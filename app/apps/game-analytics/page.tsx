@@ -13,7 +13,7 @@ import { YearlyStatsChart } from './components/YearlyStatsChart';
 import { AnalysisCharts } from './components/AnalysisCharts';
 import { InsightsPanel } from './components/InsightsPanel';
 import { Game } from './lib/types';
-import { gameRepository } from './lib/storage';
+import { gameRepository } from './lib/adaptive-storage';
 import { BASELINE_GAMES_2025 } from './data/baseline-games';
 import { filterGamesByYear, getAvailableYears, getCurrentYear } from './lib/calculations';
 
