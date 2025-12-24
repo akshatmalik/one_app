@@ -9,6 +9,7 @@ export interface Game {
   status: GameStatus;
   notes?: string;
   datePurchased?: string;
+  imageUrl?: string;
   createdAt: string;
   updatedAt: string;
 }

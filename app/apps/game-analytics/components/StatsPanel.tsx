@@ -5,15 +5,25 @@ import { AnalyticsSummary } from '../lib/types';
 
 interface StatsPanelProps {
   summary: AnalyticsSummary;
+  selectedYear?: number | 'all';
 }
 
-export function StatsPanel({ summary }: StatsPanelProps) {
+export function StatsPanel({ summary, selectedYear = 'all' }: StatsPanelProps) {
+  const yearLabel = selectedYear === 'all' ? 'All Time' : selectedYear.toString();
+
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-      <Card className="p-4">
-        <p className="text-sm text-gray-600 mb-1">Total Spent</p>
-        <p className="text-2xl font-bold text-gray-900">${summary.totalSpent}</p>
-      </Card>
+    <div className="space-y-2">
+      {selectedYear !== 'all' && (
+        <div className="flex items-center gap-2">
+          <div className="h-1 w-1 bg-purple-600 rounded-full"></div>
+          <p className="text-sm text-gray-600">Showing stats for {yearLabel}</p>
+        </div>
+      )}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+        <Card className="p-4">
+          <p className="text-sm text-gray-600 mb-1">Total Spent</p>
+          <p className="text-2xl font-bold text-gray-900">${summary.totalSpent}</p>
+        </Card>
 
       <Card className="p-4">
         <p className="text-sm text-gray-600 mb-1">Games</p>
@@ -57,6 +67,7 @@ export function StatsPanel({ summary }: StatsPanelProps) {
           </div>
         </Card>
       )}
+      </div>
     </div>
   );
 }

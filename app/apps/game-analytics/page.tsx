@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Button } from '@/components/ui/Button';
 import { useGames } from './hooks/useGames';
 import { useAnalytics, GameWithMetrics } from './hooks/useAnalytics';
@@ -8,16 +8,24 @@ import { GameTable } from './components/GameTable';
 import { StatsPanel } from './components/StatsPanel';
 import { GameForm } from './components/GameForm';
 import { BlendScoreChart } from './components/BlendScoreChart';
+import { YearFilter } from './components/YearFilter';
+import { YearlyStatsChart } from './components/YearlyStatsChart';
 import { Game } from './lib/types';
 import { gameRepository } from './lib/storage';
 import { BASELINE_GAMES_2025 } from './data/baseline-games';
+import { filterGamesByYear, getAvailableYears, getCurrentYear } from './lib/calculations';
 
 export default function GameAnalyticsPage() {
   const { games, loading, addGame, updateGame, deleteGame } = useGames();
-  const { gamesWithMetrics, summary } = useAnalytics(games);
+  const [selectedYear, setSelectedYear] = useState<number | 'all'>(getCurrentYear());
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingGame, setEditingGame] = useState<GameWithMetrics | null>(null);
   const [hasLoadedBaseline, setHasLoadedBaseline] = useState(false);
+
+  // Get available years and filtered games
+  const availableYears = useMemo(() => getAvailableYears(games), [games]);
+  const filteredGames = useMemo(() => filterGamesByYear(games, selectedYear), [games, selectedYear]);
+  const { gamesWithMetrics, summary } = useAnalytics(filteredGames);
 
   // Check if we should show seed data button
   useEffect(() => {
@@ -82,10 +90,22 @@ export default function GameAnalyticsPage() {
         </div>
       </div>
 
-      <StatsPanel summary={summary} />
+      {games.length > 0 && availableYears.length > 0 && (
+        <YearFilter
+          selectedYear={selectedYear}
+          availableYears={availableYears}
+          onYearChange={setSelectedYear}
+        />
+      )}
+
+      <StatsPanel summary={summary} selectedYear={selectedYear} />
 
       {games.length > 0 && (
         <>
+          {availableYears.length > 1 && selectedYear === 'all' && (
+            <YearlyStatsChart games={games} />
+          )}
+
           <GameTable
             games={gamesWithMetrics}
             onEdit={handleEdit}
