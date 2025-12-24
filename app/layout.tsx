@@ -3,8 +3,8 @@ import { Navigation } from '@/components/Navigation';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Hub App',
-  description: 'Your personal app hub',
+  title: 'One App - Your Personal Hub',
+  description: 'Your personal mini-application dashboard',
 };
 
 export default function RootLayout({
