@@ -49,8 +49,8 @@ export function GameTable({ games, onEdit, onDelete }: GameTableProps) {
         bVal = b.metrics.blendScore;
     }
 
-    if (typeof aVal === 'string') {
-      return sortDesc ? bVal.localeCompare(aVal as string) : aVal.localeCompare(bVal as string);
+    if (typeof aVal === 'string' && typeof bVal === 'string') {
+      return sortDesc ? bVal.localeCompare(aVal) : aVal.localeCompare(bVal);
     }
 
     return sortDesc ? (bVal as number) - (aVal as number) : (aVal as number) - (bVal as number);
