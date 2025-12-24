@@ -30,7 +30,12 @@ This document provides comprehensive guidance for AI assistants working with the
 - Auto-deployment to Vercel on push to master
 
 ### Current Mini-Apps
-1. **Game Analytics** - Track game purchases, hours played, ratings, and calculate value metrics (cost-per-hour, blend scores)
+1. **Game Analytics** - Track game purchases, hours played, ratings, and calculate value metrics (cost-per-hour, blend scores). Features include:
+   - Year-based filtering (view stats per year or all-time)
+   - Automatic game image fetching via RAWG API
+   - Yearly statistics visualizations (spending by year, games/hours charts)
+   - Game library with sortable columns and image thumbnails
+   - Budget tracking and blend score analysis
 
 ---
 
@@ -111,14 +116,17 @@ one_app/
 │   │       │   ├── BlendScoreChart.tsx
 │   │       │   ├── GameForm.tsx
 │   │       │   ├── GameTable.tsx
-│   │       │   └── StatsPanel.tsx
+│   │       │   ├── StatsPanel.tsx
+│   │       │   ├── YearFilter.tsx
+│   │       │   └── YearlyStatsChart.tsx
 │   │       ├── hooks/             # Custom React hooks
 │   │       │   ├── useAnalytics.ts
 │   │       │   └── useGames.ts
 │   │       ├── lib/               # Business logic & utilities
 │   │       │   ├── calculations.ts  # Pure functions
 │   │       │   ├── storage.ts       # Repository implementation
-│   │       │   └── types.ts         # TypeScript interfaces
+│   │       │   ├── types.ts         # TypeScript interfaces
+│   │       │   └── rawg-api.ts      # External API integration
 │   │       ├── data/              # Static/seed data
 │   │       │   └── baseline-games.ts
 │   │       ├── layout.tsx         # App layout (optional)
@@ -347,7 +355,68 @@ export function Button({ variant = 'primary', size = 'md', className, ...props }
 }
 ```
 
-### 6. Mini-App Registration
+### 6. External API Integration Pattern
+
+**Purpose**: Integrate third-party APIs for enriching data (e.g., game images, metadata).
+
+**Structure**:
+```typescript
+// lib/api-service.ts - API integration utility
+const API_KEY = process.env.NEXT_PUBLIC_API_KEY || 'demo-key';
+const BASE_URL = 'https://api.example.com';
+
+export interface APIResponse {
+  id: number;
+  name: string;
+  image_url: string | null;
+}
+
+export async function fetchData(query: string): Promise<string | null> {
+  try {
+    const response = await fetch(
+      `${BASE_URL}/endpoint?key=${API_KEY}&search=${encodeURIComponent(query)}`
+    );
+
+    if (!response.ok) {
+      console.error('API error:', response.status);
+      return null;
+    }
+
+    const data: APIResponse = await response.json();
+    return data.image_url;
+  } catch (error) {
+    console.error('Error fetching data:', error);
+    return null;
+  }
+}
+```
+
+**Key points**:
+- Keep API keys in environment variables (NEXT_PUBLIC_ prefix for client-side)
+- Handle errors gracefully (return null, don't throw)
+- Use TypeScript interfaces for API responses
+- Always encode URI components
+- Add timeout/retry logic for production
+- Cache responses when possible
+
+**Example: RAWG Game Database Integration**
+```typescript
+// app/apps/game-analytics/lib/rawg-api.ts
+export async function searchGameImage(gameName: string): Promise<string | null> {
+  const imageUrl = await fetchFromRAWG(gameName);
+  return imageUrl;
+}
+
+// In component:
+const handleFetchImage = async () => {
+  const imageUrl = await searchGameImage(formData.name);
+  if (imageUrl) {
+    setFormData({ ...formData, imageUrl });
+  }
+};
+```
+
+### 7. Mini-App Registration
 
 **All mini-apps must be registered** in `lib/mini-apps.ts`:
 ```typescript
@@ -644,6 +713,101 @@ const avgRating = totalRating / games.length;
 
 4. **No component changes needed!**
 
+### Integrating External APIs
+
+1. **Create API utility file** (`lib/api-service.ts`):
+   ```typescript
+   const API_KEY = process.env.NEXT_PUBLIC_API_KEY || 'demo-key';
+
+   export async function fetchExternalData(query: string): Promise<DataType | null> {
+     try {
+       const response = await fetch(
+         `https://api.example.com/search?key=${API_KEY}&q=${encodeURIComponent(query)}`
+       );
+       if (!response.ok) return null;
+       return await response.json();
+     } catch (error) {
+       console.error('API error:', error);
+       return null;
+     }
+   }
+   ```
+
+2. **Add to form/component**:
+   ```typescript
+   const handleFetch = async () => {
+     setFetching(true);
+     const data = await fetchExternalData(formData.name);
+     if (data) {
+       setFormData({ ...formData, field: data.value });
+     }
+     setFetching(false);
+   };
+   ```
+
+3. **Add optional field to type**:
+   ```typescript
+   export interface Item {
+     // ... existing fields
+     externalData?: string;  // Optional field for API data
+   }
+   ```
+
+### Adding Year-Based Filtering
+
+1. **Add year utility functions** (`lib/calculations.ts`):
+   ```typescript
+   export function getItemYear(item: Item): number {
+     if (item.date) {
+       return new Date(item.date).getFullYear();
+     }
+     return new Date(item.createdAt).getFullYear();
+   }
+
+   export function getCurrentYear(): number {
+     return new Date().getFullYear();
+   }
+
+   export function filterByYear(items: Item[], year: number | 'all'): Item[] {
+     if (year === 'all') return items;
+     return items.filter(item => getItemYear(item) === year);
+   }
+
+   export function getAvailableYears(items: Item[]): number[] {
+     const years = new Set(items.map(getItemYear));
+     return Array.from(years).sort((a, b) => b - a);
+   }
+   ```
+
+2. **Create YearFilter component**:
+   ```typescript
+   interface YearFilterProps {
+     selectedYear: number | 'all';
+     availableYears: number[];
+     onYearChange: (year: number | 'all') => void;
+   }
+
+   export function YearFilter({ selectedYear, availableYears, onYearChange }) {
+     return (
+       <div className="flex gap-2">
+         <button onClick={() => onYearChange('all')}>All Time</button>
+         {availableYears.map(year => (
+           <button key={year} onClick={() => onYearChange(year)}>
+             {year}
+           </button>
+         ))}
+       </div>
+     );
+   }
+   ```
+
+3. **Use in page component**:
+   ```typescript
+   const [selectedYear, setSelectedYear] = useState<number | 'all'>(getCurrentYear());
+   const availableYears = useMemo(() => getAvailableYears(items), [items]);
+   const filteredItems = useMemo(() => filterByYear(items, selectedYear), [items, selectedYear]);
+   ```
+
 ---
 
 ## Testing & Quality
@@ -722,6 +886,8 @@ Test these scenarios:
 - Skip `typeof window === 'undefined'` check in storage
 - Hardcode values that should be configurable
 - Add dependencies without considering bundle size
+- Expose API keys in client code (use NEXT_PUBLIC_ prefix and .env)
+- Make API calls without error handling
 
 ✅ **Do**:
 - Follow the existing directory structure
@@ -732,6 +898,10 @@ Test these scenarios:
 - Handle loading and error states in UI
 - Make responsive designs
 - Write clear commit messages
+- Use environment variables for API keys
+- Add year/date filtering for temporal data
+- Integrate external APIs when it enriches the data (e.g., images, metadata)
+- Create reusable filter components (YearFilter, StatusFilter, etc.)
 
 ### When Adding New Features
 
@@ -902,6 +1072,13 @@ export interface MyRepository {
 
 ## Changelog
 
+### 2025-12-24
+- Added External API Integration pattern documentation
+- Added Year-Based Filtering pattern and common tasks
+- Updated Game Analytics feature list with new capabilities
+- Updated directory structure with new components (YearFilter, YearlyStatsChart, rawg-api)
+- Added guidelines for external API integration and temporal filtering
+
 ### 2024-12-24
 - Initial CLAUDE.md creation
 - Documented architecture, patterns, and conventions
@@ -909,6 +1086,6 @@ export interface MyRepository {
 
 ---
 
-**Last Updated**: 2024-12-24
-**Version**: 1.0.0
+**Last Updated**: 2025-12-24
+**Version**: 1.1.0
 **Maintained by**: AI assistants and contributors

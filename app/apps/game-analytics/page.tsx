@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Button } from '@/components/ui/Button';
 import { useGames } from './hooks/useGames';
 import { useAnalytics, GameWithMetrics } from './hooks/useAnalytics';
@@ -8,16 +8,26 @@ import { GameTable } from './components/GameTable';
 import { StatsPanel } from './components/StatsPanel';
 import { GameForm } from './components/GameForm';
 import { BlendScoreChart } from './components/BlendScoreChart';
+import { YearFilter } from './components/YearFilter';
+import { YearlyStatsChart } from './components/YearlyStatsChart';
+import { AnalysisCharts } from './components/AnalysisCharts';
+import { InsightsPanel } from './components/InsightsPanel';
 import { Game } from './lib/types';
-import { gameRepository } from './lib/storage';
+import { gameRepository } from './lib/adaptive-storage';
 import { BASELINE_GAMES_2025 } from './data/baseline-games';
+import { filterGamesByYear, getAvailableYears, getCurrentYear } from './lib/calculations';
 
 export default function GameAnalyticsPage() {
   const { games, loading, addGame, updateGame, deleteGame } = useGames();
-  const { gamesWithMetrics, summary } = useAnalytics(games);
+  const [selectedYear, setSelectedYear] = useState<number | 'all'>(getCurrentYear());
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingGame, setEditingGame] = useState<GameWithMetrics | null>(null);
   const [hasLoadedBaseline, setHasLoadedBaseline] = useState(false);
+
+  // Get available years and filtered games
+  const availableYears = useMemo(() => getAvailableYears(games), [games]);
+  const filteredGames = useMemo(() => filterGamesByYear(games, selectedYear), [games, selectedYear]);
+  const { gamesWithMetrics, summary } = useAnalytics(filteredGames);
 
   // Check if we should show seed data button
   useEffect(() => {
@@ -67,25 +77,41 @@ export default function GameAnalyticsPage() {
 
   return (
     <div className="space-y-8">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-4xl font-bold text-gray-900">Game Analytics Dashboard</h1>
+          <h1 className="text-3xl sm:text-4xl font-bold text-gray-900">Game Analytics Dashboard</h1>
           <p className="text-gray-600 mt-2">Track your game library and analyze value</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 shrink-0">
           {games.length === 0 && !hasLoadedBaseline && (
-            <Button onClick={handleSeedData} variant="secondary">
-              Load 2025 Data
+            <Button onClick={handleSeedData} variant="secondary" size="sm">
+              Load Sample Data
             </Button>
           )}
           <Button onClick={() => setIsFormOpen(true)}>Add Game</Button>
         </div>
       </div>
 
-      <StatsPanel summary={summary} />
+      {games.length > 0 && availableYears.length > 0 && (
+        <YearFilter
+          selectedYear={selectedYear}
+          availableYears={availableYears}
+          onYearChange={setSelectedYear}
+        />
+      )}
+
+      <StatsPanel summary={summary} selectedYear={selectedYear} />
 
       {games.length > 0 && (
         <>
+          {availableYears.length > 1 && selectedYear === 'all' && (
+            <YearlyStatsChart games={games} />
+          )}
+
+          <InsightsPanel games={gamesWithMetrics} />
+
+          <AnalysisCharts games={gamesWithMetrics} />
+
           <GameTable
             games={gamesWithMetrics}
             onEdit={handleEdit}

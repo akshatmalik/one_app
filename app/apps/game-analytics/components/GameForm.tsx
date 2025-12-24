@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Game, GameStatus } from '../lib/types';
 import { calculateCostPerHour } from '../lib/calculations';
+import { searchGameImage } from '../lib/rawg-api';
 
 interface GameFormProps {
   onSubmit: (game: Omit<Game, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
@@ -15,6 +16,7 @@ interface GameFormProps {
 
 export function GameForm({ onSubmit, onClose, initialGame }: GameFormProps) {
   const [loading, setLoading] = useState(false);
+  const [fetchingImage, setFetchingImage] = useState(false);
   const [formData, setFormData] = useState({
     name: initialGame?.name || '',
     price: initialGame?.price || 0,
@@ -23,9 +25,32 @@ export function GameForm({ onSubmit, onClose, initialGame }: GameFormProps) {
     status: (initialGame?.status || 'Completed') as GameStatus,
     notes: initialGame?.notes || '',
     datePurchased: initialGame?.datePurchased || new Date().toISOString().split('T')[0],
+    imageUrl: initialGame?.imageUrl || '',
   });
 
   const costPerHour = calculateCostPerHour(formData.price, formData.hours);
+
+  const handleFetchImage = async () => {
+    if (!formData.name.trim()) {
+      alert('Please enter a game name first');
+      return;
+    }
+
+    setFetchingImage(true);
+    try {
+      const imageUrl = await searchGameImage(formData.name);
+      if (imageUrl) {
+        setFormData({ ...formData, imageUrl });
+      } else {
+        alert('No image found for this game. You can enter a custom URL.');
+      }
+    } catch (error) {
+      console.error('Error fetching image:', error);
+      alert('Failed to fetch game image');
+    } finally {
+      setFetchingImage(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,13 +64,14 @@ export function GameForm({ onSubmit, onClose, initialGame }: GameFormProps) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <Card className="w-full max-w-md p-6">
-        <h2 className="text-xl font-bold text-gray-900 mb-4">
-          {initialGame ? 'Edit Game' : 'Add New Game'}
-        </h2>
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4 overflow-y-auto">
+      <div className="w-full min-h-full sm:min-h-0 flex items-center justify-center py-4">
+        <Card className="w-full max-w-md p-4 sm:p-6 my-auto">
+          <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-4">
+            {initialGame ? 'Edit Game' : 'Add New Game'}
+          </h2>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4">
           <Input
             label="Game Name"
             required
@@ -132,6 +158,47 @@ export function GameForm({ onSubmit, onClose, initialGame }: GameFormProps) {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
+              Game Image
+            </label>
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Image URL (optional)"
+                  value={formData.imageUrl}
+                  onChange={e =>
+                    setFormData({ ...formData, imageUrl: e.target.value })
+                  }
+                  className="flex-1"
+                />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={handleFetchImage}
+                  disabled={fetchingImage || !formData.name}
+                >
+                  {fetchingImage ? '🔍' : '🎮'}
+                </Button>
+              </div>
+              {formData.imageUrl && (
+                <div className="relative w-full h-32 bg-gray-100 rounded-lg overflow-hidden">
+                  <img
+                    src={formData.imageUrl}
+                    alt={formData.name}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      e.currentTarget.src = '/placeholder-game.png';
+                    }}
+                  />
+                </div>
+              )}
+              <p className="text-xs text-gray-500">
+                Click 🎮 to auto-fetch from RAWG database
+              </p>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
               Notes
             </label>
             <textarea
@@ -160,7 +227,8 @@ export function GameForm({ onSubmit, onClose, initialGame }: GameFormProps) {
             </Button>
           </div>
         </form>
-      </Card>
+        </Card>
+      </div>
     </div>
   );
 }

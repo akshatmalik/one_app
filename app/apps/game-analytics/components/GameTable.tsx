@@ -70,6 +70,7 @@ export function GameTable({ games, onEdit, onDelete }: GameTableProps) {
       <Table>
         <TableHead>
           <TableRow>
+            <TableHeader>Image</TableHeader>
             <TableHeader className="cursor-pointer" onClick={() => toggleSort('name')}>
               Name {sortKey === 'name' && (sortDesc ? '↓' : '↑')}
             </TableHeader>
@@ -95,6 +96,24 @@ export function GameTable({ games, onEdit, onDelete }: GameTableProps) {
         <TableBody>
           {sorted.map(game => (
             <TableRow key={game.id}>
+              <TableCell>
+                {game.imageUrl ? (
+                  <div className="w-16 h-16 bg-gray-100 rounded overflow-hidden">
+                    <img
+                      src={game.imageUrl}
+                      alt={game.name}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        e.currentTarget.style.display = 'none';
+                      }}
+                    />
+                  </div>
+                ) : (
+                  <div className="w-16 h-16 bg-gray-200 rounded flex items-center justify-center text-2xl">
+                    🎮
+                  </div>
+                )}
+              </TableCell>
               <TableCell className="font-medium">{game.name}</TableCell>
               <TableCell>${game.price}</TableCell>
               <TableCell>{game.hours}h</TableCell>

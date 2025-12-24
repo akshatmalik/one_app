@@ -3,6 +3,27 @@ import { Game, GameMetrics, AnalyticsSummary } from './types';
 const BASELINE_COST = 3.5;
 const BUDGET_2026 = 910;
 
+export function getGameYear(game: Game): number {
+  if (game.datePurchased) {
+    return new Date(game.datePurchased).getFullYear();
+  }
+  return new Date(game.createdAt).getFullYear();
+}
+
+export function getCurrentYear(): number {
+  return new Date().getFullYear();
+}
+
+export function filterGamesByYear(games: Game[], year: number | 'all'): Game[] {
+  if (year === 'all') return games;
+  return games.filter(game => getGameYear(game) === year);
+}
+
+export function getAvailableYears(games: Game[]): number[] {
+  const years = new Set(games.map(getGameYear));
+  return Array.from(years).sort((a, b) => b - a);
+}
+
 export function calculateCostPerHour(price: number, hours: number): number {
   return hours > 0 ? price / hours : 0;
 }
