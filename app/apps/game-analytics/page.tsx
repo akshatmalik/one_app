@@ -10,6 +10,8 @@ import { GameForm } from './components/GameForm';
 import { BlendScoreChart } from './components/BlendScoreChart';
 import { YearFilter } from './components/YearFilter';
 import { YearlyStatsChart } from './components/YearlyStatsChart';
+import { AnalysisCharts } from './components/AnalysisCharts';
+import { InsightsPanel } from './components/InsightsPanel';
 import { Game } from './lib/types';
 import { gameRepository } from './lib/storage';
 import { BASELINE_GAMES_2025 } from './data/baseline-games';
@@ -105,6 +107,10 @@ export default function GameAnalyticsPage() {
           {availableYears.length > 1 && selectedYear === 'all' && (
             <YearlyStatsChart games={games} />
           )}
+
+          <InsightsPanel games={gamesWithMetrics} />
+
+          <AnalysisCharts games={gamesWithMetrics} />
 
           <GameTable
             games={gamesWithMetrics}
