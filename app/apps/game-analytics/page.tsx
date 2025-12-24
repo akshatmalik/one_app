@@ -75,15 +75,15 @@ export default function GameAnalyticsPage() {
 
   return (
     <div className="space-y-8">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-4xl font-bold text-gray-900">Game Analytics Dashboard</h1>
+          <h1 className="text-3xl sm:text-4xl font-bold text-gray-900">Game Analytics Dashboard</h1>
           <p className="text-gray-600 mt-2">Track your game library and analyze value</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 shrink-0">
           {games.length === 0 && !hasLoadedBaseline && (
-            <Button onClick={handleSeedData} variant="secondary">
-              Load 2025 Data
+            <Button onClick={handleSeedData} variant="secondary" size="sm">
+              Load Sample Data
             </Button>
           )}
           <Button onClick={() => setIsFormOpen(true)}>Add Game</Button>

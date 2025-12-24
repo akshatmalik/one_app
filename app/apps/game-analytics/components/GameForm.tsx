@@ -64,13 +64,14 @@ export function GameForm({ onSubmit, onClose, initialGame }: GameFormProps) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <Card className="w-full max-w-md p-6">
-        <h2 className="text-xl font-bold text-gray-900 mb-4">
-          {initialGame ? 'Edit Game' : 'Add New Game'}
-        </h2>
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4 overflow-y-auto">
+      <div className="w-full min-h-full sm:min-h-0 flex items-center justify-center py-4">
+        <Card className="w-full max-w-md p-4 sm:p-6 my-auto">
+          <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-4">
+            {initialGame ? 'Edit Game' : 'Add New Game'}
+          </h2>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4">
           <Input
             label="Game Name"
             required
@@ -226,7 +227,8 @@ export function GameForm({ onSubmit, onClose, initialGame }: GameFormProps) {
             </Button>
           </div>
         </form>
-      </Card>
+        </Card>
+      </div>
     </div>
   );
 }
