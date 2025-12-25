@@ -27,21 +27,21 @@ export function TaskInput({ onAdd }: TaskInputProps) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="flex gap-1.5 mb-3">
+    <form onSubmit={handleSubmit} className="flex gap-2 mb-3">
       <input
         type="text"
         value={text}
         onChange={(e) => setText(e.target.value)}
         placeholder="Add a new task..."
-        className="flex-1 px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent"
+        className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-200 placeholder:text-gray-400 hover:border-gray-300"
         disabled={isAdding}
       />
       <button
         type="submit"
         disabled={!text.trim() || isAdding}
-        className="px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+        className="px-3 py-2 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-lg hover:from-blue-700 hover:to-blue-600 disabled:from-gray-300 disabled:to-gray-300 disabled:cursor-not-allowed transition-all duration-200 shadow-sm hover:shadow active:scale-95"
       >
-        <Plus size={16} />
+        <Plus size={16} className={isAdding ? 'animate-spin' : ''} />
       </button>
     </form>
   );
