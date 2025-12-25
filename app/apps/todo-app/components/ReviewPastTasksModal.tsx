@@ -56,66 +56,64 @@ export function ReviewPastTasksModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[80vh] flex flex-col">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-3 z-50">
+      <div className="bg-white rounded-lg shadow-xl max-w-lg w-full max-h-[85vh] flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b">
-          <h2 className="text-xl font-bold text-gray-900">Review Past Incomplete Tasks</h2>
+        <div className="flex items-center justify-between p-3 border-b">
+          <h2 className="text-base font-bold text-gray-900">Past Tasks</h2>
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-gray-600 transition-colors"
           >
-            <X size={24} />
+            <X size={20} />
           </button>
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 overflow-y-auto p-3">
           {loading ? (
-            <div className="text-center py-8 text-gray-500">Loading...</div>
+            <div className="text-center py-6 text-gray-500 text-sm">Loading...</div>
           ) : pastTasks.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
-              <Clock size={48} className="mx-auto mb-3 text-gray-300" />
-              <p>No incomplete tasks from previous days!</p>
-              <p className="text-sm mt-2">You&apos;re all caught up 🎉</p>
+            <div className="text-center py-6 text-gray-500 text-sm">
+              <Clock size={32} className="mx-auto mb-2 text-gray-300" />
+              <p>All caught up!</p>
             </div>
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-2">
               {pastTasks.map((task) => (
                 <div
                   key={task.id}
-                  className="p-4 bg-gray-50 rounded-lg border border-gray-200"
+                  className="p-2.5 bg-gray-50 rounded border border-gray-200"
                 >
-                  <div className="mb-3">
-                    <p className="text-base font-medium text-gray-900">{task.text}</p>
-                    <p className="text-sm text-gray-500 mt-1">
-                      From: {new Date(task.date).toLocaleDateString('en-US', {
+                  <div className="mb-2">
+                    <p className="text-sm font-medium text-gray-900">{task.text}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      {new Date(task.date).toLocaleDateString('en-US', {
                         month: 'short',
                         day: 'numeric',
-                        year: 'numeric',
                       })}
                     </p>
                   </div>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap gap-1.5">
                     <button
                       onClick={() => handleMoveToToday(task.id)}
-                      className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-sm"
+                      className="flex items-center gap-1 px-2 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700 transition-colors"
                     >
-                      <ArrowRight size={16} />
-                      Move to Today
+                      <ArrowRight size={12} />
+                      Today
                     </button>
                     <button
                       onClick={() => handleDelete(task.id)}
-                      className="flex items-center gap-2 px-3 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors text-sm"
+                      className="flex items-center gap-1 px-2 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700 transition-colors"
                     >
-                      <Trash2 size={16} />
+                      <Trash2 size={12} />
                       Delete
                     </button>
                     <button
                       onClick={() => handleKeep(task.id)}
-                      className="px-3 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition-colors text-sm"
+                      className="px-2 py-1 bg-gray-200 text-gray-700 rounded text-xs hover:bg-gray-300 transition-colors"
                     >
-                      Keep There
+                      Keep
                     </button>
                   </div>
                 </div>
@@ -126,9 +124,9 @@ export function ReviewPastTasksModal({
 
         {/* Footer */}
         {pastTasks.length > 0 && (
-          <div className="p-6 border-t bg-gray-50">
-            <p className="text-sm text-gray-600 text-center">
-              {pastTasks.length} task{pastTasks.length !== 1 ? 's' : ''} remaining
+          <div className="p-2.5 border-t bg-gray-50">
+            <p className="text-xs text-gray-600 text-center">
+              {pastTasks.length} remaining
             </p>
           </div>
         )}
