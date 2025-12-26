@@ -21,60 +21,37 @@ export function TaskList({ incompleteTasks, completedTasks, onToggle }: TaskList
     );
   }
 
-  const getPriorityColor = (priority?: string) => {
-    switch (priority) {
-      case 'p1': return 'bg-red-500';
-      case 'p2': return 'bg-orange-500';
-      case 'p3': return 'bg-blue-500';
-      case 'p4': return 'bg-gray-400';
-      default: return 'bg-gray-300';
-    }
-  };
-
   const renderTask = (task: Task) => (
     <div
       key={task.id}
       className={clsx(
-        'group flex items-center gap-2 p-2 rounded-lg border transition-all duration-200',
+        'group flex items-center gap-2 p-2 rounded-lg transition-all duration-200',
         task.completed
-          ? 'border-gray-100 bg-gray-50/50 hover:bg-gray-50'
-          : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm'
+          ? 'bg-gray-50/50'
+          : 'bg-white hover:bg-gray-50/30'
       )}
     >
       <button
         onClick={() => onToggle(task.id)}
         className={clsx(
-          'flex-shrink-0 w-4 h-4 rounded border-2 flex items-center justify-center transition-all duration-200',
+          'flex-shrink-0 w-4 h-4 rounded flex items-center justify-center transition-all duration-200',
           task.completed
-            ? 'bg-gradient-to-br from-green-500 to-emerald-500 border-green-500 shadow-sm'
-            : 'border-gray-300 hover:border-blue-500 hover:scale-110 active:scale-95'
+            ? 'bg-gradient-to-br from-green-500 to-emerald-500'
+            : 'bg-gray-200 hover:bg-blue-500'
         )}
       >
         {task.completed && <Check size={11} className="text-white" strokeWidth={3} />}
       </button>
-      <div className="flex-1 flex items-center gap-1.5">
-        <span
-          className={clsx(
-            'text-xs transition-all duration-200',
-            task.completed
-              ? 'line-through text-gray-400'
-              : 'text-gray-700 group-hover:text-gray-900'
-          )}
-        >
-          {task.text}
-        </span>
-        {task.category && (
-          <span className="text-[10px] px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded font-medium">
-            @{task.category}
-          </span>
+      <span
+        className={clsx(
+          'flex-1 text-xs transition-all duration-200',
+          task.completed
+            ? 'line-through text-gray-400'
+            : 'text-gray-700'
         )}
-        {task.priority && (
-          <span className={clsx(
-            'w-1.5 h-1.5 rounded-full flex-shrink-0',
-            getPriorityColor(task.priority)
-          )} />
-        )}
-      </div>
+      >
+        {task.text}
+      </span>
     </div>
   );
 

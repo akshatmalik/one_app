@@ -66,13 +66,13 @@ export default function TodoApp() {
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 px-1 py-2 sm:px-3 sm:py-3">
       <div className="max-w-xl mx-auto">
         {/* Header Card */}
-        <div className="bg-white/80 backdrop-blur-sm rounded-xl shadow-sm border border-gray-100 p-2 mb-2">
+        <div className="bg-white/80 backdrop-blur-sm rounded-xl shadow-sm p-2 mb-2">
           <div className="flex items-center justify-between mb-2">
             <h1 className="text-base font-semibold text-gray-900">Daily Tasks</h1>
             {isToday && (
               <button
                 onClick={() => setIsReviewModalOpen(true)}
-                className="p-1 text-purple-600 hover:bg-purple-50 rounded-lg transition-all duration-200 hover:scale-105 active:scale-95"
+                className="p-1 text-purple-600 hover:bg-purple-50 rounded-lg transition-all duration-200"
                 aria-label="Review past tasks"
               >
                 <History size={16} />
@@ -84,7 +84,7 @@ export default function TodoApp() {
           <div className="flex items-center gap-1 mb-2">
             <button
               onClick={handlePreviousDay}
-              className="p-1 hover:bg-gray-100 rounded-lg transition-all duration-200 active:scale-95"
+              className="p-1 hover:bg-gray-100 rounded-lg transition-all duration-200"
               aria-label="Previous day"
             >
               <ChevronLeft size={16} />
@@ -95,13 +95,13 @@ export default function TodoApp() {
                 type="date"
                 value={selectedDate}
                 onChange={handleDateChange}
-                className="px-2 py-1 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 w-full text-center cursor-pointer transition-all duration-200 hover:border-gray-300"
+                className="px-2 py-1 bg-white rounded-lg text-xs w-full text-center cursor-pointer transition-all duration-200"
               />
             </div>
 
             <button
               onClick={handleNextDay}
-              className="p-1 hover:bg-gray-100 rounded-lg transition-all duration-200 active:scale-95"
+              className="p-1 hover:bg-gray-100 rounded-lg transition-all duration-200"
               aria-label="Next day"
             >
               <ChevronRight size={16} />
@@ -110,7 +110,7 @@ export default function TodoApp() {
             {!isToday && (
               <button
                 onClick={handleTodayClick}
-                className="px-2 py-1 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-lg hover:from-blue-700 hover:to-blue-600 transition-all duration-200 text-xs font-medium whitespace-nowrap shadow-sm hover:shadow active:scale-95"
+                className="px-2 py-1 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-lg hover:from-blue-700 hover:to-blue-600 transition-all duration-200 text-xs font-medium whitespace-nowrap shadow-sm hover:shadow"
               >
                 Today
               </button>
@@ -134,7 +134,7 @@ export default function TodoApp() {
         </div>
 
         {/* Main Content */}
-        <div className="bg-white/80 backdrop-blur-sm rounded-xl shadow-sm border border-gray-100 p-2">
+        <div className="bg-white/80 backdrop-blur-sm rounded-xl shadow-sm p-2">
           <TaskInput onAdd={addTask} />
 
           {loading ? (
