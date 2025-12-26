@@ -39,10 +39,16 @@ export function useTasks(date: string) {
 
   const addTask = async (text: string) => {
     try {
+      const tasksForDate = await repository.getByDate(date);
+      const maxOrder = tasksForDate.length > 0
+        ? Math.max(...tasksForDate.map(t => t.order || 0))
+        : 0;
+
       await repository.create({
         text,
         completed: false,
         date,
+        order: maxOrder + 1,
       });
       await loadTasks();
     } catch (e) {
@@ -93,14 +99,35 @@ export function useTasks(date: string) {
     }
   };
 
-  // Separate tasks into completed and incomplete, sort by creation time
+  const reorderTasks = async (taskId: string, newOrder: number) => {
+    try {
+      const tasksToUpdate = [...tasks];
+      const taskIndex = tasksToUpdate.findIndex(t => t.id === taskId);
+      if (taskIndex === -1) return;
+
+      const [movedTask] = tasksToUpdate.splice(taskIndex, 1);
+      tasksToUpdate.splice(newOrder, 0, movedTask);
+
+      // Update order for all tasks
+      for (let i = 0; i < tasksToUpdate.length; i++) {
+        await repository.update(tasksToUpdate[i].id, { order: i });
+      }
+
+      await loadTasks();
+    } catch (e) {
+      setError(e as Error);
+      throw e;
+    }
+  };
+
+  // Separate tasks into completed and incomplete, sort by order
   const incompleteTasks = tasks
     .filter(t => !t.completed)
-    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    .sort((a, b) => (a.order || 0) - (b.order || 0));
 
   const completedTasks = tasks
     .filter(t => t.completed)
-    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    .sort((a, b) => (a.order || 0) - (b.order || 0));
 
   const stats = {
     completed: completedTasks.length,
@@ -119,6 +146,7 @@ export function useTasks(date: string) {
     deleteTask,
     moveTaskToDate,
     getPastIncompleteTasks,
+    reorderTasks,
     refresh: loadTasks,
   };
 }

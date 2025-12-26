@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { Task } from '../lib/types';
 import { Check } from 'lucide-react';
 import clsx from 'clsx';
@@ -8,10 +9,13 @@ interface TaskListProps {
   incompleteTasks: Task[];
   completedTasks: Task[];
   onToggle: (id: string) => Promise<void>;
+  onReorder: (taskId: string, newOrder: number) => Promise<void>;
 }
 
-export function TaskList({ incompleteTasks, completedTasks, onToggle }: TaskListProps) {
+export function TaskList({ incompleteTasks, completedTasks, onToggle, onReorder }: TaskListProps) {
   const allTasks = [...incompleteTasks, ...completedTasks];
+  const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
+  const [dragOverTaskId, setDragOverTaskId] = useState<string | null>(null);
 
   if (allTasks.length === 0) {
     return (
@@ -21,6 +25,41 @@ export function TaskList({ incompleteTasks, completedTasks, onToggle }: TaskList
     );
   }
 
+  const handleDragStart = (e: React.DragEvent, taskId: string) => {
+    setDraggedTaskId(taskId);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e: React.DragEvent, taskId: string) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverTaskId(taskId);
+  };
+
+  const handleDrop = async (e: React.DragEvent, dropTaskId: string) => {
+    e.preventDefault();
+    if (!draggedTaskId || draggedTaskId === dropTaskId) {
+      setDraggedTaskId(null);
+      setDragOverTaskId(null);
+      return;
+    }
+
+    const draggedIndex = allTasks.findIndex(t => t.id === draggedTaskId);
+    const dropIndex = allTasks.findIndex(t => t.id === dropTaskId);
+
+    if (draggedIndex !== -1 && dropIndex !== -1) {
+      await onReorder(draggedTaskId, dropIndex);
+    }
+
+    setDraggedTaskId(null);
+    setDragOverTaskId(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedTaskId(null);
+    setDragOverTaskId(null);
+  };
+
   const renderTask = (task: Task) => (
     <div
       key={task.id}
@@ -28,9 +67,15 @@ export function TaskList({ incompleteTasks, completedTasks, onToggle }: TaskList
         'group flex items-center gap-2 p-2 rounded-lg transition-all duration-200 cursor-move',
         task.completed
           ? 'bg-gray-50/50 dark:bg-gray-700/50'
-          : 'bg-white dark:bg-gray-700 hover:bg-gray-50/30 dark:hover:bg-gray-600/30'
+          : 'bg-white dark:bg-gray-700 hover:bg-gray-50/30 dark:hover:bg-gray-600/30',
+        draggedTaskId === task.id && 'opacity-50',
+        dragOverTaskId === task.id && 'border-t-2 border-blue-500'
       )}
       draggable
+      onDragStart={(e) => handleDragStart(e, task.id)}
+      onDragOver={(e) => handleDragOver(e, task.id)}
+      onDrop={(e) => handleDrop(e, task.id)}
+      onDragEnd={handleDragEnd}
     >
       <button
         onClick={() => onToggle(task.id)}

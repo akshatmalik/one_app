@@ -3,6 +3,7 @@ export interface Task {
   text: string;
   completed: boolean;
   date: string; // ISO date string (YYYY-MM-DD)
+  order: number; // For drag-and-drop reordering
   createdAt: string; // ISO datetime string
   updatedAt: string; // ISO datetime string
 }

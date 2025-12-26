@@ -23,6 +23,7 @@ export default function TodoApp() {
     deleteTask,
     moveTaskToDate,
     getPastIncompleteTasks,
+    reorderTasks,
   } = useTasks(selectedDate);
 
   const today = new Date().toISOString().split('T')[0];
@@ -144,6 +145,7 @@ export default function TodoApp() {
               incompleteTasks={incompleteTasks}
               completedTasks={completedTasks}
               onToggle={toggleTask}
+              onReorder={reorderTasks}
             />
           )}
         </div>
