@@ -63,10 +63,10 @@ export default function TodoApp() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 px-1 py-2 sm:px-3 sm:py-3">
-      <div className="max-w-xl mx-auto">
-        {/* Header Card */}
-        <div className="bg-white/80 backdrop-blur-sm rounded-xl shadow-sm p-2 mb-2">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
+      <div className="w-full">
+        {/* Header */}
+        <div className="bg-white/80 backdrop-blur-sm p-2">
           <div className="flex items-center justify-between mb-2">
             <h1 className="text-base font-semibold text-gray-900">Daily Tasks</h1>
             {isToday && (
@@ -134,7 +134,7 @@ export default function TodoApp() {
         </div>
 
         {/* Main Content */}
-        <div className="bg-white/80 backdrop-blur-sm rounded-xl shadow-sm p-2">
+        <div className="bg-white/80 backdrop-blur-sm p-2">
           <TaskInput onAdd={addTask} />
 
           {loading ? (
