@@ -63,16 +63,16 @@ export default function TodoApp() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
       <div className="w-full">
         {/* Header */}
-        <div className="bg-white/80 backdrop-blur-sm p-2">
+        <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm">
           <div className="flex items-center justify-between mb-2">
-            <h1 className="text-base font-semibold text-gray-900">Daily Tasks</h1>
+            <h1 className="text-base font-semibold text-gray-900 dark:text-white">Daily Tasks</h1>
             {isToday && (
               <button
                 onClick={() => setIsReviewModalOpen(true)}
-                className="p-1 text-purple-600 hover:bg-purple-50 rounded-lg transition-all duration-200"
+                className="p-1 text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/30 rounded-lg transition-all duration-200"
                 aria-label="Review past tasks"
               >
                 <History size={16} />
@@ -84,10 +84,10 @@ export default function TodoApp() {
           <div className="flex items-center gap-1 mb-2">
             <button
               onClick={handlePreviousDay}
-              className="p-1 hover:bg-gray-100 rounded-lg transition-all duration-200"
+              className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-all duration-200"
               aria-label="Previous day"
             >
-              <ChevronLeft size={16} />
+              <ChevronLeft size={16} className="dark:text-gray-300" />
             </button>
 
             <div className="relative flex-1">
@@ -95,16 +95,16 @@ export default function TodoApp() {
                 type="date"
                 value={selectedDate}
                 onChange={handleDateChange}
-                className="px-2 py-1 bg-white rounded-lg text-xs w-full text-center cursor-pointer transition-all duration-200"
+                className="px-2 py-1 bg-white dark:bg-gray-700 dark:text-white rounded-lg text-xs w-full text-center cursor-pointer transition-all duration-200"
               />
             </div>
 
             <button
               onClick={handleNextDay}
-              className="p-1 hover:bg-gray-100 rounded-lg transition-all duration-200"
+              className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-all duration-200"
               aria-label="Next day"
             >
-              <ChevronRight size={16} />
+              <ChevronRight size={16} className="dark:text-gray-300" />
             </button>
 
             {!isToday && (
@@ -119,11 +119,11 @@ export default function TodoApp() {
 
           {/* Stats */}
           <div className="flex items-center gap-2 text-xs">
-            <span className="font-semibold text-gray-700 min-w-[2rem]">
+            <span className="font-semibold text-gray-700 dark:text-gray-300 min-w-[2rem]">
               {stats.completed}/{stats.total}
             </span>
             {stats.total > 0 && (
-              <div className="flex-1 bg-gray-100 rounded-full h-1 overflow-hidden">
+              <div className="flex-1 bg-gray-100 dark:bg-gray-700 rounded-full h-1 overflow-hidden">
                 <div
                   className="bg-gradient-to-r from-green-500 to-emerald-500 h-full transition-all duration-500 ease-out rounded-full"
                   style={{ width: `${(stats.completed / stats.total) * 100}%` }}
@@ -134,11 +134,11 @@ export default function TodoApp() {
         </div>
 
         {/* Main Content */}
-        <div className="bg-white/80 backdrop-blur-sm p-2">
+        <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm">
           <TaskInput onAdd={addTask} />
 
           {loading ? (
-            <div className="text-center py-6 text-gray-400 text-xs">Loading...</div>
+            <div className="text-center py-6 text-gray-400 dark:text-gray-500 text-xs">Loading...</div>
           ) : (
             <TaskList
               incompleteTasks={incompleteTasks}

@@ -110,13 +110,13 @@ export function ReviewPastTasksModal({
 
   return (
     <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-3 z-50">
-      <div className="bg-white rounded-xl shadow-2xl max-w-md w-full flex flex-col max-h-[85vh]">
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-md w-full flex flex-col max-h-[85vh]">
         {/* Header */}
-        <div className="flex items-center justify-between p-3 border-b">
-          <h2 className="text-base font-semibold text-gray-900">Past Tasks</h2>
+        <div className="flex items-center justify-between p-3 border-b dark:border-gray-700">
+          <h2 className="text-base font-semibold text-gray-900 dark:text-white">Past Tasks</h2>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg p-1 transition-all duration-200"
+            className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg p-1 transition-all duration-200"
           >
             <X size={18} />
           </button>
@@ -125,12 +125,12 @@ export function ReviewPastTasksModal({
         {/* Content */}
         <div className="flex-1 flex flex-col items-center justify-center p-6">
           {loading ? (
-            <div className="text-center text-gray-400 text-sm">Loading...</div>
+            <div className="text-center text-gray-400 dark:text-gray-500 text-sm">Loading...</div>
           ) : pastTasks.length === 0 ? (
-            <div className="text-center text-gray-400 text-sm">
-              <Clock size={48} className="mx-auto mb-3 text-gray-300" />
+            <div className="text-center text-gray-400 dark:text-gray-500 text-sm">
+              <Clock size={48} className="mx-auto mb-3 text-gray-300 dark:text-gray-600" />
               <p className="font-medium">All caught up!</p>
-              <p className="text-xs mt-1 text-gray-300">No incomplete tasks from the past</p>
+              <p className="text-xs mt-1 text-gray-300 dark:text-gray-600">No incomplete tasks from the past</p>
             </div>
           ) : currentTask ? (
             <div className="relative w-full max-w-sm">
@@ -156,7 +156,7 @@ export function ReviewPastTasksModal({
 
               {/* Swipeable Card */}
               <div
-                className="relative z-10 bg-white rounded-2xl shadow-lg p-6 cursor-grab active:cursor-grabbing select-none"
+                className="relative z-10 bg-white dark:bg-gray-700 rounded-2xl shadow-lg p-6 cursor-grab active:cursor-grabbing select-none"
                 style={{
                   transform: `translateX(${dragOffset.x}px) translateY(${dragOffset.y}px) rotate(${rotation}deg)`,
                   opacity,
@@ -167,8 +167,8 @@ export function ReviewPastTasksModal({
                 onTouchEnd={handleTouchEnd}
               >
                 <div className="mb-4">
-                  <p className="text-lg font-medium text-gray-900 mb-2">{currentTask.text}</p>
-                  <p className="text-sm text-gray-500">
+                  <p className="text-lg font-medium text-gray-900 dark:text-white mb-2">{currentTask.text}</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
                     From: {new Date(currentTask.date).toLocaleDateString('en-US', {
                       month: 'short',
                       day: 'numeric',
@@ -177,7 +177,7 @@ export function ReviewPastTasksModal({
                   </p>
                 </div>
 
-                <div className="text-xs text-gray-400 text-center">
+                <div className="text-xs text-gray-400 dark:text-gray-500 text-center">
                   {currentIndex + 1} of {pastTasks.length}
                 </div>
               </div>

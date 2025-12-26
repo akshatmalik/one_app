@@ -15,7 +15,7 @@ export function TaskList({ incompleteTasks, completedTasks, onToggle }: TaskList
 
   if (allTasks.length === 0) {
     return (
-      <div className="text-center py-6 text-gray-400 text-xs">
+      <div className="text-center py-6 text-gray-400 dark:text-gray-500 text-xs">
         <p>No tasks yet</p>
       </div>
     );
@@ -25,11 +25,12 @@ export function TaskList({ incompleteTasks, completedTasks, onToggle }: TaskList
     <div
       key={task.id}
       className={clsx(
-        'group flex items-center gap-2 p-2 rounded-lg transition-all duration-200',
+        'group flex items-center gap-2 p-2 rounded-lg transition-all duration-200 cursor-move',
         task.completed
-          ? 'bg-gray-50/50'
-          : 'bg-white hover:bg-gray-50/30'
+          ? 'bg-gray-50/50 dark:bg-gray-700/50'
+          : 'bg-white dark:bg-gray-700 hover:bg-gray-50/30 dark:hover:bg-gray-600/30'
       )}
+      draggable
     >
       <button
         onClick={() => onToggle(task.id)}
@@ -37,7 +38,7 @@ export function TaskList({ incompleteTasks, completedTasks, onToggle }: TaskList
           'flex-shrink-0 w-4 h-4 rounded flex items-center justify-center transition-all duration-200',
           task.completed
             ? 'bg-gradient-to-br from-green-500 to-emerald-500'
-            : 'bg-gray-200 hover:bg-blue-500'
+            : 'bg-gray-200 dark:bg-gray-600 hover:bg-blue-500'
         )}
       >
         {task.completed && <Check size={11} className="text-white" strokeWidth={3} />}
@@ -46,8 +47,8 @@ export function TaskList({ incompleteTasks, completedTasks, onToggle }: TaskList
         className={clsx(
           'flex-1 text-xs transition-all duration-200',
           task.completed
-            ? 'line-through text-gray-400'
-            : 'text-gray-700'
+            ? 'line-through text-gray-400 dark:text-gray-500'
+            : 'text-gray-700 dark:text-gray-300'
         )}
       >
         {task.text}

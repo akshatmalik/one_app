@@ -33,7 +33,7 @@ export function TaskInput({ onAdd }: TaskInputProps) {
         value={text}
         onChange={(e) => setText(e.target.value)}
         placeholder="Add a task..."
-        className="flex-1 px-2.5 py-1.5 bg-gray-50 rounded-lg text-xs focus:outline-none focus:bg-white transition-all duration-200 placeholder:text-gray-400"
+        className="flex-1 px-2.5 py-1.5 bg-gray-50 dark:bg-gray-700 dark:text-white rounded-lg text-xs focus:outline-none focus:bg-white dark:focus:bg-gray-600 transition-all duration-200 placeholder:text-gray-400 dark:placeholder:text-gray-500"
         disabled={isAdding}
       />
       <button
