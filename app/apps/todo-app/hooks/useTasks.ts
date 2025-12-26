@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { repository } from '../lib/storage';
-import { Task } from '../lib/types';
+import { Task, parseTaskText } from '../lib/types';
 import { SAMPLE_TASKS } from '../data/sample-tasks';
 
 export function useTasks(date: string) {
@@ -39,10 +39,13 @@ export function useTasks(date: string) {
 
   const addTask = async (text: string) => {
     try {
+      const { cleanText, category, priority } = parseTaskText(text);
       await repository.create({
-        text,
+        text: cleanText,
         completed: false,
         date,
+        category,
+        priority: priority || undefined,
       });
       await loadTasks();
     } catch (e) {
