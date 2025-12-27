@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Task } from '../lib/types';
-import { Check } from 'lucide-react';
+import { Check, GripVertical } from 'lucide-react';
 import clsx from 'clsx';
 
 interface TaskListProps {
@@ -19,7 +19,7 @@ export function TaskList({ incompleteTasks, completedTasks, onToggle, onReorder 
 
   if (allTasks.length === 0) {
     return (
-      <div className="text-center py-6 text-gray-400 dark:text-gray-500 text-xs">
+      <div className="text-center py-6 text-slate-400 dark:text-slate-500 text-xs">
         <p>No tasks yet</p>
       </div>
     );
@@ -64,26 +64,31 @@ export function TaskList({ incompleteTasks, completedTasks, onToggle, onReorder 
     <div
       key={task.id}
       className={clsx(
-        'group flex items-center gap-2 p-2 rounded-lg transition-all duration-200 cursor-move',
+        'group flex items-center gap-2 p-2 rounded-lg transition-all duration-200',
         task.completed
-          ? 'bg-gray-50/50 dark:bg-gray-700/50'
-          : 'bg-white dark:bg-gray-700 hover:bg-gray-50/30 dark:hover:bg-gray-600/30',
+          ? 'bg-slate-700/30 dark:bg-slate-700/30'
+          : 'bg-slate-700/50 dark:bg-slate-700/50 hover:bg-slate-700/60 dark:hover:bg-slate-700/60',
         draggedTaskId === task.id && 'opacity-50',
-        dragOverTaskId === task.id && 'border-t-2 border-blue-500'
+        dragOverTaskId === task.id && 'border-t-2 border-blue-400'
       )}
-      draggable
-      onDragStart={(e) => handleDragStart(e, task.id)}
       onDragOver={(e) => handleDragOver(e, task.id)}
       onDrop={(e) => handleDrop(e, task.id)}
-      onDragEnd={handleDragEnd}
     >
+      <div
+        draggable
+        onDragStart={(e) => handleDragStart(e, task.id)}
+        onDragEnd={handleDragEnd}
+        className="flex-shrink-0 cursor-grab active:cursor-grabbing touch-none p-0.5 -ml-1 hover:bg-slate-600/30 rounded transition-colors"
+      >
+        <GripVertical size={14} className="text-slate-400 dark:text-slate-500" />
+      </div>
       <button
         onClick={() => onToggle(task.id)}
         className={clsx(
           'flex-shrink-0 w-4 h-4 rounded flex items-center justify-center transition-all duration-200',
           task.completed
             ? 'bg-gradient-to-br from-green-500 to-emerald-500'
-            : 'bg-gray-200 dark:bg-gray-600 hover:bg-blue-500'
+            : 'bg-slate-600/50 dark:bg-slate-600/50 hover:bg-blue-500 dark:hover:bg-blue-500'
         )}
       >
         {task.completed && <Check size={11} className="text-white" strokeWidth={3} />}
@@ -92,8 +97,8 @@ export function TaskList({ incompleteTasks, completedTasks, onToggle, onReorder 
         className={clsx(
           'flex-1 text-xs transition-all duration-200',
           task.completed
-            ? 'line-through text-gray-400 dark:text-gray-500'
-            : 'text-gray-700 dark:text-gray-300'
+            ? 'line-through text-slate-400 dark:text-slate-500'
+            : 'text-slate-100 dark:text-slate-200'
         )}
       >
         {task.text}

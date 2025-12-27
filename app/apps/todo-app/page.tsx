@@ -64,31 +64,31 @@ export default function TodoApp() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
+    <div className="min-h-screen bg-gradient-to-br from-slate-800 via-slate-900 to-slate-950 dark:from-slate-900 dark:via-slate-950 dark:to-black">
       <div className="w-full">
         {/* Header */}
-        <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm">
+        <div className="bg-slate-800/80 dark:bg-slate-900/80 backdrop-blur-sm p-3">
           <div className="flex items-center justify-between mb-2">
-            <h1 className="text-base font-semibold text-gray-900 dark:text-white">Daily Tasks</h1>
+            <h1 className="text-base font-semibold text-slate-100 dark:text-white">Daily Tasks</h1>
             {isToday && (
               <button
                 onClick={() => setIsReviewModalOpen(true)}
-                className="p-1 text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/30 rounded-lg transition-all duration-200"
+                className="p-1.5 text-purple-400 dark:text-purple-400 hover:bg-slate-700/50 dark:hover:bg-slate-800/50 rounded-lg transition-all duration-200"
                 aria-label="Review past tasks"
               >
-                <History size={16} />
+                <History size={18} />
               </button>
             )}
           </div>
 
           {/* Date Navigation */}
-          <div className="flex items-center gap-1 mb-2">
+          <div className="flex items-center gap-1.5 mb-3">
             <button
               onClick={handlePreviousDay}
-              className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-all duration-200"
+              className="p-1.5 hover:bg-slate-700/50 dark:hover:bg-slate-800/50 rounded-lg transition-all duration-200"
               aria-label="Previous day"
             >
-              <ChevronLeft size={16} className="dark:text-gray-300" />
+              <ChevronLeft size={18} className="text-slate-300 dark:text-slate-400" />
             </button>
 
             <div className="relative flex-1">
@@ -96,22 +96,22 @@ export default function TodoApp() {
                 type="date"
                 value={selectedDate}
                 onChange={handleDateChange}
-                className="px-2 py-1 bg-white dark:bg-gray-700 dark:text-white rounded-lg text-xs w-full text-center cursor-pointer transition-all duration-200"
+                className="px-3 py-2 bg-slate-700/50 dark:bg-slate-800/50 text-slate-100 dark:text-white rounded-lg text-sm w-full text-center cursor-pointer transition-all duration-200"
               />
             </div>
 
             <button
               onClick={handleNextDay}
-              className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-all duration-200"
+              className="p-1.5 hover:bg-slate-700/50 dark:hover:bg-slate-800/50 rounded-lg transition-all duration-200"
               aria-label="Next day"
             >
-              <ChevronRight size={16} className="dark:text-gray-300" />
+              <ChevronRight size={18} className="text-slate-300 dark:text-slate-400" />
             </button>
 
             {!isToday && (
               <button
                 onClick={handleTodayClick}
-                className="px-2 py-1 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-lg hover:from-blue-700 hover:to-blue-600 transition-all duration-200 text-xs font-medium whitespace-nowrap shadow-sm hover:shadow"
+                className="px-3 py-2 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-lg hover:from-blue-700 hover:to-blue-600 transition-all duration-200 text-sm font-medium whitespace-nowrap shadow-sm hover:shadow"
               >
                 Today
               </button>
@@ -119,12 +119,12 @@ export default function TodoApp() {
           </div>
 
           {/* Stats */}
-          <div className="flex items-center gap-2 text-xs">
-            <span className="font-semibold text-gray-700 dark:text-gray-300 min-w-[2rem]">
+          <div className="flex items-center gap-2.5 text-sm">
+            <span className="font-semibold text-slate-200 dark:text-slate-300 min-w-[2.5rem]">
               {stats.completed}/{stats.total}
             </span>
             {stats.total > 0 && (
-              <div className="flex-1 bg-gray-100 dark:bg-gray-700 rounded-full h-1 overflow-hidden">
+              <div className="flex-1 bg-slate-700/50 dark:bg-slate-800/50 rounded-full h-1.5 overflow-hidden">
                 <div
                   className="bg-gradient-to-r from-green-500 to-emerald-500 h-full transition-all duration-500 ease-out rounded-full"
                   style={{ width: `${(stats.completed / stats.total) * 100}%` }}
@@ -135,11 +135,11 @@ export default function TodoApp() {
         </div>
 
         {/* Main Content */}
-        <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm">
+        <div className="bg-slate-800/50 dark:bg-slate-900/50 backdrop-blur-sm p-3">
           <TaskInput onAdd={addTask} />
 
           {loading ? (
-            <div className="text-center py-6 text-gray-400 dark:text-gray-500 text-xs">Loading...</div>
+            <div className="text-center py-6 text-slate-400 dark:text-slate-500 text-sm">Loading...</div>
           ) : (
             <TaskList
               incompleteTasks={incompleteTasks}
