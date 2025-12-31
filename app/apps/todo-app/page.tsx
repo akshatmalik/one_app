@@ -1,15 +1,17 @@
 'use client';
 
 import { useState } from 'react';
-import { ChevronLeft, ChevronRight, History } from 'lucide-react';
+import { ChevronLeft, ChevronRight, History, Cloud, CloudOff } from 'lucide-react';
 import { useTasks } from './hooks/useTasks';
 import { TaskInput } from './components/TaskInput';
 import { TaskList } from './components/TaskList';
 import { ReviewPastTasksModal } from './components/ReviewPastTasksModal';
 import { useAuthContext } from '@/lib/AuthContext';
+import { useToast } from '@/components/Toast';
 
 export default function TodoApp() {
   const { user, loading: authLoading } = useAuthContext();
+  const { showToast } = useToast();
   const [selectedDate, setSelectedDate] = useState(() => {
     return new Date().toISOString().split('T')[0];
   });
@@ -20,6 +22,7 @@ export default function TodoApp() {
     completedTasks,
     stats,
     loading,
+    error,
     addTask,
     toggleTask,
     deleteTask,
@@ -51,18 +54,45 @@ export default function TodoApp() {
     setSelectedDate(e.target.value);
   };
 
-  const formatDisplayDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', {
-      weekday: 'long',
-      month: 'long',
-      day: 'numeric',
-      year: 'numeric',
-    });
+  const handleMoveToToday = async (taskId: string) => {
+    try {
+      await moveTaskToDate(taskId, today);
+    } catch (e) {
+      showToast(`Failed to move task: ${(e as Error).message}`, 'error');
+    }
   };
 
-  const handleMoveToToday = async (taskId: string) => {
-    await moveTaskToDate(taskId, today);
+  const handleAddTask = async (text: string) => {
+    try {
+      await addTask(text);
+      showToast('Task added', 'success');
+    } catch (e) {
+      showToast(`Failed to add task: ${(e as Error).message}`, 'error');
+    }
+  };
+
+  const handleToggleTask = async (id: string) => {
+    try {
+      await toggleTask(id);
+    } catch (e) {
+      showToast(`Failed to toggle task: ${(e as Error).message}`, 'error');
+    }
+  };
+
+  const handleDeleteTask = async (id: string) => {
+    try {
+      await deleteTask(id);
+    } catch (e) {
+      showToast(`Failed to delete task: ${(e as Error).message}`, 'error');
+    }
+  };
+
+  const handleReorder = async (taskId: string, newOrder: number) => {
+    try {
+      await reorderTasks(taskId, newOrder);
+    } catch (e) {
+      showToast(`Failed to reorder: ${(e as Error).message}`, 'error');
+    }
   };
 
   // Show loading while checking auth
@@ -74,36 +104,48 @@ export default function TodoApp() {
     );
   }
 
-  // Show sign-in prompt if not authenticated
-  if (!user) {
-    return (
-      <div className="space-y-6">
-        <div className="w-full">
-          <h1 className="text-4xl font-bold text-gray-900 mb-4">Daily Tasks</h1>
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
-            <p className="text-gray-600">Sign in to save your tasks across devices</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-6">
       <div className="w-full">
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-4xl font-bold text-gray-900">Daily Tasks</h1>
-          {isToday && (
-            <button
-              onClick={() => setIsReviewModalOpen(true)}
-              className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-all duration-200"
-              aria-label="Review past tasks"
-            >
-              <History size={20} />
-            </button>
-          )}
+          <div className="flex items-center gap-2">
+            {/* Cloud sync indicator */}
+            {user ? (
+              <span className="text-green-600" title="Syncing to cloud">
+                <Cloud size={20} />
+              </span>
+            ) : (
+              <span className="text-gray-400" title="Local only - sign in to sync">
+                <CloudOff size={20} />
+              </span>
+            )}
+            {isToday && (
+              <button
+                onClick={() => setIsReviewModalOpen(true)}
+                className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-all duration-200"
+                aria-label="Review past tasks"
+              >
+                <History size={20} />
+              </button>
+            )}
+          </div>
         </div>
+
+        {/* Local mode banner */}
+        {!user && (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 mb-4 text-sm text-amber-700">
+            Local mode - tasks saved on this device only. Sign in to sync across devices.
+          </div>
+        )}
+
+        {/* Error display */}
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-2 mb-4 text-sm text-red-700">
+            Error: {error.message}
+          </div>
+        )}
 
         {/* Date Navigation */}
         <div className="flex items-center gap-2 mb-4">
@@ -159,7 +201,7 @@ export default function TodoApp() {
 
         {/* Main Content */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-          <TaskInput onAdd={addTask} />
+          <TaskInput onAdd={handleAddTask} />
 
           {loading ? (
             <div className="text-center py-6 text-gray-500 text-sm">Loading...</div>
@@ -167,8 +209,8 @@ export default function TodoApp() {
             <TaskList
               incompleteTasks={incompleteTasks}
               completedTasks={completedTasks}
-              onToggle={toggleTask}
-              onReorder={reorderTasks}
+              onToggle={handleToggleTask}
+              onReorder={handleReorder}
             />
           )}
         </div>
@@ -180,7 +222,7 @@ export default function TodoApp() {
         onClose={() => setIsReviewModalOpen(false)}
         getPastTasks={getPastIncompleteTasks}
         onMoveToToday={handleMoveToToday}
-        onDelete={deleteTask}
+        onDelete={handleDeleteTask}
         todayDate={today}
       />
     </div>

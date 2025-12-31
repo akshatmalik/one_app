@@ -74,7 +74,6 @@ export class FirebaseRepository implements TaskRepository {
     const snapshot = await getDoc(docRef);
     if (!snapshot.exists()) return null;
     const task = snapshot.data() as Task;
-    // Only return if belongs to current user
     return task.userId === this.userId ? task : null;
   }
 
@@ -111,23 +110,29 @@ export class FirebaseRepository implements TaskRepository {
   }
 }
 
-// LocalStorage Repository - for local dev (no auth needed)
+// LocalStorage Repository - for local mode (no auth needed)
 export class LocalStorageRepository implements TaskRepository {
   private userId: string = 'local-user';
 
   setUserId(userId: string): void {
-    this.userId = userId;
+    this.userId = userId || 'local-user';
+  }
+
+  private getStorageKey(): string {
+    return `${STORAGE_KEY}-${this.userId}`;
   }
 
   async getAll(): Promise<Task[]> {
     if (typeof window === 'undefined') return [];
-    const data = localStorage.getItem(STORAGE_KEY);
+    const data = localStorage.getItem(this.getStorageKey());
     return data ? JSON.parse(data) : [];
   }
 
   async getByDate(date: string): Promise<Task[]> {
     const allTasks = await this.getAll();
-    return allTasks.filter(task => task.date === date);
+    return allTasks
+      .filter(task => task.date === date)
+      .sort((a, b) => (a.order || 0) - (b.order || 0));
   }
 
   async getIncompleteBefore(date: string): Promise<Task[]> {
@@ -179,12 +184,55 @@ export class LocalStorageRepository implements TaskRepository {
 
   private save(tasks: Task[]): void {
     if (typeof window !== 'undefined') {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
+      localStorage.setItem(this.getStorageKey(), JSON.stringify(tasks));
     }
   }
 }
 
+// Hybrid Repository - uses Firebase when authenticated, localStorage otherwise
+class HybridRepository implements TaskRepository {
+  private firebaseRepo = new FirebaseRepository();
+  private localRepo = new LocalStorageRepository();
+  private useFirebase = false;
+
+  setUserId(userId: string): void {
+    this.useFirebase = !!userId && isFirebaseConfigured();
+    this.firebaseRepo.setUserId(userId);
+    this.localRepo.setUserId(userId || 'local-user');
+  }
+
+  private get repo(): TaskRepository {
+    return this.useFirebase ? this.firebaseRepo : this.localRepo;
+  }
+
+  getAll(): Promise<Task[]> {
+    return this.repo.getAll();
+  }
+
+  getByDate(date: string): Promise<Task[]> {
+    return this.repo.getByDate(date);
+  }
+
+  getIncompleteBefore(date: string): Promise<Task[]> {
+    return this.repo.getIncompleteBefore(date);
+  }
+
+  getById(id: string): Promise<Task | null> {
+    return this.repo.getById(id);
+  }
+
+  create(taskData: Omit<Task, 'id' | 'userId' | 'createdAt' | 'updatedAt'>): Promise<Task> {
+    return this.repo.create(taskData);
+  }
+
+  update(id: string, updates: Partial<Task>): Promise<Task> {
+    return this.repo.update(id, updates);
+  }
+
+  delete(id: string): Promise<void> {
+    return this.repo.delete(id);
+  }
+}
+
 // Export singleton
-export const repository: TaskRepository = isFirebaseConfigured()
-  ? new FirebaseRepository()
-  : new LocalStorageRepository();
+export const repository: TaskRepository = new HybridRepository();
