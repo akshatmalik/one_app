@@ -31,6 +31,7 @@ This document provides comprehensive guidance for AI assistants working with the
 
 ### Current Mini-Apps
 1. **Game Analytics** - Track game purchases, hours played, ratings, and calculate value metrics (cost-per-hour, blend scores)
+2. **Daily Tasks (Todo App)** - Daily task management with drag-and-drop reordering, date navigation, and past task review
 
 ---
 
@@ -48,6 +49,7 @@ This document provides comprehensive guidance for AI assistants working with the
 - `clsx` - Conditional className composition
 - `lucide-react` - Icon library
 - `date-fns` - Date manipulation
+- `firebase` - Authentication and Firestore database
 
 ### Development Tools
 - **ESLint** - Linting with Next.js config
@@ -80,15 +82,45 @@ Each mini-app is **completely isolated**:
 - NO cross-mini-app imports (except shared UI components)
 
 ### Data Persistence Strategy
-**Current**: localStorage (Phase 1)
-**Future**: API routes + Database (Phase 2)
-**Pattern**: Repository pattern for easy migration
+**Pattern**: HybridRepository with localStorage fallback
+
+The app uses a **HybridRepository** pattern:
+- **Not logged in**: Uses localStorage (local-only mode)
+- **Logged in**: Uses Firebase Firestore (cloud sync)
 
 ```typescript
-// Phase 1: LocalStorageRepository
-// Phase 2: Swap to ApiRepository
-// Components unchanged!
-export const repository = new LocalStorageRepository();
+// HybridRepository switches based on auth state
+class HybridRepository implements Repository {
+  setUserId(userId: string): void {
+    this.useFirebase = !!userId && isFirebaseConfigured();
+  }
+
+  private get repo(): Repository {
+    return this.useFirebase ? this.firebaseRepo : this.localRepo;
+  }
+}
+```
+
+### Authentication
+- **Firebase Auth** with Google sign-in
+- Global auth state via `AuthContext` and `useAuthContext` hook
+- Sign-in/sign-out in Navigation bar
+- All data models include `userId` field for per-user data
+
+### Firestore Security Rules
+Required rules in Firebase Console → Firestore → Rules:
+```
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /tasks/{taskId} {
+      allow read, write: if request.auth != null;
+    }
+    match /games/{gameId} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}
 ```
 
 ### Design Principles
