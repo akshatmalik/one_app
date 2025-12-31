@@ -74,6 +74,7 @@ export class FirebaseRepository implements TaskRepository {
     const snapshot = await getDoc(docRef);
     if (!snapshot.exists()) return null;
     const task = snapshot.data() as Task;
+    // Only return if belongs to current user
     return task.userId === this.userId ? task : null;
   }
 
