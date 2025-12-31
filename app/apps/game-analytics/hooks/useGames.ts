@@ -1,17 +1,22 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Game } from '../lib/types';
 import { gameRepository } from '../lib/storage';
 
-export function useGames() {
+export function useGames(userId: string | null) {
   const [games, setGames] = useState<Game[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
-  const refresh = async () => {
+  const refresh = useCallback(async () => {
     try {
       setLoading(true);
+      setError(null);
+
+      // Set userId on repository
+      gameRepository.setUserId(userId || '');
+
       const data = await gameRepository.getAll();
       setGames(data);
     } catch (e) {
@@ -19,13 +24,13 @@ export function useGames() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [userId]);
 
   useEffect(() => {
     refresh();
-  }, []);
+  }, [refresh]);
 
-  const addGame = async (gameData: Omit<Game, 'id' | 'createdAt' | 'updatedAt'>) => {
+  const addGame = async (gameData: Omit<Game, 'id' | 'userId' | 'createdAt' | 'updatedAt'>) => {
     try {
       const newGame = await gameRepository.create(gameData);
       await refresh();

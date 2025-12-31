@@ -1,6 +1,6 @@
 import { Game } from '../lib/types';
 
-export const BASELINE_GAMES_2025: Omit<Game, 'id' | 'createdAt' | 'updatedAt'>[] = [
+export const BASELINE_GAMES_2025: Omit<Game, 'id' | 'userId' | 'createdAt' | 'updatedAt'>[] = [
   {
     name: 'Silent Hill 2',
     price: 45,

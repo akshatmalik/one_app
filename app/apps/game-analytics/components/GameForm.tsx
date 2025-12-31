@@ -8,7 +8,7 @@ import { Game, GameStatus } from '../lib/types';
 import { calculateCostPerHour } from '../lib/calculations';
 
 interface GameFormProps {
-  onSubmit: (game: Omit<Game, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
+  onSubmit: (game: Omit<Game, 'id' | 'userId' | 'createdAt' | 'updatedAt'>) => Promise<void>;
   onClose: () => void;
   initialGame?: Game;
 }

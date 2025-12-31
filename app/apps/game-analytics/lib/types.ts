@@ -2,6 +2,7 @@ export type GameStatus = 'Not Started' | 'In Progress' | 'Completed';
 
 export interface Game {
   id: string;
+  userId: string; // Owner of the game
   name: string;
   price: number;
   hours: number;
@@ -29,9 +30,10 @@ export interface AnalyticsSummary {
 }
 
 export interface GameRepository {
+  setUserId(userId: string): void;
   getAll(): Promise<Game[]>;
   getById(id: string): Promise<Game | null>;
-  create(game: Omit<Game, 'id' | 'createdAt' | 'updatedAt'>): Promise<Game>;
+  create(game: Omit<Game, 'id' | 'userId' | 'createdAt' | 'updatedAt'>): Promise<Game>;
   update(id: string, updates: Partial<Game>): Promise<Game>;
   delete(id: string): Promise<void>;
 }
