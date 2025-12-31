@@ -11,6 +11,16 @@ export const MINI_APPS: MiniApp[] = [
     tags: ['analytics', 'gaming'],
     isNew: true,
   },
+  {
+    id: 'todo-app',
+    name: 'Daily Tasks',
+    description: 'Simple daily task tracker with date navigation and past task review',
+    icon: '✓',
+    path: '/apps/todo-app',
+    color: '#3B82F6',
+    tags: ['productivity', 'tasks'],
+    isNew: true,
+  },
 ];
 
 export function getMiniAppById(id: string): MiniApp | undefined {
