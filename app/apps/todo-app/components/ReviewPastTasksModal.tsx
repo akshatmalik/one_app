@@ -109,14 +109,14 @@ export function ReviewPastTasksModal({
   const opacity = isDragging ? 1 - Math.abs(dragOffset.x) / 300 : 1;
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-      <div className="bg-slate-800 dark:bg-slate-900 rounded-xl shadow-2xl max-w-md w-full flex flex-col max-h-[85vh]">
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-xl shadow-2xl max-w-md w-full flex flex-col max-h-[85vh]">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-slate-700 dark:border-slate-800">
-          <h2 className="text-base font-semibold text-slate-100 dark:text-white">Past Tasks</h2>
+        <div className="flex items-center justify-between p-4 border-b border-gray-200">
+          <h2 className="text-lg font-semibold text-gray-900">Review Past Tasks</h2>
           <button
             onClick={onClose}
-            className="text-slate-400 dark:text-slate-500 hover:text-slate-200 dark:hover:text-slate-300 hover:bg-slate-700 dark:hover:bg-slate-800 rounded-lg p-1.5 transition-all duration-200"
+            className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg p-1.5 transition-all duration-200"
           >
             <X size={20} />
           </button>
@@ -125,12 +125,12 @@ export function ReviewPastTasksModal({
         {/* Content */}
         <div className="flex-1 flex flex-col items-center justify-center p-6">
           {loading ? (
-            <div className="text-center text-slate-400 dark:text-slate-500 text-sm">Loading...</div>
+            <div className="text-center text-gray-500 text-sm">Loading...</div>
           ) : pastTasks.length === 0 ? (
-            <div className="text-center text-slate-400 dark:text-slate-500 text-sm">
-              <Clock size={48} className="mx-auto mb-3 text-slate-600 dark:text-slate-700" />
-              <p className="font-medium">All caught up!</p>
-              <p className="text-xs mt-1 text-slate-500 dark:text-slate-600">No incomplete tasks from the past</p>
+            <div className="text-center text-gray-500 text-sm">
+              <Clock size={48} className="mx-auto mb-3 text-gray-300" />
+              <p className="font-medium text-gray-700">All caught up!</p>
+              <p className="text-xs mt-1 text-gray-400">No incomplete tasks from the past</p>
             </div>
           ) : currentTask ? (
             <div className="relative w-full max-w-sm">
@@ -156,7 +156,7 @@ export function ReviewPastTasksModal({
 
               {/* Swipeable Card */}
               <div
-                className="relative z-10 bg-slate-700 dark:bg-slate-800 rounded-2xl shadow-lg p-6 cursor-grab active:cursor-grabbing select-none"
+                className="relative z-10 bg-gray-50 border border-gray-200 rounded-2xl shadow-lg p-6 cursor-grab active:cursor-grabbing select-none"
                 style={{
                   transform: `translateX(${dragOffset.x}px) translateY(${dragOffset.y}px) rotate(${rotation}deg)`,
                   opacity,
@@ -167,8 +167,8 @@ export function ReviewPastTasksModal({
                 onTouchEnd={handleTouchEnd}
               >
                 <div className="mb-4">
-                  <p className="text-lg font-medium text-slate-100 dark:text-white mb-2">{currentTask.text}</p>
-                  <p className="text-sm text-slate-400 dark:text-slate-500">
+                  <p className="text-lg font-medium text-gray-900 mb-2">{currentTask.text}</p>
+                  <p className="text-sm text-gray-500">
                     From: {new Date(currentTask.date).toLocaleDateString('en-US', {
                       month: 'short',
                       day: 'numeric',
@@ -177,7 +177,7 @@ export function ReviewPastTasksModal({
                   </p>
                 </div>
 
-                <div className="text-xs text-slate-500 dark:text-slate-600 text-center">
+                <div className="text-xs text-gray-400 text-center">
                   {currentIndex + 1} of {pastTasks.length}
                 </div>
               </div>
@@ -196,7 +196,7 @@ export function ReviewPastTasksModal({
             </button>
             <button
               onClick={handleMoveToToday}
-              className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 text-white shadow-lg hover:shadow-xl active:scale-95 transition-all duration-200 flex items-center justify-center font-semibold text-sm"
+              className="w-20 h-20 rounded-full bg-gradient-to-br from-purple-500 to-purple-600 text-white shadow-lg hover:shadow-xl active:scale-95 transition-all duration-200 flex items-center justify-center font-semibold text-sm"
             >
               TODAY
             </button>
