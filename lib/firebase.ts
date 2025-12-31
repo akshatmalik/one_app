@@ -4,13 +4,14 @@ import { getFirestore, Firestore } from 'firebase/firestore';
 let app: FirebaseApp | null = null;
 let db: Firestore | null = null;
 
+// Firebase config is safe to be public - security comes from Firestore rules
 const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+  apiKey: "AIzaSyBS3IVvszDrm_zjjXu8TATgs1H-FlegHtM",
+  authDomain: "oneapp-943e3.firebaseapp.com",
+  projectId: "oneapp-943e3",
+  storageBucket: "oneapp-943e3.firebasestorage.app",
+  messagingSenderId: "1052736128978",
+  appId: "1:1052736128978:web:9d42b47c6a343eac35aa0b",
 };
 
 export function getFirebaseDb(): Firestore {
@@ -26,8 +27,5 @@ export function getFirebaseDb(): Firestore {
 }
 
 export const isFirebaseConfigured = (): boolean => {
-  return !!(
-    process.env.NEXT_PUBLIC_FIREBASE_API_KEY &&
-    process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID
-  );
+  return true; // Always configured now
 };
