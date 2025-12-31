@@ -1,10 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, Target } from 'lucide-react';
+import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame } from 'lucide-react';
 import { useGames } from './hooks/useGames';
 import { useAnalytics, GameWithMetrics } from './hooks/useAnalytics';
 import { GameForm } from './components/GameForm';
+import { GameCharts } from './components/GameCharts';
 import { Game, GameStatus } from './lib/types';
 import { gameRepository } from './lib/storage';
 import { BASELINE_GAMES_2025 } from './data/baseline-games';
@@ -269,6 +270,13 @@ export default function GameAnalyticsPage() {
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+
+          {/* Charts Section */}
+          {games.length > 0 && (
+            <div className="mt-8">
+              <GameCharts games={gamesWithMetrics} />
             </div>
           )}
         </div>
