@@ -1,124 +1,93 @@
 import { v4 as uuidv4 } from 'uuid';
 import { Task, TaskRepository } from './types';
-import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
+import { getFirebaseDb, isFirebaseConfigured } from '@/lib/firebase';
+import {
+  collection,
+  doc,
+  getDocs,
+  getDoc,
+  setDoc,
+  updateDoc,
+  deleteDoc,
+  query,
+  where,
+  orderBy,
+} from 'firebase/firestore';
 
 const STORAGE_KEY = 'todo-app-tasks';
+const COLLECTION_NAME = 'tasks';
 
-// Supabase Repository - uses cloud database
-export class SupabaseRepository implements TaskRepository {
-  private get supabase() {
-    return getSupabase();
+// Firebase Repository - schemaless, just write data
+export class FirebaseRepository implements TaskRepository {
+  private get db() {
+    return getFirebaseDb();
+  }
+
+  private get tasksCollection() {
+    return collection(this.db, COLLECTION_NAME);
   }
 
   async getAll(): Promise<Task[]> {
-    const { data, error } = await this.supabase
-      .from('tasks')
-      .select('*')
-      .order('order', { ascending: true });
-
-    if (error) throw error;
-    return (data || []).map(this.mapFromDb);
+    const q = query(this.tasksCollection, orderBy('order', 'asc'));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => doc.data() as Task);
   }
 
   async getByDate(date: string): Promise<Task[]> {
-    const { data, error } = await this.supabase
-      .from('tasks')
-      .select('*')
-      .eq('date', date)
-      .order('order', { ascending: true });
-
-    if (error) throw error;
-    return (data || []).map(this.mapFromDb);
+    const q = query(
+      this.tasksCollection,
+      where('date', '==', date),
+      orderBy('order', 'asc')
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => doc.data() as Task);
   }
 
   async getIncompleteBefore(date: string): Promise<Task[]> {
-    const { data, error } = await this.supabase
-      .from('tasks')
-      .select('*')
-      .eq('completed', false)
-      .lt('date', date)
-      .order('date', { ascending: false });
-
-    if (error) throw error;
-    return (data || []).map(this.mapFromDb);
+    const q = query(
+      this.tasksCollection,
+      where('completed', '==', false),
+      where('date', '<', date),
+      orderBy('date', 'desc')
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => doc.data() as Task);
   }
 
   async getById(id: string): Promise<Task | null> {
-    const { data, error } = await this.supabase
-      .from('tasks')
-      .select('*')
-      .eq('id', id)
-      .single();
-
-    if (error) {
-      if (error.code === 'PGRST116') return null; // Not found
-      throw error;
-    }
-    return data ? this.mapFromDb(data) : null;
+    const docRef = doc(this.db, COLLECTION_NAME, id);
+    const snapshot = await getDoc(docRef);
+    return snapshot.exists() ? (snapshot.data() as Task) : null;
   }
 
   async create(taskData: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>): Promise<Task> {
     const now = new Date().toISOString();
-    const task = {
+    const task: Task = {
+      ...taskData,
       id: uuidv4(),
-      text: taskData.text,
-      completed: taskData.completed,
-      date: taskData.date,
-      order: taskData.order,
-      created_at: now,
-      updated_at: now,
+      createdAt: now,
+      updatedAt: now,
     };
 
-    const { data, error } = await this.supabase
-      .from('tasks')
-      .insert(task)
-      .select()
-      .single();
-
-    if (error) throw error;
-    return this.mapFromDb(data);
+    await setDoc(doc(this.db, COLLECTION_NAME, task.id), task);
+    return task;
   }
 
   async update(id: string, updates: Partial<Task>): Promise<Task> {
-    const dbUpdates: Record<string, unknown> = {
-      updated_at: new Date().toISOString(),
+    const docRef = doc(this.db, COLLECTION_NAME, id);
+    const updateData = {
+      ...updates,
+      updatedAt: new Date().toISOString(),
     };
 
-    if (updates.text !== undefined) dbUpdates.text = updates.text;
-    if (updates.completed !== undefined) dbUpdates.completed = updates.completed;
-    if (updates.date !== undefined) dbUpdates.date = updates.date;
-    if (updates.order !== undefined) dbUpdates.order = updates.order;
+    await updateDoc(docRef, updateData);
 
-    const { data, error } = await this.supabase
-      .from('tasks')
-      .update(dbUpdates)
-      .eq('id', id)
-      .select()
-      .single();
-
-    if (error) throw error;
-    return this.mapFromDb(data);
+    const updated = await getDoc(docRef);
+    return updated.data() as Task;
   }
 
   async delete(id: string): Promise<void> {
-    const { error } = await this.supabase
-      .from('tasks')
-      .delete()
-      .eq('id', id);
-
-    if (error) throw error;
-  }
-
-  private mapFromDb(row: Record<string, unknown>): Task {
-    return {
-      id: row.id as string,
-      text: row.text as string,
-      completed: row.completed as boolean,
-      date: row.date as string,
-      order: row.order as number,
-      createdAt: row.created_at as string,
-      updatedAt: row.updated_at as string,
-    };
+    await deleteDoc(doc(this.db, COLLECTION_NAME, id));
   }
 }
 
@@ -188,7 +157,7 @@ export class LocalStorageRepository implements TaskRepository {
   }
 }
 
-// Use Supabase if configured, otherwise fall back to localStorage
-export const repository: TaskRepository = isSupabaseConfigured()
-  ? new SupabaseRepository()
+// Use Firebase if configured, otherwise fall back to localStorage
+export const repository: TaskRepository = isFirebaseConfigured()
+  ? new FirebaseRepository()
   : new LocalStorageRepository();
