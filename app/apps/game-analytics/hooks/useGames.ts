@@ -14,8 +14,8 @@ export function useGames(userId: string | null) {
       setLoading(true);
       setError(null);
 
-      // Set userId on repository
-      gameRepository.setUserId(userId || '');
+      // Set userId on repository - use 'local-user' for local mode
+      gameRepository.setUserId(userId || 'local-user');
 
       const data = await gameRepository.getAll();
       setGames(data);

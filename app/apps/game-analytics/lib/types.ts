@@ -1,13 +1,15 @@
-export type GameStatus = 'Not Started' | 'In Progress' | 'Completed';
+export type GameStatus = 'Not Started' | 'In Progress' | 'Completed' | 'Wishlist' | 'Abandoned';
 
 export interface Game {
   id: string;
-  userId: string; // Owner of the game
+  userId: string;
   name: string;
   price: number;
   hours: number;
   rating: number;
   status: GameStatus;
+  platform?: string;
+  genre?: string;
   notes?: string;
   datePurchased?: string;
   createdAt: string;
@@ -18,6 +20,7 @@ export interface GameMetrics {
   costPerHour: number;
   blendScore: number;
   normalizedCost: number;
+  valueRating: 'Excellent' | 'Good' | 'Fair' | 'Poor';
 }
 
 export interface AnalyticsSummary {
@@ -26,7 +29,18 @@ export interface AnalyticsSummary {
   totalHours: number;
   averageCostPerHour: number;
   averageRating: number;
-  budgetRemaining?: number;
+  wishlistCount: number;
+  wishlistValue: number;
+  completedCount: number;
+  inProgressCount: number;
+  bestValue: { name: string; costPerHour: number } | null;
+  mostPlayed: { name: string; hours: number } | null;
+  highestRated: { name: string; rating: number } | null;
+}
+
+export interface BudgetSettings {
+  monthlyBudget: number;
+  yearlyBudget: number;
 }
 
 export interface GameRepository {

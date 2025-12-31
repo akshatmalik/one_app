@@ -42,7 +42,6 @@ export function ReviewPastTasksModal({
   }, [isOpen, loadPastTasks]);
 
   const handleKeep = async () => {
-    // Just move to next card
     if (currentIndex < pastTasks.length - 1) {
       setCurrentIndex(currentIndex + 1);
     } else {
@@ -88,13 +87,10 @@ export function ReviewPastTasksModal({
     if (!isDragging) return;
     setIsDragging(false);
 
-    // Swipe threshold
     if (Math.abs(dragOffset.x) > 100) {
       if (dragOffset.x > 0) {
-        // Swipe right = Keep
         handleKeep();
       } else {
-        // Swipe left = Delete
         handleDelete();
       }
     }
@@ -109,14 +105,14 @@ export function ReviewPastTasksModal({
   const opacity = isDragging ? 1 - Math.abs(dragOffset.x) / 300 : 1;
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-xl shadow-2xl max-w-md w-full flex flex-col max-h-[85vh]">
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+      <div className="bg-[#12121a] border border-white/5 rounded-2xl shadow-2xl max-w-md w-full flex flex-col max-h-[85vh]">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-900">Review Past Tasks</h2>
+        <div className="flex items-center justify-between p-4 border-b border-white/5">
+          <h2 className="text-lg font-semibold text-white">Review Past Tasks</h2>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg p-1.5 transition-all duration-200"
+            className="text-white/40 hover:text-white/70 hover:bg-white/5 rounded-lg p-1.5 transition-all"
           >
             <X size={20} />
           </button>
@@ -125,12 +121,12 @@ export function ReviewPastTasksModal({
         {/* Content */}
         <div className="flex-1 flex flex-col items-center justify-center p-6">
           {loading ? (
-            <div className="text-center text-gray-500 text-sm">Loading...</div>
+            <div className="text-center text-white/30 text-sm">Loading...</div>
           ) : pastTasks.length === 0 ? (
-            <div className="text-center text-gray-500 text-sm">
-              <Clock size={48} className="mx-auto mb-3 text-gray-300" />
-              <p className="font-medium text-gray-700">All caught up!</p>
-              <p className="text-xs mt-1 text-gray-400">No incomplete tasks from the past</p>
+            <div className="text-center">
+              <Clock size={48} className="mx-auto mb-3 text-white/10" />
+              <p className="font-medium text-white/70">All caught up!</p>
+              <p className="text-xs mt-1 text-white/30">No incomplete tasks from the past</p>
             </div>
           ) : currentTask ? (
             <div className="relative w-full max-w-sm">
@@ -146,7 +142,7 @@ export function ReviewPastTasksModal({
               </div>
               <div className="absolute -right-2 top-1/2 -translate-y-1/2 z-0">
                 <div
-                  className={`px-3 py-2 bg-green-500 text-white rounded-lg font-bold text-sm transition-opacity ${
+                  className={`px-3 py-2 bg-emerald-500 text-white rounded-lg font-bold text-sm transition-opacity ${
                     dragOffset.x > 30 ? 'opacity-100' : 'opacity-0'
                   }`}
                 >
@@ -156,7 +152,7 @@ export function ReviewPastTasksModal({
 
               {/* Swipeable Card */}
               <div
-                className="relative z-10 bg-gray-50 border border-gray-200 rounded-2xl shadow-lg p-6 cursor-grab active:cursor-grabbing select-none"
+                className="relative z-10 bg-white/[0.03] border border-white/5 rounded-2xl p-6 cursor-grab active:cursor-grabbing select-none"
                 style={{
                   transform: `translateX(${dragOffset.x}px) translateY(${dragOffset.y}px) rotate(${rotation}deg)`,
                   opacity,
@@ -167,8 +163,8 @@ export function ReviewPastTasksModal({
                 onTouchEnd={handleTouchEnd}
               >
                 <div className="mb-4">
-                  <p className="text-lg font-medium text-gray-900 mb-2">{currentTask.text}</p>
-                  <p className="text-sm text-gray-500">
+                  <p className="text-lg font-medium text-white/90 mb-2">{currentTask.text}</p>
+                  <p className="text-sm text-white/40">
                     From: {new Date(currentTask.date).toLocaleDateString('en-US', {
                       month: 'short',
                       day: 'numeric',
@@ -177,7 +173,7 @@ export function ReviewPastTasksModal({
                   </p>
                 </div>
 
-                <div className="text-xs text-gray-400 text-center">
+                <div className="text-xs text-white/20 text-center">
                   {currentIndex + 1} of {pastTasks.length}
                 </div>
               </div>
@@ -190,21 +186,21 @@ export function ReviewPastTasksModal({
           <div className="p-4 flex items-center justify-center gap-4">
             <button
               onClick={handleDelete}
-              className="w-16 h-16 rounded-full bg-gradient-to-br from-red-500 to-red-600 text-white shadow-lg hover:shadow-xl active:scale-95 transition-all duration-200 flex items-center justify-center"
+              className="w-14 h-14 rounded-full bg-red-500/20 text-red-400 hover:bg-red-500/30 active:scale-95 transition-all flex items-center justify-center"
             >
-              <Trash2 size={24} />
+              <Trash2 size={20} />
             </button>
             <button
               onClick={handleMoveToToday}
-              className="w-20 h-20 rounded-full bg-gradient-to-br from-purple-500 to-purple-600 text-white shadow-lg hover:shadow-xl active:scale-95 transition-all duration-200 flex items-center justify-center font-semibold text-sm"
+              className="w-16 h-16 rounded-full bg-purple-600 text-white shadow-lg shadow-purple-500/20 hover:bg-purple-500 active:scale-95 transition-all flex items-center justify-center font-semibold text-xs"
             >
               TODAY
             </button>
             <button
               onClick={handleKeep}
-              className="w-16 h-16 rounded-full bg-gradient-to-br from-green-500 to-green-600 text-white shadow-lg hover:shadow-xl active:scale-95 transition-all duration-200 flex items-center justify-center"
+              className="w-14 h-14 rounded-full bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 active:scale-95 transition-all flex items-center justify-center"
             >
-              <Check size={24} />
+              <Check size={20} />
             </button>
           </div>
         )}

@@ -2,25 +2,27 @@
 
 import { useState } from 'react';
 import { Task } from '../lib/types';
-import { Check, GripVertical } from 'lucide-react';
+import { Check, GripVertical, Trash2 } from 'lucide-react';
 import clsx from 'clsx';
 
 interface TaskListProps {
   incompleteTasks: Task[];
   completedTasks: Task[];
   onToggle: (id: string) => Promise<void>;
+  onDelete: (id: string) => Promise<void>;
   onReorder: (taskId: string, newOrder: number) => Promise<void>;
 }
 
-export function TaskList({ incompleteTasks, completedTasks, onToggle, onReorder }: TaskListProps) {
+export function TaskList({ incompleteTasks, completedTasks, onToggle, onDelete, onReorder }: TaskListProps) {
   const allTasks = [...incompleteTasks, ...completedTasks];
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
   const [dragOverTaskId, setDragOverTaskId] = useState<string | null>(null);
 
   if (allTasks.length === 0) {
     return (
-      <div className="text-center py-8 text-gray-400 text-sm">
-        <p>No tasks yet. Add one above!</p>
+      <div className="text-center py-16">
+        <p className="text-white/30 text-sm">No tasks for this day</p>
+        <p className="text-white/20 text-xs mt-1">Add a task above to get started</p>
       </div>
     );
   }
@@ -69,7 +71,7 @@ export function TaskList({ incompleteTasks, completedTasks, onToggle, onReorder 
     setDragOverTaskId(null);
   };
 
-  const renderTask = (task: Task, index: number) => (
+  const renderTask = (task: Task) => (
     <div
       key={task.id}
       draggable
@@ -79,48 +81,59 @@ export function TaskList({ incompleteTasks, completedTasks, onToggle, onReorder 
       onDrop={(e) => handleDrop(e, task.id)}
       onDragEnd={handleDragEnd}
       className={clsx(
-        'group flex items-center gap-3 p-3 rounded-lg transition-all duration-200 cursor-grab active:cursor-grabbing',
+        'group flex items-center gap-3 p-3 rounded-xl transition-all duration-200 cursor-grab active:cursor-grabbing',
         task.completed
-          ? 'bg-gray-50'
-          : 'bg-gray-50 hover:bg-gray-100',
+          ? 'bg-white/[0.02]'
+          : 'bg-white/[0.03] hover:bg-white/[0.05]',
         draggedTaskId === task.id && 'opacity-50 scale-[0.98]',
-        dragOverTaskId === task.id && draggedTaskId !== task.id && 'border-t-2 border-purple-400 -mt-0.5'
+        dragOverTaskId === task.id && draggedTaskId !== task.id && 'ring-1 ring-purple-500/50'
       )}
     >
-      <div className="flex-shrink-0 p-0.5 hover:bg-gray-200 rounded transition-colors">
-        <GripVertical size={16} className="text-gray-400" />
+      <div className="flex-shrink-0 p-1 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab">
+        <GripVertical size={14} className="text-white/20" />
       </div>
       <button
         onClick={() => onToggle(task.id)}
         className={clsx(
-          'flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center transition-all duration-200',
+          'flex-shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all duration-200',
           task.completed
-            ? 'bg-green-500 border-green-500'
-            : 'border-gray-300 hover:border-purple-500'
+            ? 'bg-emerald-500 border-emerald-500'
+            : 'border-white/20 hover:border-purple-500'
         )}
       >
-        {task.completed && <Check size={12} className="text-white" strokeWidth={3} />}
+        {task.completed && <Check size={10} className="text-white" strokeWidth={3} />}
       </button>
       <span
         className={clsx(
           'flex-1 text-sm transition-all duration-200',
           task.completed
-            ? 'line-through text-gray-400'
-            : 'text-gray-700'
+            ? 'line-through text-white/30'
+            : 'text-white/80'
         )}
       >
         {task.text}
       </span>
+      <button
+        onClick={() => onDelete(task.id)}
+        className="flex-shrink-0 p-1.5 opacity-0 group-hover:opacity-100 text-white/20 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all"
+        aria-label="Delete task"
+      >
+        <Trash2 size={14} />
+      </button>
     </div>
   );
 
   return (
     <div className="space-y-2">
-      {incompleteTasks.map((task, index) => renderTask(task, index))}
+      {incompleteTasks.map((task) => renderTask(task))}
       {completedTasks.length > 0 && incompleteTasks.length > 0 && (
-        <div className="border-t border-gray-200 my-3" />
+        <div className="flex items-center gap-3 py-3">
+          <div className="flex-1 h-px bg-white/5" />
+          <span className="text-[10px] text-white/20 uppercase tracking-wider font-medium">Completed</span>
+          <div className="flex-1 h-px bg-white/5" />
+        </div>
       )}
-      {completedTasks.map((task, index) => renderTask(task, incompleteTasks.length + index))}
+      {completedTasks.map((task) => renderTask(task))}
     </div>
   );
 }

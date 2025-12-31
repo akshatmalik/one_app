@@ -1,62 +1,48 @@
 'use client';
 
-import { Card } from '@/components/ui/Card';
 import { AnalyticsSummary } from '../lib/types';
 
 interface StatsPanelProps {
   summary: AnalyticsSummary;
 }
 
+// Legacy component - stats are now displayed directly in the page
 export function StatsPanel({ summary }: StatsPanelProps) {
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-      <Card className="p-4">
-        <p className="text-sm text-gray-600 mb-1">Total Spent</p>
-        <p className="text-2xl font-bold text-gray-900">${summary.totalSpent}</p>
-      </Card>
+    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+      <div className="p-3 rounded-xl bg-white/[0.02] border border-white/5">
+        <p className="text-xs text-white/40 mb-1">Total Spent</p>
+        <p className="text-lg font-semibold text-white/90">${summary.totalSpent.toFixed(0)}</p>
+      </div>
 
-      <Card className="p-4">
-        <p className="text-sm text-gray-600 mb-1">Games</p>
-        <p className="text-2xl font-bold text-gray-900">{summary.gameCount}</p>
-      </Card>
+      <div className="p-3 rounded-xl bg-white/[0.02] border border-white/5">
+        <p className="text-xs text-white/40 mb-1">Games</p>
+        <p className="text-lg font-semibold text-white/90">{summary.gameCount}</p>
+      </div>
 
-      <Card className="p-4">
-        <p className="text-sm text-gray-600 mb-1">Total Hours</p>
-        <p className="text-2xl font-bold text-gray-900">{summary.totalHours}</p>
-      </Card>
+      <div className="p-3 rounded-xl bg-white/[0.02] border border-white/5">
+        <p className="text-xs text-white/40 mb-1">Total Hours</p>
+        <p className="text-lg font-semibold text-white/90">{summary.totalHours.toFixed(0)}</p>
+      </div>
 
-      <Card className="p-4">
-        <p className="text-sm text-gray-600 mb-1">Avg $/Hour</p>
-        <p className="text-2xl font-bold text-gray-900">
+      <div className="p-3 rounded-xl bg-white/[0.02] border border-white/5">
+        <p className="text-xs text-white/40 mb-1">Avg $/Hour</p>
+        <p className="text-lg font-semibold text-white/90">
           ${summary.averageCostPerHour.toFixed(2)}
         </p>
-      </Card>
+      </div>
 
-      <Card className="p-4">
-        <p className="text-sm text-gray-600 mb-1">Avg Rating</p>
-        <p className="text-2xl font-bold text-gray-900">
+      <div className="p-3 rounded-xl bg-white/[0.02] border border-white/5">
+        <p className="text-xs text-white/40 mb-1">Avg Rating</p>
+        <p className="text-lg font-semibold text-white/90">
           {summary.averageRating.toFixed(1)}/10
         </p>
-      </Card>
+      </div>
 
-      {summary.budgetRemaining !== undefined && (
-        <Card className="p-4 md:col-span-2 lg:col-span-5">
-          <p className="text-sm text-gray-600 mb-1">2026 Budget Remaining</p>
-          <div className="flex items-center gap-4">
-            <p className="text-2xl font-bold text-gray-900">
-              ${summary.budgetRemaining}
-            </p>
-            <div className="flex-1 bg-gray-200 rounded-full h-2">
-              <div
-                className="bg-purple-600 h-2 rounded-full transition-all"
-                style={{
-                  width: `${Math.max(0, (summary.budgetRemaining / 910) * 100)}%`,
-                }}
-              />
-            </div>
-          </div>
-        </Card>
-      )}
+      <div className="p-3 rounded-xl bg-purple-500/10 border border-purple-500/20">
+        <p className="text-xs text-white/40 mb-1">Wishlist</p>
+        <p className="text-lg font-semibold text-purple-400">{summary.wishlistCount}</p>
+      </div>
     </div>
   );
 }
