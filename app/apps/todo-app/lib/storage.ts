@@ -17,8 +17,10 @@ import {
 const STORAGE_KEY = 'todo-app-tasks';
 const COLLECTION_NAME = 'tasks';
 
-// Firebase Repository - schemaless, just write data
+// Firebase Repository - filters by userId
 export class FirebaseRepository implements TaskRepository {
+  private userId: string = '';
+
   private get db() {
     return getFirebaseDb();
   }
@@ -27,15 +29,26 @@ export class FirebaseRepository implements TaskRepository {
     return collection(this.db, COLLECTION_NAME);
   }
 
+  setUserId(userId: string): void {
+    this.userId = userId;
+  }
+
   async getAll(): Promise<Task[]> {
-    const q = query(this.tasksCollection, orderBy('order', 'asc'));
+    if (!this.userId) return [];
+    const q = query(
+      this.tasksCollection,
+      where('userId', '==', this.userId),
+      orderBy('order', 'asc')
+    );
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => doc.data() as Task);
   }
 
   async getByDate(date: string): Promise<Task[]> {
+    if (!this.userId) return [];
     const q = query(
       this.tasksCollection,
+      where('userId', '==', this.userId),
       where('date', '==', date),
       orderBy('order', 'asc')
     );
@@ -44,8 +57,10 @@ export class FirebaseRepository implements TaskRepository {
   }
 
   async getIncompleteBefore(date: string): Promise<Task[]> {
+    if (!this.userId) return [];
     const q = query(
       this.tasksCollection,
+      where('userId', '==', this.userId),
       where('completed', '==', false),
       where('date', '<', date),
       orderBy('date', 'desc')
@@ -57,14 +72,19 @@ export class FirebaseRepository implements TaskRepository {
   async getById(id: string): Promise<Task | null> {
     const docRef = doc(this.db, COLLECTION_NAME, id);
     const snapshot = await getDoc(docRef);
-    return snapshot.exists() ? (snapshot.data() as Task) : null;
+    if (!snapshot.exists()) return null;
+    const task = snapshot.data() as Task;
+    // Only return if belongs to current user
+    return task.userId === this.userId ? task : null;
   }
 
-  async create(taskData: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>): Promise<Task> {
+  async create(taskData: Omit<Task, 'id' | 'userId' | 'createdAt' | 'updatedAt'>): Promise<Task> {
+    if (!this.userId) throw new Error('Not authenticated');
     const now = new Date().toISOString();
     const task: Task = {
       ...taskData,
       id: uuidv4(),
+      userId: this.userId,
       createdAt: now,
       updatedAt: now,
     };
@@ -91,8 +111,14 @@ export class FirebaseRepository implements TaskRepository {
   }
 }
 
-// LocalStorage Repository - fallback for local development
+// LocalStorage Repository - for local dev (no auth needed)
 export class LocalStorageRepository implements TaskRepository {
+  private userId: string = 'local-user';
+
+  setUserId(userId: string): void {
+    this.userId = userId;
+  }
+
   async getAll(): Promise<Task[]> {
     if (typeof window === 'undefined') return [];
     const data = localStorage.getItem(STORAGE_KEY);
@@ -114,12 +140,13 @@ export class LocalStorageRepository implements TaskRepository {
     return allTasks.find(task => task.id === id) || null;
   }
 
-  async create(taskData: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>): Promise<Task> {
+  async create(taskData: Omit<Task, 'id' | 'userId' | 'createdAt' | 'updatedAt'>): Promise<Task> {
     const allTasks = await this.getAll();
     const now = new Date().toISOString();
     const task: Task = {
       ...taskData,
       id: uuidv4(),
+      userId: this.userId,
       createdAt: now,
       updatedAt: now,
     };
@@ -157,7 +184,7 @@ export class LocalStorageRepository implements TaskRepository {
   }
 }
 
-// Use Firebase if configured, otherwise fall back to localStorage
+// Export singleton
 export const repository: TaskRepository = isFirebaseConfigured()
   ? new FirebaseRepository()
   : new LocalStorageRepository();

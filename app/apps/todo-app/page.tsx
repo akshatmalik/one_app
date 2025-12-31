@@ -1,13 +1,15 @@
 'use client';
 
 import { useState } from 'react';
-import { ChevronLeft, ChevronRight, Calendar, History } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar, History, LogIn, LogOut } from 'lucide-react';
 import { useTasks } from './hooks/useTasks';
 import { TaskInput } from './components/TaskInput';
 import { TaskList } from './components/TaskList';
 import { ReviewPastTasksModal } from './components/ReviewPastTasksModal';
+import { useAuth } from '@/lib/useAuth';
 
 export default function TodoApp() {
+  const { user, loading: authLoading, signIn, signOut } = useAuth();
   const [selectedDate, setSelectedDate] = useState(() => {
     return new Date().toISOString().split('T')[0];
   });
@@ -24,7 +26,7 @@ export default function TodoApp() {
     moveTaskToDate,
     getPastIncompleteTasks,
     reorderTasks,
-  } = useTasks(selectedDate);
+  } = useTasks(selectedDate, user?.uid ?? null);
 
   const today = new Date().toISOString().split('T')[0];
   const isToday = selectedDate === today;
@@ -63,21 +65,61 @@ export default function TodoApp() {
     await moveTaskToDate(taskId, today);
   };
 
+  // Show loading while checking auth
+  if (authLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-gray-500">Loading...</div>
+      </div>
+    );
+  }
+
+  // Show sign-in prompt if not authenticated
+  if (!user) {
+    return (
+      <div className="space-y-6">
+        <div className="w-full">
+          <h1 className="text-4xl font-bold text-gray-900 mb-4">Daily Tasks</h1>
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
+            <p className="text-gray-600 mb-6">Sign in to save your tasks across devices</p>
+            <button
+              onClick={signIn}
+              className="inline-flex items-center gap-2 px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-all duration-200 font-medium shadow-sm hover:shadow"
+            >
+              <LogIn size={20} />
+              Sign in with Google
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="w-full">
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-4xl font-bold text-gray-900">Daily Tasks</h1>
-          {isToday && (
+          <div className="flex items-center gap-2">
+            {isToday && (
+              <button
+                onClick={() => setIsReviewModalOpen(true)}
+                className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-all duration-200"
+                aria-label="Review past tasks"
+              >
+                <History size={20} />
+              </button>
+            )}
             <button
-              onClick={() => setIsReviewModalOpen(true)}
-              className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-all duration-200"
-              aria-label="Review past tasks"
+              onClick={signOut}
+              className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-all duration-200"
+              aria-label="Sign out"
+              title={`Signed in as ${user.email}`}
             >
-              <History size={20} />
+              <LogOut size={20} />
             </button>
-          )}
+          </div>
         </div>
 
         {/* Date Navigation */}
