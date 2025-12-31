@@ -1,7 +1,7 @@
 import { Task } from '../lib/types';
 
 // Sample tasks for testing - will be loaded on first use
-export const SAMPLE_TASKS: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>[] = [
+export const SAMPLE_TASKS: Omit<Task, 'id' | 'userId' | 'createdAt' | 'updatedAt'>[] = [
   {
     text: 'Morning workout',
     completed: false,

@@ -3,26 +3,25 @@
 import { useState, useEffect, useCallback } from 'react';
 import { repository } from '../lib/storage';
 import { Task } from '../lib/types';
-import { SAMPLE_TASKS } from '../data/sample-tasks';
 
-export function useTasks(date: string) {
+export function useTasks(date: string, userId: string | null) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
   const loadTasks = useCallback(async () => {
+    if (!userId) {
+      setTasks([]);
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
       setError(null);
 
-      // Check if this is first time - if no tasks exist, load samples
-      const allTasks = await repository.getAll();
-      if (allTasks.length === 0) {
-        // Load sample tasks
-        for (const sampleTask of SAMPLE_TASKS) {
-          await repository.create(sampleTask);
-        }
-      }
+      // Set userId on repository
+      repository.setUserId(userId);
 
       const tasksForDate = await repository.getByDate(date);
       setTasks(tasksForDate);
@@ -31,7 +30,7 @@ export function useTasks(date: string) {
     } finally {
       setLoading(false);
     }
-  }, [date]);
+  }, [date, userId]);
 
   useEffect(() => {
     loadTasks();

@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { Navigation } from '@/components/Navigation';
+import { ClientLayout } from '@/components/ClientLayout';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -15,10 +16,12 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="bg-gray-50">
-        <Navigation />
-        <main className="container mx-auto px-8 py-12">
-          {children}
-        </main>
+        <ClientLayout>
+          <Navigation />
+          <main className="container mx-auto px-8 py-12">
+            {children}
+          </main>
+        </ClientLayout>
       </body>
     </html>
   );
