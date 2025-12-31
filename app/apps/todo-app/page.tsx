@@ -1,15 +1,15 @@
 'use client';
 
 import { useState } from 'react';
-import { ChevronLeft, ChevronRight, Calendar, History, LogIn, LogOut } from 'lucide-react';
+import { ChevronLeft, ChevronRight, History } from 'lucide-react';
 import { useTasks } from './hooks/useTasks';
 import { TaskInput } from './components/TaskInput';
 import { TaskList } from './components/TaskList';
 import { ReviewPastTasksModal } from './components/ReviewPastTasksModal';
-import { useAuth } from '@/lib/useAuth';
+import { useAuthContext } from '@/lib/AuthContext';
 
 export default function TodoApp() {
-  const { user, loading: authLoading, signIn, signOut } = useAuth();
+  const { user, loading: authLoading } = useAuthContext();
   const [selectedDate, setSelectedDate] = useState(() => {
     return new Date().toISOString().split('T')[0];
   });
@@ -81,14 +81,7 @@ export default function TodoApp() {
         <div className="w-full">
           <h1 className="text-4xl font-bold text-gray-900 mb-4">Daily Tasks</h1>
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
-            <p className="text-gray-600 mb-6">Sign in to save your tasks across devices</p>
-            <button
-              onClick={signIn}
-              className="inline-flex items-center gap-2 px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-all duration-200 font-medium shadow-sm hover:shadow"
-            >
-              <LogIn size={20} />
-              Sign in with Google
-            </button>
+            <p className="text-gray-600">Sign in to save your tasks across devices</p>
           </div>
         </div>
       </div>
@@ -101,25 +94,15 @@ export default function TodoApp() {
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-4xl font-bold text-gray-900">Daily Tasks</h1>
-          <div className="flex items-center gap-2">
-            {isToday && (
-              <button
-                onClick={() => setIsReviewModalOpen(true)}
-                className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-all duration-200"
-                aria-label="Review past tasks"
-              >
-                <History size={20} />
-              </button>
-            )}
+          {isToday && (
             <button
-              onClick={signOut}
-              className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-all duration-200"
-              aria-label="Sign out"
-              title={`Signed in as ${user.email}`}
+              onClick={() => setIsReviewModalOpen(true)}
+              className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-all duration-200"
+              aria-label="Review past tasks"
             >
-              <LogOut size={20} />
+              <History size={20} />
             </button>
-          </div>
+          )}
         </div>
 
         {/* Date Navigation */}
