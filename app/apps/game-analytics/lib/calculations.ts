@@ -60,6 +60,20 @@ export function calculateSummary(games: Game[]): AnalyticsSummary {
   const backlogValue = notStartedGames.reduce((sum, g) => sum + g.price, 0);
   const averagePrice = ownedGames.length > 0 ? totalSpent / ownedGames.length : 0;
 
+  // Discount savings (for paid games that have originalPrice set)
+  const gamesWithDiscount = ownedGames.filter(g =>
+    !g.acquiredFree && g.originalPrice && g.originalPrice > g.price
+  );
+  const totalDiscountSavings = gamesWithDiscount.reduce((sum, g) =>
+    sum + ((g.originalPrice || 0) - g.price), 0
+  );
+  const averageDiscount = gamesWithDiscount.length > 0
+    ? gamesWithDiscount.reduce((sum, g) => {
+        const discount = ((g.originalPrice || 0) - g.price) / (g.originalPrice || 1) * 100;
+        return sum + discount;
+      }, 0) / gamesWithDiscount.length
+    : 0;
+
   // Time calculations
   const totalHours = ownedGames.reduce((sum, g) => sum + g.hours, 0);
   const averageHoursPerGame = playedGames.length > 0 ? totalHours / playedGames.length : 0;
@@ -200,6 +214,8 @@ export function calculateSummary(games: Game[]): AnalyticsSummary {
     backlogValue,
     averagePrice,
     averageCostPerHour,
+    totalDiscountSavings,
+    averageDiscount,
 
     // Time
     totalHours,
