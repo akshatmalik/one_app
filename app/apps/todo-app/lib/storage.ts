@@ -78,11 +78,39 @@ export class FirebaseRepository implements TaskRepository {
     return task.userId === this.userId ? task : null;
   }
 
+  async getCompletedInRange(startDate: string, endDate: string): Promise<Task[]> {
+    if (!this.userId) return [];
+    const q = query(
+      this.tasksCollection,
+      where('userId', '==', this.userId),
+      where('completed', '==', true),
+      where('completedAt', '>=', startDate),
+      where('completedAt', '<=', endDate),
+      orderBy('completedAt', 'desc')
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => doc.data() as Task);
+  }
+
+  async getAllCompleted(): Promise<Task[]> {
+    if (!this.userId) return [];
+    const q = query(
+      this.tasksCollection,
+      where('userId', '==', this.userId),
+      where('completed', '==', true),
+      orderBy('completedAt', 'desc')
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => doc.data() as Task);
+  }
+
   async create(taskData: Omit<Task, 'id' | 'userId' | 'createdAt' | 'updatedAt'>): Promise<Task> {
     if (!this.userId) throw new Error('Not authenticated');
     const now = new Date().toISOString();
     const task: Task = {
       ...taskData,
+      priority: taskData.priority ?? 4,
+      points: taskData.points ?? 1,
       id: uuidv4(),
       userId: this.userId,
       createdAt: now,
@@ -104,6 +132,15 @@ export class FirebaseRepository implements TaskRepository {
       }
     }
     cleanUpdates.updatedAt = new Date().toISOString();
+
+    // Set completedAt when task is marked as completed
+    if (updates.completed === true && !cleanUpdates.completedAt) {
+      cleanUpdates.completedAt = new Date().toISOString();
+    }
+    // Clear completedAt when task is uncompleted
+    if (updates.completed === false) {
+      cleanUpdates.completedAt = null;
+    }
 
     await updateDoc(docRef, cleanUpdates);
 
@@ -151,11 +188,29 @@ export class LocalStorageRepository implements TaskRepository {
     return allTasks.find(task => task.id === id) || null;
   }
 
+  async getCompletedInRange(startDate: string, endDate: string): Promise<Task[]> {
+    const allTasks = await this.getAll();
+    return allTasks.filter(task =>
+      task.completed &&
+      task.completedAt &&
+      task.completedAt >= startDate &&
+      task.completedAt <= endDate
+    ).sort((a, b) => (b.completedAt || '').localeCompare(a.completedAt || ''));
+  }
+
+  async getAllCompleted(): Promise<Task[]> {
+    const allTasks = await this.getAll();
+    return allTasks.filter(task => task.completed)
+      .sort((a, b) => (b.completedAt || '').localeCompare(a.completedAt || ''));
+  }
+
   async create(taskData: Omit<Task, 'id' | 'userId' | 'createdAt' | 'updatedAt'>): Promise<Task> {
     const allTasks = await this.getAll();
     const now = new Date().toISOString();
     const task: Task = {
       ...taskData,
+      priority: taskData.priority ?? 4,
+      points: taskData.points ?? 1,
       id: uuidv4(),
       userId: this.userId,
       createdAt: now,
@@ -172,10 +227,22 @@ export class LocalStorageRepository implements TaskRepository {
     if (index === -1) {
       throw new Error(`Task with id ${id} not found`);
     }
+
+    const now = new Date().toISOString();
+    const updatedFields = { ...updates, updatedAt: now };
+
+    // Set completedAt when task is marked as completed
+    if (updates.completed === true && !allTasks[index].completedAt) {
+      updatedFields.completedAt = now;
+    }
+    // Clear completedAt when task is uncompleted
+    if (updates.completed === false) {
+      updatedFields.completedAt = undefined;
+    }
+
     const updatedTask = {
       ...allTasks[index],
-      ...updates,
-      updatedAt: new Date().toISOString(),
+      ...updatedFields,
     };
     allTasks[index] = updatedTask;
     this.save(allTasks);
@@ -227,6 +294,14 @@ class HybridRepository implements TaskRepository {
 
   getById(id: string): Promise<Task | null> {
     return this.repo.getById(id);
+  }
+
+  getCompletedInRange(startDate: string, endDate: string): Promise<Task[]> {
+    return this.repo.getCompletedInRange(startDate, endDate);
+  }
+
+  getAllCompleted(): Promise<Task[]> {
+    return this.repo.getAllCompleted();
   }
 
   create(taskData: Omit<Task, 'id' | 'userId' | 'createdAt' | 'updatedAt'>): Promise<Task> {

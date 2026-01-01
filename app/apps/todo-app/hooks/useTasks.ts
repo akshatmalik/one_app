@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { repository } from '../lib/storage';
 import { Task } from '../lib/types';
+import { parseTaskText } from '../lib/calculations';
 
 export function useTasks(date: string, userId: string | null) {
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -30,18 +31,24 @@ export function useTasks(date: string, userId: string | null) {
     loadTasks();
   }, [loadTasks]);
 
-  const addTask = async (text: string) => {
+  const addTask = async (rawText: string) => {
     try {
       const tasksForDate = await repository.getByDate(date);
       const maxOrder = tasksForDate.length > 0
         ? Math.max(...tasksForDate.map(t => t.order || 0))
         : 0;
 
+      // Parse text to extract category and priority
+      const { text, priority, category } = parseTaskText(rawText);
+
       await repository.create({
         text,
         completed: false,
         date,
         order: maxOrder + 1,
+        priority,
+        category,
+        points: 1,
       });
       await loadTasks();
     } catch (e) {
@@ -113,10 +120,15 @@ export function useTasks(date: string, userId: string | null) {
     }
   };
 
-  // Separate tasks into completed and incomplete, sort by order
+  // Separate tasks into completed and incomplete
+  // Sort incomplete by priority first (P1 first), then by order
   const incompleteTasks = tasks
     .filter(t => !t.completed)
-    .sort((a, b) => (a.order || 0) - (b.order || 0));
+    .sort((a, b) => {
+      const priorityDiff = (a.priority ?? 4) - (b.priority ?? 4);
+      if (priorityDiff !== 0) return priorityDiff;
+      return (a.order || 0) - (b.order || 0);
+    });
 
   const completedTasks = tasks
     .filter(t => t.completed)
