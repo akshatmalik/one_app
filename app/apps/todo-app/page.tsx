@@ -1,27 +1,35 @@
 'use client';
 
 import { useState } from 'react';
-import { ChevronLeft, ChevronRight, History, Sparkles, Calendar, BarChart3, CheckSquare } from 'lucide-react';
+import { ChevronLeft, ChevronRight, History, Sparkles, Calendar, BarChart3, CheckSquare, BookOpen } from 'lucide-react';
 import { useTasks } from './hooks/useTasks';
 import { useStats } from './hooks/useStats';
+import { useSettings } from './hooks/useSettings';
+import { useDayNotes } from './hooks/useDayNotes';
 import { TaskInput } from './components/TaskInput';
 import { TaskList } from './components/TaskList';
 import { ReviewPastTasksModal } from './components/ReviewPastTasksModal';
 import { StatsView } from './components/StatsView';
+import { StartDateSetup } from './components/StartDateSetup';
+import { DayNotesEditor } from './components/DayNotesEditor';
 import { useAuthContext } from '@/lib/AuthContext';
 import { useToast } from '@/components/Toast';
 import { repository } from './lib/storage';
 import { SAMPLE_TASKS } from './data/sample-tasks';
+import { calculateDayNumber } from './lib/calculations';
 import clsx from 'clsx';
 
 export default function TodoApp() {
   const { user, loading: authLoading } = useAuthContext();
   const { showToast } = useToast();
-  const [activeTab, setActiveTab] = useState<'tasks' | 'stats'>('tasks');
+  const [activeTab, setActiveTab] = useState<'tasks' | 'stats' | 'notes'>('tasks');
   const [selectedDate, setSelectedDate] = useState(() => {
     return new Date().toISOString().split('T')[0];
   });
   const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
+
+  const { settings, loading: settingsLoading, setStartDate } = useSettings(user?.uid ?? null);
+  const { note, saveNote } = useDayNotes(selectedDate, user?.uid ?? null);
 
   const {
     incompleteTasks,
@@ -134,12 +142,39 @@ export default function TodoApp() {
     }
   };
 
-  if (authLoading) {
+  const handleSetStartDate = async (date: string) => {
+    try {
+      await setStartDate(date);
+      showToast('Start date set successfully!', 'success');
+    } catch (e) {
+      showToast(`Failed to set start date: ${(e as Error).message}`, 'error');
+      throw e;
+    }
+  };
+
+  const handleSaveNote = async (content: string) => {
+    try {
+      await saveNote(content);
+      showToast('Note saved!', 'success');
+    } catch (e) {
+      showToast(`Failed to save note: ${(e as Error).message}`, 'error');
+      throw e;
+    }
+  };
+
+  const dayNumber = settings ? calculateDayNumber(selectedDate, settings.startDate) : null;
+
+  if (authLoading || settingsLoading) {
     return (
       <div className="min-h-[calc(100vh-60px)] flex items-center justify-center">
         <div className="text-white/30">Loading...</div>
       </div>
     );
+  }
+
+  // Show setup screen if no start date is configured
+  if (!settings) {
+    return <StartDateSetup onSetStartDate={handleSetStartDate} />;
   }
 
   const progressPercent = stats.total > 0 ? (stats.completed / stats.total) * 100 : 0;
@@ -189,6 +224,18 @@ export default function TodoApp() {
               Tasks
             </button>
             <button
+              onClick={() => setActiveTab('notes')}
+              className={clsx(
+                'flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all',
+                activeTab === 'notes'
+                  ? 'bg-purple-600 text-white'
+                  : 'bg-white/[0.03] text-white/60 hover:text-white/80 hover:bg-white/[0.05]'
+              )}
+            >
+              <BookOpen size={16} />
+              Notes
+            </button>
+            <button
               onClick={() => setActiveTab('stats')}
               className={clsx(
                 'flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all',
@@ -202,8 +249,8 @@ export default function TodoApp() {
             </button>
           </div>
 
-          {/* Date Navigation - Only show on Tasks tab */}
-          {activeTab === 'tasks' && (
+          {/* Date Navigation - Show on Tasks and Notes tabs */}
+          {(activeTab === 'tasks' || activeTab === 'notes') && (
             <>
               <div className="flex items-center gap-3">
                 <button
@@ -216,10 +263,17 @@ export default function TodoApp() {
 
                 <button
                   onClick={handleTodayClick}
-                  className="flex-1 flex items-center justify-center gap-2 py-2 text-white/70 hover:text-white hover:bg-white/5 rounded-lg transition-all group"
+                  className="flex-1 flex flex-col items-center justify-center py-2 text-white/70 hover:text-white hover:bg-white/5 rounded-lg transition-all group"
                 >
-                  <Calendar size={16} className="text-white/40 group-hover:text-white/60" />
-                  <span className="text-lg font-medium">{formatDate(selectedDate)}</span>
+                  {dayNumber !== null && (
+                    <span className="text-xs font-medium text-purple-400 mb-0.5">
+                      Day {dayNumber}
+                    </span>
+                  )}
+                  <div className="flex items-center gap-2">
+                    <Calendar size={16} className="text-white/40 group-hover:text-white/60" />
+                    <span className="text-lg font-medium">{formatDate(selectedDate)}</span>
+                  </div>
                 </button>
 
                 <button
@@ -262,8 +316,8 @@ export default function TodoApp() {
       )}
 
       {/* Main Content */}
-      <div className="flex-1 px-6 py-6">
-        <div className="max-w-2xl mx-auto">
+      <div className="flex-1 px-6 py-6 overflow-hidden flex flex-col">
+        <div className="max-w-2xl mx-auto w-full flex-1 flex flex-col">
           {activeTab === 'tasks' ? (
             <>
               <TaskInput onAdd={handleAddTask} />
@@ -280,6 +334,16 @@ export default function TodoApp() {
                 />
               )}
             </>
+          ) : activeTab === 'notes' ? (
+            <div className="flex-1 bg-white/[0.02] border border-white/5 rounded-2xl overflow-hidden">
+              <DayNotesEditor
+                date={selectedDate}
+                dayNumber={dayNumber}
+                initialContent={note?.content || ''}
+                onSave={handleSaveNote}
+                onClose={() => setActiveTab('tasks')}
+              />
+            </div>
           ) : (
             <>
               {statsLoading ? (

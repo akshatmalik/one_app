@@ -51,3 +51,36 @@ export interface DailyCompletion {
   completed: number;
   points: number;
 }
+
+export interface AppSettings {
+  id: string;
+  userId: string;
+  startDate: string; // ISO date string (YYYY-MM-DD) - Day 1
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AppSettingsRepository {
+  setUserId(userId: string): void;
+  get(): Promise<AppSettings | null>;
+  set(startDate: string): Promise<AppSettings>;
+  update(updates: Partial<Omit<AppSettings, 'id' | 'userId' | 'createdAt' | 'updatedAt'>>): Promise<AppSettings>;
+}
+
+export interface DayNote {
+  id: string;
+  userId: string;
+  date: string; // ISO date string (YYYY-MM-DD)
+  content: string; // Markdown content
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DayNoteRepository {
+  setUserId(userId: string): void;
+  getAll(): Promise<DayNote[]>;
+  getByDate(date: string): Promise<DayNote | null>;
+  create(note: Omit<DayNote, 'id' | 'userId' | 'createdAt' | 'updatedAt'>): Promise<DayNote>;
+  update(id: string, updates: Partial<DayNote>): Promise<DayNote>;
+  delete(id: string): Promise<void>;
+}
