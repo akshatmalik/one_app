@@ -197,7 +197,9 @@ class HybridRepository implements TaskRepository {
   private useFirebase = false;
 
   setUserId(userId: string): void {
-    this.useFirebase = !!userId && isFirebaseConfigured();
+    // Only use Firebase for real user IDs, not 'local-user'
+    const isRealUser = !!userId && userId !== 'local-user';
+    this.useFirebase = isRealUser && isFirebaseConfigured();
     this.firebaseRepo.setUserId(userId);
     this.localRepo.setUserId(userId || 'local-user');
   }

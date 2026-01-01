@@ -1,17 +1,20 @@
 'use client';
 
 import { useState } from 'react';
-import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { Game, GameStatus } from '../lib/types';
-import { calculateCostPerHour } from '../lib/calculations';
+import { X } from 'lucide-react';
+import { Game, GameStatus, PurchaseSource } from '../lib/types';
+import { calculateCostPerHour, getValueRating } from '../lib/calculations';
+import clsx from 'clsx';
 
 interface GameFormProps {
   onSubmit: (game: Omit<Game, 'id' | 'userId' | 'createdAt' | 'updatedAt'>) => Promise<void>;
   onClose: () => void;
   initialGame?: Game;
 }
+
+const PLATFORMS = ['PC', 'PS5', 'PS4', 'Xbox Series', 'Xbox One', 'Switch', 'Mobile', 'Other'];
+const GENRES = ['Action', 'Action-Adventure', 'RPG', 'JRPG', 'Horror', 'Platformer', 'Strategy', 'Simulation', 'Sports', 'Racing', 'Puzzle', 'Metroidvania', 'Roguelike', 'Souls-like', 'FPS', 'TPS', 'MMO', 'Indie', 'Adventure', 'Other'];
+const PURCHASE_SOURCES: PurchaseSource[] = ['Steam', 'PlayStation', 'Xbox', 'Nintendo', 'Epic', 'GOG', 'Physical', 'Other'];
 
 export function GameForm({ onSubmit, onClose, initialGame }: GameFormProps) {
   const [loading, setLoading] = useState(false);
@@ -20,147 +23,288 @@ export function GameForm({ onSubmit, onClose, initialGame }: GameFormProps) {
     price: initialGame?.price || 0,
     hours: initialGame?.hours || 0,
     rating: initialGame?.rating || 8,
-    status: (initialGame?.status || 'Completed') as GameStatus,
+    status: (initialGame?.status || 'Not Started') as GameStatus,
+    platform: initialGame?.platform || '',
+    genre: initialGame?.genre || '',
+    purchaseSource: initialGame?.purchaseSource || '' as PurchaseSource | '',
     notes: initialGame?.notes || '',
+    review: initialGame?.review || '',
     datePurchased: initialGame?.datePurchased || new Date().toISOString().split('T')[0],
+    startDate: initialGame?.startDate || '',
+    endDate: initialGame?.endDate || '',
+    playLogs: initialGame?.playLogs || [],
   });
 
   const costPerHour = calculateCostPerHour(formData.price, formData.hours);
+  const valueRating = getValueRating(costPerHour);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
-      await onSubmit(formData);
+      await onSubmit({
+        ...formData,
+        purchaseSource: formData.purchaseSource || undefined,
+        startDate: formData.startDate || undefined,
+        endDate: formData.endDate || undefined,
+      });
       onClose();
     } finally {
       setLoading(false);
     }
   };
 
+  const getValueColor = (rating: string) => {
+    switch (rating) {
+      case 'Excellent': return 'text-emerald-400 bg-emerald-500/10';
+      case 'Good': return 'text-blue-400 bg-blue-500/10';
+      case 'Fair': return 'text-yellow-400 bg-yellow-500/10';
+      case 'Poor': return 'text-red-400 bg-red-500/10';
+      default: return 'text-white/50 bg-white/5';
+    }
+  };
+
+  const isOwned = formData.status !== 'Wishlist';
+  const showPlayDates = isOwned && (formData.status === 'In Progress' || formData.status === 'Completed' || formData.status === 'Abandoned');
+
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <Card className="w-full max-w-md p-6">
-        <h2 className="text-xl font-bold text-gray-900 mb-4">
-          {initialGame ? 'Edit Game' : 'Add New Game'}
-        </h2>
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-[#12121a] border border-white/5 rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+        {/* Header */}
+        <div className="flex items-center justify-between p-4 border-b border-white/5 sticky top-0 bg-[#12121a] z-10">
+          <h2 className="text-lg font-semibold text-white">
+            {initialGame ? 'Edit Game' : 'Add Game'}
+          </h2>
+          <button
+            onClick={onClose}
+            className="text-white/40 hover:text-white/70 hover:bg-white/5 rounded-lg p-1.5 transition-all"
+          >
+            <X size={20} />
+          </button>
+        </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <Input
-            label="Game Name"
-            required
-            value={formData.name}
-            onChange={e =>
-              setFormData({ ...formData, name: e.target.value })
-            }
-          />
+        <form onSubmit={handleSubmit} className="p-4 space-y-4">
+          {/* Game Name */}
+          <div>
+            <label className="block text-xs font-medium text-white/50 mb-1.5">Game Name *</label>
+            <input
+              type="text"
+              required
+              value={formData.name}
+              onChange={e => setFormData({ ...formData, name: e.target.value })}
+              className="w-full px-3 py-2.5 bg-white/[0.03] border border-white/5 text-white rounded-lg text-sm focus:outline-none focus:bg-white/[0.05] focus:border-white/10 transition-all placeholder:text-white/30"
+              placeholder="Enter game name"
+            />
+          </div>
 
-          <Input
-            label="Price ($)"
-            type="number"
-            step="0.01"
-            required
-            value={formData.price}
-            onChange={e =>
-              setFormData({ ...formData, price: parseFloat(e.target.value) || 0 })
-            }
-          />
+          {/* Status */}
+          <div>
+            <label className="block text-xs font-medium text-white/50 mb-1.5">Status</label>
+            <div className="grid grid-cols-5 gap-1.5">
+              {(['Not Started', 'In Progress', 'Completed', 'Wishlist', 'Abandoned'] as GameStatus[]).map(status => (
+                <button
+                  key={status}
+                  type="button"
+                  onClick={() => setFormData({ ...formData, status })}
+                  className={clsx(
+                    'px-2 py-1.5 rounded-lg text-[10px] font-medium transition-all',
+                    formData.status === status
+                      ? status === 'Completed' ? 'bg-emerald-500/20 text-emerald-400 ring-1 ring-emerald-500/50'
+                        : status === 'In Progress' ? 'bg-blue-500/20 text-blue-400 ring-1 ring-blue-500/50'
+                        : status === 'Wishlist' ? 'bg-purple-500/20 text-purple-400 ring-1 ring-purple-500/50'
+                        : status === 'Abandoned' ? 'bg-red-500/20 text-red-400 ring-1 ring-red-500/50'
+                        : 'bg-white/10 text-white/70 ring-1 ring-white/20'
+                      : 'bg-white/[0.03] text-white/40 hover:bg-white/[0.06]'
+                  )}
+                >
+                  {status === 'Not Started' ? 'Backlog' : status}
+                </button>
+              ))}
+            </div>
+          </div>
 
-          <Input
-            label="Hours Played"
-            type="number"
-            step="0.5"
-            required
-            value={formData.hours}
-            onChange={e =>
-              setFormData({ ...formData, hours: parseFloat(e.target.value) || 0 })
-            }
-          />
+          {/* Price & Hours Row */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-white/50 mb-1.5">Price ($)</label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={formData.price}
+                onChange={e => setFormData({ ...formData, price: parseFloat(e.target.value) || 0 })}
+                className="w-full px-3 py-2.5 bg-white/[0.03] border border-white/5 text-white rounded-lg text-sm focus:outline-none focus:bg-white/[0.05] focus:border-white/10 transition-all"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-white/50 mb-1.5">Total Hours</label>
+              <input
+                type="number"
+                step="0.5"
+                min="0"
+                value={formData.hours}
+                onChange={e => setFormData({ ...formData, hours: parseFloat(e.target.value) || 0 })}
+                className="w-full px-3 py-2.5 bg-white/[0.03] border border-white/5 text-white rounded-lg text-sm focus:outline-none focus:bg-white/[0.05] focus:border-white/10 transition-all"
+              />
+            </div>
+          </div>
 
-          {formData.hours > 0 && (
-            <div className="p-3 bg-blue-50 rounded-lg">
-              <p className="text-sm text-blue-900">
-                Cost per hour: <span className="font-semibold">${costPerHour.toFixed(2)}</span>
-              </p>
+          {/* Cost Per Hour Display */}
+          {formData.hours > 0 && formData.price > 0 && (
+            <div className={clsx('px-3 py-2 rounded-lg text-sm', getValueColor(valueRating))}>
+              <span className="font-medium">${costPerHour.toFixed(2)}/hr</span>
+              <span className="text-white/40 ml-2">• {valueRating} value</span>
             </div>
           )}
 
+          {/* Rating */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Rating (1-10)
+            <label className="block text-xs font-medium text-white/50 mb-1.5">
+              Rating <span className="text-white/70 font-semibold">{formData.rating}/10</span>
             </label>
             <input
               type="range"
               min="1"
               max="10"
               value={formData.rating}
-              onChange={e =>
-                setFormData({ ...formData, rating: parseInt(e.target.value) })
-              }
+              onChange={e => setFormData({ ...formData, rating: parseInt(e.target.value) })}
               className="w-full"
             />
-            <p className="text-center text-sm text-gray-600 mt-1">
-              {formData.rating} / 10
-            </p>
+            <div className="flex justify-between text-[10px] text-white/30 mt-1">
+              <span>Awful</span>
+              <span>Meh</span>
+              <span>Good</span>
+              <span>Great</span>
+              <span>Masterpiece</span>
+            </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Status
-            </label>
-            <select
-              value={formData.status}
-              onChange={e =>
-                setFormData({ ...formData, status: e.target.value as GameStatus })
-              }
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-            >
-              <option value="Not Started">Not Started</option>
-              <option value="In Progress">In Progress</option>
-              <option value="Completed">Completed</option>
-            </select>
+          {/* Platform, Genre, Source Row */}
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-white/50 mb-1.5">Platform</label>
+              <select
+                value={formData.platform}
+                onChange={e => setFormData({ ...formData, platform: e.target.value })}
+                className="w-full px-2 py-2.5 bg-white/[0.03] border border-white/5 text-white rounded-lg text-xs focus:outline-none focus:bg-white/[0.05] focus:border-white/10 transition-all"
+              >
+                <option value="">Select...</option>
+                {PLATFORMS.map(p => <option key={p} value={p}>{p}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-white/50 mb-1.5">Genre</label>
+              <select
+                value={formData.genre}
+                onChange={e => setFormData({ ...formData, genre: e.target.value })}
+                className="w-full px-2 py-2.5 bg-white/[0.03] border border-white/5 text-white rounded-lg text-xs focus:outline-none focus:bg-white/[0.05] focus:border-white/10 transition-all"
+              >
+                <option value="">Select...</option>
+                {GENRES.map(g => <option key={g} value={g}>{g}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-white/50 mb-1.5">Source</label>
+              <select
+                value={formData.purchaseSource}
+                onChange={e => setFormData({ ...formData, purchaseSource: e.target.value as PurchaseSource })}
+                className="w-full px-2 py-2.5 bg-white/[0.03] border border-white/5 text-white rounded-lg text-xs focus:outline-none focus:bg-white/[0.05] focus:border-white/10 transition-all"
+              >
+                <option value="">Select...</option>
+                {PURCHASE_SOURCES.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
           </div>
 
-          <Input
-            label="Date Purchased"
-            type="date"
-            value={formData.datePurchased}
-            onChange={e =>
-              setFormData({ ...formData, datePurchased: e.target.value })
-            }
-          />
+          {/* Date Section */}
+          {isOwned && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <div className="h-px flex-1 bg-white/5" />
+                <span className="text-[10px] text-white/30 uppercase tracking-wider">Dates</span>
+                <div className="h-px flex-1 bg-white/5" />
+              </div>
 
+              <div className={clsx('grid gap-3', showPlayDates ? 'grid-cols-3' : 'grid-cols-1')}>
+                <div>
+                  <label className="block text-xs font-medium text-white/50 mb-1.5">Purchased</label>
+                  <input
+                    type="date"
+                    value={formData.datePurchased}
+                    onChange={e => setFormData({ ...formData, datePurchased: e.target.value })}
+                    className="w-full px-2 py-2.5 bg-white/[0.03] border border-white/5 text-white rounded-lg text-xs focus:outline-none focus:bg-white/[0.05] focus:border-white/10 transition-all"
+                  />
+                </div>
+                {showPlayDates && (
+                  <>
+                    <div>
+                      <label className="block text-xs font-medium text-white/50 mb-1.5">Started</label>
+                      <input
+                        type="date"
+                        value={formData.startDate}
+                        onChange={e => setFormData({ ...formData, startDate: e.target.value })}
+                        className="w-full px-2 py-2.5 bg-white/[0.03] border border-white/5 text-white rounded-lg text-xs focus:outline-none focus:bg-white/[0.05] focus:border-white/10 transition-all"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-white/50 mb-1.5">Finished</label>
+                      <input
+                        type="date"
+                        value={formData.endDate}
+                        onChange={e => setFormData({ ...formData, endDate: e.target.value })}
+                        className="w-full px-2 py-2.5 bg-white/[0.03] border border-white/5 text-white rounded-lg text-xs focus:outline-none focus:bg-white/[0.05] focus:border-white/10 transition-all"
+                      />
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Notes */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Notes
-            </label>
-            <textarea
+            <label className="block text-xs font-medium text-white/50 mb-1.5">Quick Notes</label>
+            <input
+              type="text"
               value={formData.notes}
-              onChange={e =>
-                setFormData({ ...formData, notes: e.target.value })
-              }
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-              rows={3}
-              placeholder="Optional notes..."
+              onChange={e => setFormData({ ...formData, notes: e.target.value })}
+              className="w-full px-3 py-2.5 bg-white/[0.03] border border-white/5 text-white rounded-lg text-sm focus:outline-none focus:bg-white/[0.05] focus:border-white/10 transition-all"
+              placeholder="Brief note (e.g. 'Day one purchase')"
             />
           </div>
 
-          <div className="flex gap-3 pt-4">
-            <Button
+          {/* Review */}
+          <div>
+            <label className="block text-xs font-medium text-white/50 mb-1.5">Your Review</label>
+            <textarea
+              value={formData.review}
+              onChange={e => setFormData({ ...formData, review: e.target.value })}
+              className="w-full px-3 py-2.5 bg-white/[0.03] border border-white/5 text-white rounded-lg text-sm focus:outline-none focus:bg-white/[0.05] focus:border-white/10 transition-all resize-none"
+              rows={4}
+              placeholder="Write your detailed review... What did you love? What could be better? Would you recommend it?"
+            />
+          </div>
+
+          {/* Actions */}
+          <div className="flex gap-3 pt-2">
+            <button
               type="button"
-              variant="outline"
               onClick={onClose}
-              className="flex-1"
               disabled={loading}
+              className="flex-1 px-4 py-2.5 bg-white/5 text-white/70 rounded-lg hover:bg-white/10 transition-all text-sm font-medium disabled:opacity-50"
             >
               Cancel
-            </Button>
-            <Button type="submit" className="flex-1" disabled={loading}>
+            </button>
+            <button
+              type="submit"
+              disabled={loading}
+              className="flex-1 px-4 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-500 transition-all text-sm font-medium disabled:opacity-50"
+            >
               {loading ? 'Saving...' : initialGame ? 'Update' : 'Add Game'}
-            </Button>
+            </button>
           </div>
         </form>
-      </Card>
+      </div>
     </div>
   );
 }

@@ -10,18 +10,12 @@ export function useTasks(date: string, userId: string | null) {
   const [error, setError] = useState<Error | null>(null);
 
   const loadTasks = useCallback(async () => {
-    if (!userId) {
-      setTasks([]);
-      setLoading(false);
-      return;
-    }
-
     try {
       setLoading(true);
       setError(null);
 
-      // Set userId on repository
-      repository.setUserId(userId);
+      // Set userId on repository - use 'local-user' for local mode
+      repository.setUserId(userId || 'local-user');
 
       const tasksForDate = await repository.getByDate(date);
       setTasks(tasksForDate);
