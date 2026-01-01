@@ -28,6 +28,7 @@ export function GameForm({ onSubmit, onClose, initialGame }: GameFormProps) {
     genre: initialGame?.genre || '',
     purchaseSource: initialGame?.purchaseSource || '' as PurchaseSource | '',
     notes: initialGame?.notes || '',
+    review: initialGame?.review || '',
     datePurchased: initialGame?.datePurchased || new Date().toISOString().split('T')[0],
     startDate: initialGame?.startDate || '',
     endDate: initialGame?.endDate || '',
@@ -262,13 +263,25 @@ export function GameForm({ onSubmit, onClose, initialGame }: GameFormProps) {
 
           {/* Notes */}
           <div>
-            <label className="block text-xs font-medium text-white/50 mb-1.5">Notes</label>
-            <textarea
+            <label className="block text-xs font-medium text-white/50 mb-1.5">Quick Notes</label>
+            <input
+              type="text"
               value={formData.notes}
               onChange={e => setFormData({ ...formData, notes: e.target.value })}
+              className="w-full px-3 py-2.5 bg-white/[0.03] border border-white/5 text-white rounded-lg text-sm focus:outline-none focus:bg-white/[0.05] focus:border-white/10 transition-all"
+              placeholder="Brief note (e.g. 'Day one purchase')"
+            />
+          </div>
+
+          {/* Review */}
+          <div>
+            <label className="block text-xs font-medium text-white/50 mb-1.5">Your Review</label>
+            <textarea
+              value={formData.review}
+              onChange={e => setFormData({ ...formData, review: e.target.value })}
               className="w-full px-3 py-2.5 bg-white/[0.03] border border-white/5 text-white rounded-lg text-sm focus:outline-none focus:bg-white/[0.05] focus:border-white/10 transition-all resize-none"
-              rows={2}
-              placeholder="Your thoughts, memorable moments..."
+              rows={4}
+              placeholder="Write your detailed review... What did you love? What could be better? Would you recommend it?"
             />
           </div>
 

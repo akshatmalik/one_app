@@ -268,73 +268,94 @@ export default function GameAnalyticsPage() {
                   {filteredGames.map((game) => (
                     <div
                       key={game.id}
+                      onClick={() => handleEdit(game)}
                       className="group p-4 bg-white/[0.02] hover:bg-white/[0.04] border border-white/5 hover:border-white/10 rounded-xl cursor-pointer transition-all"
                     >
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex-1 min-w-0" onClick={() => handleEdit(game)}>
-                          <div className="flex items-center gap-2 mb-1">
-                            <h3 className="text-white/90 font-medium truncate">{game.name}</h3>
-                            <span className={clsx('text-[10px] px-2 py-0.5 rounded-full font-medium', getStatusColor(game.status))}>
+                      {/* Header: Name + Status + Actions */}
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h3 className="text-white/90 font-medium">{game.name}</h3>
+                            <span className={clsx('text-[10px] px-2 py-0.5 rounded-full font-medium shrink-0', getStatusColor(game.status))}>
                               {game.status}
                             </span>
                           </div>
-                          <div className="flex items-center gap-4 text-xs text-white/40">
-                            {game.platform && <span>{game.platform}</span>}
-                            {game.genre && <span>{game.genre}</span>}
-                            {game.purchaseSource && <span>{game.purchaseSource}</span>}
-                            {game.hours > 0 && <span>{game.hours}h played</span>}
-                          </div>
                         </div>
-
-                        <div className="flex items-center gap-4 text-right">
-                          <div onClick={() => handleEdit(game)}>
-                            <div className="text-white/80 font-medium">${game.price}</div>
-                            {game.hours > 0 && (
-                              <div className={clsx('text-xs', getValueColor(game.metrics.valueRating))}>
-                                ${game.metrics.costPerHour.toFixed(2)}/hr
-                              </div>
-                            )}
-                          </div>
-                          <div className="w-12" onClick={() => handleEdit(game)}>
-                            <div className="text-white/80 font-medium">{game.rating}/10</div>
-                            <div className="text-xs text-white/40">rating</div>
-                          </div>
-                          {game.hours > 0 && (
-                            <div className="w-16 hidden sm:block" onClick={() => handleEdit(game)}>
-                              <div className="text-white/80 font-medium">{game.metrics.blendScore.toFixed(0)}</div>
-                              <div className="text-xs text-white/40">blend</div>
-                            </div>
-                          )}
-                          {/* Action Buttons */}
-                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleOpenPlayLog(game);
-                              }}
-                              className="p-2 text-white/30 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg transition-all"
-                              title="Log Play Session"
-                            >
-                              <Clock size={14} />
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDelete(game.id);
-                              }}
-                              className="p-2 text-white/30 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all"
-                              title="Delete Game"
-                            >
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                              </svg>
-                            </button>
-                          </div>
+                        {/* Action Buttons - Always visible on mobile */}
+                        <div className="flex items-center gap-1 sm:opacity-0 sm:group-hover:opacity-100 transition-all shrink-0">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenPlayLog(game);
+                            }}
+                            className="p-2 text-white/30 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg transition-all"
+                            title="Log Play Session"
+                          >
+                            <Clock size={14} />
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDelete(game.id);
+                            }}
+                            className="p-2 text-white/30 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all"
+                            title="Delete Game"
+                          >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                            </svg>
+                          </button>
                         </div>
                       </div>
+
+                      {/* Tags Row */}
+                      <div className="flex items-center gap-2 flex-wrap text-xs text-white/40 mb-3">
+                        {game.platform && <span className="px-2 py-0.5 bg-white/5 rounded">{game.platform}</span>}
+                        {game.genre && <span className="px-2 py-0.5 bg-white/5 rounded">{game.genre}</span>}
+                        {game.purchaseSource && <span className="px-2 py-0.5 bg-white/5 rounded">{game.purchaseSource}</span>}
+                      </div>
+
+                      {/* Stats Row */}
+                      <div className="grid grid-cols-4 gap-2 text-center">
+                        <div className="p-2 bg-white/[0.02] rounded-lg">
+                          <div className="text-white/80 font-medium text-sm">${game.price}</div>
+                          <div className="text-[10px] text-white/30">price</div>
+                        </div>
+                        <div className="p-2 bg-white/[0.02] rounded-lg">
+                          <div className="text-white/80 font-medium text-sm">{game.hours}h</div>
+                          <div className="text-[10px] text-white/30">played</div>
+                        </div>
+                        <div className="p-2 bg-white/[0.02] rounded-lg">
+                          <div className="text-white/80 font-medium text-sm">{game.rating}/10</div>
+                          <div className="text-[10px] text-white/30">rating</div>
+                        </div>
+                        <div className="p-2 bg-white/[0.02] rounded-lg">
+                          {game.hours > 0 ? (
+                            <>
+                              <div className={clsx('font-medium text-sm', getValueColor(game.metrics.valueRating))}>
+                                ${game.metrics.costPerHour.toFixed(2)}
+                              </div>
+                              <div className="text-[10px] text-white/30">per hr</div>
+                            </>
+                          ) : (
+                            <>
+                              <div className="text-white/30 font-medium text-sm">-</div>
+                              <div className="text-[10px] text-white/30">per hr</div>
+                            </>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Review Preview */}
+                      {game.review && (
+                        <div className="mt-3 pt-3 border-t border-white/5">
+                          <p className="text-xs text-white/40 line-clamp-2">{game.review}</p>
+                        </div>
+                      )}
+
                       {/* Play Logs Summary */}
                       {game.playLogs && game.playLogs.length > 0 && (
-                        <div className="mt-2 pt-2 border-t border-white/5">
+                        <div className={clsx('mt-3 pt-3 border-t border-white/5', !game.review && 'mt-3')}>
                           <div className="flex items-center gap-2 text-xs text-white/30">
                             <Clock size={10} />
                             <span>{game.playLogs.length} sessions logged</span>

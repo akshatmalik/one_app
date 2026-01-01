@@ -21,6 +21,7 @@ export interface Game {
   genre?: string;
   purchaseSource?: PurchaseSource;
   notes?: string;
+  review?: string; // Personal review/thoughts about the game
   datePurchased?: string;
   startDate?: string; // When you started playing
   endDate?: string; // When you finished/stopped
