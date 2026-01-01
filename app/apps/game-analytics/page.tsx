@@ -351,13 +351,48 @@ export default function GameAnalyticsPage() {
                         {game.platform && <span className="px-2 py-0.5 bg-white/5 rounded">{game.platform}</span>}
                         {game.genre && <span className="px-2 py-0.5 bg-white/5 rounded">{game.genre}</span>}
                         {game.purchaseSource && <span className="px-2 py-0.5 bg-white/5 rounded">{game.purchaseSource}</span>}
+                        {/* Value Badge */}
+                        {game.hours > 0 && (
+                          <span className={clsx(
+                            'px-2 py-0.5 rounded font-medium',
+                            game.metrics.valueRating === 'Excellent' && 'bg-emerald-500/20 text-emerald-400',
+                            game.metrics.valueRating === 'Good' && 'bg-blue-500/20 text-blue-400',
+                            game.metrics.valueRating === 'Fair' && 'bg-yellow-500/20 text-yellow-400',
+                            game.metrics.valueRating === 'Poor' && 'bg-red-500/20 text-red-400'
+                          )}>
+                            {game.metrics.valueRating} Value
+                          </span>
+                        )}
+                        {/* Discount Badge */}
+                        {game.originalPrice && game.originalPrice > game.price && (
+                          <span className="px-2 py-0.5 bg-green-500/20 text-green-400 rounded font-medium">
+                            {(((game.originalPrice - game.price) / game.originalPrice) * 100).toFixed(0)}% off
+                          </span>
+                        )}
+                        {/* Free Badge */}
+                        {game.acquiredFree && (
+                          <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-400 rounded font-medium">
+                            FREE
+                          </span>
+                        )}
                       </div>
 
                       {/* Stats Row */}
                       <div className="grid grid-cols-4 gap-2 text-center">
                         <div className="p-2 bg-white/[0.02] rounded-lg">
-                          <div className="text-white/80 font-medium text-sm">${game.price}</div>
-                          <div className="text-[10px] text-white/30">price</div>
+                          <div className="flex flex-col items-center gap-0.5">
+                            {game.originalPrice && game.originalPrice > game.price ? (
+                              <>
+                                <div className="text-white/30 line-through text-xs">${game.originalPrice}</div>
+                                <div className="text-emerald-400 font-medium text-sm">${game.price}</div>
+                              </>
+                            ) : (
+                              <div className="text-white/80 font-medium text-sm">${game.price}</div>
+                            )}
+                          </div>
+                          <div className="text-[10px] text-white/30">
+                            {game.acquiredFree ? 'free' : 'price'}
+                          </div>
                         </div>
                         <div className="p-2 bg-white/[0.02] rounded-lg">
                           <div className="text-white/80 font-medium text-sm">{game.hours}h</div>
@@ -416,6 +451,19 @@ export default function GameAnalyticsPage() {
                 const gameWithMetrics = gamesWithMetrics.find(g => g.id === game.id);
                 if (gameWithMetrics) {
                   handleOpenPlayLog(gameWithMetrics);
+                }
+              }}
+              onQuickAddTime={async (gameId, playLog) => {
+                const game = games.find(g => g.id === gameId);
+                if (game) {
+                  const existingLogs = game.playLogs || [];
+                  const updatedLogs = [...existingLogs, playLog];
+                  const totalHours = updatedLogs.reduce((sum, log) => sum + log.hours, 0);
+                  await updateGame(gameId, {
+                    playLogs: updatedLogs,
+                    hours: Math.max(game.hours, totalHours),
+                  });
+                  showToast('Play session added', 'success');
                 }
               }}
             />
