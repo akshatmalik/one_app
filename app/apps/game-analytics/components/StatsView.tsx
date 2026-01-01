@@ -482,31 +482,32 @@ export function StatsView({ games, summary, budgets = [], onSetBudget }: StatsVi
               )}
               <div className="grid grid-cols-3 gap-3 mt-4 pt-4 border-t border-white/5">
                 <div className="p-3 bg-white/5 rounded-xl text-center">
-                  <div className="text-lg font-semibold text-white">${yearSpent.toFixed(0)}</div>
+                  <div className="text-lg font-semibold text-white">${periodSpent.toFixed(0)}</div>
                   <div className="text-[10px] text-white/40">spent</div>
                 </div>
                 <div className="p-3 bg-white/5 rounded-xl text-center">
-                  <div className="text-lg font-semibold text-white">{yearGamesCount}</div>
+                  <div className="text-lg font-semibold text-white">{periodGamesCount}</div>
                   <div className="text-[10px] text-white/40">games</div>
                 </div>
                 <div className="p-3 bg-white/5 rounded-xl text-center">
-                  <div className="text-lg font-semibold text-blue-400">{yearHours.toFixed(0)}h</div>
+                  <div className="text-lg font-semibold text-blue-400">{periodHours.toFixed(0)}h</div>
                   <div className="text-[10px] text-white/40">played</div>
                 </div>
               </div>
             </div>
           )}
         </div>
+        )}
 
-        {/* Year Spending Breakdown */}
-        {yearSpendingByGame.length > 0 && (
+        {/* Period Spending Breakdown */}
+        {periodSpendingByGame.length > 0 && (
           <div className="p-4 bg-white/[0.02] border border-white/5 rounded-xl">
             <h3 className="text-sm font-medium text-white/70 mb-3 flex items-center gap-2">
               <DollarSign size={14} className="text-emerald-400" />
-              {selectedYear} Spending Breakdown
+              {isAllTime ? 'All Time' : selectedYear} Spending Breakdown
             </h3>
             <div className="space-y-2">
-              {yearSpendingByGame.slice(0, 8).map((game, idx) => (
+              {periodSpendingByGame.slice(0, 8).map((game, idx) => (
                 <div key={idx} className="flex items-center gap-3">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between mb-1">
@@ -525,20 +526,20 @@ export function StatsView({ games, summary, budgets = [], onSetBudget }: StatsVi
                   </span>
                 </div>
               ))}
-              {yearSpendingByGame.length > 8 && (
+              {periodSpendingByGame.length > 8 && (
                 <p className="text-[10px] text-white/30 text-center pt-2">
-                  +{yearSpendingByGame.length - 8} more games
+                  +{periodSpendingByGame.length - 8} more games
                 </p>
               )}
             </div>
           </div>
         )}
 
-        {/* Monthly Spending for Year */}
-        {yearMonthlySpending.length > 0 && (
-          <ChartCard title={`${selectedYear} Monthly Spending`} icon={<BarChart3 size={16} />}>
+        {/* Monthly Spending for Period */}
+        {periodMonthlySpending.length > 0 && (
+          <ChartCard title={`${isAllTime ? 'Monthly' : selectedYear + ' Monthly'} Spending`} icon={<BarChart3 size={16} />}>
             <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={yearMonthlySpending}>
+              <BarChart data={periodMonthlySpending}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
                 <XAxis dataKey="label" tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 10 }} />
                 <YAxis tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 10 }} tickFormatter={v => `$${v}`} />
@@ -547,6 +548,52 @@ export function StatsView({ games, summary, budgets = [], onSetBudget }: StatsVi
               </BarChart>
             </ResponsiveContainer>
           </ChartCard>
+        )}
+
+        {/* Franchise Stats */}
+        {franchiseStats.length > 0 && (
+          <div className="p-4 bg-white/[0.02] border border-white/5 rounded-xl">
+            <h3 className="text-sm font-medium text-white/70 mb-3 flex items-center gap-2">
+              <Layers size={14} className="text-purple-400" />
+              {isAllTime ? 'All Time' : selectedYear} Franchise Stats
+            </h3>
+            <div className="space-y-3">
+              {franchiseStats.slice(0, 6).map((franchise, idx) => (
+                <div key={idx} className="p-3 bg-white/[0.03] rounded-lg">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-white/90">{franchise.name}</span>
+                    <span className="text-xs text-white/40">{franchise.games} game{franchise.games !== 1 ? 's' : ''}</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 text-center">
+                    <div>
+                      <div className="text-sm font-semibold text-emerald-400">${franchise.spent.toFixed(0)}</div>
+                      <div className="text-[10px] text-white/30">spent</div>
+                    </div>
+                    <div>
+                      <div className="text-sm font-semibold text-blue-400">{franchise.hours.toFixed(0)}h</div>
+                      <div className="text-[10px] text-white/30">played</div>
+                    </div>
+                    <div>
+                      <div className={clsx(
+                        'text-sm font-semibold',
+                        franchise.avgCostPerHour <= 1 ? 'text-emerald-400' :
+                        franchise.avgCostPerHour <= 3 ? 'text-blue-400' :
+                        franchise.avgCostPerHour <= 5 ? 'text-yellow-400' : 'text-red-400'
+                      )}>
+                        ${franchise.avgCostPerHour.toFixed(2)}/h
+                      </div>
+                      <div className="text-[10px] text-white/30">avg cost</div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {franchiseStats.length > 6 && (
+                <p className="text-[10px] text-white/30 text-center pt-1">
+                  +{franchiseStats.length - 6} more franchises
+                </p>
+              )}
+            </div>
+          </div>
         )}
       </div>
 
