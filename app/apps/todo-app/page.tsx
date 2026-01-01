@@ -348,6 +348,12 @@ export default function TodoApp() {
             <>
               {statsLoading ? (
                 <div className="text-center py-12 text-white/30 text-sm">Loading stats...</div>
+              ) : statsError ? (
+                <div className="text-center py-12">
+                  <div className="bg-red-500/10 border border-red-500/20 rounded-lg px-4 py-3 text-sm text-red-400 inline-block">
+                    Error loading stats: {statsError.message}
+                  </div>
+                </div>
               ) : weeklyStats && monthlyStats ? (
                 <StatsView
                   weeklyStats={weeklyStats}
@@ -356,7 +362,17 @@ export default function TodoApp() {
                   monthlyData={monthlyData}
                 />
               ) : (
-                <div className="text-center py-12 text-white/30 text-sm">No stats available</div>
+                <div className="text-center py-20">
+                  <div className="max-w-md mx-auto">
+                    <div className="w-16 h-16 bg-purple-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <BarChart3 size={32} className="text-purple-400/50" />
+                    </div>
+                    <h3 className="text-lg font-medium text-white/70 mb-2">No stats yet</h3>
+                    <p className="text-white/40 text-sm">
+                      Complete some tasks to start seeing your statistics and progress tracking.
+                    </p>
+                  </div>
+                </div>
               )}
             </>
           )}
