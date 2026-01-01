@@ -119,6 +119,9 @@ service cloud.firestore {
     match /games/{gameId} {
       allow read, write: if request.auth != null;
     }
+    match /budgetSettings/{budgetId} {
+      allow read, write: if request.auth != null;
+    }
   }
 }
 ```
