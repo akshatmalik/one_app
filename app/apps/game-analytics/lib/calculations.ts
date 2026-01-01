@@ -134,13 +134,16 @@ export function calculateSummary(games: Game[]): AnalyticsSummary {
       highestRated = { name: sortedByRating[0].name, rating: sortedByRating[0].rating };
     }
 
-    // Best ROI
-    const gamesWithROI = playedGames.map(g => ({
-      ...g,
-      roi: calculateROI(g.rating, g.hours, g.price)
-    })).sort((a, b) => b.roi - a.roi);
-    if (gamesWithROI.length > 0) {
-      bestROI = { name: gamesWithROI[0].name, roi: gamesWithROI[0].roi };
+    // Best ROI (exclude free games)
+    const paidGamesWithROI = playedGames
+      .filter(g => g.price > 0 && !g.acquiredFree)
+      .map(g => ({
+        ...g,
+        roi: calculateROI(g.rating, g.hours, g.price)
+      }))
+      .sort((a, b) => b.roi - a.roi);
+    if (paidGamesWithROI.length > 0) {
+      bestROI = { name: paidGamesWithROI[0].name, roi: paidGamesWithROI[0].roi };
     }
   }
 

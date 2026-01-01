@@ -241,8 +241,9 @@ export function StatsView({ games, summary, budgets = [], onSetBudget }: StatsVi
     .sort((a, b) => b.hours - a.hours)
     .slice(0, 8);
 
-  // ROI rankings
+  // ROI rankings (exclude free games)
   const roiRankings = [...playedGames]
+    .filter(g => g.price > 0 && !g.acquiredFree)
     .map(g => ({
       name: g.name.length > 15 ? g.name.slice(0, 15) + '...' : g.name,
       fullName: g.name,
@@ -306,16 +307,31 @@ export function StatsView({ games, summary, budgets = [], onSetBudget }: StatsVi
     periodFreeGames.reduce((acc, g) => {
       const source = g.subscriptionSource || 'Other';
       if (!acc[source]) {
-        acc[source] = { saved: 0, hours: 0, games: 0 };
+        acc[source] = { saved: 0, hours: 0, games: 0, gamesList: [] };
       }
       acc[source].saved += g.originalPrice || 0;
       acc[source].hours += g.hours;
       acc[source].games += 1;
+      acc[source].gamesList.push(g);
       return acc;
-    }, {} as Record<string, { saved: number; hours: number; games: number }>)
+    }, {} as Record<string, { saved: number; hours: number; games: number; gamesList: GameWithMetrics[] }>)
   )
     .map(([name, stats]) => ({ name, ...stats }))
     .sort((a, b) => b.saved - a.saved);
+
+  // Discount savings for the period
+  const periodPaidGamesWithDiscount = filteredGames.filter(g =>
+    g.status !== 'Wishlist' && !g.acquiredFree && g.originalPrice && g.originalPrice > g.price
+  );
+  const periodDiscountSavings = periodPaidGamesWithDiscount.reduce((sum, g) =>
+    sum + ((g.originalPrice || 0) - g.price), 0
+  );
+  const periodAverageDiscount = periodPaidGamesWithDiscount.length > 0
+    ? periodPaidGamesWithDiscount.reduce((sum, g) => {
+        const discount = ((g.originalPrice || 0) - g.price) / (g.originalPrice || 1) * 100;
+        return sum + discount;
+      }, 0) / periodPaidGamesWithDiscount.length
+    : 0;
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
@@ -654,14 +670,30 @@ export function StatsView({ games, summary, budgets = [], onSetBudget }: StatsVi
               <div className="space-y-2">
                 <div className="text-[10px] text-white/40 uppercase tracking-wider mb-2">By Service</div>
                 {subscriptionStats.map((sub, idx) => (
-                  <div key={idx} className="flex items-center justify-between p-2 bg-white/[0.03] rounded-lg">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-white/80">{sub.name}</span>
-                      <span className="text-[10px] text-white/40">({sub.games} game{sub.games !== 1 ? 's' : ''})</span>
+                  <div key={idx} className="space-y-2">
+                    <div className="flex items-center justify-between p-2 bg-white/[0.03] rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-white/80">{sub.name}</span>
+                        <span className="text-[10px] text-white/40">({sub.games} game{sub.games !== 1 ? 's' : ''})</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="text-xs text-blue-400">{sub.hours.toFixed(0)}h</span>
+                        <span className="text-sm font-medium text-emerald-400">${sub.saved.toFixed(0)}</span>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <span className="text-xs text-blue-400">{sub.hours.toFixed(0)}h</span>
-                      <span className="text-sm font-medium text-emerald-400">${sub.saved.toFixed(0)}</span>
+                    {/* Games list */}
+                    <div className="ml-2 space-y-1">
+                      {sub.gamesList.map((game) => (
+                        <div key={game.id} className="flex items-center justify-between px-2 py-1 bg-white/[0.02] rounded text-xs">
+                          <span className="text-white/60">{game.name}</span>
+                          <div className="flex items-center gap-2">
+                            {game.hours > 0 && (
+                              <span className="text-blue-400/70">{game.hours}h</span>
+                            )}
+                            <span className="text-emerald-400/70">${(game.originalPrice || 0).toFixed(0)}</span>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 ))}
@@ -671,22 +703,22 @@ export function StatsView({ games, summary, budgets = [], onSetBudget }: StatsVi
         )}
       </div>
 
-      {/* Discount Savings Card - All Time */}
-      {summary.totalDiscountSavings > 0 && (
+      {/* Discount Savings Card - Period-based */}
+      {periodDiscountSavings > 0 && (
         <div className="p-4 bg-gradient-to-br from-blue-500/10 to-purple-500/10 border border-blue-500/20 rounded-xl">
           <h3 className="text-sm font-medium text-white/70 mb-3 flex items-center gap-2">
             <DollarSign size={14} className="text-blue-400" />
-            All-Time Discount Savings
+            {isAllTime ? 'All-Time' : selectedYear} Discount Savings
           </h3>
 
           {/* Summary Row */}
           <div className="grid grid-cols-2 gap-3 mb-3">
             <div className="p-3 bg-white/5 rounded-xl text-center">
-              <div className="text-lg font-bold text-blue-400">${summary.totalDiscountSavings.toFixed(0)}</div>
+              <div className="text-lg font-bold text-blue-400">${periodDiscountSavings.toFixed(0)}</div>
               <div className="text-[10px] text-white/40">total saved</div>
             </div>
             <div className="p-3 bg-white/5 rounded-xl text-center">
-              <div className="text-lg font-bold text-purple-400">{summary.averageDiscount.toFixed(0)}%</div>
+              <div className="text-lg font-bold text-purple-400">{periodAverageDiscount.toFixed(0)}%</div>
               <div className="text-[10px] text-white/40">avg discount</div>
             </div>
           </div>
