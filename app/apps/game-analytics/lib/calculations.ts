@@ -168,6 +168,22 @@ export function calculateSummary(games: Game[]): AnalyticsSummary {
     }
   });
 
+  // Subscription/Free game stats
+  const freeGames = ownedGames.filter(g => g.acquiredFree);
+  const freeGamesCount = freeGames.length;
+  const totalSaved = freeGames.reduce((sum, g) => sum + (g.originalPrice || 0), 0);
+
+  const hoursBySubscription: Record<string, number> = {};
+  const savedBySubscription: Record<string, number> = {};
+  const gamesBySubscription: Record<string, number> = {};
+
+  freeGames.forEach(game => {
+    const source = game.subscriptionSource || 'Other';
+    hoursBySubscription[source] = (hoursBySubscription[source] || 0) + game.hours;
+    savedBySubscription[source] = (savedBySubscription[source] || 0) + (game.originalPrice || 0);
+    gamesBySubscription[source] = (gamesBySubscription[source] || 0) + 1;
+  });
+
   return {
     // Counts
     totalGames: games.length,
@@ -212,6 +228,13 @@ export function calculateSummary(games: Game[]): AnalyticsSummary {
     spendingByFranchise,
     hoursByFranchise,
     gamesByFranchise,
+
+    // Subscription/Free game stats
+    freeGamesCount,
+    totalSaved,
+    hoursBySubscription,
+    savedBySubscription,
+    gamesBySubscription,
   };
 }
 

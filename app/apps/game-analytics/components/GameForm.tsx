@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { X } from 'lucide-react';
-import { Game, GameStatus, PurchaseSource } from '../lib/types';
+import { Game, GameStatus, PurchaseSource, SubscriptionSource } from '../lib/types';
 import { calculateCostPerHour, getValueRating } from '../lib/calculations';
 import clsx from 'clsx';
 
@@ -16,6 +16,7 @@ interface GameFormProps {
 const PLATFORMS = ['PC', 'PS5', 'PS4', 'Xbox Series', 'Xbox One', 'Switch', 'Mobile', 'Other'];
 const GENRES = ['Action', 'Action-Adventure', 'RPG', 'JRPG', 'Horror', 'Platformer', 'Strategy', 'Simulation', 'Sports', 'Racing', 'Puzzle', 'Metroidvania', 'Roguelike', 'Souls-like', 'FPS', 'TPS', 'MMO', 'Indie', 'Adventure', 'Other'];
 const PURCHASE_SOURCES: PurchaseSource[] = ['Steam', 'PlayStation', 'Xbox', 'Nintendo', 'Epic', 'GOG', 'Physical', 'Other'];
+const SUBSCRIPTION_SOURCES: SubscriptionSource[] = ['PS Plus', 'Game Pass', 'Epic Free', 'Prime Gaming', 'Humble Choice', 'Other'];
 
 export function GameForm({ onSubmit, onClose, initialGame, existingFranchises = [] }: GameFormProps) {
   const [loading, setLoading] = useState(false);
@@ -29,6 +30,9 @@ export function GameForm({ onSubmit, onClose, initialGame, existingFranchises = 
     genre: initialGame?.genre || '',
     franchise: initialGame?.franchise || '',
     purchaseSource: initialGame?.purchaseSource || '' as PurchaseSource | '',
+    acquiredFree: initialGame?.acquiredFree || false,
+    originalPrice: initialGame?.originalPrice || 0,
+    subscriptionSource: initialGame?.subscriptionSource || '' as SubscriptionSource | '',
     notes: initialGame?.notes || '',
     review: initialGame?.review || '',
     datePurchased: initialGame?.datePurchased || new Date().toISOString().split('T')[0],
@@ -48,6 +52,9 @@ export function GameForm({ onSubmit, onClose, initialGame, existingFranchises = 
         ...formData,
         franchise: formData.franchise || undefined,
         purchaseSource: formData.purchaseSource || undefined,
+        acquiredFree: formData.acquiredFree || undefined,
+        originalPrice: formData.acquiredFree ? formData.originalPrice : undefined,
+        subscriptionSource: formData.acquiredFree && formData.subscriptionSource ? formData.subscriptionSource : undefined,
         startDate: formData.startDate || undefined,
         endDate: formData.endDate || undefined,
       });
@@ -237,6 +244,81 @@ export function GameForm({ onSubmit, onClose, initialGame, existingFranchises = 
               {existingFranchises.map(f => <option key={f} value={f} />)}
             </datalist>
           </div>
+
+          {/* Free/Subscription Section */}
+          {isOwned && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <div className="h-px flex-1 bg-white/5" />
+                <span className="text-[10px] text-white/30 uppercase tracking-wider">Subscription / Free</span>
+                <div className="h-px flex-1 bg-white/5" />
+              </div>
+
+              {/* Acquired Free Toggle */}
+              <div className="flex items-center justify-between p-3 bg-white/[0.02] rounded-lg">
+                <div>
+                  <div className="text-sm text-white/80">Acquired Free</div>
+                  <div className="text-[10px] text-white/40">From PS Plus, Game Pass, etc.</div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const newAcquiredFree = !formData.acquiredFree;
+                    setFormData({
+                      ...formData,
+                      acquiredFree: newAcquiredFree,
+                      price: newAcquiredFree ? 0 : formData.price,
+                    });
+                  }}
+                  className={clsx(
+                    'w-11 h-6 rounded-full transition-all relative',
+                    formData.acquiredFree ? 'bg-emerald-500' : 'bg-white/10'
+                  )}
+                >
+                  <div className={clsx(
+                    'w-5 h-5 rounded-full bg-white absolute top-0.5 transition-all',
+                    formData.acquiredFree ? 'left-5' : 'left-0.5'
+                  )} />
+                </button>
+              </div>
+
+              {/* Subscription Details */}
+              {formData.acquiredFree && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-white/50 mb-1.5">Subscription</label>
+                    <select
+                      value={formData.subscriptionSource}
+                      onChange={e => setFormData({ ...formData, subscriptionSource: e.target.value as SubscriptionSource })}
+                      className="w-full px-2 py-2.5 bg-white/[0.03] border border-white/5 text-white rounded-lg text-xs focus:outline-none focus:bg-white/[0.05] focus:border-white/10 transition-all"
+                    >
+                      <option value="">Select...</option>
+                      {SUBSCRIPTION_SOURCES.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-white/50 mb-1.5">Original Value ($)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={formData.originalPrice}
+                      onChange={e => setFormData({ ...formData, originalPrice: parseFloat(e.target.value) || 0 })}
+                      placeholder="Game's actual price"
+                      className="w-full px-3 py-2.5 bg-white/[0.03] border border-white/5 text-white rounded-lg text-xs focus:outline-none focus:bg-white/[0.05] focus:border-white/10 transition-all placeholder:text-white/30"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Savings Display */}
+              {formData.acquiredFree && formData.originalPrice > 0 && (
+                <div className="px-3 py-2 rounded-lg bg-emerald-500/10 text-emerald-400 text-sm">
+                  <span className="font-medium">You saved ${formData.originalPrice.toFixed(2)}!</span>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Date Section */}
           {isOwned && (

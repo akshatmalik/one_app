@@ -45,6 +45,7 @@ import {
   CalendarDays,
   ChevronDown,
   Layers,
+  Gift,
 } from 'lucide-react';
 import { Game, GameStatus, AnalyticsSummary, BudgetSettings } from '../lib/types';
 import { calculateSummary, getCumulativeSpending, getHoursByMonth, getSpendingByMonth } from '../lib/calculations';
@@ -289,6 +290,26 @@ export function StatsView({ games, summary, budgets = [], onSetBudget }: StatsVi
       avgCostPerHour: stats.hours > 0 ? stats.spent / stats.hours : 0,
     }))
     .sort((a, b) => b.spent - a.spent);
+
+  // Subscription stats for the period
+  const periodFreeGames = filteredGames.filter(g => g.acquiredFree && g.status !== 'Wishlist');
+  const periodTotalSaved = periodFreeGames.reduce((sum, g) => sum + (g.originalPrice || 0), 0);
+  const periodFreeHours = periodFreeGames.reduce((sum, g) => sum + g.hours, 0);
+
+  const subscriptionStats = Object.entries(
+    periodFreeGames.reduce((acc, g) => {
+      const source = g.subscriptionSource || 'Other';
+      if (!acc[source]) {
+        acc[source] = { saved: 0, hours: 0, games: 0 };
+      }
+      acc[source].saved += g.originalPrice || 0;
+      acc[source].hours += g.hours;
+      acc[source].games += 1;
+      return acc;
+    }, {} as Record<string, { saved: number; hours: number; games: number }>)
+  )
+    .map(([name, stats]) => ({ name, ...stats }))
+    .sort((a, b) => b.saved - a.saved);
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
@@ -593,6 +614,51 @@ export function StatsView({ games, summary, budgets = [], onSetBudget }: StatsVi
                 </p>
               )}
             </div>
+          </div>
+        )}
+
+        {/* Subscription / Free Games Stats */}
+        {periodFreeGames.length > 0 && (
+          <div className="p-4 bg-gradient-to-br from-emerald-500/10 to-cyan-500/10 border border-emerald-500/20 rounded-xl">
+            <h3 className="text-sm font-medium text-white/70 mb-3 flex items-center gap-2">
+              <Gift size={14} className="text-emerald-400" />
+              {isAllTime ? 'All Time' : selectedYear} Subscription Savings
+            </h3>
+
+            {/* Summary Row */}
+            <div className="grid grid-cols-3 gap-3 mb-4">
+              <div className="p-3 bg-white/5 rounded-xl text-center">
+                <div className="text-lg font-bold text-emerald-400">${periodTotalSaved.toFixed(0)}</div>
+                <div className="text-[10px] text-white/40">total saved</div>
+              </div>
+              <div className="p-3 bg-white/5 rounded-xl text-center">
+                <div className="text-lg font-bold text-white">{periodFreeGames.length}</div>
+                <div className="text-[10px] text-white/40">free games</div>
+              </div>
+              <div className="p-3 bg-white/5 rounded-xl text-center">
+                <div className="text-lg font-bold text-blue-400">{periodFreeHours.toFixed(0)}h</div>
+                <div className="text-[10px] text-white/40">played</div>
+              </div>
+            </div>
+
+            {/* By Subscription Service */}
+            {subscriptionStats.length > 0 && (
+              <div className="space-y-2">
+                <div className="text-[10px] text-white/40 uppercase tracking-wider mb-2">By Service</div>
+                {subscriptionStats.map((sub, idx) => (
+                  <div key={idx} className="flex items-center justify-between p-2 bg-white/[0.03] rounded-lg">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-white/80">{sub.name}</span>
+                      <span className="text-[10px] text-white/40">({sub.games} game{sub.games !== 1 ? 's' : ''})</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs text-blue-400">{sub.hours.toFixed(0)}h</span>
+                      <span className="text-sm font-medium text-emerald-400">${sub.saved.toFixed(0)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>

@@ -2,6 +2,8 @@ export type GameStatus = 'Not Started' | 'In Progress' | 'Completed' | 'Wishlist
 
 export type PurchaseSource = 'Steam' | 'PlayStation' | 'Xbox' | 'Nintendo' | 'Epic' | 'GOG' | 'Physical' | 'Other';
 
+export type SubscriptionSource = 'PS Plus' | 'Game Pass' | 'Epic Free' | 'Prime Gaming' | 'Humble Choice' | 'Other';
+
 export interface PlayLog {
   id: string;
   date: string;
@@ -21,6 +23,10 @@ export interface Game {
   genre?: string;
   franchise?: string; // Game franchise/series (e.g., "The Witcher", "Final Fantasy")
   purchaseSource?: PurchaseSource;
+  // Subscription/Free game tracking
+  acquiredFree?: boolean; // Was this game acquired for free?
+  originalPrice?: number; // Original value of the game (for calculating savings)
+  subscriptionSource?: SubscriptionSource; // Which subscription service provided the game
   notes?: string;
   review?: string; // Personal review/thoughts about the game
   datePurchased?: string;
@@ -84,6 +90,13 @@ export interface AnalyticsSummary {
   spendingByFranchise: Record<string, number>;
   hoursByFranchise: Record<string, number>;
   gamesByFranchise: Record<string, number>;
+
+  // Subscription/Free game stats
+  freeGamesCount: number;
+  totalSaved: number; // Sum of originalPrice for free games
+  hoursBySubscription: Record<string, number>;
+  savedBySubscription: Record<string, number>;
+  gamesBySubscription: Record<string, number>;
 }
 
 export interface BudgetSettings {
