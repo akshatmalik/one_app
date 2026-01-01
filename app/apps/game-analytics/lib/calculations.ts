@@ -369,6 +369,70 @@ export function getPeriodStats(games: Game[], days: number): PeriodStats {
   };
 }
 
+// Get stats for a specific date range
+export function getPeriodStatsForRange(games: Game[], startDate: Date, endDate: Date): PeriodStats {
+  const gamesWithActivity: Map<string, { game: Game; hours: number; sessions: number }> = new Map();
+  let totalHours = 0;
+  let totalSessions = 0;
+
+  games.forEach(game => {
+    if (game.playLogs) {
+      game.playLogs.forEach(log => {
+        const logDate = new Date(log.date);
+        if (logDate >= startDate && logDate <= endDate) {
+          const existing = gamesWithActivity.get(game.id) || { game, hours: 0, sessions: 0 };
+          existing.hours += log.hours;
+          existing.sessions += 1;
+          gamesWithActivity.set(game.id, existing);
+          totalHours += log.hours;
+          totalSessions += 1;
+        }
+      });
+    }
+  });
+
+  const gamesPlayed = Array.from(gamesWithActivity.values()).map(g => g.game);
+  const mostPlayedEntry = Array.from(gamesWithActivity.values())
+    .sort((a, b) => b.hours - a.hours)[0];
+
+  return {
+    gamesPlayed,
+    totalHours,
+    totalSessions,
+    mostPlayedGame: mostPlayedEntry ? { name: mostPlayedEntry.game.name, hours: mostPlayedEntry.hours } : null,
+    averageSessionLength: totalSessions > 0 ? totalHours / totalSessions : 0,
+    uniqueGames: gamesPlayed.length,
+  };
+}
+
+// Get last week stats (7 days before this week)
+export function getLastWeekStats(games: Game[]): PeriodStats {
+  const today = new Date();
+  const endDate = new Date(today);
+  endDate.setDate(today.getDate() - 7);
+  endDate.setHours(23, 59, 59, 999);
+
+  const startDate = new Date(endDate);
+  startDate.setDate(endDate.getDate() - 6);
+  startDate.setHours(0, 0, 0, 0);
+
+  return getPeriodStatsForRange(games, startDate, endDate);
+}
+
+// Get last month stats (30 days before this month)
+export function getLastMonthStats(games: Game[]): PeriodStats {
+  const today = new Date();
+  const endDate = new Date(today);
+  endDate.setDate(today.getDate() - 30);
+  endDate.setHours(23, 59, 59, 999);
+
+  const startDate = new Date(endDate);
+  startDate.setDate(endDate.getDate() - 29);
+  startDate.setHours(0, 0, 0, 0);
+
+  return getPeriodStatsForRange(games, startDate, endDate);
+}
+
 // ========================================
 // FUN & CREATIVE STATS
 // ========================================

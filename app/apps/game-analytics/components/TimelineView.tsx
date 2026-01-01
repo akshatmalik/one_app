@@ -1,14 +1,17 @@
 'use client';
 
-import { useMemo } from 'react';
-import { Calendar, Clock, Gamepad2, DollarSign, Play, CheckCircle, XCircle } from 'lucide-react';
-import { Game } from '../lib/types';
+import { useMemo, useState } from 'react';
+import { Calendar, Clock, Gamepad2, DollarSign, Play, CheckCircle, XCircle, Plus } from 'lucide-react';
+import { Game, PlayLog } from '../lib/types';
 import { getAllPlayLogs } from '../lib/calculations';
+import { TimelinePeriodCards } from './TimelinePeriodCards';
+import { QuickAddTimeModal } from './QuickAddTimeModal';
 import clsx from 'clsx';
 
 interface TimelineViewProps {
   games: Game[];
   onLogTime?: (game: Game) => void;
+  onQuickAddTime?: (gameId: string, playLog: PlayLog) => Promise<void>;
 }
 
 type TimelineEvent = {
@@ -21,7 +24,9 @@ type TimelineEvent = {
   price?: number;
 };
 
-export function TimelineView({ games, onLogTime }: TimelineViewProps) {
+export function TimelineView({ games, onLogTime, onQuickAddTime }: TimelineViewProps) {
+  const [showQuickAdd, setShowQuickAdd] = useState(false);
+
   const events = useMemo(() => {
     const allEvents: TimelineEvent[] = [];
 
@@ -129,24 +134,101 @@ export function TimelineView({ games, onLogTime }: TimelineViewProps) {
     }
   };
 
+  // Calculate monthly totals
+  const monthlyTotals = useMemo(() => {
+    const totals: Record<string, { hours: number; sessions: number; games: Set<string> }> = {};
+    events.forEach(event => {
+      if (event.type === 'play') {
+        const monthKey = event.date.substring(0, 7);
+        if (!totals[monthKey]) {
+          totals[monthKey] = { hours: 0, sessions: 0, games: new Set() };
+        }
+        totals[monthKey].hours += event.hours || 0;
+        totals[monthKey].sessions += 1;
+        totals[monthKey].games.add(event.game.id);
+      }
+    });
+    return totals;
+  }, [events]);
+
+  const handleQuickAddTime = async (gameId: string, playLog: PlayLog) => {
+    if (onQuickAddTime) {
+      await onQuickAddTime(gameId, playLog);
+    }
+  };
+
   if (events.length === 0) {
     return (
-      <div className="text-center py-16">
-        <Calendar size={48} className="mx-auto mb-4 text-white/10" />
-        <p className="text-white/30 text-sm">No timeline events yet</p>
-        <p className="text-white/20 text-xs mt-1">Add games with dates or log play sessions to see your timeline</p>
-      </div>
+      <>
+        {/* Period Cards */}
+        <TimelinePeriodCards games={games} />
+
+        {/* Quick Add Button */}
+        {onQuickAddTime && (
+          <div className="flex justify-end mb-4">
+            <button
+              onClick={() => setShowQuickAdd(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg transition-all text-sm font-medium"
+            >
+              <Plus size={16} />
+              Add Play Time
+            </button>
+          </div>
+        )}
+
+        <div className="text-center py-16">
+          <Calendar size={48} className="mx-auto mb-4 text-white/10" />
+          <p className="text-white/30 text-sm">No timeline events yet</p>
+          <p className="text-white/20 text-xs mt-1">Add games with dates or log play sessions to see your timeline</p>
+        </div>
+
+        {/* Quick Add Modal */}
+        {showQuickAdd && onQuickAddTime && (
+          <QuickAddTimeModal
+            games={games}
+            onSave={handleQuickAddTime}
+            onClose={() => setShowQuickAdd(false)}
+          />
+        )}
+      </>
     );
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
+      {/* Period Cards */}
+      <TimelinePeriodCards games={games} />
+
+      {/* Quick Add Button */}
+      {onQuickAddTime && (
+        <div className="flex justify-end">
+          <button
+            onClick={() => setShowQuickAdd(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg transition-all text-sm font-medium"
+          >
+            <Plus size={16} />
+            Add Play Time
+          </button>
+        </div>
+      )}
+
+      {/* Timeline Events */}
+      <div className="space-y-8">
       {Object.entries(groupedEvents).map(([monthKey, monthEvents]) => (
         <div key={monthKey}>
           {/* Month Header */}
           <div className="flex items-center gap-3 mb-4">
             <h3 className="text-lg font-semibold text-white">{formatMonth(monthKey)}</h3>
             <div className="flex-1 h-px bg-white/5" />
+            {monthlyTotals[monthKey] && (
+              <div className="flex items-center gap-3 text-xs">
+                <span className="text-purple-400 font-medium">{monthlyTotals[monthKey].hours.toFixed(1)}h</span>
+                <span className="text-white/20">•</span>
+                <span className="text-white/40">{monthlyTotals[monthKey].sessions} sessions</span>
+                <span className="text-white/20">•</span>
+                <span className="text-white/40">{monthlyTotals[monthKey].games.size} games</span>
+              </div>
+            )}
             <span className="text-xs text-white/30">{monthEvents.length} events</span>
           </div>
 
@@ -209,6 +291,16 @@ export function TimelineView({ games, onLogTime }: TimelineViewProps) {
           </div>
         </div>
       ))}
+      </div>
+
+      {/* Quick Add Modal */}
+      {showQuickAdd && onQuickAddTime && (
+        <QuickAddTimeModal
+          games={games}
+          onSave={handleQuickAddTime}
+          onClose={() => setShowQuickAdd(false)}
+        />
+      )}
     </div>
   );
 }

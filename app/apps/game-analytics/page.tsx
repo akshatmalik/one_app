@@ -453,6 +453,19 @@ export default function GameAnalyticsPage() {
                   handleOpenPlayLog(gameWithMetrics);
                 }
               }}
+              onQuickAddTime={async (gameId, playLog) => {
+                const game = games.find(g => g.id === gameId);
+                if (game) {
+                  const existingLogs = game.playLogs || [];
+                  const updatedLogs = [...existingLogs, playLog];
+                  const totalHours = updatedLogs.reduce((sum, log) => sum + log.hours, 0);
+                  await updateGame(gameId, {
+                    playLogs: updatedLogs,
+                    hours: Math.max(game.hours, totalHours),
+                  });
+                  showToast('Play session added', 'success');
+                }
+              }}
             />
           )}
 
