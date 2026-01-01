@@ -57,13 +57,22 @@ export class FirebaseGameRepository implements GameRepository {
   async create(gameData: Omit<Game, 'id' | 'userId' | 'createdAt' | 'updatedAt'>): Promise<Game> {
     if (!this.userId) throw new Error('Not authenticated');
     const now = new Date().toISOString();
+
+    // Filter out undefined values - Firestore doesn't accept them
+    const cleanData: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(gameData)) {
+      if (value !== undefined) {
+        cleanData[key] = value;
+      }
+    }
+
     const game: Game = {
-      ...gameData,
+      ...cleanData,
       id: uuidv4(),
       userId: this.userId,
       createdAt: now,
       updatedAt: now,
-    };
+    } as Game;
 
     await setDoc(doc(this.db, COLLECTION_NAME, game.id), game);
     return game;
@@ -71,12 +80,17 @@ export class FirebaseGameRepository implements GameRepository {
 
   async update(id: string, updates: Partial<Game>): Promise<Game> {
     const docRef = doc(this.db, COLLECTION_NAME, id);
-    const updateData = {
-      ...updates,
-      updatedAt: new Date().toISOString(),
-    };
 
-    await updateDoc(docRef, updateData);
+    // Filter out undefined values - Firestore doesn't accept them
+    const cleanUpdates: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(updates)) {
+      if (value !== undefined) {
+        cleanUpdates[key] = value;
+      }
+    }
+    cleanUpdates.updatedAt = new Date().toISOString();
+
+    await updateDoc(docRef, cleanUpdates);
 
     const updated = await getDoc(docRef);
     return updated.data() as Game;
