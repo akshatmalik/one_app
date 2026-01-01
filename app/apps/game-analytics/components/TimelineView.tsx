@@ -8,6 +8,7 @@ import clsx from 'clsx';
 
 interface TimelineViewProps {
   games: Game[];
+  onLogTime?: (game: Game) => void;
 }
 
 type TimelineEvent = {
@@ -20,7 +21,7 @@ type TimelineEvent = {
   price?: number;
 };
 
-export function TimelineView({ games }: TimelineViewProps) {
+export function TimelineView({ games, onLogTime }: TimelineViewProps) {
   const events = useMemo(() => {
     const allEvents: TimelineEvent[] = [];
 
@@ -167,13 +168,26 @@ export function TimelineView({ games }: TimelineViewProps) {
                 {/* Content */}
                 <div className="flex-1 pt-1">
                   <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <div className="flex items-center gap-2">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-white/90 font-medium">{event.game.name}</span>
                         {event.type === 'play' && (
                           <span className="text-xs px-2 py-0.5 bg-blue-500/20 text-blue-400 rounded-full">
                             {event.hours}h
                           </span>
+                        )}
+                        {onLogTime && event.game.status !== 'Wishlist' && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onLogTime(event.game);
+                            }}
+                            className="text-xs px-2 py-0.5 bg-white/5 hover:bg-purple-500/20 text-white/40 hover:text-purple-400 rounded-full transition-all flex items-center gap-1"
+                            title="Log play time"
+                          >
+                            <Clock size={10} />
+                            Log Time
+                          </button>
                         )}
                       </div>
                       <p className="text-sm text-white/50 mt-0.5">{getEventLabel(event)}</p>
@@ -181,7 +195,7 @@ export function TimelineView({ games }: TimelineViewProps) {
                         <p className="text-xs text-white/30 mt-1 italic">&ldquo;{event.notes}&rdquo;</p>
                       )}
                     </div>
-                    <div className="text-xs text-white/30">
+                    <div className="text-xs text-white/30 shrink-0">
                       {parseLocalDate(event.date).toLocaleDateString('en-US', {
                         weekday: 'short',
                         month: 'short',

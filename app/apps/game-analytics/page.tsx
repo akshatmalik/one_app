@@ -30,6 +30,7 @@ export default function GameAnalyticsPage() {
   const [playLogGame, setPlayLogGame] = useState<GameWithMetrics | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('all');
   const [tabMode, setTabMode] = useState<TabMode>('games');
+  const [sortBy, setSortBy] = useState<'name' | 'price' | 'hours' | 'rating' | 'costPerHour' | 'dateAdded'>('dateAdded');
 
   const handleAddGame = async (gameData: Omit<Game, 'id' | 'userId' | 'createdAt' | 'updatedAt'>) => {
     try {
@@ -102,11 +103,32 @@ export default function GameAnalyticsPage() {
     );
   }
 
-  const filteredGames = gamesWithMetrics.filter(g => {
-    if (viewMode === 'owned') return g.status !== 'Wishlist';
-    if (viewMode === 'wishlist') return g.status === 'Wishlist';
-    return true;
-  });
+  const filteredGames = gamesWithMetrics
+    .filter(g => {
+      if (viewMode === 'owned') return g.status !== 'Wishlist';
+      if (viewMode === 'wishlist') return g.status === 'Wishlist';
+      return true;
+    })
+    .sort((a, b) => {
+      switch (sortBy) {
+        case 'name':
+          return a.name.localeCompare(b.name);
+        case 'price':
+          return b.price - a.price;
+        case 'hours':
+          return b.hours - a.hours;
+        case 'rating':
+          return b.rating - a.rating;
+        case 'costPerHour':
+          // Handle cases where hours might be 0
+          const aCost = a.hours > 0 ? a.metrics.costPerHour : Infinity;
+          const bCost = b.hours > 0 ? b.metrics.costPerHour : Infinity;
+          return aCost - bCost;
+        case 'dateAdded':
+        default:
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      }
+    });
 
   const getStatusColor = (status: GameStatus) => {
     switch (status) {
@@ -231,23 +253,37 @@ export default function GameAnalyticsPage() {
               ))}
             </div>
 
-            {/* View Mode Filter (only for games tab) */}
+            {/* View Mode Filter & Sort (only for games tab) */}
             {tabMode === 'games' && (
-              <div className="flex items-center gap-1 bg-white/[0.02] rounded-lg p-1 ml-auto">
-                {(['all', 'owned', 'wishlist'] as ViewMode[]).map((mode) => (
-                  <button
-                    key={mode}
-                    onClick={() => setViewMode(mode)}
-                    className={clsx(
-                      'px-3 py-1 rounded-md text-xs font-medium transition-all capitalize',
-                      viewMode === mode
-                        ? 'bg-white/10 text-white'
-                        : 'text-white/40 hover:text-white/60'
-                    )}
-                  >
-                    {mode}
-                  </button>
-                ))}
+              <div className="flex items-center gap-2 ml-auto">
+                <div className="flex items-center gap-1 bg-white/[0.02] rounded-lg p-1">
+                  {(['all', 'owned', 'wishlist'] as ViewMode[]).map((mode) => (
+                    <button
+                      key={mode}
+                      onClick={() => setViewMode(mode)}
+                      className={clsx(
+                        'px-3 py-1 rounded-md text-xs font-medium transition-all capitalize',
+                        viewMode === mode
+                          ? 'bg-white/10 text-white'
+                          : 'text-white/40 hover:text-white/60'
+                      )}
+                    >
+                      {mode}
+                    </button>
+                  ))}
+                </div>
+                <select
+                  value={sortBy}
+                  onChange={e => setSortBy(e.target.value as typeof sortBy)}
+                  className="px-3 py-1 bg-white/[0.02] border border-white/10 text-white text-xs rounded-lg focus:outline-none focus:border-purple-500/50 cursor-pointer"
+                >
+                  <option value="dateAdded">Date Added</option>
+                  <option value="name">Name</option>
+                  <option value="price">Price (High to Low)</option>
+                  <option value="hours">Hours (High to Low)</option>
+                  <option value="rating">Rating (High to Low)</option>
+                  <option value="costPerHour">Value (Best First)</option>
+                </select>
               </div>
             )}
           </div>
@@ -374,7 +410,15 @@ export default function GameAnalyticsPage() {
           )}
 
           {tabMode === 'timeline' && (
-            <TimelineView games={games} />
+            <TimelineView
+              games={games}
+              onLogTime={(game) => {
+                const gameWithMetrics = gamesWithMetrics.find(g => g.id === game.id);
+                if (gameWithMetrics) {
+                  handleOpenPlayLog(gameWithMetrics);
+                }
+              }}
+            />
           )}
 
           {tabMode === 'stats' && games.length > 0 && (
