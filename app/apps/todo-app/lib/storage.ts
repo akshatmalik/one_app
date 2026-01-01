@@ -95,12 +95,17 @@ export class FirebaseRepository implements TaskRepository {
 
   async update(id: string, updates: Partial<Task>): Promise<Task> {
     const docRef = doc(this.db, COLLECTION_NAME, id);
-    const updateData = {
-      ...updates,
-      updatedAt: new Date().toISOString(),
-    };
 
-    await updateDoc(docRef, updateData);
+    // Filter out undefined values - Firestore doesn't accept them
+    const cleanUpdates: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(updates)) {
+      if (value !== undefined) {
+        cleanUpdates[key] = value;
+      }
+    }
+    cleanUpdates.updatedAt = new Date().toISOString();
+
+    await updateDoc(docRef, cleanUpdates);
 
     const updated = await getDoc(docRef);
     return updated.data() as Task;
