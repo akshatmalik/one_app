@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import {
   BarChart,
   Bar,
@@ -36,9 +37,17 @@ import {
   Flame,
   BarChart3,
   PieChart as PieChartIcon,
-  Activity
+  Activity,
+  Wallet,
+  Edit3,
+  Check,
+  X,
+  CalendarDays,
+  ChevronDown,
+  Layers,
+  Gift,
 } from 'lucide-react';
-import { Game, GameStatus, AnalyticsSummary } from '../lib/types';
+import { Game, GameStatus, AnalyticsSummary, BudgetSettings } from '../lib/types';
 import { calculateSummary, getCumulativeSpending, getHoursByMonth, getSpendingByMonth } from '../lib/calculations';
 import { GameWithMetrics } from '../hooks/useAnalytics';
 import clsx from 'clsx';
@@ -46,6 +55,8 @@ import clsx from 'clsx';
 interface StatsViewProps {
   games: GameWithMetrics[];
   summary: AnalyticsSummary;
+  budgets?: BudgetSettings[];
+  onSetBudget?: (year: number, amount: number) => Promise<void>;
 }
 
 const STATUS_COLORS: Record<GameStatus, string> = {
@@ -58,7 +69,79 @@ const STATUS_COLORS: Record<GameStatus, string> = {
 
 const CHART_COLORS = ['#8b5cf6', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#3b82f6', '#84cc16'];
 
-export function StatsView({ games, summary }: StatsViewProps) {
+export function StatsView({ games, summary, budgets = [], onSetBudget }: StatsViewProps) {
+  const currentYear = new Date().getFullYear();
+  const [selectedPeriod, setSelectedPeriod] = useState<'all' | number>(currentYear);
+  const [isEditingBudget, setIsEditingBudget] = useState(false);
+  const [savingBudget, setSavingBudget] = useState(false);
+
+  const isAllTime = selectedPeriod === 'all';
+  const selectedYear = isAllTime ? currentYear : selectedPeriod;
+
+  // Get budget for selected year (only for specific years)
+  const selectedBudget = isAllTime ? undefined : budgets.find(b => b.year === selectedYear);
+  const [budgetInput, setBudgetInput] = useState(selectedBudget?.yearlyBudget?.toString() || '');
+
+  // Update budget input when year or budgets change
+  useEffect(() => {
+    if (isAllTime) {
+      setBudgetInput('');
+      setIsEditingBudget(false);
+      return;
+    }
+    const budget = budgets.find(b => b.year === selectedYear);
+    setBudgetInput(budget?.yearlyBudget?.toString() || '');
+    setIsEditingBudget(false);
+  }, [selectedPeriod, selectedYear, budgets, isAllTime]);
+
+  // Get available years from games
+  const availableYears = Array.from(new Set(
+    games
+      .filter(g => g.datePurchased)
+      .map(g => parseInt(g.datePurchased!.split('-')[0]))
+  )).sort((a, b) => b - a);
+
+  if (!availableYears.includes(currentYear)) {
+    availableYears.unshift(currentYear);
+  }
+
+  // Filter games by selected period
+  const filteredGames = isAllTime
+    ? games
+    : games.filter(g => {
+        if (!g.datePurchased) return false;
+        return g.datePurchased.startsWith(selectedYear.toString());
+      });
+
+  // Calculate period-specific stats
+  const periodSpent = filteredGames.reduce((sum, g) => sum + (g.status !== 'Wishlist' ? g.price : 0), 0);
+  const periodHours = filteredGames.reduce((sum, g) => sum + g.hours, 0);
+  const periodGamesCount = filteredGames.filter(g => g.status !== 'Wishlist').length;
+  const periodAvgCostPerHour = periodHours > 0 ? periodSpent / periodHours : 0;
+
+  // Budget calculations (only for specific years)
+  const budgetAmount = selectedBudget?.yearlyBudget || 0;
+  const budgetRemaining = budgetAmount - periodSpent;
+  const budgetUsedPercent = budgetAmount > 0 ? (periodSpent / budgetAmount) * 100 : 0;
+  const monthsRemaining = 12 - new Date().getMonth();
+  const monthlyBudgetRemaining = budgetRemaining > 0 && monthsRemaining > 0
+    ? budgetRemaining / monthsRemaining
+    : 0;
+
+  const handleSaveBudget = async () => {
+    if (!onSetBudget) return;
+    const amount = parseFloat(budgetInput);
+    if (isNaN(amount) || amount < 0) return;
+
+    setSavingBudget(true);
+    try {
+      await onSetBudget(selectedYear, amount);
+      setIsEditingBudget(false);
+    } finally {
+      setSavingBudget(false);
+    }
+  };
+
   const ownedGames = games.filter(g => g.status !== 'Wishlist');
   const playedGames = ownedGames.filter(g => g.hours > 0);
 
@@ -162,6 +245,72 @@ export function StatsView({ games, summary }: StatsViewProps) {
     .sort((a, b) => b.roi - a.roi)
     .slice(0, 8);
 
+  // Period spending breakdown by game
+  const periodSpendingByGame = [...filteredGames]
+    .filter(g => g.status !== 'Wishlist')
+    .sort((a, b) => b.price - a.price)
+    .map(g => ({
+      name: g.name.length > 18 ? g.name.slice(0, 18) + '...' : g.name,
+      fullName: g.name,
+      price: g.price,
+      hours: g.hours,
+      percent: periodSpent > 0 ? (g.price / periodSpent) * 100 : 0,
+    }));
+
+  // Monthly spending for the selected period
+  const periodMonthlySpending = isAllTime
+    ? monthlySpendingData
+    : Object.entries(spendingByMonth)
+        .filter(([month]) => month.startsWith(selectedYear.toString()))
+        .map(([month, total]) => ({
+          month,
+          label: new Date(month + '-01').toLocaleDateString('en-US', { month: 'short' }),
+          total,
+        }))
+        .sort((a, b) => a.month.localeCompare(b.month));
+
+  // Franchise stats for the period
+  const franchiseStats = Object.entries(
+    filteredGames
+      .filter(g => g.franchise && g.status !== 'Wishlist')
+      .reduce((acc, g) => {
+        const franchise = g.franchise!;
+        if (!acc[franchise]) {
+          acc[franchise] = { spent: 0, hours: 0, games: 0 };
+        }
+        acc[franchise].spent += g.price;
+        acc[franchise].hours += g.hours;
+        acc[franchise].games += 1;
+        return acc;
+      }, {} as Record<string, { spent: number; hours: number; games: number }>)
+  )
+    .map(([name, stats]) => ({
+      name,
+      ...stats,
+      avgCostPerHour: stats.hours > 0 ? stats.spent / stats.hours : 0,
+    }))
+    .sort((a, b) => b.spent - a.spent);
+
+  // Subscription stats for the period
+  const periodFreeGames = filteredGames.filter(g => g.acquiredFree && g.status !== 'Wishlist');
+  const periodTotalSaved = periodFreeGames.reduce((sum, g) => sum + (g.originalPrice || 0), 0);
+  const periodFreeHours = periodFreeGames.reduce((sum, g) => sum + g.hours, 0);
+
+  const subscriptionStats = Object.entries(
+    periodFreeGames.reduce((acc, g) => {
+      const source = g.subscriptionSource || 'Other';
+      if (!acc[source]) {
+        acc[source] = { saved: 0, hours: 0, games: 0 };
+      }
+      acc[source].saved += g.originalPrice || 0;
+      acc[source].hours += g.hours;
+      acc[source].games += 1;
+      return acc;
+    }, {} as Record<string, { saved: number; hours: number; games: number }>)
+  )
+    .map(([name, stats]) => ({ name, ...stats }))
+    .sort((a, b) => b.saved - a.saved);
+
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       return (
@@ -181,8 +330,343 @@ export function StatsView({ games, summary }: StatsViewProps) {
 
   return (
     <div className="space-y-8">
-      {/* Summary Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+      {/* Time Period Selector & Stats Section */}
+      <div className="space-y-4">
+        {/* Time Period Selector */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <CalendarDays size={18} className="text-purple-400" />
+            <h2 className="text-lg font-semibold text-white">
+              {isAllTime ? 'All Time' : selectedYear} Overview
+            </h2>
+          </div>
+          <div className="relative">
+            <select
+              value={selectedPeriod}
+              onChange={e => setSelectedPeriod(e.target.value === 'all' ? 'all' : parseInt(e.target.value))}
+              className="appearance-none px-4 py-2 pr-8 bg-white/[0.03] border border-white/10 text-white rounded-lg text-sm font-medium focus:outline-none focus:border-purple-500/50 cursor-pointer"
+            >
+              <option value="all">All Time</option>
+              {availableYears.map(year => (
+                <option key={year} value={year}>{year}</option>
+              ))}
+            </select>
+            <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-white/40 pointer-events-none" />
+          </div>
+        </div>
+
+        {/* Period Summary Stats */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="p-4 bg-white/[0.02] border border-white/5 rounded-xl">
+            <div className="flex items-center gap-2 mb-1">
+              <DollarSign size={14} className="text-emerald-400" />
+              <span className="text-xs text-white/40">Spent</span>
+            </div>
+            <div className="text-xl font-bold text-white">${periodSpent.toFixed(0)}</div>
+          </div>
+          <div className="p-4 bg-white/[0.02] border border-white/5 rounded-xl">
+            <div className="flex items-center gap-2 mb-1">
+              <Clock size={14} className="text-blue-400" />
+              <span className="text-xs text-white/40">Hours Played</span>
+            </div>
+            <div className="text-xl font-bold text-white">{periodHours.toFixed(0)}h</div>
+          </div>
+          <div className="p-4 bg-white/[0.02] border border-white/5 rounded-xl">
+            <div className="flex items-center gap-2 mb-1">
+              <Gamepad2 size={14} className="text-purple-400" />
+              <span className="text-xs text-white/40">Games</span>
+            </div>
+            <div className="text-xl font-bold text-white">{periodGamesCount}</div>
+          </div>
+          <div className="p-4 bg-white/[0.02] border border-white/5 rounded-xl">
+            <div className="flex items-center gap-2 mb-1">
+              <TrendingUp size={14} className="text-yellow-400" />
+              <span className="text-xs text-white/40">Avg $/Hour</span>
+            </div>
+            <div className={clsx(
+              'text-xl font-bold',
+              periodAvgCostPerHour <= 1 ? 'text-emerald-400' :
+              periodAvgCostPerHour <= 3 ? 'text-blue-400' :
+              periodAvgCostPerHour <= 5 ? 'text-yellow-400' : 'text-red-400'
+            )}>
+              ${periodAvgCostPerHour.toFixed(2)}
+            </div>
+          </div>
+        </div>
+
+        {/* Budget Card - only for specific years */}
+        {!isAllTime && (
+          <div className="p-5 bg-gradient-to-br from-purple-500/10 to-blue-500/10 border border-purple-500/20 rounded-2xl">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Wallet size={18} className="text-purple-400" />
+                <h3 className="text-sm font-medium text-white">{selectedYear} Gaming Budget</h3>
+              </div>
+              {onSetBudget && !isEditingBudget && (
+                <button
+                  onClick={() => {
+                    setBudgetInput(budgetAmount.toString());
+                    setIsEditingBudget(true);
+                  }}
+                  className="p-1.5 text-white/40 hover:text-white/70 hover:bg-white/10 rounded-lg transition-all"
+                >
+                  <Edit3 size={14} />
+                </button>
+              )}
+            </div>
+
+            {isEditingBudget ? (
+              <div className="flex items-center gap-2 mb-4">
+                <span className="text-white/40">$</span>
+                <input
+                  type="number"
+                  value={budgetInput}
+                  onChange={e => setBudgetInput(e.target.value)}
+                  placeholder="Set budget..."
+                  className="flex-1 px-3 py-2 bg-white/5 border border-white/10 text-white rounded-lg text-sm focus:outline-none focus:border-purple-500/50"
+                  autoFocus
+                />
+                <button
+                  onClick={handleSaveBudget}
+                  disabled={savingBudget}
+                  className="p-2 bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 rounded-lg transition-all disabled:opacity-50"
+                >
+                  <Check size={16} />
+                </button>
+                <button
+                  onClick={() => setIsEditingBudget(false)}
+                  className="p-2 bg-white/5 text-white/40 hover:bg-white/10 rounded-lg transition-all"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            ) : budgetAmount > 0 ? (
+              <>
+                {/* Budget Progress */}
+                <div className="mb-4">
+                  <div className="flex items-end justify-between mb-2">
+                    <div>
+                      <div className="text-2xl font-bold text-white">${periodSpent.toFixed(0)}</div>
+                      <div className="text-xs text-white/40">of ${budgetAmount.toFixed(0)} budget</div>
+                    </div>
+                    <div className={clsx(
+                      'text-right',
+                      budgetRemaining >= 0 ? 'text-emerald-400' : 'text-red-400'
+                    )}>
+                      <div className="text-lg font-semibold">
+                        {budgetRemaining >= 0 ? `$${budgetRemaining.toFixed(0)}` : `-$${Math.abs(budgetRemaining).toFixed(0)}`}
+                      </div>
+                      <div className="text-xs opacity-70">
+                        {budgetRemaining >= 0 ? 'remaining' : 'over budget'}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="h-3 bg-white/5 rounded-full overflow-hidden">
+                    <div
+                      className={clsx(
+                        'h-full rounded-full transition-all duration-500',
+                        budgetUsedPercent <= 75 ? 'bg-emerald-500' :
+                        budgetUsedPercent <= 100 ? 'bg-yellow-500' : 'bg-red-500'
+                      )}
+                      style={{ width: `${Math.min(budgetUsedPercent, 100)}%` }}
+                    />
+                  </div>
+                  <div className="flex justify-between mt-1 text-[10px] text-white/30">
+                    <span>{budgetUsedPercent.toFixed(0)}% used</span>
+                    <span>{Math.max(0, 100 - budgetUsedPercent).toFixed(0)}% available</span>
+                  </div>
+                </div>
+
+                {/* Monthly Budget Remaining */}
+                {selectedYear === currentYear && monthlyBudgetRemaining > 0 && (
+                  <div className="p-3 bg-white/5 rounded-xl text-center">
+                    <div className="text-lg font-semibold text-purple-400">
+                      ${monthlyBudgetRemaining.toFixed(0)}/mo
+                    </div>
+                    <div className="text-[10px] text-white/40">remaining budget per month</div>
+                  </div>
+                )}
+            </>
+          ) : (
+            <div className="text-center py-4">
+              <p className="text-white/40 text-sm mb-3">No budget set for {selectedYear}</p>
+              {onSetBudget && (
+                <button
+                  onClick={() => {
+                    setBudgetInput('500');
+                    setIsEditingBudget(true);
+                  }}
+                  className="px-4 py-2 bg-purple-500/20 text-purple-400 hover:bg-purple-500/30 rounded-lg text-sm font-medium transition-all"
+                >
+                  Set Budget
+                </button>
+              )}
+              <div className="grid grid-cols-3 gap-3 mt-4 pt-4 border-t border-white/5">
+                <div className="p-3 bg-white/5 rounded-xl text-center">
+                  <div className="text-lg font-semibold text-white">${periodSpent.toFixed(0)}</div>
+                  <div className="text-[10px] text-white/40">spent</div>
+                </div>
+                <div className="p-3 bg-white/5 rounded-xl text-center">
+                  <div className="text-lg font-semibold text-white">{periodGamesCount}</div>
+                  <div className="text-[10px] text-white/40">games</div>
+                </div>
+                <div className="p-3 bg-white/5 rounded-xl text-center">
+                  <div className="text-lg font-semibold text-blue-400">{periodHours.toFixed(0)}h</div>
+                  <div className="text-[10px] text-white/40">played</div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+        )}
+
+        {/* Period Spending Breakdown */}
+        {periodSpendingByGame.length > 0 && (
+          <div className="p-4 bg-white/[0.02] border border-white/5 rounded-xl">
+            <h3 className="text-sm font-medium text-white/70 mb-3 flex items-center gap-2">
+              <DollarSign size={14} className="text-emerald-400" />
+              {isAllTime ? 'All Time' : selectedYear} Spending Breakdown
+            </h3>
+            <div className="space-y-2">
+              {periodSpendingByGame.slice(0, 8).map((game, idx) => (
+                <div key={idx} className="flex items-center gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs text-white/70 truncate">{game.fullName}</span>
+                      <span className="text-xs text-white/50">${game.price}</span>
+                    </div>
+                    <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-purple-500/50 rounded-full"
+                        style={{ width: `${game.percent}%` }}
+                      />
+                    </div>
+                  </div>
+                  <span className="text-[10px] text-white/30 w-10 text-right">
+                    {game.percent.toFixed(0)}%
+                  </span>
+                </div>
+              ))}
+              {periodSpendingByGame.length > 8 && (
+                <p className="text-[10px] text-white/30 text-center pt-2">
+                  +{periodSpendingByGame.length - 8} more games
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Monthly Spending for Period */}
+        {periodMonthlySpending.length > 0 && (
+          <ChartCard title={`${isAllTime ? 'Monthly' : selectedYear + ' Monthly'} Spending`} icon={<BarChart3 size={16} />}>
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={periodMonthlySpending}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                <XAxis dataKey="label" tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 10 }} />
+                <YAxis tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 10 }} tickFormatter={v => `$${v}`} />
+                <Tooltip content={CustomTooltip} />
+                <Bar dataKey="total" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </ChartCard>
+        )}
+
+        {/* Franchise Stats */}
+        {franchiseStats.length > 0 && (
+          <div className="p-4 bg-white/[0.02] border border-white/5 rounded-xl">
+            <h3 className="text-sm font-medium text-white/70 mb-3 flex items-center gap-2">
+              <Layers size={14} className="text-purple-400" />
+              {isAllTime ? 'All Time' : selectedYear} Franchise Stats
+            </h3>
+            <div className="space-y-3">
+              {franchiseStats.slice(0, 6).map((franchise, idx) => (
+                <div key={idx} className="p-3 bg-white/[0.03] rounded-lg">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-white/90">{franchise.name}</span>
+                    <span className="text-xs text-white/40">{franchise.games} game{franchise.games !== 1 ? 's' : ''}</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 text-center">
+                    <div>
+                      <div className="text-sm font-semibold text-emerald-400">${franchise.spent.toFixed(0)}</div>
+                      <div className="text-[10px] text-white/30">spent</div>
+                    </div>
+                    <div>
+                      <div className="text-sm font-semibold text-blue-400">{franchise.hours.toFixed(0)}h</div>
+                      <div className="text-[10px] text-white/30">played</div>
+                    </div>
+                    <div>
+                      <div className={clsx(
+                        'text-sm font-semibold',
+                        franchise.avgCostPerHour <= 1 ? 'text-emerald-400' :
+                        franchise.avgCostPerHour <= 3 ? 'text-blue-400' :
+                        franchise.avgCostPerHour <= 5 ? 'text-yellow-400' : 'text-red-400'
+                      )}>
+                        ${franchise.avgCostPerHour.toFixed(2)}/h
+                      </div>
+                      <div className="text-[10px] text-white/30">avg cost</div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {franchiseStats.length > 6 && (
+                <p className="text-[10px] text-white/30 text-center pt-1">
+                  +{franchiseStats.length - 6} more franchises
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Subscription / Free Games Stats */}
+        {periodFreeGames.length > 0 && (
+          <div className="p-4 bg-gradient-to-br from-emerald-500/10 to-cyan-500/10 border border-emerald-500/20 rounded-xl">
+            <h3 className="text-sm font-medium text-white/70 mb-3 flex items-center gap-2">
+              <Gift size={14} className="text-emerald-400" />
+              {isAllTime ? 'All Time' : selectedYear} Subscription Savings
+            </h3>
+
+            {/* Summary Row */}
+            <div className="grid grid-cols-3 gap-3 mb-4">
+              <div className="p-3 bg-white/5 rounded-xl text-center">
+                <div className="text-lg font-bold text-emerald-400">${periodTotalSaved.toFixed(0)}</div>
+                <div className="text-[10px] text-white/40">total saved</div>
+              </div>
+              <div className="p-3 bg-white/5 rounded-xl text-center">
+                <div className="text-lg font-bold text-white">{periodFreeGames.length}</div>
+                <div className="text-[10px] text-white/40">free games</div>
+              </div>
+              <div className="p-3 bg-white/5 rounded-xl text-center">
+                <div className="text-lg font-bold text-blue-400">{periodFreeHours.toFixed(0)}h</div>
+                <div className="text-[10px] text-white/40">played</div>
+              </div>
+            </div>
+
+            {/* By Subscription Service */}
+            {subscriptionStats.length > 0 && (
+              <div className="space-y-2">
+                <div className="text-[10px] text-white/40 uppercase tracking-wider mb-2">By Service</div>
+                {subscriptionStats.map((sub, idx) => (
+                  <div key={idx} className="flex items-center justify-between p-2 bg-white/[0.03] rounded-lg">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-white/80">{sub.name}</span>
+                      <span className="text-[10px] text-white/40">({sub.games} game{sub.games !== 1 ? 's' : ''})</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs text-blue-400">{sub.hours.toFixed(0)}h</span>
+                      <span className="text-sm font-medium text-emerald-400">${sub.saved.toFixed(0)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* All-Time Summary Cards */}
+      <div>
+        <h3 className="text-sm font-medium text-white/50 mb-3">All-Time Statistics</h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
         <SummaryCard
           icon={<Gamepad2 size={16} />}
           label="Total Games"
@@ -224,6 +708,7 @@ export function StatsView({ games, summary }: StatsViewProps) {
           subValue={`${summary.completedCount} completed`}
           color="cyan"
         />
+        </div>
       </div>
 
       {/* Highlights */}

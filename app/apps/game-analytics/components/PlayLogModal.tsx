@@ -52,6 +52,12 @@ export function PlayLogModal({ game, onSave, onClose }: PlayLogModalProps) {
 
   const totalLoggedHours = logs.reduce((sum, log) => sum + log.hours, 0);
 
+  // Parse date string (YYYY-MM-DD) as local date to avoid timezone shift
+  const parseLocalDate = (dateStr: string) => {
+    const [year, month, day] = dateStr.split('-').map(Number);
+    return new Date(year, month - 1, day);
+  };
+
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-[#12121a] border border-white/5 rounded-2xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col">
@@ -147,7 +153,7 @@ export function PlayLogModal({ game, onSave, onClose }: PlayLogModalProps) {
                   <div className="flex items-center gap-2">
                     <Calendar size={12} className="text-white/30" />
                     <span className="text-sm text-white/70">
-                      {new Date(log.date).toLocaleDateString('en-US', {
+                      {parseLocalDate(log.date).toLocaleDateString('en-US', {
                         weekday: 'short',
                         month: 'short',
                         day: 'numeric',

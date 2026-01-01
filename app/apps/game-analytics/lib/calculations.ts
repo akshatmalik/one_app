@@ -136,6 +136,9 @@ export function calculateSummary(games: Game[]): AnalyticsSummary {
   const spendingBySource: Record<string, number> = {};
   const spendingByYear: Record<string, number> = {};
   const hoursByGenre: Record<string, number> = {};
+  const spendingByFranchise: Record<string, number> = {};
+  const hoursByFranchise: Record<string, number> = {};
+  const gamesByFranchise: Record<string, number> = {};
 
   ownedGames.forEach(game => {
     // By genre
@@ -156,6 +159,29 @@ export function calculateSummary(games: Game[]): AnalyticsSummary {
       const year = game.datePurchased.split('-')[0];
       spendingByYear[year] = (spendingByYear[year] || 0) + game.price;
     }
+
+    // By franchise
+    if (game.franchise) {
+      spendingByFranchise[game.franchise] = (spendingByFranchise[game.franchise] || 0) + game.price;
+      hoursByFranchise[game.franchise] = (hoursByFranchise[game.franchise] || 0) + game.hours;
+      gamesByFranchise[game.franchise] = (gamesByFranchise[game.franchise] || 0) + 1;
+    }
+  });
+
+  // Subscription/Free game stats
+  const freeGames = ownedGames.filter(g => g.acquiredFree);
+  const freeGamesCount = freeGames.length;
+  const totalSaved = freeGames.reduce((sum, g) => sum + (g.originalPrice || 0), 0);
+
+  const hoursBySubscription: Record<string, number> = {};
+  const savedBySubscription: Record<string, number> = {};
+  const gamesBySubscription: Record<string, number> = {};
+
+  freeGames.forEach(game => {
+    const source = game.subscriptionSource || 'Other';
+    hoursBySubscription[source] = (hoursBySubscription[source] || 0) + game.hours;
+    savedBySubscription[source] = (savedBySubscription[source] || 0) + (game.originalPrice || 0);
+    gamesBySubscription[source] = (gamesBySubscription[source] || 0) + 1;
   });
 
   return {
@@ -197,6 +223,18 @@ export function calculateSummary(games: Game[]): AnalyticsSummary {
     spendingBySource,
     spendingByYear,
     hoursByGenre,
+
+    // Franchise stats
+    spendingByFranchise,
+    hoursByFranchise,
+    gamesByFranchise,
+
+    // Subscription/Free game stats
+    freeGamesCount,
+    totalSaved,
+    hoursBySubscription,
+    savedBySubscription,
+    gamesBySubscription,
   };
 }
 

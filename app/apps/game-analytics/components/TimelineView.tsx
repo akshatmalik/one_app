@@ -92,6 +92,12 @@ export function TimelineView({ games }: TimelineViewProps) {
     return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
   };
 
+  // Parse date string (YYYY-MM-DD) as local date to avoid timezone shift
+  const parseLocalDate = (dateStr: string) => {
+    const [year, month, day] = dateStr.split('-').map(Number);
+    return new Date(year, month - 1, day);
+  };
+
   const getEventIcon = (type: TimelineEvent['type']) => {
     switch (type) {
       case 'play': return <Play size={14} className="text-blue-400" />;
@@ -176,7 +182,7 @@ export function TimelineView({ games }: TimelineViewProps) {
                       )}
                     </div>
                     <div className="text-xs text-white/30">
-                      {new Date(event.date).toLocaleDateString('en-US', {
+                      {parseLocalDate(event.date).toLocaleDateString('en-US', {
                         weekday: 'short',
                         month: 'short',
                         day: 'numeric',

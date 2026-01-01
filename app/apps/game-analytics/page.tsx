@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, List } from 'lucide-react';
 import { useGames } from './hooks/useGames';
 import { useAnalytics, GameWithMetrics } from './hooks/useAnalytics';
+import { useBudget } from './hooks/useBudget';
 import { GameForm } from './components/GameForm';
 import { PlayLogModal } from './components/PlayLogModal';
 import { TimelineView } from './components/TimelineView';
@@ -23,6 +24,7 @@ export default function GameAnalyticsPage() {
   const { showToast } = useToast();
   const { games, loading, error, addGame, updateGame, deleteGame, refresh } = useGames(user?.uid ?? null);
   const { gamesWithMetrics, summary } = useAnalytics(games);
+  const { budgets, setBudget } = useBudget(user?.uid ?? null);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingGame, setEditingGame] = useState<GameWithMetrics | null>(null);
   const [playLogGame, setPlayLogGame] = useState<GameWithMetrics | null>(null);
@@ -376,7 +378,19 @@ export default function GameAnalyticsPage() {
           )}
 
           {tabMode === 'stats' && games.length > 0 && (
-            <StatsView games={gamesWithMetrics} summary={summary} />
+            <StatsView
+              games={gamesWithMetrics}
+              summary={summary}
+              budgets={budgets}
+              onSetBudget={async (year, amount) => {
+                try {
+                  await setBudget(year, amount);
+                  showToast('Budget updated', 'success');
+                } catch (e) {
+                  showToast(`Failed to save budget: ${(e as Error).message}`, 'error');
+                }
+              }}
+            />
           )}
 
           {tabMode === 'stats' && games.length === 0 && (
@@ -395,6 +409,7 @@ export default function GameAnalyticsPage() {
           onSubmit={handleAddGame}
           onClose={handleCloseForm}
           initialGame={editingGame || undefined}
+          existingFranchises={Array.from(new Set(games.map(g => g.franchise).filter(Boolean) as string[]))}
         />
       )}
 
