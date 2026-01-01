@@ -19,6 +19,26 @@ import {
 const STORAGE_KEY = 'game-analytics-games';
 const COLLECTION_NAME = 'games';
 
+// Helper to recursively clean undefined values from objects/arrays (Firestore doesn't accept undefined)
+function cleanUndefinedValues<T>(obj: T): T {
+  if (obj === null || obj === undefined) {
+    return obj;
+  }
+  if (Array.isArray(obj)) {
+    return obj.map(item => cleanUndefinedValues(item)) as T;
+  }
+  if (typeof obj === 'object') {
+    const cleaned: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(obj)) {
+      if (value !== undefined) {
+        cleaned[key] = cleanUndefinedValues(value);
+      }
+    }
+    return cleaned as T;
+  }
+  return obj;
+}
+
 // Firebase Repository - filters by userId
 export class FirebaseGameRepository implements GameRepository {
   private userId: string = '';
@@ -58,13 +78,8 @@ export class FirebaseGameRepository implements GameRepository {
     if (!this.userId) throw new Error('Not authenticated');
     const now = new Date().toISOString();
 
-    // Filter out undefined values - Firestore doesn't accept them
-    const cleanData: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(gameData)) {
-      if (value !== undefined) {
-        cleanData[key] = value;
-      }
-    }
+    // Clean undefined values recursively - Firestore doesn't accept them
+    const cleanData = cleanUndefinedValues(gameData);
 
     const game: Game = {
       ...cleanData,
@@ -81,13 +96,8 @@ export class FirebaseGameRepository implements GameRepository {
   async update(id: string, updates: Partial<Game>): Promise<Game> {
     const docRef = doc(this.db, COLLECTION_NAME, id);
 
-    // Filter out undefined values - Firestore doesn't accept them
-    const cleanUpdates: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(updates)) {
-      if (value !== undefined) {
-        cleanUpdates[key] = value;
-      }
-    }
+    // Clean undefined values recursively - Firestore doesn't accept them
+    const cleanUpdates = cleanUndefinedValues(updates) as Record<string, unknown>;
     cleanUpdates.updatedAt = new Date().toISOString();
 
     await updateDoc(docRef, cleanUpdates);
