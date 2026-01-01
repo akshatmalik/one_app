@@ -1,12 +1,14 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame } from 'lucide-react';
+import { useState } from 'react';
+import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, List } from 'lucide-react';
 import { useGames } from './hooks/useGames';
 import { useAnalytics, GameWithMetrics } from './hooks/useAnalytics';
 import { GameForm } from './components/GameForm';
-import { GameCharts } from './components/GameCharts';
-import { Game, GameStatus } from './lib/types';
+import { PlayLogModal } from './components/PlayLogModal';
+import { TimelineView } from './components/TimelineView';
+import { StatsView } from './components/StatsView';
+import { Game, GameStatus, PlayLog } from './lib/types';
 import { gameRepository } from './lib/storage';
 import { BASELINE_GAMES_2025 } from './data/baseline-games';
 import { useAuthContext } from '@/lib/AuthContext';
@@ -14,6 +16,7 @@ import { useToast } from '@/components/Toast';
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist';
+type TabMode = 'games' | 'timeline' | 'stats';
 
 export default function GameAnalyticsPage() {
   const { user, loading: authLoading } = useAuthContext();
@@ -22,7 +25,9 @@ export default function GameAnalyticsPage() {
   const { gamesWithMetrics, summary } = useAnalytics(games);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingGame, setEditingGame] = useState<GameWithMetrics | null>(null);
+  const [playLogGame, setPlayLogGame] = useState<GameWithMetrics | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('all');
+  const [tabMode, setTabMode] = useState<TabMode>('games');
 
   const handleAddGame = async (gameData: Omit<Game, 'id' | 'userId' | 'createdAt' | 'updatedAt'>) => {
     try {
@@ -57,6 +62,21 @@ export default function GameAnalyticsPage() {
     } catch (e) {
       showToast(`Failed to delete game: ${(e as Error).message}`, 'error');
     }
+  };
+
+  const handleOpenPlayLog = (game: GameWithMetrics) => {
+    setPlayLogGame(game);
+  };
+
+  const handleSavePlayLogs = async (playLogs: PlayLog[]) => {
+    if (!playLogGame) return;
+    const totalHours = playLogs.reduce((sum, log) => sum + log.hours, 0);
+    await updateGame(playLogGame.id, {
+      playLogs,
+      hours: Math.max(playLogGame.hours, totalHours), // Keep manual hours if higher
+    });
+    setPlayLogGame(null);
+    showToast('Play sessions saved', 'success');
   };
 
   const handleSeedData = async () => {
@@ -139,7 +159,7 @@ export default function GameAnalyticsPage() {
 
           {/* Stats Overview */}
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-            <StatCard icon={<Gamepad2 size={16} />} label="Games" value={summary.gameCount} />
+            <StatCard icon={<Gamepad2 size={16} />} label="Games" value={summary.totalGames} />
             <StatCard icon={<DollarSign size={16} />} label="Spent" value={`$${summary.totalSpent.toFixed(0)}`} />
             <StatCard icon={<Clock size={16} />} label="Hours" value={summary.totalHours.toFixed(0)} />
             <StatCard icon={<TrendingUp size={16} />} label="$/Hour" value={`$${summary.averageCostPerHour.toFixed(2)}`} />
@@ -185,98 +205,164 @@ export default function GameAnalyticsPage() {
       {/* Main Content */}
       <div className="flex-1 px-6 py-6">
         <div className="max-w-6xl mx-auto">
-          {/* View Mode Tabs */}
-          <div className="flex items-center gap-1 mb-6 bg-white/[0.02] rounded-lg p-1 w-fit">
-            {(['all', 'owned', 'wishlist'] as ViewMode[]).map((mode) => (
-              <button
-                key={mode}
-                onClick={() => setViewMode(mode)}
-                className={clsx(
-                  'px-4 py-1.5 rounded-md text-sm font-medium transition-all capitalize',
-                  viewMode === mode
-                    ? 'bg-white/10 text-white'
-                    : 'text-white/40 hover:text-white/60'
-                )}
-              >
-                {mode}
-              </button>
-            ))}
-          </div>
-
-          {games.length === 0 ? (
-            <div className="text-center py-16">
-              <Gamepad2 size={48} className="mx-auto mb-4 text-white/10" />
-              <p className="text-white/30 text-sm">No games in your library</p>
-              <p className="text-white/20 text-xs mt-1">Add a game or load sample data to get started</p>
-            </div>
-          ) : filteredGames.length === 0 ? (
-            <div className="text-center py-16">
-              <p className="text-white/30 text-sm">No games in this category</p>
-            </div>
-          ) : (
-            <div className="grid gap-3">
-              {filteredGames.map((game) => (
-                <div
-                  key={game.id}
-                  onClick={() => handleEdit(game)}
-                  className="group p-4 bg-white/[0.02] hover:bg-white/[0.04] border border-white/5 hover:border-white/10 rounded-xl cursor-pointer transition-all"
+          {/* Tab Navigation */}
+          <div className="flex items-center gap-4 mb-6">
+            <div className="flex items-center gap-1 bg-white/[0.02] rounded-lg p-1">
+              {([
+                { id: 'games', label: 'Games', icon: <List size={14} /> },
+                { id: 'timeline', label: 'Timeline', icon: <Calendar size={14} /> },
+                { id: 'stats', label: 'Stats', icon: <BarChart3 size={14} /> },
+              ] as const).map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setTabMode(tab.id)}
+                  className={clsx(
+                    'flex items-center gap-2 px-4 py-1.5 rounded-md text-sm font-medium transition-all',
+                    tabMode === tab.id
+                      ? 'bg-white/10 text-white'
+                      : 'text-white/40 hover:text-white/60'
+                  )}
                 >
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h3 className="text-white/90 font-medium truncate">{game.name}</h3>
-                        <span className={clsx('text-[10px] px-2 py-0.5 rounded-full font-medium', getStatusColor(game.status))}>
-                          {game.status}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-4 text-xs text-white/40">
-                        {game.platform && <span>{game.platform}</span>}
-                        {game.genre && <span>{game.genre}</span>}
-                        {game.hours > 0 && <span>{game.hours}h played</span>}
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-6 text-right">
-                      <div>
-                        <div className="text-white/80 font-medium">${game.price}</div>
-                        {game.hours > 0 && (
-                          <div className={clsx('text-xs', getValueColor(game.metrics.valueRating))}>
-                            ${game.metrics.costPerHour.toFixed(2)}/hr
-                          </div>
-                        )}
-                      </div>
-                      <div className="w-12">
-                        <div className="text-white/80 font-medium">{game.rating}/10</div>
-                        <div className="text-xs text-white/40">rating</div>
-                      </div>
-                      {game.hours > 0 && (
-                        <div className="w-16 hidden sm:block">
-                          <div className="text-white/80 font-medium">{game.metrics.blendScore.toFixed(0)}</div>
-                          <div className="text-xs text-white/40">blend</div>
-                        </div>
-                      )}
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDelete(game.id);
-                        }}
-                        className="opacity-0 group-hover:opacity-100 p-2 text-white/30 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all"
-                      >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                        </svg>
-                      </button>
-                    </div>
-                  </div>
-                </div>
+                  {tab.icon}
+                  {tab.label}
+                </button>
               ))}
             </div>
+
+            {/* View Mode Filter (only for games tab) */}
+            {tabMode === 'games' && (
+              <div className="flex items-center gap-1 bg-white/[0.02] rounded-lg p-1 ml-auto">
+                {(['all', 'owned', 'wishlist'] as ViewMode[]).map((mode) => (
+                  <button
+                    key={mode}
+                    onClick={() => setViewMode(mode)}
+                    className={clsx(
+                      'px-3 py-1 rounded-md text-xs font-medium transition-all capitalize',
+                      viewMode === mode
+                        ? 'bg-white/10 text-white'
+                        : 'text-white/40 hover:text-white/60'
+                    )}
+                  >
+                    {mode}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Tab Content */}
+          {tabMode === 'games' && (
+            <>
+              {games.length === 0 ? (
+                <div className="text-center py-16">
+                  <Gamepad2 size={48} className="mx-auto mb-4 text-white/10" />
+                  <p className="text-white/30 text-sm">No games in your library</p>
+                  <p className="text-white/20 text-xs mt-1">Add a game or load sample data to get started</p>
+                </div>
+              ) : filteredGames.length === 0 ? (
+                <div className="text-center py-16">
+                  <p className="text-white/30 text-sm">No games in this category</p>
+                </div>
+              ) : (
+                <div className="grid gap-3">
+                  {filteredGames.map((game) => (
+                    <div
+                      key={game.id}
+                      className="group p-4 bg-white/[0.02] hover:bg-white/[0.04] border border-white/5 hover:border-white/10 rounded-xl cursor-pointer transition-all"
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1 min-w-0" onClick={() => handleEdit(game)}>
+                          <div className="flex items-center gap-2 mb-1">
+                            <h3 className="text-white/90 font-medium truncate">{game.name}</h3>
+                            <span className={clsx('text-[10px] px-2 py-0.5 rounded-full font-medium', getStatusColor(game.status))}>
+                              {game.status}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-4 text-xs text-white/40">
+                            {game.platform && <span>{game.platform}</span>}
+                            {game.genre && <span>{game.genre}</span>}
+                            {game.purchaseSource && <span>{game.purchaseSource}</span>}
+                            {game.hours > 0 && <span>{game.hours}h played</span>}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-4 text-right">
+                          <div onClick={() => handleEdit(game)}>
+                            <div className="text-white/80 font-medium">${game.price}</div>
+                            {game.hours > 0 && (
+                              <div className={clsx('text-xs', getValueColor(game.metrics.valueRating))}>
+                                ${game.metrics.costPerHour.toFixed(2)}/hr
+                              </div>
+                            )}
+                          </div>
+                          <div className="w-12" onClick={() => handleEdit(game)}>
+                            <div className="text-white/80 font-medium">{game.rating}/10</div>
+                            <div className="text-xs text-white/40">rating</div>
+                          </div>
+                          {game.hours > 0 && (
+                            <div className="w-16 hidden sm:block" onClick={() => handleEdit(game)}>
+                              <div className="text-white/80 font-medium">{game.metrics.blendScore.toFixed(0)}</div>
+                              <div className="text-xs text-white/40">blend</div>
+                            </div>
+                          )}
+                          {/* Action Buttons */}
+                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleOpenPlayLog(game);
+                              }}
+                              className="p-2 text-white/30 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg transition-all"
+                              title="Log Play Session"
+                            >
+                              <Clock size={14} />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDelete(game.id);
+                              }}
+                              className="p-2 text-white/30 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all"
+                              title="Delete Game"
+                            >
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                              </svg>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                      {/* Play Logs Summary */}
+                      {game.playLogs && game.playLogs.length > 0 && (
+                        <div className="mt-2 pt-2 border-t border-white/5">
+                          <div className="flex items-center gap-2 text-xs text-white/30">
+                            <Clock size={10} />
+                            <span>{game.playLogs.length} sessions logged</span>
+                            <span className="text-white/10">•</span>
+                            <span>Last: {new Date(game.playLogs[0].date).toLocaleDateString()}</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
           )}
 
-          {/* Charts Section */}
-          {games.length > 0 && (
-            <div className="mt-8">
-              <GameCharts games={gamesWithMetrics} />
+          {tabMode === 'timeline' && (
+            <TimelineView games={games} />
+          )}
+
+          {tabMode === 'stats' && games.length > 0 && (
+            <StatsView games={gamesWithMetrics} summary={summary} />
+          )}
+
+          {tabMode === 'stats' && games.length === 0 && (
+            <div className="text-center py-16">
+              <BarChart3 size={48} className="mx-auto mb-4 text-white/10" />
+              <p className="text-white/30 text-sm">No stats to display</p>
+              <p className="text-white/20 text-xs mt-1">Add some games to see analytics</p>
             </div>
           )}
         </div>
@@ -288,6 +374,15 @@ export default function GameAnalyticsPage() {
           onSubmit={handleAddGame}
           onClose={handleCloseForm}
           initialGame={editingGame || undefined}
+        />
+      )}
+
+      {/* Play Log Modal */}
+      {playLogGame && (
+        <PlayLogModal
+          game={playLogGame}
+          onSave={handleSavePlayLogs}
+          onClose={() => setPlayLogGame(null)}
         />
       )}
     </div>
