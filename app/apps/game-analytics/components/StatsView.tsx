@@ -131,12 +131,18 @@ export function StatsView({ games, summary, budgets = [], onSetBudget }: StatsVi
   const handleSaveBudget = async () => {
     if (!onSetBudget) return;
     const amount = parseFloat(budgetInput);
-    if (isNaN(amount) || amount < 0) return;
+    if (isNaN(amount) || amount < 0) {
+      alert('Please enter a valid budget amount');
+      return;
+    }
 
     setSavingBudget(true);
     try {
       await onSetBudget(selectedYear, amount);
       setIsEditingBudget(false);
+    } catch (error) {
+      console.error('Failed to save budget:', error);
+      alert('Failed to save budget. Please try again.');
     } finally {
       setSavingBudget(false);
     }
@@ -420,10 +426,12 @@ export function StatsView({ games, summary, budgets = [], onSetBudget }: StatsVi
                 <span className="text-white/40">$</span>
                 <input
                   type="number"
+                  min="0"
+                  step="0.01"
                   value={budgetInput}
                   onChange={e => setBudgetInput(e.target.value)}
-                  placeholder="Set budget..."
-                  className="flex-1 px-3 py-2 bg-white/5 border border-white/10 text-white rounded-lg text-sm focus:outline-none focus:border-purple-500/50"
+                  placeholder="0.00"
+                  className="flex-1 px-3 py-2 bg-white/5 border border-white/10 text-white rounded-lg text-sm focus:outline-none focus:border-purple-500/50 placeholder:text-white/30"
                   autoFocus
                 />
                 <button

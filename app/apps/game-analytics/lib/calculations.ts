@@ -91,8 +91,8 @@ export function calculateSummary(games: Game[]): AnalyticsSummary {
   let bestROI: { name: string; roi: number } | null = null;
 
   if (playedGames.length > 0) {
-    // Best value (min 5 hours)
-    const qualifiedForValue = playedGames.filter(g => g.hours >= 5);
+    // Best value (min 5 hours, exclude free games)
+    const qualifiedForValue = playedGames.filter(g => g.hours >= 5 && !g.acquiredFree);
     if (qualifiedForValue.length > 0) {
       const sortedByValue = [...qualifiedForValue].sort((a, b) =>
         calculateCostPerHour(a.price, a.hours) - calculateCostPerHour(b.price, b.hours)

@@ -22,8 +22,8 @@ export function GameForm({ onSubmit, onClose, initialGame, existingFranchises = 
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     name: initialGame?.name || '',
-    price: initialGame?.price || 0,
-    hours: initialGame?.hours || 0,
+    price: initialGame?.price !== undefined ? initialGame.price.toString() : '',
+    hours: initialGame?.hours !== undefined ? initialGame.hours.toString() : '',
     rating: initialGame?.rating || 8,
     status: (initialGame?.status || 'Not Started') as GameStatus,
     platform: initialGame?.platform || '',
@@ -31,7 +31,7 @@ export function GameForm({ onSubmit, onClose, initialGame, existingFranchises = 
     franchise: initialGame?.franchise || '',
     purchaseSource: initialGame?.purchaseSource || '' as PurchaseSource | '',
     acquiredFree: initialGame?.acquiredFree || false,
-    originalPrice: initialGame?.originalPrice || 0,
+    originalPrice: initialGame?.originalPrice !== undefined ? initialGame.originalPrice.toString() : '',
     subscriptionSource: initialGame?.subscriptionSource || '' as SubscriptionSource | '',
     notes: initialGame?.notes || '',
     review: initialGame?.review || '',
@@ -41,7 +41,9 @@ export function GameForm({ onSubmit, onClose, initialGame, existingFranchises = 
     playLogs: initialGame?.playLogs || [],
   });
 
-  const costPerHour = calculateCostPerHour(formData.price, formData.hours);
+  const priceNum = parseFloat(formData.price) || 0;
+  const hoursNum = parseFloat(formData.hours) || 0;
+  const costPerHour = calculateCostPerHour(priceNum, hoursNum);
   const valueRating = getValueRating(costPerHour);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -50,10 +52,12 @@ export function GameForm({ onSubmit, onClose, initialGame, existingFranchises = 
     try {
       await onSubmit({
         ...formData,
+        price: parseFloat(formData.price) || 0,
+        hours: parseFloat(formData.hours) || 0,
+        originalPrice: formData.originalPrice ? parseFloat(formData.originalPrice) : undefined,
         franchise: formData.franchise || undefined,
         purchaseSource: formData.purchaseSource || undefined,
         acquiredFree: formData.acquiredFree || undefined,
-        originalPrice: formData.acquiredFree ? formData.originalPrice : undefined,
         subscriptionSource: formData.acquiredFree && formData.subscriptionSource ? formData.subscriptionSource : undefined,
         startDate: formData.startDate || undefined,
         endDate: formData.endDate || undefined,
@@ -142,8 +146,9 @@ export function GameForm({ onSubmit, onClose, initialGame, existingFranchises = 
                 step="0.01"
                 min="0"
                 value={formData.price}
-                onChange={e => setFormData({ ...formData, price: parseFloat(e.target.value) || 0 })}
+                onChange={e => setFormData({ ...formData, price: e.target.value })}
                 className="w-full px-3 py-2.5 bg-white/[0.03] border border-white/5 text-white rounded-lg text-sm focus:outline-none focus:bg-white/[0.05] focus:border-white/10 transition-all"
+                placeholder="0.00"
               />
             </div>
             <div>
@@ -153,14 +158,15 @@ export function GameForm({ onSubmit, onClose, initialGame, existingFranchises = 
                 step="0.5"
                 min="0"
                 value={formData.hours}
-                onChange={e => setFormData({ ...formData, hours: parseFloat(e.target.value) || 0 })}
+                onChange={e => setFormData({ ...formData, hours: e.target.value })}
                 className="w-full px-3 py-2.5 bg-white/[0.03] border border-white/5 text-white rounded-lg text-sm focus:outline-none focus:bg-white/[0.05] focus:border-white/10 transition-all"
+                placeholder="0.0"
               />
             </div>
           </div>
 
           {/* Cost Per Hour Display */}
-          {formData.hours > 0 && formData.price > 0 && (
+          {hoursNum > 0 && priceNum > 0 && (
             <div className={clsx('px-3 py-2 rounded-lg text-sm', getValueColor(valueRating))}>
               <span className="font-medium">${costPerHour.toFixed(2)}/hr</span>
               <span className="text-white/40 ml-2">• {valueRating} value</span>
@@ -267,7 +273,7 @@ export function GameForm({ onSubmit, onClose, initialGame, existingFranchises = 
                     setFormData({
                       ...formData,
                       acquiredFree: newAcquiredFree,
-                      price: newAcquiredFree ? 0 : formData.price,
+                      price: newAcquiredFree ? '0' : formData.price,
                     });
                   }}
                   className={clsx(
@@ -303,8 +309,8 @@ export function GameForm({ onSubmit, onClose, initialGame, existingFranchises = 
                       step="0.01"
                       min="0"
                       value={formData.originalPrice}
-                      onChange={e => setFormData({ ...formData, originalPrice: parseFloat(e.target.value) || 0 })}
-                      placeholder="Game's actual price"
+                      onChange={e => setFormData({ ...formData, originalPrice: e.target.value })}
+                      placeholder="0.00"
                       className="w-full px-3 py-2.5 bg-white/[0.03] border border-white/5 text-white rounded-lg text-xs focus:outline-none focus:bg-white/[0.05] focus:border-white/10 transition-all placeholder:text-white/30"
                     />
                   </div>
@@ -312,9 +318,9 @@ export function GameForm({ onSubmit, onClose, initialGame, existingFranchises = 
               )}
 
               {/* Savings Display */}
-              {formData.acquiredFree && formData.originalPrice > 0 && (
+              {formData.acquiredFree && formData.originalPrice && parseFloat(formData.originalPrice) > 0 && (
                 <div className="px-3 py-2 rounded-lg bg-emerald-500/10 text-emerald-400 text-sm">
-                  <span className="font-medium">You saved ${formData.originalPrice.toFixed(2)}!</span>
+                  <span className="font-medium">You saved ${parseFloat(formData.originalPrice).toFixed(2)}!</span>
                 </div>
               )}
             </div>

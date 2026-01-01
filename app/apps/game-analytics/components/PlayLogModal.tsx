@@ -17,21 +17,24 @@ export function PlayLogModal({ game, onSave, onClose }: PlayLogModalProps) {
   const [loading, setLoading] = useState(false);
   const [newLog, setNewLog] = useState({
     date: new Date().toISOString().split('T')[0],
-    hours: 1,
+    hours: '1',
     notes: '',
   });
 
   const addLog = () => {
+    const hours = parseFloat(newLog.hours) || 0;
+    if (hours <= 0) return; // Don't add log with 0 or negative hours
+
     const log: PlayLog = {
       id: uuidv4(),
       date: newLog.date,
-      hours: newLog.hours,
+      hours: hours,
       notes: newLog.notes || undefined,
     };
     setLogs([log, ...logs].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
     setNewLog({
       date: new Date().toISOString().split('T')[0],
-      hours: 1,
+      hours: '1',
       notes: '',
     });
   };
@@ -111,8 +114,9 @@ export function PlayLogModal({ game, onSave, onClose }: PlayLogModalProps) {
                 step="0.5"
                 min="0.5"
                 value={newLog.hours}
-                onChange={e => setNewLog({ ...newLog, hours: parseFloat(e.target.value) || 0 })}
+                onChange={e => setNewLog({ ...newLog, hours: e.target.value })}
                 className="w-full px-2 py-2 bg-white/[0.03] border border-white/5 text-white rounded-lg text-xs focus:outline-none focus:bg-white/[0.05] focus:border-white/10 transition-all"
+                placeholder="1.0"
               />
             </div>
             <div className="flex-1">
@@ -127,7 +131,7 @@ export function PlayLogModal({ game, onSave, onClose }: PlayLogModalProps) {
             </div>
             <button
               onClick={addLog}
-              disabled={newLog.hours <= 0}
+              disabled={!newLog.hours || parseFloat(newLog.hours) <= 0}
               className="px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Plus size={16} />
