@@ -409,6 +409,7 @@ export default function GameAnalyticsPage() {
           onSubmit={handleAddGame}
           onClose={handleCloseForm}
           initialGame={editingGame || undefined}
+          existingFranchises={Array.from(new Set(games.map(g => g.franchise).filter(Boolean) as string[]))}
         />
       )}
 

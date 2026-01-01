@@ -43,8 +43,8 @@ import {
   Check,
   X,
   CalendarDays,
-  ChevronLeft,
-  ChevronRight,
+  ChevronDown,
+  Layers,
 } from 'lucide-react';
 import { Game, GameStatus, AnalyticsSummary, BudgetSettings } from '../lib/types';
 import { calculateSummary, getCumulativeSpending, getHoursByMonth, getSpendingByMonth } from '../lib/calculations';
@@ -70,20 +70,28 @@ const CHART_COLORS = ['#8b5cf6', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#e
 
 export function StatsView({ games, summary, budgets = [], onSetBudget }: StatsViewProps) {
   const currentYear = new Date().getFullYear();
-  const [selectedYear, setSelectedYear] = useState(currentYear);
+  const [selectedPeriod, setSelectedPeriod] = useState<'all' | number>(currentYear);
   const [isEditingBudget, setIsEditingBudget] = useState(false);
   const [savingBudget, setSavingBudget] = useState(false);
 
-  // Get budget for selected year
-  const selectedBudget = budgets.find(b => b.year === selectedYear);
+  const isAllTime = selectedPeriod === 'all';
+  const selectedYear = isAllTime ? currentYear : selectedPeriod;
+
+  // Get budget for selected year (only for specific years)
+  const selectedBudget = isAllTime ? undefined : budgets.find(b => b.year === selectedYear);
   const [budgetInput, setBudgetInput] = useState(selectedBudget?.yearlyBudget?.toString() || '');
 
   // Update budget input when year or budgets change
   useEffect(() => {
+    if (isAllTime) {
+      setBudgetInput('');
+      setIsEditingBudget(false);
+      return;
+    }
     const budget = budgets.find(b => b.year === selectedYear);
     setBudgetInput(budget?.yearlyBudget?.toString() || '');
     setIsEditingBudget(false);
-  }, [selectedYear, budgets]);
+  }, [selectedPeriod, selectedYear, budgets, isAllTime]);
 
   // Get available years from games
   const availableYears = Array.from(new Set(
@@ -96,21 +104,24 @@ export function StatsView({ games, summary, budgets = [], onSetBudget }: StatsVi
     availableYears.unshift(currentYear);
   }
 
-  // Filter games by selected year (based on purchase date)
-  const yearGames = games.filter(g => {
-    if (!g.datePurchased) return false;
-    return g.datePurchased.startsWith(selectedYear.toString());
-  });
+  // Filter games by selected period
+  const filteredGames = isAllTime
+    ? games
+    : games.filter(g => {
+        if (!g.datePurchased) return false;
+        return g.datePurchased.startsWith(selectedYear.toString());
+      });
 
-  // Calculate year-specific stats
-  const yearSpent = yearGames.reduce((sum, g) => sum + (g.status !== 'Wishlist' ? g.price : 0), 0);
-  const yearHours = yearGames.reduce((sum, g) => sum + g.hours, 0);
-  const yearGamesCount = yearGames.filter(g => g.status !== 'Wishlist').length;
+  // Calculate period-specific stats
+  const periodSpent = filteredGames.reduce((sum, g) => sum + (g.status !== 'Wishlist' ? g.price : 0), 0);
+  const periodHours = filteredGames.reduce((sum, g) => sum + g.hours, 0);
+  const periodGamesCount = filteredGames.filter(g => g.status !== 'Wishlist').length;
+  const periodAvgCostPerHour = periodHours > 0 ? periodSpent / periodHours : 0;
 
-  // Budget calculations
+  // Budget calculations (only for specific years)
   const budgetAmount = selectedBudget?.yearlyBudget || 0;
-  const budgetRemaining = budgetAmount - yearSpent;
-  const budgetUsedPercent = budgetAmount > 0 ? (yearSpent / budgetAmount) * 100 : 0;
+  const budgetRemaining = budgetAmount - periodSpent;
+  const budgetUsedPercent = budgetAmount > 0 ? (periodSpent / budgetAmount) * 100 : 0;
   const monthsRemaining = 12 - new Date().getMonth();
   const monthlyBudgetRemaining = budgetRemaining > 0 && monthsRemaining > 0
     ? budgetRemaining / monthsRemaining
@@ -233,8 +244,8 @@ export function StatsView({ games, summary, budgets = [], onSetBudget }: StatsVi
     .sort((a, b) => b.roi - a.roi)
     .slice(0, 8);
 
-  // Year spending breakdown by game
-  const yearSpendingByGame = [...yearGames]
+  // Period spending breakdown by game
+  const periodSpendingByGame = [...filteredGames]
     .filter(g => g.status !== 'Wishlist')
     .sort((a, b) => b.price - a.price)
     .map(g => ({
@@ -242,18 +253,42 @@ export function StatsView({ games, summary, budgets = [], onSetBudget }: StatsVi
       fullName: g.name,
       price: g.price,
       hours: g.hours,
-      percent: yearSpent > 0 ? (g.price / yearSpent) * 100 : 0,
+      percent: periodSpent > 0 ? (g.price / periodSpent) * 100 : 0,
     }));
 
-  // Monthly spending for the selected year
-  const yearMonthlySpending = Object.entries(spendingByMonth)
-    .filter(([month]) => month.startsWith(selectedYear.toString()))
-    .map(([month, total]) => ({
-      month,
-      label: new Date(month + '-01').toLocaleDateString('en-US', { month: 'short' }),
-      total,
+  // Monthly spending for the selected period
+  const periodMonthlySpending = isAllTime
+    ? monthlySpendingData
+    : Object.entries(spendingByMonth)
+        .filter(([month]) => month.startsWith(selectedYear.toString()))
+        .map(([month, total]) => ({
+          month,
+          label: new Date(month + '-01').toLocaleDateString('en-US', { month: 'short' }),
+          total,
+        }))
+        .sort((a, b) => a.month.localeCompare(b.month));
+
+  // Franchise stats for the period
+  const franchiseStats = Object.entries(
+    filteredGames
+      .filter(g => g.franchise && g.status !== 'Wishlist')
+      .reduce((acc, g) => {
+        const franchise = g.franchise!;
+        if (!acc[franchise]) {
+          acc[franchise] = { spent: 0, hours: 0, games: 0 };
+        }
+        acc[franchise].spent += g.price;
+        acc[franchise].hours += g.hours;
+        acc[franchise].games += 1;
+        return acc;
+      }, {} as Record<string, { spent: number; hours: number; games: number }>)
+  )
+    .map(([name, stats]) => ({
+      name,
+      ...stats,
+      avgCostPerHour: stats.hours > 0 ? stats.spent / stats.hours : 0,
     }))
-    .sort((a, b) => a.month.localeCompare(b.month));
+    .sort((a, b) => b.spent - a.spent);
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
@@ -274,131 +309,162 @@ export function StatsView({ games, summary, budgets = [], onSetBudget }: StatsVi
 
   return (
     <div className="space-y-8">
-      {/* Year Selector & Budget Section */}
+      {/* Time Period Selector & Stats Section */}
       <div className="space-y-4">
-        {/* Year Selector */}
+        {/* Time Period Selector */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <CalendarDays size={18} className="text-purple-400" />
-            <h2 className="text-lg font-semibold text-white">Year Overview</h2>
+            <h2 className="text-lg font-semibold text-white">
+              {isAllTime ? 'All Time' : selectedYear} Overview
+            </h2>
           </div>
-          <div className="flex items-center gap-2 bg-white/[0.02] rounded-lg p-1">
-            <button
-              onClick={() => setSelectedYear(y => Math.max(y - 1, Math.min(...availableYears)))}
-              className="p-1.5 text-white/40 hover:text-white/70 hover:bg-white/5 rounded transition-all"
+          <div className="relative">
+            <select
+              value={selectedPeriod}
+              onChange={e => setSelectedPeriod(e.target.value === 'all' ? 'all' : parseInt(e.target.value))}
+              className="appearance-none px-4 py-2 pr-8 bg-white/[0.03] border border-white/10 text-white rounded-lg text-sm font-medium focus:outline-none focus:border-purple-500/50 cursor-pointer"
             >
-              <ChevronLeft size={16} />
-            </button>
-            <span className="text-white font-medium px-3 min-w-[60px] text-center">{selectedYear}</span>
-            <button
-              onClick={() => setSelectedYear(y => Math.min(y + 1, currentYear))}
-              disabled={selectedYear >= currentYear}
-              className="p-1.5 text-white/40 hover:text-white/70 hover:bg-white/5 rounded transition-all disabled:opacity-30 disabled:cursor-not-allowed"
-            >
-              <ChevronRight size={16} />
-            </button>
+              <option value="all">All Time</option>
+              {availableYears.map(year => (
+                <option key={year} value={year}>{year}</option>
+              ))}
+            </select>
+            <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-white/40 pointer-events-none" />
           </div>
         </div>
 
-        {/* Budget Card */}
-        <div className="p-5 bg-gradient-to-br from-purple-500/10 to-blue-500/10 border border-purple-500/20 rounded-2xl">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <Wallet size={18} className="text-purple-400" />
-              <h3 className="text-sm font-medium text-white">{selectedYear} Gaming Budget</h3>
+        {/* Period Summary Stats */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="p-4 bg-white/[0.02] border border-white/5 rounded-xl">
+            <div className="flex items-center gap-2 mb-1">
+              <DollarSign size={14} className="text-emerald-400" />
+              <span className="text-xs text-white/40">Spent</span>
             </div>
-            {onSetBudget && !isEditingBudget && (
-              <button
-                onClick={() => {
-                  setBudgetInput(budgetAmount.toString());
-                  setIsEditingBudget(true);
-                }}
-                className="p-1.5 text-white/40 hover:text-white/70 hover:bg-white/10 rounded-lg transition-all"
-              >
-                <Edit3 size={14} />
-              </button>
-            )}
+            <div className="text-xl font-bold text-white">${periodSpent.toFixed(0)}</div>
           </div>
-
-          {isEditingBudget ? (
-            <div className="flex items-center gap-2 mb-4">
-              <span className="text-white/40">$</span>
-              <input
-                type="number"
-                value={budgetInput}
-                onChange={e => setBudgetInput(e.target.value)}
-                placeholder="Set budget..."
-                className="flex-1 px-3 py-2 bg-white/5 border border-white/10 text-white rounded-lg text-sm focus:outline-none focus:border-purple-500/50"
-                autoFocus
-              />
-              <button
-                onClick={handleSaveBudget}
-                disabled={savingBudget}
-                className="p-2 bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 rounded-lg transition-all disabled:opacity-50"
-              >
-                <Check size={16} />
-              </button>
-              <button
-                onClick={() => setIsEditingBudget(false)}
-                className="p-2 bg-white/5 text-white/40 hover:bg-white/10 rounded-lg transition-all"
-              >
-                <X size={16} />
-              </button>
+          <div className="p-4 bg-white/[0.02] border border-white/5 rounded-xl">
+            <div className="flex items-center gap-2 mb-1">
+              <Clock size={14} className="text-blue-400" />
+              <span className="text-xs text-white/40">Hours Played</span>
             </div>
-          ) : budgetAmount > 0 ? (
-            <>
-              {/* Budget Progress */}
-              <div className="mb-4">
-                <div className="flex items-end justify-between mb-2">
-                  <div>
-                    <div className="text-2xl font-bold text-white">${yearSpent.toFixed(0)}</div>
-                    <div className="text-xs text-white/40">of ${budgetAmount.toFixed(0)} budget</div>
-                  </div>
-                  <div className={clsx(
-                    'text-right',
-                    budgetRemaining >= 0 ? 'text-emerald-400' : 'text-red-400'
-                  )}>
-                    <div className="text-lg font-semibold">
-                      {budgetRemaining >= 0 ? `$${budgetRemaining.toFixed(0)}` : `-$${Math.abs(budgetRemaining).toFixed(0)}`}
-                    </div>
-                    <div className="text-xs opacity-70">
-                      {budgetRemaining >= 0 ? 'remaining' : 'over budget'}
-                    </div>
-                  </div>
-                </div>
-                <div className="h-3 bg-white/5 rounded-full overflow-hidden">
-                  <div
-                    className={clsx(
-                      'h-full rounded-full transition-all duration-500',
-                      budgetUsedPercent <= 75 ? 'bg-emerald-500' :
-                      budgetUsedPercent <= 100 ? 'bg-yellow-500' : 'bg-red-500'
-                    )}
-                    style={{ width: `${Math.min(budgetUsedPercent, 100)}%` }}
-                  />
-                </div>
-                <div className="flex justify-between mt-1 text-[10px] text-white/30">
-                  <span>{budgetUsedPercent.toFixed(0)}% used</span>
-                  <span>{Math.max(0, 100 - budgetUsedPercent).toFixed(0)}% available</span>
-                </div>
-              </div>
+            <div className="text-xl font-bold text-white">{periodHours.toFixed(0)}h</div>
+          </div>
+          <div className="p-4 bg-white/[0.02] border border-white/5 rounded-xl">
+            <div className="flex items-center gap-2 mb-1">
+              <Gamepad2 size={14} className="text-purple-400" />
+              <span className="text-xs text-white/40">Games</span>
+            </div>
+            <div className="text-xl font-bold text-white">{periodGamesCount}</div>
+          </div>
+          <div className="p-4 bg-white/[0.02] border border-white/5 rounded-xl">
+            <div className="flex items-center gap-2 mb-1">
+              <TrendingUp size={14} className="text-yellow-400" />
+              <span className="text-xs text-white/40">Avg $/Hour</span>
+            </div>
+            <div className={clsx(
+              'text-xl font-bold',
+              periodAvgCostPerHour <= 1 ? 'text-emerald-400' :
+              periodAvgCostPerHour <= 3 ? 'text-blue-400' :
+              periodAvgCostPerHour <= 5 ? 'text-yellow-400' : 'text-red-400'
+            )}>
+              ${periodAvgCostPerHour.toFixed(2)}
+            </div>
+          </div>
+        </div>
 
-              {/* Quick Stats Row */}
-              <div className="grid grid-cols-3 gap-3">
-                <div className="p-3 bg-white/5 rounded-xl text-center">
-                  <div className="text-lg font-semibold text-white">{yearGamesCount}</div>
-                  <div className="text-[10px] text-white/40">games bought</div>
-                </div>
-                <div className="p-3 bg-white/5 rounded-xl text-center">
-                  <div className="text-lg font-semibold text-blue-400">{yearHours.toFixed(0)}h</div>
-                  <div className="text-[10px] text-white/40">played</div>
-                </div>
-                <div className="p-3 bg-white/5 rounded-xl text-center">
-                  <div className="text-lg font-semibold text-purple-400">
-                    ${monthlyBudgetRemaining.toFixed(0)}
-                  </div>
-                  <div className="text-[10px] text-white/40">/mo remaining</div>
-                </div>
+        {/* Budget Card - only for specific years */}
+        {!isAllTime && (
+          <div className="p-5 bg-gradient-to-br from-purple-500/10 to-blue-500/10 border border-purple-500/20 rounded-2xl">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Wallet size={18} className="text-purple-400" />
+                <h3 className="text-sm font-medium text-white">{selectedYear} Gaming Budget</h3>
               </div>
+              {onSetBudget && !isEditingBudget && (
+                <button
+                  onClick={() => {
+                    setBudgetInput(budgetAmount.toString());
+                    setIsEditingBudget(true);
+                  }}
+                  className="p-1.5 text-white/40 hover:text-white/70 hover:bg-white/10 rounded-lg transition-all"
+                >
+                  <Edit3 size={14} />
+                </button>
+              )}
+            </div>
+
+            {isEditingBudget ? (
+              <div className="flex items-center gap-2 mb-4">
+                <span className="text-white/40">$</span>
+                <input
+                  type="number"
+                  value={budgetInput}
+                  onChange={e => setBudgetInput(e.target.value)}
+                  placeholder="Set budget..."
+                  className="flex-1 px-3 py-2 bg-white/5 border border-white/10 text-white rounded-lg text-sm focus:outline-none focus:border-purple-500/50"
+                  autoFocus
+                />
+                <button
+                  onClick={handleSaveBudget}
+                  disabled={savingBudget}
+                  className="p-2 bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 rounded-lg transition-all disabled:opacity-50"
+                >
+                  <Check size={16} />
+                </button>
+                <button
+                  onClick={() => setIsEditingBudget(false)}
+                  className="p-2 bg-white/5 text-white/40 hover:bg-white/10 rounded-lg transition-all"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            ) : budgetAmount > 0 ? (
+              <>
+                {/* Budget Progress */}
+                <div className="mb-4">
+                  <div className="flex items-end justify-between mb-2">
+                    <div>
+                      <div className="text-2xl font-bold text-white">${periodSpent.toFixed(0)}</div>
+                      <div className="text-xs text-white/40">of ${budgetAmount.toFixed(0)} budget</div>
+                    </div>
+                    <div className={clsx(
+                      'text-right',
+                      budgetRemaining >= 0 ? 'text-emerald-400' : 'text-red-400'
+                    )}>
+                      <div className="text-lg font-semibold">
+                        {budgetRemaining >= 0 ? `$${budgetRemaining.toFixed(0)}` : `-$${Math.abs(budgetRemaining).toFixed(0)}`}
+                      </div>
+                      <div className="text-xs opacity-70">
+                        {budgetRemaining >= 0 ? 'remaining' : 'over budget'}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="h-3 bg-white/5 rounded-full overflow-hidden">
+                    <div
+                      className={clsx(
+                        'h-full rounded-full transition-all duration-500',
+                        budgetUsedPercent <= 75 ? 'bg-emerald-500' :
+                        budgetUsedPercent <= 100 ? 'bg-yellow-500' : 'bg-red-500'
+                      )}
+                      style={{ width: `${Math.min(budgetUsedPercent, 100)}%` }}
+                    />
+                  </div>
+                  <div className="flex justify-between mt-1 text-[10px] text-white/30">
+                    <span>{budgetUsedPercent.toFixed(0)}% used</span>
+                    <span>{Math.max(0, 100 - budgetUsedPercent).toFixed(0)}% available</span>
+                  </div>
+                </div>
+
+                {/* Monthly Budget Remaining */}
+                {selectedYear === currentYear && monthlyBudgetRemaining > 0 && (
+                  <div className="p-3 bg-white/5 rounded-xl text-center">
+                    <div className="text-lg font-semibold text-purple-400">
+                      ${monthlyBudgetRemaining.toFixed(0)}/mo
+                    </div>
+                    <div className="text-[10px] text-white/40">remaining budget per month</div>
+                  </div>
+                )}
             </>
           ) : (
             <div className="text-center py-4">

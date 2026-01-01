@@ -10,13 +10,14 @@ interface GameFormProps {
   onSubmit: (game: Omit<Game, 'id' | 'userId' | 'createdAt' | 'updatedAt'>) => Promise<void>;
   onClose: () => void;
   initialGame?: Game;
+  existingFranchises?: string[];
 }
 
 const PLATFORMS = ['PC', 'PS5', 'PS4', 'Xbox Series', 'Xbox One', 'Switch', 'Mobile', 'Other'];
 const GENRES = ['Action', 'Action-Adventure', 'RPG', 'JRPG', 'Horror', 'Platformer', 'Strategy', 'Simulation', 'Sports', 'Racing', 'Puzzle', 'Metroidvania', 'Roguelike', 'Souls-like', 'FPS', 'TPS', 'MMO', 'Indie', 'Adventure', 'Other'];
 const PURCHASE_SOURCES: PurchaseSource[] = ['Steam', 'PlayStation', 'Xbox', 'Nintendo', 'Epic', 'GOG', 'Physical', 'Other'];
 
-export function GameForm({ onSubmit, onClose, initialGame }: GameFormProps) {
+export function GameForm({ onSubmit, onClose, initialGame, existingFranchises = [] }: GameFormProps) {
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     name: initialGame?.name || '',
@@ -26,6 +27,7 @@ export function GameForm({ onSubmit, onClose, initialGame }: GameFormProps) {
     status: (initialGame?.status || 'Not Started') as GameStatus,
     platform: initialGame?.platform || '',
     genre: initialGame?.genre || '',
+    franchise: initialGame?.franchise || '',
     purchaseSource: initialGame?.purchaseSource || '' as PurchaseSource | '',
     notes: initialGame?.notes || '',
     review: initialGame?.review || '',
@@ -44,6 +46,7 @@ export function GameForm({ onSubmit, onClose, initialGame }: GameFormProps) {
     try {
       await onSubmit({
         ...formData,
+        franchise: formData.franchise || undefined,
         purchaseSource: formData.purchaseSource || undefined,
         startDate: formData.startDate || undefined,
         endDate: formData.endDate || undefined,
@@ -214,6 +217,25 @@ export function GameForm({ onSubmit, onClose, initialGame }: GameFormProps) {
                 {PURCHASE_SOURCES.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
+          </div>
+
+          {/* Franchise */}
+          <div>
+            <label className="block text-xs font-medium text-white/50 mb-1.5">
+              Franchise / Series
+              <span className="text-white/30 ml-1 font-normal">(optional)</span>
+            </label>
+            <input
+              type="text"
+              list="franchise-suggestions"
+              value={formData.franchise}
+              onChange={e => setFormData({ ...formData, franchise: e.target.value })}
+              className="w-full px-3 py-2.5 bg-white/[0.03] border border-white/5 text-white rounded-lg text-sm focus:outline-none focus:bg-white/[0.05] focus:border-white/10 transition-all placeholder:text-white/30"
+              placeholder="e.g. The Witcher, Final Fantasy, Souls"
+            />
+            <datalist id="franchise-suggestions">
+              {existingFranchises.map(f => <option key={f} value={f} />)}
+            </datalist>
           </div>
 
           {/* Date Section */}

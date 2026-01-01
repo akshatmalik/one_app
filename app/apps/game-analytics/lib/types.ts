@@ -19,6 +19,7 @@ export interface Game {
   status: GameStatus;
   platform?: string;
   genre?: string;
+  franchise?: string; // Game franchise/series (e.g., "The Witcher", "Final Fantasy")
   purchaseSource?: PurchaseSource;
   notes?: string;
   review?: string; // Personal review/thoughts about the game
@@ -78,6 +79,11 @@ export interface AnalyticsSummary {
   spendingBySource: Record<string, number>;
   spendingByYear: Record<string, number>;
   hoursByGenre: Record<string, number>;
+
+  // Franchise stats
+  spendingByFranchise: Record<string, number>;
+  hoursByFranchise: Record<string, number>;
+  gamesByFranchise: Record<string, number>;
 }
 
 export interface BudgetSettings {

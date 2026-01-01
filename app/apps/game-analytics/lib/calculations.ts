@@ -136,6 +136,9 @@ export function calculateSummary(games: Game[]): AnalyticsSummary {
   const spendingBySource: Record<string, number> = {};
   const spendingByYear: Record<string, number> = {};
   const hoursByGenre: Record<string, number> = {};
+  const spendingByFranchise: Record<string, number> = {};
+  const hoursByFranchise: Record<string, number> = {};
+  const gamesByFranchise: Record<string, number> = {};
 
   ownedGames.forEach(game => {
     // By genre
@@ -155,6 +158,13 @@ export function calculateSummary(games: Game[]): AnalyticsSummary {
     if (game.datePurchased) {
       const year = game.datePurchased.split('-')[0];
       spendingByYear[year] = (spendingByYear[year] || 0) + game.price;
+    }
+
+    // By franchise
+    if (game.franchise) {
+      spendingByFranchise[game.franchise] = (spendingByFranchise[game.franchise] || 0) + game.price;
+      hoursByFranchise[game.franchise] = (hoursByFranchise[game.franchise] || 0) + game.hours;
+      gamesByFranchise[game.franchise] = (gamesByFranchise[game.franchise] || 0) + 1;
     }
   });
 
@@ -197,6 +207,11 @@ export function calculateSummary(games: Game[]): AnalyticsSummary {
     spendingBySource,
     spendingByYear,
     hoursByGenre,
+
+    // Franchise stats
+    spendingByFranchise,
+    hoursByFranchise,
+    gamesByFranchise,
   };
 }
 
