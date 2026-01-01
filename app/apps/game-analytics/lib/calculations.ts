@@ -317,3 +317,229 @@ export function getCumulativeSpending(games: Game[]): Array<{ month: string; tot
     };
   });
 }
+
+// ========================================
+// PERIOD-BASED STATS (WEEKLY/MONTHLY)
+// ========================================
+
+export interface PeriodStats {
+  gamesPlayed: Game[];
+  totalHours: number;
+  totalSessions: number;
+  mostPlayedGame: { name: string; hours: number } | null;
+  averageSessionLength: number;
+  uniqueGames: number;
+}
+
+export function getPeriodStats(games: Game[], days: number): PeriodStats {
+  const cutoffDate = new Date();
+  cutoffDate.setDate(cutoffDate.getDate() - days);
+
+  const gamesWithRecentActivity: Map<string, { game: Game; hours: number; sessions: number }> = new Map();
+  let totalHours = 0;
+  let totalSessions = 0;
+
+  games.forEach(game => {
+    if (game.playLogs) {
+      game.playLogs.forEach(log => {
+        const logDate = new Date(log.date);
+        if (logDate >= cutoffDate) {
+          const existing = gamesWithRecentActivity.get(game.id) || { game, hours: 0, sessions: 0 };
+          existing.hours += log.hours;
+          existing.sessions += 1;
+          gamesWithRecentActivity.set(game.id, existing);
+          totalHours += log.hours;
+          totalSessions += 1;
+        }
+      });
+    }
+  });
+
+  const gamesPlayed = Array.from(gamesWithRecentActivity.values()).map(g => g.game);
+  const mostPlayedEntry = Array.from(gamesWithRecentActivity.values())
+    .sort((a, b) => b.hours - a.hours)[0];
+
+  return {
+    gamesPlayed,
+    totalHours,
+    totalSessions,
+    mostPlayedGame: mostPlayedEntry ? { name: mostPlayedEntry.game.name, hours: mostPlayedEntry.hours } : null,
+    averageSessionLength: totalSessions > 0 ? totalHours / totalSessions : 0,
+    uniqueGames: gamesPlayed.length,
+  };
+}
+
+// ========================================
+// FUN & CREATIVE STATS
+// ========================================
+
+export interface HiddenGem {
+  game: Game;
+  score: number; // Calculated value score
+}
+
+// Find "Hidden Gems" - games with amazing value (low price, high hours, high rating)
+export function findHiddenGems(games: Game[]): HiddenGem[] {
+  const playedGames = games.filter(g => g.hours >= 10 && g.status !== 'Wishlist' && !g.acquiredFree);
+
+  return playedGames
+    .map(game => {
+      const costPerHour = calculateCostPerHour(game.price, game.hours);
+      const valueScore = (game.rating * 10) / (costPerHour + 0.1); // Higher is better
+      return { game, score: valueScore };
+    })
+    .filter(g => g.game.price <= 20 && g.game.rating >= 7)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 5);
+}
+
+export interface RegretPurchase {
+  game: Game;
+  regretScore: number; // Higher = more regret
+}
+
+// Find "Regret Purchases" - expensive games with low playtime
+export function findRegretPurchases(games: Game[]): RegretPurchase[] {
+  const ownedGames = games.filter(g => g.status !== 'Wishlist' && !g.acquiredFree && g.price > 20);
+
+  return ownedGames
+    .map(game => {
+      // Regret score: high price, low hours relative to purchase date
+      const daysSincePurchase = game.datePurchased
+        ? Math.max(1, (Date.now() - new Date(game.datePurchased).getTime()) / (1000 * 60 * 60 * 24))
+        : 365;
+      const expectedHours = Math.min(daysSincePurchase * 0.5, 50); // Expect at least 0.5h per day, max 50h
+      const hourDeficit = Math.max(0, expectedHours - game.hours);
+      const regretScore = (game.price / 10) * hourDeficit;
+      return { game, regretScore };
+    })
+    .filter(g => g.regretScore > 5)
+    .sort((a, b) => b.regretScore - a.regretScore)
+    .slice(0, 5);
+}
+
+export interface ShelfWarmer {
+  game: Game;
+  daysSitting: number;
+}
+
+// Find "Shelf Warmers" - not started games gathering dust
+export function findShelfWarmers(games: Game[]): ShelfWarmer[] {
+  const backlogGames = games.filter(g =>
+    g.status === 'Not Started' && g.datePurchased && g.price > 0
+  );
+
+  return backlogGames
+    .map(game => {
+      const daysSitting = game.datePurchased
+        ? (Date.now() - new Date(game.datePurchased).getTime()) / (1000 * 60 * 60 * 24)
+        : 0;
+      return { game, daysSitting };
+    })
+    .filter(g => g.daysSitting > 30)
+    .sort((a, b) => b.daysSitting - a.daysSitting)
+    .slice(0, 5);
+}
+
+// Gaming velocity - hours per day over the last period
+export function getGamingVelocity(games: Game[], days: number): number {
+  const stats = getPeriodStats(games, days);
+  return stats.totalHours / days;
+}
+
+// Find the best gaming month (most hours logged)
+export function getBestGamingMonth(games: Game[]): { month: string; hours: number } | null {
+  const hoursByMonth = getHoursByMonth(games);
+  const entries = Object.entries(hoursByMonth);
+  if (entries.length === 0) return null;
+
+  const best = entries.sort((a, b) => b[1] - a[1])[0];
+  return { month: best[0], hours: best[1] };
+}
+
+// Calculate gaming streak (consecutive days with play logs)
+export function getCurrentGamingStreak(games: Game[]): number {
+  const allLogs = getAllPlayLogs(games);
+  if (allLogs.length === 0) return 0;
+
+  const uniqueDates = Array.from(new Set(allLogs.map(l => l.log.date))).sort().reverse();
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  let streak = 0;
+  let checkDate = new Date(today);
+
+  for (const dateStr of uniqueDates) {
+    const logDate = new Date(dateStr);
+    logDate.setHours(0, 0, 0, 0);
+
+    const diffDays = Math.round((checkDate.getTime() - logDate.getTime()) / (1000 * 60 * 60 * 24));
+
+    if (diffDays === streak) {
+      streak++;
+    } else if (diffDays > streak) {
+      break;
+    }
+  }
+
+  return streak;
+}
+
+// Completion velocity - average days to complete games
+export function getCompletionVelocity(games: Game[]): number | null {
+  const completed = games.filter(g =>
+    g.status === 'Completed' && g.startDate && g.endDate
+  );
+
+  if (completed.length === 0) return null;
+
+  const times = completed.map(g => calculateDaysToComplete(g.startDate, g.endDate)!);
+  return times.reduce((sum, days) => sum + days, 0) / times.length;
+}
+
+// Platform preference score (0-100 based on hours played per platform)
+export function getPlatformPreference(games: Game[]): Array<{ platform: string; score: number; hours: number }> {
+  const platformHours: Record<string, number> = {};
+  const playedGames = games.filter(g => g.hours > 0);
+
+  playedGames.forEach(game => {
+    const platform = game.platform || 'Unknown';
+    platformHours[platform] = (platformHours[platform] || 0) + game.hours;
+  });
+
+  const totalHours = Object.values(platformHours).reduce((sum, h) => sum + h, 0);
+
+  return Object.entries(platformHours)
+    .map(([platform, hours]) => ({
+      platform,
+      hours,
+      score: totalHours > 0 ? (hours / totalHours) * 100 : 0,
+    }))
+    .sort((a, b) => b.hours - a.hours);
+}
+
+// Get discount effectiveness - how much you saved per game on average
+export function getDiscountEffectiveness(games: Game[]): { avgSavings: number; bestDeal: Game | null } {
+  const discountedGames = games.filter(g =>
+    !g.acquiredFree && g.originalPrice && g.originalPrice > g.price && g.status !== 'Wishlist'
+  );
+
+  if (discountedGames.length === 0) {
+    return { avgSavings: 0, bestDeal: null };
+  }
+
+  const totalSavings = discountedGames.reduce((sum, g) =>
+    sum + ((g.originalPrice || 0) - g.price), 0
+  );
+
+  const bestDeal = discountedGames.sort((a, b) => {
+    const aSavings = (a.originalPrice || 0) - a.price;
+    const bSavings = (b.originalPrice || 0) - b.price;
+    return bSavings - aSavings;
+  })[0];
+
+  return {
+    avgSavings: totalSavings / discountedGames.length,
+    bestDeal,
+  };
+}
