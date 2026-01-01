@@ -18,12 +18,20 @@ const GENRES = ['Action', 'Action-Adventure', 'RPG', 'JRPG', 'Horror', 'Platform
 const PURCHASE_SOURCES: PurchaseSource[] = ['Steam', 'PlayStation', 'Xbox', 'Nintendo', 'Epic', 'GOG', 'Physical', 'Other'];
 const SUBSCRIPTION_SOURCES: SubscriptionSource[] = ['PS Plus', 'Game Pass', 'Epic Free', 'Prime Gaming', 'Humble Choice', 'Other'];
 
+// Capitalize first letter of each word
+function toTitleCase(str: string): string {
+  return str
+    .split(' ')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+}
+
 export function GameForm({ onSubmit, onClose, initialGame, existingFranchises = [] }: GameFormProps) {
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     name: initialGame?.name || '',
-    price: initialGame?.price || 0,
-    hours: initialGame?.hours || 0,
+    price: initialGame?.price !== undefined ? initialGame.price.toString() : '',
+    hours: initialGame?.hours !== undefined ? initialGame.hours.toString() : '',
     rating: initialGame?.rating || 8,
     status: (initialGame?.status || 'Not Started') as GameStatus,
     platform: initialGame?.platform || '',
@@ -31,7 +39,7 @@ export function GameForm({ onSubmit, onClose, initialGame, existingFranchises = 
     franchise: initialGame?.franchise || '',
     purchaseSource: initialGame?.purchaseSource || '' as PurchaseSource | '',
     acquiredFree: initialGame?.acquiredFree || false,
-    originalPrice: initialGame?.originalPrice || 0,
+    originalPrice: initialGame?.originalPrice !== undefined ? initialGame.originalPrice.toString() : '',
     subscriptionSource: initialGame?.subscriptionSource || '' as SubscriptionSource | '',
     notes: initialGame?.notes || '',
     review: initialGame?.review || '',
@@ -41,7 +49,9 @@ export function GameForm({ onSubmit, onClose, initialGame, existingFranchises = 
     playLogs: initialGame?.playLogs || [],
   });
 
-  const costPerHour = calculateCostPerHour(formData.price, formData.hours);
+  const priceNum = parseFloat(formData.price) || 0;
+  const hoursNum = parseFloat(formData.hours) || 0;
+  const costPerHour = calculateCostPerHour(priceNum, hoursNum);
   const valueRating = getValueRating(costPerHour);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -50,10 +60,13 @@ export function GameForm({ onSubmit, onClose, initialGame, existingFranchises = 
     try {
       await onSubmit({
         ...formData,
-        franchise: formData.franchise || undefined,
+        name: toTitleCase(formData.name.trim()),
+        franchise: formData.franchise ? toTitleCase(formData.franchise.trim()) : undefined,
+        price: parseFloat(formData.price) || 0,
+        hours: parseFloat(formData.hours) || 0,
+        originalPrice: formData.originalPrice ? parseFloat(formData.originalPrice) : undefined,
         purchaseSource: formData.purchaseSource || undefined,
         acquiredFree: formData.acquiredFree || undefined,
-        originalPrice: formData.acquiredFree ? formData.originalPrice : undefined,
         subscriptionSource: formData.acquiredFree && formData.subscriptionSource ? formData.subscriptionSource : undefined,
         startDate: formData.startDate || undefined,
         endDate: formData.endDate || undefined,
@@ -136,31 +149,68 @@ export function GameForm({ onSubmit, onClose, initialGame, existingFranchises = 
           {/* Price & Hours Row */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-white/50 mb-1.5">Price ($)</label>
+              <label className="block text-xs font-medium text-white/50 mb-1.5">
+                Paid Price ($) {formData.acquiredFree && <span className="text-emerald-400 text-[10px]">• Free</span>}
+              </label>
               <input
                 type="number"
                 step="0.01"
                 min="0"
                 value={formData.price}
-                onChange={e => setFormData({ ...formData, price: parseFloat(e.target.value) || 0 })}
+                onChange={e => setFormData({ ...formData, price: e.target.value })}
                 className="w-full px-3 py-2.5 bg-white/[0.03] border border-white/5 text-white rounded-lg text-sm focus:outline-none focus:bg-white/[0.05] focus:border-white/10 transition-all"
+                placeholder="0.00"
+                disabled={formData.acquiredFree}
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-white/50 mb-1.5">Total Hours</label>
+              <label className="block text-xs font-medium text-white/50 mb-1.5">Original Price ($)</label>
               <input
                 type="number"
-                step="0.5"
+                step="0.01"
                 min="0"
-                value={formData.hours}
-                onChange={e => setFormData({ ...formData, hours: parseFloat(e.target.value) || 0 })}
+                value={formData.originalPrice}
+                onChange={e => setFormData({ ...formData, originalPrice: e.target.value })}
                 className="w-full px-3 py-2.5 bg-white/[0.03] border border-white/5 text-white rounded-lg text-sm focus:outline-none focus:bg-white/[0.05] focus:border-white/10 transition-all"
+                placeholder="0.00"
               />
             </div>
           </div>
 
+          {/* Discount Display */}
+          {(() => {
+            const paidPrice = parseFloat(formData.price) || 0;
+            const origPrice = parseFloat(formData.originalPrice) || 0;
+            const discount = origPrice > paidPrice && paidPrice >= 0 ? ((origPrice - paidPrice) / origPrice) * 100 : 0;
+            const savings = origPrice - paidPrice;
+
+            if (discount > 0) {
+              return (
+                <div className="px-3 py-2 rounded-lg bg-emerald-500/10 text-emerald-400 text-sm flex items-center justify-between">
+                  <span className="font-medium">{discount.toFixed(0)}% discount!</span>
+                  <span className="text-xs">Saved ${savings.toFixed(2)}</span>
+                </div>
+              );
+            }
+            return null;
+          })()}
+
+          {/* Hours */}
+          <div>
+            <label className="block text-xs font-medium text-white/50 mb-1.5">Total Hours</label>
+            <input
+              type="number"
+              step="0.5"
+              min="0"
+              value={formData.hours}
+              onChange={e => setFormData({ ...formData, hours: e.target.value })}
+              className="w-full px-3 py-2.5 bg-white/[0.03] border border-white/5 text-white rounded-lg text-sm focus:outline-none focus:bg-white/[0.05] focus:border-white/10 transition-all"
+              placeholder="0.0"
+            />
+          </div>
+
           {/* Cost Per Hour Display */}
-          {formData.hours > 0 && formData.price > 0 && (
+          {hoursNum > 0 && priceNum > 0 && (
             <div className={clsx('px-3 py-2 rounded-lg text-sm', getValueColor(valueRating))}>
               <span className="font-medium">${costPerHour.toFixed(2)}/hr</span>
               <span className="text-white/40 ml-2">• {valueRating} value</span>
@@ -267,7 +317,7 @@ export function GameForm({ onSubmit, onClose, initialGame, existingFranchises = 
                     setFormData({
                       ...formData,
                       acquiredFree: newAcquiredFree,
-                      price: newAcquiredFree ? 0 : formData.price,
+                      price: newAcquiredFree ? '0' : formData.price,
                     });
                   }}
                   className={clsx(
@@ -284,37 +334,16 @@ export function GameForm({ onSubmit, onClose, initialGame, existingFranchises = 
 
               {/* Subscription Details */}
               {formData.acquiredFree && (
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-medium text-white/50 mb-1.5">Subscription</label>
-                    <select
-                      value={formData.subscriptionSource}
-                      onChange={e => setFormData({ ...formData, subscriptionSource: e.target.value as SubscriptionSource })}
-                      className="w-full px-2 py-2.5 bg-white/[0.03] border border-white/5 text-white rounded-lg text-xs focus:outline-none focus:bg-white/[0.05] focus:border-white/10 transition-all"
-                    >
-                      <option value="">Select...</option>
-                      {SUBSCRIPTION_SOURCES.map(s => <option key={s} value={s}>{s}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-white/50 mb-1.5">Original Value ($)</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={formData.originalPrice}
-                      onChange={e => setFormData({ ...formData, originalPrice: parseFloat(e.target.value) || 0 })}
-                      placeholder="Game's actual price"
-                      className="w-full px-3 py-2.5 bg-white/[0.03] border border-white/5 text-white rounded-lg text-xs focus:outline-none focus:bg-white/[0.05] focus:border-white/10 transition-all placeholder:text-white/30"
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* Savings Display */}
-              {formData.acquiredFree && formData.originalPrice > 0 && (
-                <div className="px-3 py-2 rounded-lg bg-emerald-500/10 text-emerald-400 text-sm">
-                  <span className="font-medium">You saved ${formData.originalPrice.toFixed(2)}!</span>
+                <div>
+                  <label className="block text-xs font-medium text-white/50 mb-1.5">Subscription Source</label>
+                  <select
+                    value={formData.subscriptionSource}
+                    onChange={e => setFormData({ ...formData, subscriptionSource: e.target.value as SubscriptionSource })}
+                    className="w-full px-3 py-2.5 bg-white/[0.03] border border-white/5 text-white rounded-lg text-sm focus:outline-none focus:bg-white/[0.05] focus:border-white/10 transition-all"
+                  >
+                    <option value="">Select...</option>
+                    {SUBSCRIPTION_SOURCES.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
                 </div>
               )}
             </div>

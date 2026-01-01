@@ -131,12 +131,18 @@ export function StatsView({ games, summary, budgets = [], onSetBudget }: StatsVi
   const handleSaveBudget = async () => {
     if (!onSetBudget) return;
     const amount = parseFloat(budgetInput);
-    if (isNaN(amount) || amount < 0) return;
+    if (isNaN(amount) || amount < 0) {
+      alert('Please enter a valid budget amount');
+      return;
+    }
 
     setSavingBudget(true);
     try {
       await onSetBudget(selectedYear, amount);
       setIsEditingBudget(false);
+    } catch (error) {
+      console.error('Failed to save budget:', error);
+      alert('Failed to save budget. Please try again.');
     } finally {
       setSavingBudget(false);
     }
@@ -420,10 +426,12 @@ export function StatsView({ games, summary, budgets = [], onSetBudget }: StatsVi
                 <span className="text-white/40">$</span>
                 <input
                   type="number"
+                  min="0"
+                  step="0.01"
                   value={budgetInput}
                   onChange={e => setBudgetInput(e.target.value)}
-                  placeholder="Set budget..."
-                  className="flex-1 px-3 py-2 bg-white/5 border border-white/10 text-white rounded-lg text-sm focus:outline-none focus:border-purple-500/50"
+                  placeholder="0.00"
+                  className="flex-1 px-3 py-2 bg-white/5 border border-white/10 text-white rounded-lg text-sm focus:outline-none focus:border-purple-500/50 placeholder:text-white/30"
                   autoFocus
                 />
                 <button
@@ -662,6 +670,31 @@ export function StatsView({ games, summary, budgets = [], onSetBudget }: StatsVi
           </div>
         )}
       </div>
+
+      {/* Discount Savings Card - All Time */}
+      {summary.totalDiscountSavings > 0 && (
+        <div className="p-4 bg-gradient-to-br from-blue-500/10 to-purple-500/10 border border-blue-500/20 rounded-xl">
+          <h3 className="text-sm font-medium text-white/70 mb-3 flex items-center gap-2">
+            <DollarSign size={14} className="text-blue-400" />
+            All-Time Discount Savings
+          </h3>
+
+          {/* Summary Row */}
+          <div className="grid grid-cols-2 gap-3 mb-3">
+            <div className="p-3 bg-white/5 rounded-xl text-center">
+              <div className="text-lg font-bold text-blue-400">${summary.totalDiscountSavings.toFixed(0)}</div>
+              <div className="text-[10px] text-white/40">total saved</div>
+            </div>
+            <div className="p-3 bg-white/5 rounded-xl text-center">
+              <div className="text-lg font-bold text-purple-400">{summary.averageDiscount.toFixed(0)}%</div>
+              <div className="text-[10px] text-white/40">avg discount</div>
+            </div>
+          </div>
+          <p className="text-xs text-white/40 text-center">
+            Savings from sales and discounts on paid games
+          </p>
+        </div>
+      )}
 
       {/* All-Time Summary Cards */}
       <div>

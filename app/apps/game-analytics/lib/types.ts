@@ -62,6 +62,8 @@ export interface AnalyticsSummary {
   backlogValue: number; // Value of unplayed games
   averagePrice: number;
   averageCostPerHour: number;
+  totalDiscountSavings: number; // Sum of (originalPrice - price) for paid games
+  averageDiscount: number; // Average discount % across all games with discounts
 
   // Time
   totalHours: number;

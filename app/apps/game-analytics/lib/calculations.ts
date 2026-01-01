@@ -60,6 +60,20 @@ export function calculateSummary(games: Game[]): AnalyticsSummary {
   const backlogValue = notStartedGames.reduce((sum, g) => sum + g.price, 0);
   const averagePrice = ownedGames.length > 0 ? totalSpent / ownedGames.length : 0;
 
+  // Discount savings (for paid games that have originalPrice set)
+  const gamesWithDiscount = ownedGames.filter(g =>
+    !g.acquiredFree && g.originalPrice && g.originalPrice > g.price
+  );
+  const totalDiscountSavings = gamesWithDiscount.reduce((sum, g) =>
+    sum + ((g.originalPrice || 0) - g.price), 0
+  );
+  const averageDiscount = gamesWithDiscount.length > 0
+    ? gamesWithDiscount.reduce((sum, g) => {
+        const discount = ((g.originalPrice || 0) - g.price) / (g.originalPrice || 1) * 100;
+        return sum + discount;
+      }, 0) / gamesWithDiscount.length
+    : 0;
+
   // Time calculations
   const totalHours = ownedGames.reduce((sum, g) => sum + g.hours, 0);
   const averageHoursPerGame = playedGames.length > 0 ? totalHours / playedGames.length : 0;
@@ -91,8 +105,8 @@ export function calculateSummary(games: Game[]): AnalyticsSummary {
   let bestROI: { name: string; roi: number } | null = null;
 
   if (playedGames.length > 0) {
-    // Best value (min 5 hours)
-    const qualifiedForValue = playedGames.filter(g => g.hours >= 5);
+    // Best value (min 5 hours, exclude free games)
+    const qualifiedForValue = playedGames.filter(g => g.hours >= 5 && !g.acquiredFree);
     if (qualifiedForValue.length > 0) {
       const sortedByValue = [...qualifiedForValue].sort((a, b) =>
         calculateCostPerHour(a.price, a.hours) - calculateCostPerHour(b.price, b.hours)
@@ -200,6 +214,8 @@ export function calculateSummary(games: Game[]): AnalyticsSummary {
     backlogValue,
     averagePrice,
     averageCostPerHour,
+    totalDiscountSavings,
+    averageDiscount,
 
     // Time
     totalHours,

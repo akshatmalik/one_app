@@ -60,23 +60,30 @@ class FirebaseBudgetRepository implements BudgetRepository {
 
   async set(year: number, yearlyBudget: number): Promise<BudgetSettings> {
     if (!this.userId) throw new Error('Not authenticated');
+
+    // Validate yearlyBudget is a valid number
+    if (typeof yearlyBudget !== 'number' || isNaN(yearlyBudget) || yearlyBudget < 0) {
+      throw new Error('Invalid budget amount');
+    }
+
     const existing = await this.getByYear(year);
     const now = new Date().toISOString();
 
     if (existing) {
       const docRef = doc(this.db, COLLECTION_NAME, existing.id);
-      await updateDoc(docRef, {
-        yearlyBudget,
+      const updateData = {
+        yearlyBudget: yearlyBudget,
         updatedAt: now,
-      });
+      };
+      await updateDoc(docRef, updateData);
       return { ...existing, yearlyBudget, updatedAt: now };
     }
 
     const budget: BudgetSettings = {
       id: uuidv4(),
       userId: this.userId,
-      year,
-      yearlyBudget,
+      year: year,
+      yearlyBudget: yearlyBudget,
       createdAt: now,
       updatedAt: now,
     };
