@@ -66,22 +66,18 @@ export function DayNotesEditor({ date, dayNumber, initialContent, onSave, onClos
   };
 
   return (
-    <div className="flex flex-col h-full bg-gradient-to-br from-purple-950/20 via-transparent to-blue-950/10">
-      {/* Compact Header */}
-      <div className="flex items-center justify-between px-8 py-4 border-b border-white/5">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 bg-gradient-to-br from-purple-600/30 to-purple-700/20 rounded-xl flex items-center justify-center backdrop-blur-sm border border-purple-500/20">
-            <BookOpen size={18} className="text-purple-300" />
-          </div>
-          <div>
-            <h3 className="text-base font-semibold text-white/90">
-              {dayNumber !== null && (
-                <span className="text-purple-400">Day {dayNumber}</span>
-              )}
-              {dayNumber !== null && ' • '}
-              {formatDate()}
-            </h3>
-          </div>
+    <div className="flex flex-col h-full bg-gradient-to-br from-purple-950/10 via-transparent to-blue-950/5">
+      {/* Ultra-compact Header */}
+      <div className="flex items-center justify-between px-6 py-3 border-b border-white/[0.03]">
+        <div className="flex items-center gap-2">
+          <BookOpen size={16} className="text-purple-400/60" />
+          <h3 className="text-sm font-medium text-white/60">
+            {dayNumber !== null && (
+              <span className="text-purple-400">Day {dayNumber}</span>
+            )}
+            {dayNumber !== null && ' • '}
+            {formatDate()}
+          </h3>
         </div>
 
         <div className="flex items-center gap-2">
@@ -89,72 +85,65 @@ export function DayNotesEditor({ date, dayNumber, initialContent, onSave, onClos
             onClick={handleSave}
             disabled={!hasChanges || saving}
             className={clsx(
-              'px-4 py-2 rounded-xl font-medium text-sm transition-all flex items-center gap-2',
+              'px-3 py-1.5 rounded-lg font-medium text-xs transition-all flex items-center gap-1.5',
               hasChanges && !saving
-                ? 'bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white shadow-lg shadow-purple-500/25'
-                : 'bg-white/[0.03] text-white/30 cursor-not-allowed'
+                ? 'bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white shadow-lg shadow-purple-500/20'
+                : 'bg-white/[0.02] text-white/20 cursor-not-allowed'
             )}
           >
             {saving ? (
               <>
-                <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                <div className="w-3 h-3 border-2 border-white/20 border-t-white rounded-full animate-spin" />
                 Saving...
               </>
             ) : (
               <>
-                <Save size={16} />
+                <Save size={14} />
                 Save
               </>
             )}
           </button>
           <button
             onClick={handleClose}
-            className="p-2 text-white/40 hover:text-white/70 hover:bg-white/5 rounded-xl transition-all"
+            className="p-1.5 text-white/30 hover:text-white/60 hover:bg-white/5 rounded-lg transition-all"
             aria-label="Close"
           >
-            <X size={20} />
+            <X size={16} />
           </button>
         </div>
       </div>
 
-      {/* Spacious Writing Area */}
-      <div className="flex-1 px-8 py-8 overflow-hidden">
-        <div className="h-full relative">
-          {/* Decorative elements for a journal feel */}
-          <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-purple-500/20 via-purple-500/10 to-transparent rounded-full" />
-
+      {/* Maximized Writing Area - Like Evernote */}
+      <div className="flex-1 px-12 py-10 overflow-y-auto">
+        <div className="max-w-3xl mx-auto h-full">
           <textarea
             ref={textareaRef}
             value={content}
             onChange={(e) => handleContentChange(e.target.value)}
-            placeholder="Start writing...
-
-How was your day? What are you thinking about? What are you grateful for?
-
-This is your space to reflect, dream, and capture your thoughts."
-            className="w-full h-full bg-transparent border-0 pl-6 pr-4 py-2 text-white/90 text-base leading-relaxed placeholder:text-white/25 placeholder:leading-relaxed focus:outline-none resize-none"
+            placeholder="Start writing... How was your day? What are you thinking about? What are you grateful for?"
+            className="w-full h-full min-h-[600px] bg-transparent border-0 px-0 py-0 text-white/90 text-base leading-loose placeholder:text-white/20 placeholder:leading-loose focus:outline-none resize-none"
             style={{
               fontFamily: 'inherit',
-              lineHeight: '1.75',
+              lineHeight: '1.8',
               fontSize: '16px'
             }}
           />
         </div>
       </div>
 
-      {/* Minimal Footer */}
-      <div className="px-8 py-3 border-t border-white/5 bg-black/10">
+      {/* Ultra-minimal Footer - Status Only */}
+      <div className="px-6 py-2 border-t border-white/[0.03] bg-black/5">
         <div className="flex items-center justify-between text-xs">
           <div>
             {hasChanges ? (
-              <span className="text-amber-400/90 font-medium">● Unsaved changes</span>
+              <span className="text-amber-400/70 font-medium">● Unsaved</span>
             ) : (
-              <span className="text-emerald-400/70">✓ Saved</span>
+              <span className="text-emerald-400/50">✓ Saved</span>
             )}
           </div>
           {content.length > 0 && (
-            <div className="text-white/30">
-              {content.length} characters
+            <div className="text-white/20">
+              {content.length.toLocaleString()} chars
             </div>
           )}
         </div>
