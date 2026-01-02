@@ -14,6 +14,7 @@ import { gameRepository } from './lib/storage';
 import { BASELINE_GAMES_2025 } from './data/baseline-games';
 import { useAuthContext } from '@/lib/AuthContext';
 import { useToast } from '@/components/Toast';
+import { getROIRating } from './lib/calculations';
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist';
@@ -378,7 +379,7 @@ export default function GameAnalyticsPage() {
                       </div>
 
                       {/* Stats Row */}
-                      <div className="grid grid-cols-4 gap-2 text-center">
+                      <div className="grid grid-cols-5 gap-2 text-center">
                         <div className="p-2 bg-white/[0.02] rounded-lg">
                           <div className="flex flex-col items-center gap-0.5">
                             {game.originalPrice && game.originalPrice > game.price ? (
@@ -414,6 +415,21 @@ export default function GameAnalyticsPage() {
                             <>
                               <div className="text-white/30 font-medium text-sm">-</div>
                               <div className="text-[10px] text-white/30">per hr</div>
+                            </>
+                          )}
+                        </div>
+                        <div className="p-2 bg-white/[0.02] rounded-lg">
+                          {game.hours > 0 ? (
+                            <>
+                              <div className={clsx('font-medium text-sm', getValueColor(getROIRating(game.metrics.roi)))}>
+                                {game.metrics.roi.toFixed(1)}
+                              </div>
+                              <div className="text-[10px] text-white/30">{getROIRating(game.metrics.roi)} ROI</div>
+                            </>
+                          ) : (
+                            <>
+                              <div className="text-white/30 font-medium text-sm">-</div>
+                              <div className="text-[10px] text-white/30">ROI</div>
                             </>
                           )}
                         </div>

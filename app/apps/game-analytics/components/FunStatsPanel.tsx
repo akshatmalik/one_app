@@ -1,16 +1,36 @@
 'use client';
 
-import { Sparkles, Gem, Frown, Package, Flame, Trophy, Target, TrendingUp, Zap } from 'lucide-react';
+import {
+  Sparkles, Gem, Frown, Package, Flame, Trophy, Target, TrendingUp, Zap,
+  Award, Clock, Heart, Percent, Calendar, Star, Shield, Rocket, Crown,
+  DollarSign, Gamepad2, CheckCircle2
+} from 'lucide-react';
 import { Game } from '../lib/types';
 import {
   findHiddenGems,
   findRegretPurchases,
   findShelfWarmers,
   getCurrentGamingStreak,
+  getLongestGamingStreak,
   getCompletionVelocity,
   getPlatformPreference,
   getGamingVelocity,
   getBestGamingMonth,
+  getImpulseBuyerStat,
+  getBacklogInDays,
+  getGenreDiversity,
+  getCommitmentScore,
+  getFastestCompletion,
+  getSlowestCompletion,
+  getLongestSession,
+  getCenturyClubGames,
+  getQuickFixGames,
+  getPatientGamerStats,
+  getCompletionistRate,
+  getHiddenGems,
+  getMostInvestedFranchise,
+  getValueChampion,
+  getAverageDiscount,
 } from '../lib/calculations';
 import clsx from 'clsx';
 
@@ -19,15 +39,39 @@ interface FunStatsPanelProps {
 }
 
 export function FunStatsPanel({ games }: FunStatsPanelProps) {
+  // Existing stats
   const hiddenGems = findHiddenGems(games);
   const regretPurchases = findRegretPurchases(games);
   const shelfWarmers = findShelfWarmers(games);
   const gamingStreak = getCurrentGamingStreak(games);
+  const longestStreak = getLongestGamingStreak(games);
   const completionVelocity = getCompletionVelocity(games);
   const platformPreference = getPlatformPreference(games);
   const weeklyVelocity = getGamingVelocity(games, 7);
   const monthlyVelocity = getGamingVelocity(games, 30);
   const bestMonth = getBestGamingMonth(games);
+
+  // New creative stats
+  const impulseBuyer = getImpulseBuyerStat(games);
+  const backlogDays = getBacklogInDays(games);
+  const genreDiversity = getGenreDiversity(games);
+  const commitmentScore = getCommitmentScore(games);
+  const fastestCompletion = getFastestCompletion(games);
+  const slowestCompletion = getSlowestCompletion(games);
+  const longestSession = getLongestSession(games);
+  const centuryClub = getCenturyClubGames(games);
+  const quickFix = getQuickFixGames(games);
+  const patientGamer = getPatientGamerStats(games);
+  const completionist = getCompletionistRate(games);
+  const hiddenGemsResult = getHiddenGems(games);
+  const mostInvestedFranchise = getMostInvestedFranchise(games);
+  const valueChampion = getValueChampion(games);
+  const avgDiscount = getAverageDiscount(games);
+
+  // Calculate some fun badges
+  const ownedGames = games.filter(g => g.status !== 'Wishlist');
+  const freeGames = ownedGames.filter(g => g.acquiredFree);
+  const totalFreeValue = freeGames.reduce((sum, g) => sum + (g.originalPrice || 0), 0);
 
   return (
     <div className="space-y-4">
@@ -37,55 +81,124 @@ export function FunStatsPanel({ games }: FunStatsPanelProps) {
         <h3 className="text-base font-semibold text-white">Gaming Insights</h3>
       </div>
 
-      {/* Quick Stats Grid */}
+      {/* Achievement Badges */}
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+        {/* Century Club */}
+        {centuryClub.length > 0 && (
+          <div className="p-3 bg-gradient-to-br from-purple-500/10 to-pink-500/10 border border-purple-500/20 rounded-xl">
+            <div className="flex items-center gap-2 mb-1">
+              <Crown size={14} className="text-purple-400" />
+              <span className="text-xs text-white/40">Century Club</span>
+            </div>
+            <div className="text-2xl font-bold text-purple-400">{centuryClub.length}</div>
+            <div className="text-xs text-white/30">100+ hrs</div>
+          </div>
+        )}
+
+        {/* Patient Gamer */}
+        {patientGamer.count > 0 && (
+          <div className="p-3 bg-gradient-to-br from-blue-500/10 to-cyan-500/10 border border-blue-500/20 rounded-xl">
+            <div className="flex items-center gap-2 mb-1">
+              <Percent size={14} className="text-blue-400" />
+              <span className="text-xs text-white/40">Patient Gamer</span>
+            </div>
+            <div className="text-2xl font-bold text-blue-400">{patientGamer.count}</div>
+            <div className="text-xs text-white/30">50%+ off</div>
+          </div>
+        )}
+
+        {/* Free Rider */}
+        {freeGames.length > 0 && (
+          <div className="p-3 bg-gradient-to-br from-emerald-500/10 to-teal-500/10 border border-emerald-500/20 rounded-xl">
+            <div className="flex items-center gap-2 mb-1">
+              <Star size={14} className="text-emerald-400" />
+              <span className="text-xs text-white/40">Free Rider</span>
+            </div>
+            <div className="text-2xl font-bold text-emerald-400">${totalFreeValue.toFixed(0)}</div>
+            <div className="text-xs text-white/30">{freeGames.length} free games</div>
+          </div>
+        )}
+
+        {/* Quick Fix */}
+        {quickFix.length > 0 && (
+          <div className="p-3 bg-gradient-to-br from-yellow-500/10 to-orange-500/10 border border-yellow-500/20 rounded-xl">
+            <div className="flex items-center gap-2 mb-1">
+              <Zap size={14} className="text-yellow-400" />
+              <span className="text-xs text-white/40">Quick Fix</span>
+            </div>
+            <div className="text-2xl font-bold text-yellow-400">{quickFix.length}</div>
+            <div className="text-xs text-white/30">&lt;10h games</div>
+          </div>
+        )}
+
+        {/* All-Rounder */}
+        {genreDiversity.uniqueGenres >= 5 && (
+          <div className="p-3 bg-gradient-to-br from-cyan-500/10 to-blue-500/10 border border-cyan-500/20 rounded-xl">
+            <div className="flex items-center gap-2 mb-1">
+              <Gamepad2 size={14} className="text-cyan-400" />
+              <span className="text-xs text-white/40">All-Rounder</span>
+            </div>
+            <div className="text-2xl font-bold text-cyan-400">{genreDiversity.uniqueGenres}</div>
+            <div className="text-xs text-white/30">genres played</div>
+          </div>
+        )}
+
+        {/* Completionist */}
+        {completionist.completionRate >= 50 && (
+          <div className="p-3 bg-gradient-to-br from-green-500/10 to-emerald-500/10 border border-green-500/20 rounded-xl">
+            <div className="flex items-center gap-2 mb-1">
+              <CheckCircle2 size={14} className="text-green-400" />
+              <span className="text-xs text-white/40">Completionist</span>
+            </div>
+            <div className="text-2xl font-bold text-green-400">{completionist.completionRate.toFixed(0)}%</div>
+            <div className="text-xs text-white/30">completion rate</div>
+          </div>
+        )}
+      </div>
+
+      {/* Key Insights Grid */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {/* Gaming Streak */}
-        {gamingStreak > 0 && (
+        {longestStreak > 0 && (
           <div className="p-3 bg-gradient-to-br from-orange-500/10 to-red-500/10 border border-orange-500/20 rounded-xl">
             <div className="flex items-center gap-2 mb-1">
               <Flame size={14} className="text-orange-400" />
-              <span className="text-xs text-white/40">Current Streak</span>
+              <span className="text-xs text-white/40">Longest Streak</span>
             </div>
-            <div className="text-2xl font-bold text-orange-400">{gamingStreak}</div>
-            <div className="text-xs text-white/30">day{gamingStreak !== 1 ? 's' : ''}</div>
+            <div className="text-2xl font-bold text-orange-400">{longestStreak}</div>
+            <div className="text-xs text-white/30">day{longestStreak !== 1 ? 's' : ''} in a row</div>
           </div>
         )}
 
-        {/* Weekly Velocity */}
-        {weeklyVelocity > 0 && (
-          <div className="p-3 bg-gradient-to-br from-blue-500/10 to-cyan-500/10 border border-blue-500/20 rounded-xl">
-            <div className="flex items-center gap-2 mb-1">
-              <Zap size={14} className="text-blue-400" />
-              <span className="text-xs text-white/40">Weekly Pace</span>
-            </div>
-            <div className="text-2xl font-bold text-blue-400">{weeklyVelocity.toFixed(1)}h</div>
-            <div className="text-xs text-white/30">per day</div>
+        {/* Commitment Score */}
+        <div className="p-3 bg-gradient-to-br from-purple-500/10 to-pink-500/10 border border-purple-500/20 rounded-xl">
+          <div className="flex items-center gap-2 mb-1">
+            <Heart size={14} className="text-purple-400" />
+            <span className="text-xs text-white/40">Commitment</span>
           </div>
-        )}
+          <div className="text-2xl font-bold text-purple-400">{commitmentScore.toFixed(0)}%</div>
+          <div className="text-xs text-white/30">games &gt;10hrs</div>
+        </div>
 
-        {/* Completion Velocity */}
-        {completionVelocity && (
-          <div className="p-3 bg-gradient-to-br from-emerald-500/10 to-teal-500/10 border border-emerald-500/20 rounded-xl">
-            <div className="flex items-center gap-2 mb-1">
-              <Target size={14} className="text-emerald-400" />
-              <span className="text-xs text-white/40">Avg Completion</span>
-            </div>
-            <div className="text-2xl font-bold text-emerald-400">{completionVelocity.toFixed(0)}</div>
-            <div className="text-xs text-white/30">days</div>
+        {/* Genre Diversity */}
+        <div className="p-3 bg-gradient-to-br from-cyan-500/10 to-blue-500/10 border border-cyan-500/20 rounded-xl">
+          <div className="flex items-center gap-2 mb-1">
+            <Award size={14} className="text-cyan-400" />
+            <span className="text-xs text-white/40">Genre Diversity</span>
           </div>
-        )}
+          <div className="text-2xl font-bold text-cyan-400">{genreDiversity.percentage.toFixed(0)}%</div>
+          <div className="text-xs text-white/30">{genreDiversity.uniqueGenres} genres</div>
+        </div>
 
-        {/* Best Gaming Month */}
-        {bestMonth && (
-          <div className="p-3 bg-gradient-to-br from-purple-500/10 to-pink-500/10 border border-purple-500/20 rounded-xl">
+        {/* Backlog Boss */}
+        {backlogDays > 0 && (
+          <div className="p-3 bg-gradient-to-br from-yellow-500/10 to-orange-500/10 border border-yellow-500/20 rounded-xl">
             <div className="flex items-center gap-2 mb-1">
-              <Trophy size={14} className="text-purple-400" />
-              <span className="text-xs text-white/40">Best Month</span>
+              <Package size={14} className="text-yellow-400" />
+              <span className="text-xs text-white/40">Backlog Boss</span>
             </div>
-            <div className="text-lg font-bold text-purple-400">
-              {new Date(bestMonth.month + '-01').toLocaleDateString('en-US', { month: 'short', year: '2-digit' })}
-            </div>
-            <div className="text-xs text-white/30">{bestMonth.hours.toFixed(0)}h played</div>
+            <div className="text-2xl font-bold text-yellow-400">{backlogDays.toFixed(0)}</div>
+            <div className="text-xs text-white/30">days of backlog</div>
           </div>
         )}
       </div>
@@ -172,34 +285,121 @@ export function FunStatsPanel({ games }: FunStatsPanelProps) {
         </div>
       )}
 
-      {/* Platform Preference */}
-      {platformPreference.length > 1 && (
-        <div className="p-4 bg-gradient-to-br from-blue-500/10 to-purple-500/10 border border-blue-500/20 rounded-xl">
+      {/* Value Champion */}
+      {valueChampion && (
+        <div className="p-4 bg-gradient-to-br from-emerald-500/10 to-green-500/10 border border-emerald-500/20 rounded-xl">
           <div className="flex items-center gap-2 mb-3">
-            <TrendingUp size={16} className="text-blue-400" />
-            <h4 className="text-sm font-medium text-white">Platform Preference</h4>
-            <span className="text-xs text-white/30">By playtime</span>
+            <Trophy size={16} className="text-emerald-400" />
+            <h4 className="text-sm font-medium text-white">Value Champion</h4>
+            <span className="text-xs text-white/30">Best $/hour</span>
+          </div>
+          <div className="p-3 bg-white/5 rounded-lg">
+            <div className="text-sm font-medium text-white/90 mb-2">{valueChampion.game.name}</div>
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-white/40">{valueChampion.game.hours}h • ${valueChampion.game.price}</span>
+              <span className="text-lg font-bold text-emerald-400">${valueChampion.costPerHour.toFixed(2)}/hr</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Most Invested Franchise */}
+      {mostInvestedFranchise && (
+        <div className="p-4 bg-gradient-to-br from-purple-500/10 to-pink-500/10 border border-purple-500/20 rounded-xl">
+          <div className="flex items-center gap-2 mb-3">
+            <Crown size={16} className="text-purple-400" />
+            <h4 className="text-sm font-medium text-white">Franchise Fan</h4>
+            <span className="text-xs text-white/30">Most invested</span>
+          </div>
+          <div className="p-3 bg-white/5 rounded-lg">
+            <div className="text-lg font-bold text-purple-400 mb-2">{mostInvestedFranchise.franchise}</div>
+            <div className="grid grid-cols-3 gap-3 text-center text-xs">
+              <div>
+                <div className="text-sm font-semibold text-white/80">{mostInvestedFranchise.games}</div>
+                <div className="text-white/30">games</div>
+              </div>
+              <div>
+                <div className="text-sm font-semibold text-white/80">{mostInvestedFranchise.hours}h</div>
+                <div className="text-white/30">played</div>
+              </div>
+              <div>
+                <div className="text-sm font-semibold text-white/80">${mostInvestedFranchise.spent}</div>
+                <div className="text-white/30">spent</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bargain Hunter */}
+      {avgDiscount > 0 && (
+        <div className="p-4 bg-gradient-to-br from-blue-500/10 to-cyan-500/10 border border-blue-500/20 rounded-xl">
+          <div className="flex items-center gap-2 mb-3">
+            <DollarSign size={16} className="text-blue-400" />
+            <h4 className="text-sm font-medium text-white">Bargain Hunter</h4>
+            <span className="text-xs text-white/30">Avg discount</span>
+          </div>
+          <div className="p-3 bg-white/5 rounded-lg text-center">
+            <div className="text-3xl font-bold text-blue-400 mb-1">{avgDiscount.toFixed(0)}%</div>
+            <div className="text-xs text-white/40">
+              {avgDiscount >= 50 ? '🏆 Elite Bargain Hunter!' : avgDiscount >= 30 ? '⭐ Great Deal Seeker!' : '👍 Smart Shopper!'}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Speed Records */}
+      {(fastestCompletion || slowestCompletion || longestSession) && (
+        <div className="p-4 bg-gradient-to-br from-yellow-500/10 to-orange-500/10 border border-yellow-500/20 rounded-xl">
+          <div className="flex items-center gap-2 mb-3">
+            <Rocket size={16} className="text-yellow-400" />
+            <h4 className="text-sm font-medium text-white">Speed Records</h4>
           </div>
           <div className="space-y-2">
-            {platformPreference.slice(0, 3).map((platform, idx) => (
-              <div key={platform.platform} className="space-y-1">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-white/80">{platform.platform}</span>
-                  <span className="text-white/50">{platform.hours.toFixed(0)}h ({platform.score.toFixed(0)}%)</span>
-                </div>
-                <div className="h-2 bg-white/5 rounded-full overflow-hidden">
-                  <div
-                    className={clsx(
-                      'h-full rounded-full',
-                      idx === 0 && 'bg-blue-500',
-                      idx === 1 && 'bg-purple-500',
-                      idx === 2 && 'bg-cyan-500'
-                    )}
-                    style={{ width: `${platform.score}%` }}
-                  />
+            {fastestCompletion && (
+              <div className="p-2 bg-white/5 rounded-lg">
+                <div className="text-xs text-white/40 mb-1">⚡ Speed Demon</div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-white/80">{fastestCompletion.game.name}</span>
+                  <span className="text-sm font-medium text-yellow-400">{fastestCompletion.days}d</span>
                 </div>
               </div>
-            ))}
+            )}
+            {slowestCompletion && (
+              <div className="p-2 bg-white/5 rounded-lg">
+                <div className="text-xs text-white/40 mb-1">🐌 Slow Burn</div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-white/80">{slowestCompletion.game.name}</span>
+                  <span className="text-sm font-medium text-orange-400">{slowestCompletion.days}d</span>
+                </div>
+              </div>
+            )}
+            {longestSession && (
+              <div className="p-2 bg-white/5 rounded-lg">
+                <div className="text-xs text-white/40 mb-1">🎯 Marathon Session</div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-white/80">{longestSession.game.name}</span>
+                  <span className="text-sm font-medium text-red-400">{longestSession.hours.toFixed(1)}h</span>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Impulse Buyer */}
+      {impulseBuyer !== null && impulseBuyer >= 0 && (
+        <div className="p-4 bg-gradient-to-br from-pink-500/10 to-purple-500/10 border border-pink-500/20 rounded-xl">
+          <div className="flex items-center gap-2 mb-3">
+            <Clock size={16} className="text-pink-400" />
+            <h4 className="text-sm font-medium text-white">Impulse Buyer</h4>
+          </div>
+          <div className="p-3 bg-white/5 rounded-lg text-center">
+            <div className="text-3xl font-bold text-pink-400 mb-1">{impulseBuyer.toFixed(0)}d</div>
+            <div className="text-xs text-white/40">
+              {impulseBuyer <= 1 ? '⚡ Instant Gratification!' : impulseBuyer <= 7 ? '🎮 Ready to Play!' : impulseBuyer <= 30 ? '📅 Patient Player' : '🕐 Strategic Buyer'}
+            </div>
+            <div className="text-xs text-white/30 mt-1">avg days to first play</div>
           </div>
         </div>
       )}

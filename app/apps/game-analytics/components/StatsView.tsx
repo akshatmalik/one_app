@@ -44,8 +44,10 @@ import {
   X,
   CalendarDays,
   ChevronDown,
+  ChevronUp,
   Layers,
   Gift,
+  List as ListIcon,
 } from 'lucide-react';
 import { Game, GameStatus, AnalyticsSummary, BudgetSettings } from '../lib/types';
 import { calculateSummary, getCumulativeSpending, getHoursByMonth, getSpendingByMonth } from '../lib/calculations';
@@ -76,6 +78,9 @@ export function StatsView({ games, summary, budgets = [], onSetBudget }: StatsVi
   const [selectedPeriod, setSelectedPeriod] = useState<'all' | number>(currentYear);
   const [isEditingBudget, setIsEditingBudget] = useState(false);
   const [savingBudget, setSavingBudget] = useState(false);
+  const [showDiscountGames, setShowDiscountGames] = useState(false);
+  const [showAllGamesPlayed, setShowAllGamesPlayed] = useState(false);
+  const [showROIRankings, setShowROIRankings] = useState(false);
 
   const isAllTime = selectedPeriod === 'all';
   const selectedYear = isAllTime ? currentYear : selectedPeriod;
@@ -253,6 +258,21 @@ export function StatsView({ games, summary, budgets = [], onSetBudget }: StatsVi
     }))
     .sort((a, b) => b.roi - a.roi)
     .slice(0, 8);
+
+  // Period ROI rankings
+  const periodROIRankings = [...filteredGames]
+    .filter(g => g.hours > 0 && g.price > 0 && !g.acquiredFree && g.status !== 'Wishlist')
+    .map(g => ({
+      game: g,
+      roi: g.metrics.roi,
+      roiRating: g.metrics.roi >= 50 ? 'Excellent' : g.metrics.roi >= 20 ? 'Good' : g.metrics.roi >= 5 ? 'Fair' : 'Poor',
+    }))
+    .sort((a, b) => b.roi - a.roi);
+
+  // All games played in period
+  const periodAllGamesPlayed = [...filteredGames]
+    .filter(g => g.hours > 0 && g.status !== 'Wishlist')
+    .sort((a, b) => b.hours - a.hours);
 
   // Period spending breakdown by game
   const periodSpendingByGame = [...filteredGames]
@@ -643,6 +663,131 @@ export function StatsView({ games, summary, budgets = [], onSetBudget }: StatsVi
           </div>
         )}
 
+        {/* Period ROI Rankings */}
+        {periodROIRankings.length > 0 && (
+          <div className="p-4 bg-gradient-to-br from-emerald-500/10 to-cyan-500/10 border border-emerald-500/20 rounded-xl">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-medium text-white/70 flex items-center gap-2">
+                <Trophy size={14} className="text-emerald-400" />
+                {isAllTime ? 'All-Time' : selectedYear} ROI Rankings
+              </h3>
+              <button
+                onClick={() => setShowROIRankings(!showROIRankings)}
+                className="text-xs text-white/40 hover:text-white/70 transition-all"
+              >
+                {showROIRankings ? 'Show Less' : `Show All (${periodROIRankings.length})`}
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              {(showROIRankings ? periodROIRankings : periodROIRankings.slice(0, 10)).map(({ game, roi, roiRating }, idx) => {
+                const roiColor = roiRating === 'Excellent' ? 'text-emerald-400' :
+                                 roiRating === 'Good' ? 'text-blue-400' :
+                                 roiRating === 'Fair' ? 'text-yellow-400' : 'text-red-400';
+                return (
+                  <div key={game.id} className="p-3 bg-white/[0.03] rounded-lg">
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-white/30 w-6">#{idx + 1}</span>
+                        <span className="text-sm text-white/80 font-medium">{game.name}</span>
+                      </div>
+                      <span className={clsx('text-xs font-medium px-2 py-0.5 rounded', {
+                        'bg-emerald-500/20 text-emerald-400': roiRating === 'Excellent',
+                        'bg-blue-500/20 text-blue-400': roiRating === 'Good',
+                        'bg-yellow-500/20 text-yellow-400': roiRating === 'Fair',
+                        'bg-red-500/20 text-red-400': roiRating === 'Poor',
+                      })}>
+                        {roiRating}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-3 text-white/40">
+                        <span>${game.price}</span>
+                        <span>•</span>
+                        <span>{game.hours}h</span>
+                        <span>•</span>
+                        <span>{game.rating}/10</span>
+                      </div>
+                      <span className={clsx('font-bold text-sm', roiColor)}>
+                        {roi.toFixed(1)} ROI
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* All Games Played in Period */}
+        {periodAllGamesPlayed.length > 0 && (
+          <div className="p-4 bg-white/[0.02] border border-white/5 rounded-xl">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-medium text-white/70 flex items-center gap-2">
+                <ListIcon size={14} className="text-purple-400" />
+                {isAllTime ? 'All' : selectedYear} Games Played
+              </h3>
+              <button
+                onClick={() => setShowAllGamesPlayed(!showAllGamesPlayed)}
+                className="text-xs text-white/40 hover:text-white/70 transition-all"
+              >
+                {showAllGamesPlayed ? 'Show Less' : `Show All (${periodAllGamesPlayed.length})`}
+              </button>
+            </div>
+
+            {/* Summary */}
+            <div className="grid grid-cols-2 gap-3 mb-3">
+              <div className="p-3 bg-white/5 rounded-xl text-center">
+                <div className="text-lg font-bold text-purple-400">{periodAllGamesPlayed.length}</div>
+                <div className="text-[10px] text-white/40">games played</div>
+              </div>
+              <div className="p-3 bg-white/5 rounded-xl text-center">
+                <div className="text-lg font-bold text-blue-400">
+                  {periodAllGamesPlayed.reduce((sum, g) => sum + g.hours, 0).toFixed(0)}h
+                </div>
+                <div className="text-[10px] text-white/40">total hours</div>
+              </div>
+            </div>
+
+            {/* Games List */}
+            <div className="space-y-1">
+              {(showAllGamesPlayed ? periodAllGamesPlayed : periodAllGamesPlayed.slice(0, 15)).map((game) => (
+                <div key={game.id} className="flex items-center justify-between px-3 py-2 bg-white/[0.03] rounded-lg hover:bg-white/[0.05] transition-all">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-white/80 truncate">{game.name}</span>
+                      {game.playLogs && game.playLogs.length > 0 && (
+                        <span className="text-[10px] text-white/30">
+                          Last: {new Date(game.playLogs[0].date).toLocaleDateString()}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <span className={clsx('text-xs px-2 py-0.5 rounded', {
+                      'bg-emerald-500/20 text-emerald-400': game.status === 'Completed',
+                      'bg-blue-500/20 text-blue-400': game.status === 'In Progress',
+                      'bg-white/10 text-white/50': game.status === 'Not Started',
+                      'bg-red-500/20 text-red-400': game.status === 'Abandoned',
+                    })}>
+                      {game.status}
+                    </span>
+                    <span className="text-sm text-purple-400 font-medium w-16 text-right">{game.hours}h</span>
+                    <span className="text-xs text-white/40 w-20 text-right">
+                      ${game.metrics.costPerHour.toFixed(2)}/hr
+                    </span>
+                  </div>
+                </div>
+              ))}
+              {!showAllGamesPlayed && periodAllGamesPlayed.length > 15 && (
+                <p className="text-[10px] text-white/30 text-center pt-2">
+                  +{periodAllGamesPlayed.length - 15} more games
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Subscription / Free Games Stats */}
         {periodFreeGames.length > 0 && (
           <div className="p-4 bg-gradient-to-br from-emerald-500/10 to-cyan-500/10 border border-emerald-500/20 rounded-xl">
@@ -724,9 +869,52 @@ export function StatsView({ games, summary, budgets = [], onSetBudget }: StatsVi
               <div className="text-[10px] text-white/40">avg discount</div>
             </div>
           </div>
-          <p className="text-xs text-white/40 text-center">
-            Savings from sales and discounts on paid games
-          </p>
+
+          {/* Discounted Games List */}
+          {periodPaidGamesWithDiscount.length > 0 && (
+            <div className="mt-3 pt-3 border-t border-white/10">
+              <button
+                onClick={() => setShowDiscountGames(!showDiscountGames)}
+                className="w-full flex items-center justify-between px-3 py-2 hover:bg-white/5 rounded-lg transition-all"
+              >
+                <div className="flex items-center gap-2">
+                  <DollarSign size={14} className="text-white/40" />
+                  <span className="text-sm text-white/70">Discounted Games ({periodPaidGamesWithDiscount.length})</span>
+                </div>
+                {showDiscountGames ? <ChevronDown size={16} className="text-white/40" /> : <ChevronDown size={16} className="text-white/40" />}
+              </button>
+              {showDiscountGames && (
+                <div className="mt-2 space-y-2">
+                  {periodPaidGamesWithDiscount.map((game) => {
+                    const discount = ((game.originalPrice || 0) - game.price) / (game.originalPrice || 1) * 100;
+                    const saved = (game.originalPrice || 0) - game.price;
+                    return (
+                      <div key={game.id} className="p-3 bg-white/[0.03] rounded-lg">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-sm text-white/80 font-medium">{game.name}</span>
+                          <span className="text-xs font-medium px-2 py-0.5 bg-green-500/20 text-green-400 rounded">
+                            {discount.toFixed(0)}% off
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between text-xs">
+                          <div className="flex items-center gap-2">
+                            <span className="text-white/30 line-through">${(game.originalPrice || 0).toFixed(2)}</span>
+                            <span className="text-blue-400 font-medium">${game.price.toFixed(2)}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {game.hours > 0 && (
+                              <span className="text-white/40">{game.hours}h played</span>
+                            )}
+                            <span className="text-emerald-400 font-medium">saved ${saved.toFixed(2)}</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
