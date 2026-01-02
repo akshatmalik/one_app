@@ -1,6 +1,7 @@
 'use client';
 
-import { Clock, Gamepad2, Zap, Calendar } from 'lucide-react';
+import { useState } from 'react';
+import { Clock, Gamepad2, Zap, Calendar, ChevronDown, ChevronUp } from 'lucide-react';
 import { Game } from '../lib/types';
 import { getPeriodStats } from '../lib/calculations';
 import clsx from 'clsx';
@@ -10,8 +11,38 @@ interface PeriodStatsPanelProps {
 }
 
 export function PeriodStatsPanel({ games }: PeriodStatsPanelProps) {
+  const [showWeekGames, setShowWeekGames] = useState(false);
+  const [showMonthGames, setShowMonthGames] = useState(false);
+
   const weekStats = getPeriodStats(games, 7);
   const monthStats = getPeriodStats(games, 30);
+
+  // Get detailed game stats for each period
+  const getGameStatsForPeriod = (days: number) => {
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - days);
+
+    const gameStats: Map<string, { game: Game; hours: number; sessions: number }> = new Map();
+
+    games.forEach(game => {
+      if (game.playLogs) {
+        game.playLogs.forEach(log => {
+          const logDate = new Date(log.date);
+          if (logDate >= cutoffDate) {
+            const existing = gameStats.get(game.id) || { game, hours: 0, sessions: 0 };
+            existing.hours += log.hours;
+            existing.sessions += 1;
+            gameStats.set(game.id, existing);
+          }
+        });
+      }
+    });
+
+    return Array.from(gameStats.values()).sort((a, b) => b.hours - a.hours);
+  };
+
+  const weekGames = getGameStatsForPeriod(7);
+  const monthGames = getGameStatsForPeriod(30);
 
   // If no recent activity, don't show the panel
   if (weekStats.totalHours === 0 && monthStats.totalHours === 0) {
@@ -60,6 +91,35 @@ export function PeriodStatsPanel({ games }: PeriodStatsPanelProps) {
               </div>
             </div>
           )}
+
+          {/* Games List */}
+          {weekGames.length > 0 && (
+            <div className="mt-3 pt-3 border-t border-white/10">
+              <button
+                onClick={() => setShowWeekGames(!showWeekGames)}
+                className="w-full flex items-center justify-between px-3 py-2 hover:bg-white/5 rounded-lg transition-all"
+              >
+                <div className="flex items-center gap-2">
+                  <Gamepad2 size={14} className="text-white/40" />
+                  <span className="text-sm text-white/70">Games Played ({weekGames.length})</span>
+                </div>
+                {showWeekGames ? <ChevronUp size={16} className="text-white/40" /> : <ChevronDown size={16} className="text-white/40" />}
+              </button>
+              {showWeekGames && (
+                <div className="mt-2 space-y-1">
+                  {weekGames.map(({ game, hours, sessions }) => (
+                    <div key={game.id} className="flex items-center justify-between px-3 py-2 bg-white/[0.03] rounded-lg">
+                      <span className="text-sm text-white/80">{game.name}</span>
+                      <div className="flex items-center gap-3">
+                        <span className="text-xs text-cyan-400">{sessions} session{sessions !== 1 ? 's' : ''}</span>
+                        <span className="text-sm text-blue-400 font-medium">{hours.toFixed(1)}h</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -101,6 +161,35 @@ export function PeriodStatsPanel({ games }: PeriodStatsPanelProps) {
                 <span className="text-sm font-medium text-white/90">{monthStats.mostPlayedGame.name}</span>
                 <span className="text-sm text-purple-400">{monthStats.mostPlayedGame.hours.toFixed(1)}h</span>
               </div>
+            </div>
+          )}
+
+          {/* Games List */}
+          {monthGames.length > 0 && (
+            <div className="mt-3 pt-3 border-t border-white/10">
+              <button
+                onClick={() => setShowMonthGames(!showMonthGames)}
+                className="w-full flex items-center justify-between px-3 py-2 hover:bg-white/5 rounded-lg transition-all"
+              >
+                <div className="flex items-center gap-2">
+                  <Gamepad2 size={14} className="text-white/40" />
+                  <span className="text-sm text-white/70">Games Played ({monthGames.length})</span>
+                </div>
+                {showMonthGames ? <ChevronUp size={16} className="text-white/40" /> : <ChevronDown size={16} className="text-white/40" />}
+              </button>
+              {showMonthGames && (
+                <div className="mt-2 space-y-1">
+                  {monthGames.map(({ game, hours, sessions }) => (
+                    <div key={game.id} className="flex items-center justify-between px-3 py-2 bg-white/[0.03] rounded-lg">
+                      <span className="text-sm text-white/80">{game.name}</span>
+                      <div className="flex items-center gap-3">
+                        <span className="text-xs text-cyan-400">{sessions} session{sessions !== 1 ? 's' : ''}</span>
+                        <span className="text-sm text-purple-400 font-medium">{hours.toFixed(1)}h</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>

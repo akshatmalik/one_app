@@ -607,3 +607,277 @@ export function getDiscountEffectiveness(games: Game[]): { avgSavings: number; b
     bestDeal,
   };
 }
+
+// Get ROI rating label based on ROI value
+export function getROIRating(roi: number): 'Excellent' | 'Good' | 'Fair' | 'Poor' {
+  if (roi >= 50) return 'Excellent';
+  if (roi >= 20) return 'Good';
+  if (roi >= 5) return 'Fair';
+  return 'Poor';
+}
+
+// Get longest gaming streak ever
+export function getLongestGamingStreak(games: Game[]): number {
+  const allLogs = getAllPlayLogs(games);
+  if (allLogs.length === 0) return 0;
+
+  const uniqueDates = Array.from(new Set(allLogs.map(l => l.log.date))).sort();
+  let longestStreak = 1;
+  let currentStreak = 1;
+
+  for (let i = 1; i < uniqueDates.length; i++) {
+    const prevDate = new Date(uniqueDates[i - 1]);
+    const currDate = new Date(uniqueDates[i]);
+    const diffDays = Math.round((currDate.getTime() - prevDate.getTime()) / (1000 * 60 * 60 * 24));
+
+    if (diffDays === 1) {
+      currentStreak++;
+      longestStreak = Math.max(longestStreak, currentStreak);
+    } else {
+      currentStreak = 1;
+    }
+  }
+
+  return longestStreak;
+}
+
+// Calculate night owl score (% of gaming between 10pm-4am)
+export function getNightOwlScore(games: Game[]): number {
+  // Since we don't have time data in play logs, we'll return 0 for now
+  // This could be enhanced if play logs include time of day
+  return 0;
+}
+
+// Calculate impulse buyer stat (average days between purchase and first play)
+export function getImpulseBuyerStat(games: Game[]): number | null {
+  const gamesWithData = games.filter(g =>
+    g.datePurchased && g.playLogs && g.playLogs.length > 0 && g.status !== 'Wishlist'
+  );
+
+  if (gamesWithData.length === 0) return null;
+
+  const delays = gamesWithData.map(game => {
+    const purchaseDate = new Date(game.datePurchased!);
+    const firstPlayDate = new Date(game.playLogs![0].date);
+    return Math.max(0, (firstPlayDate.getTime() - purchaseDate.getTime()) / (1000 * 60 * 60 * 24));
+  });
+
+  return delays.reduce((sum, d) => sum + d, 0) / delays.length;
+}
+
+// Calculate backlog in days (total unplayed hours / 24)
+export function getBacklogInDays(games: Game[]): number {
+  const unplayedGames = games.filter(g => g.status === 'Not Started' && g.hours === 0);
+  // Estimate 20 hours per unplayed game
+  const estimatedHours = unplayedGames.length * 20;
+  return estimatedHours / 24;
+}
+
+// Calculate genre diversity (number of unique genres played / total genres)
+export function getGenreDiversity(games: Game[]): { uniqueGenres: number; percentage: number } {
+  const playedGames = games.filter(g => g.hours > 0 && g.genre);
+  const uniqueGenres = new Set(playedGames.map(g => g.genre)).size;
+  const totalGenres = new Set(games.filter(g => g.genre).map(g => g.genre)).size;
+
+  return {
+    uniqueGenres,
+    percentage: totalGenres > 0 ? (uniqueGenres / totalGenres) * 100 : 0,
+  };
+}
+
+// Calculate commitment score (% of library with >10 hours)
+export function getCommitmentScore(games: Game[]): number {
+  const ownedGames = games.filter(g => g.status !== 'Wishlist');
+  if (ownedGames.length === 0) return 0;
+
+  const committedGames = ownedGames.filter(g => g.hours >= 10);
+  return (committedGames.length / ownedGames.length) * 100;
+}
+
+// Get fastest completion (shortest days to complete)
+export function getFastestCompletion(games: Game[]): { game: Game; days: number } | null {
+  const completed = games.filter(g =>
+    g.status === 'Completed' && g.startDate && g.endDate
+  );
+
+  if (completed.length === 0) return null;
+
+  const withDays = completed.map(g => ({
+    game: g,
+    days: calculateDaysToComplete(g.startDate, g.endDate)!,
+  })).sort((a, b) => a.days - b.days);
+
+  return withDays[0];
+}
+
+// Get slowest/longest completion
+export function getSlowestCompletion(games: Game[]): { game: Game; days: number } | null {
+  const completed = games.filter(g =>
+    g.status === 'Completed' && g.startDate && g.endDate
+  );
+
+  if (completed.length === 0) return null;
+
+  const withDays = completed.map(g => ({
+    game: g,
+    days: calculateDaysToComplete(g.startDate, g.endDate)!,
+  })).sort((a, b) => b.days - a.days);
+
+  return withDays[0];
+}
+
+// Get longest single session
+export function getLongestSession(games: Game[]): { game: Game; hours: number; date: string } | null {
+  let longest: { game: Game; hours: number; date: string } | null = null;
+
+  games.forEach(game => {
+    if (game.playLogs) {
+      game.playLogs.forEach(log => {
+        if (!longest || log.hours > longest.hours) {
+          longest = { game, hours: log.hours, date: log.date };
+        }
+      });
+    }
+  });
+
+  return longest;
+}
+
+// Get "Century Club" games (100+ hours)
+export function getCenturyClubGames(games: Game[]): Game[] {
+  return games.filter(g => g.hours >= 100 && g.status !== 'Wishlist')
+    .sort((a, b) => b.hours - a.hours);
+}
+
+// Get "Quick Fix" games (completed in <10 hours)
+export function getQuickFixGames(games: Game[]): Game[] {
+  return games.filter(g =>
+    g.status === 'Completed' && g.hours > 0 && g.hours < 10
+  ).sort((a, b) => a.hours - b.hours);
+}
+
+// Get patient gamer stats (games bought at 50%+ discount)
+export function getPatientGamerStats(games: Game[]): { count: number; avgDiscount: number; totalSaved: number } {
+  const patientGames = games.filter(g =>
+    !g.acquiredFree &&
+    g.originalPrice &&
+    g.originalPrice > g.price &&
+    ((g.originalPrice - g.price) / g.originalPrice) >= 0.5 &&
+    g.status !== 'Wishlist'
+  );
+
+  if (patientGames.length === 0) {
+    return { count: 0, avgDiscount: 0, totalSaved: 0 };
+  }
+
+  const totalSaved = patientGames.reduce((sum, g) => sum + ((g.originalPrice || 0) - g.price), 0);
+  const avgDiscount = patientGames.reduce((sum, g) => {
+    const discount = ((g.originalPrice || 0) - g.price) / (g.originalPrice || 1) * 100;
+    return sum + discount;
+  }, 0) / patientGames.length;
+
+  return { count: patientGames.length, avgDiscount, totalSaved };
+}
+
+// Get completionist rate (completed vs abandoned)
+export function getCompletionistRate(games: Game[]): {
+  completionRate: number;
+  abandonRate: number;
+  completedCount: number;
+  abandonedCount: number;
+} {
+  const finishedGames = games.filter(g =>
+    g.status === 'Completed' || g.status === 'Abandoned'
+  );
+
+  if (finishedGames.length === 0) {
+    return { completionRate: 0, abandonRate: 0, completedCount: 0, abandonedCount: 0 };
+  }
+
+  const completedCount = games.filter(g => g.status === 'Completed').length;
+  const abandonedCount = games.filter(g => g.status === 'Abandoned').length;
+
+  return {
+    completionRate: (completedCount / finishedGames.length) * 100,
+    abandonRate: (abandonedCount / finishedGames.length) * 100,
+    completedCount,
+    abandonedCount,
+  };
+}
+
+// Get hidden gems (cheap games with high value)
+export function getHiddenGems(games: Game[]): Game[] {
+  return games.filter(g =>
+    g.hours >= 10 &&
+    g.status !== 'Wishlist' &&
+    !g.acquiredFree &&
+    g.price <= 10 &&
+    g.rating >= 8
+  ).sort((a, b) => {
+    const aValue = calculateROI(a.rating, a.hours, a.price);
+    const bValue = calculateROI(b.rating, b.hours, b.price);
+    return bValue - aValue;
+  });
+}
+
+// Get most invested franchise
+export function getMostInvestedFranchise(games: Game[]): {
+  franchise: string;
+  spent: number;
+  hours: number;
+  games: number
+} | null {
+  const franchiseStats: Record<string, { spent: number; hours: number; games: number }> = {};
+
+  games.filter(g => g.franchise && g.status !== 'Wishlist').forEach(game => {
+    const f = game.franchise!;
+    if (!franchiseStats[f]) {
+      franchiseStats[f] = { spent: 0, hours: 0, games: 0 };
+    }
+    franchiseStats[f].spent += game.price;
+    franchiseStats[f].hours += game.hours;
+    franchiseStats[f].games += 1;
+  });
+
+  const entries = Object.entries(franchiseStats);
+  if (entries.length === 0) return null;
+
+  const best = entries.sort((a, b) => b[1].hours - a[1].hours)[0];
+  return { franchise: best[0], ...best[1] };
+}
+
+// Get value champion (best cost per hour across all played games)
+export function getValueChampion(games: Game[]): { game: Game; costPerHour: number } | null {
+  const playedGames = games.filter(g =>
+    g.hours >= 5 &&
+    g.status !== 'Wishlist' &&
+    !g.acquiredFree
+  );
+
+  if (playedGames.length === 0) return null;
+
+  const best = playedGames.sort((a, b) =>
+    calculateCostPerHour(a.price, a.hours) - calculateCostPerHour(b.price, b.hours)
+  )[0];
+
+  return { game: best, costPerHour: calculateCostPerHour(best.price, best.hours) };
+}
+
+// Calculate average discount percentage
+export function getAverageDiscount(games: Game[]): number {
+  const discountedGames = games.filter(g =>
+    !g.acquiredFree &&
+    g.originalPrice &&
+    g.originalPrice > g.price &&
+    g.status !== 'Wishlist'
+  );
+
+  if (discountedGames.length === 0) return 0;
+
+  const avgDiscount = discountedGames.reduce((sum, g) => {
+    const discount = ((g.originalPrice || 0) - g.price) / (g.originalPrice || 1) * 100;
+    return sum + discount;
+  }, 0) / discountedGames.length;
+
+  return avgDiscount;
+}
