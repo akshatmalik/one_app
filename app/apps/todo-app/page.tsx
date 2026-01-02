@@ -292,7 +292,7 @@ export default function TodoApp() {
                 >
                   {dayNumber !== null && (
                     <span className="text-xs font-medium text-purple-400 mb-0.5">
-                      Day {dayNumber}
+                      Day {dayNumber} • {new Date(selectedDate + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                     </span>
                   )}
                   <div className="flex items-center gap-2">
