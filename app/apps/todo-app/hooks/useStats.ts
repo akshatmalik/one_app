@@ -55,6 +55,27 @@ export function useStats(userId: string | null) {
     } catch (e) {
       setError(e as Error);
       console.error('Failed to load stats:', e);
+
+      // Set empty stats on error so UI doesn't show "null"
+      const emptyStats: TaskStats = {
+        completed: 0,
+        total: 0,
+        points: 0,
+        completionRate: 0,
+        byPriority: {
+          1: { completed: 0, total: 0 },
+          2: { completed: 0, total: 0 },
+          3: { completed: 0, total: 0 },
+          4: { completed: 0, total: 0 },
+        },
+        byCategory: {},
+        currentStreak: 0,
+        longestStreak: 0,
+      };
+      setWeeklyStats(emptyStats);
+      setMonthlyStats(emptyStats);
+      setWeeklyData([]);
+      setMonthlyData([]);
     } finally {
       setLoading(false);
     }

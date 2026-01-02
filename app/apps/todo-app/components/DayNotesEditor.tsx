@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { BookOpen, Save, X } from 'lucide-react';
 import clsx from 'clsx';
 
@@ -16,10 +16,15 @@ export function DayNotesEditor({ date, dayNumber, initialContent, onSave, onClos
   const [content, setContent] = useState(initialContent);
   const [saving, setSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     setContent(initialContent);
     setHasChanges(false);
+    // Auto-focus the textarea when the component mounts or date changes
+    setTimeout(() => {
+      textareaRef.current?.focus();
+    }, 100);
   }, [initialContent, date]);
 
   const handleContentChange = (value: string) => {
@@ -61,22 +66,21 @@ export function DayNotesEditor({ date, dayNumber, initialContent, onSave, onClos
   };
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-white/5">
+    <div className="flex flex-col h-full bg-gradient-to-br from-purple-950/20 via-transparent to-blue-950/10">
+      {/* Compact Header */}
+      <div className="flex items-center justify-between px-8 py-4 border-b border-white/5">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-purple-600/20 rounded-lg flex items-center justify-center">
-            <BookOpen size={20} className="text-purple-400" />
+          <div className="w-9 h-9 bg-gradient-to-br from-purple-600/30 to-purple-700/20 rounded-xl flex items-center justify-center backdrop-blur-sm border border-purple-500/20">
+            <BookOpen size={18} className="text-purple-300" />
           </div>
           <div>
-            <h3 className="text-lg font-semibold text-white">
+            <h3 className="text-base font-semibold text-white/90">
               {dayNumber !== null && (
                 <span className="text-purple-400">Day {dayNumber}</span>
               )}
               {dayNumber !== null && ' • '}
               {formatDate()}
             </h3>
-            <p className="text-xs text-white/40">Daily notes & reflections</p>
           </div>
         </div>
 
@@ -85,9 +89,9 @@ export function DayNotesEditor({ date, dayNumber, initialContent, onSave, onClos
             onClick={handleSave}
             disabled={!hasChanges || saving}
             className={clsx(
-              'px-4 py-2 rounded-lg font-medium text-sm transition-all flex items-center gap-2',
+              'px-4 py-2 rounded-xl font-medium text-sm transition-all flex items-center gap-2',
               hasChanges && !saving
-                ? 'bg-purple-600 hover:bg-purple-700 text-white'
+                ? 'bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white shadow-lg shadow-purple-500/25'
                 : 'bg-white/[0.03] text-white/30 cursor-not-allowed'
             )}
           >
@@ -105,7 +109,7 @@ export function DayNotesEditor({ date, dayNumber, initialContent, onSave, onClos
           </button>
           <button
             onClick={handleClose}
-            className="p-2 text-white/40 hover:text-white/70 hover:bg-white/5 rounded-lg transition-all"
+            className="p-2 text-white/40 hover:text-white/70 hover:bg-white/5 rounded-xl transition-all"
             aria-label="Close"
           >
             <X size={20} />
@@ -113,38 +117,46 @@ export function DayNotesEditor({ date, dayNumber, initialContent, onSave, onClos
         </div>
       </div>
 
-      {/* Editor */}
-      <div className="flex-1 p-6">
-        <textarea
-          value={content}
-          onChange={(e) => handleContentChange(e.target.value)}
-          placeholder="Write your thoughts, reflections, or notes for this day...
+      {/* Spacious Writing Area */}
+      <div className="flex-1 px-8 py-8 overflow-hidden">
+        <div className="h-full relative">
+          {/* Decorative elements for a journal feel */}
+          <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-purple-500/20 via-purple-500/10 to-transparent rounded-full" />
 
-You can write anything you want here:
-• How was your day?
-• What did you accomplish?
-• What are you grateful for?
-• What could be improved?
-• Any insights or learnings?
+          <textarea
+            ref={textareaRef}
+            value={content}
+            onChange={(e) => handleContentChange(e.target.value)}
+            placeholder="Start writing...
 
-This is your personal space to reflect and track your journey."
-          className="w-full h-full bg-white/[0.03] border border-white/10 rounded-lg px-4 py-3 text-white placeholder:text-white/20 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none transition-all"
-        />
+How was your day? What are you thinking about? What are you grateful for?
+
+This is your space to reflect, dream, and capture your thoughts."
+            className="w-full h-full bg-transparent border-0 pl-6 pr-4 py-2 text-white/90 text-base leading-relaxed placeholder:text-white/25 placeholder:leading-relaxed focus:outline-none resize-none"
+            style={{
+              fontFamily: 'inherit',
+              lineHeight: '1.75',
+              fontSize: '16px'
+            }}
+          />
+        </div>
       </div>
 
-      {/* Footer */}
-      <div className="px-6 py-3 border-t border-white/5">
-        <div className="flex items-center justify-between text-xs text-white/40">
+      {/* Minimal Footer */}
+      <div className="px-8 py-3 border-t border-white/5 bg-black/10">
+        <div className="flex items-center justify-between text-xs">
           <div>
             {hasChanges ? (
-              <span className="text-amber-400">Unsaved changes</span>
+              <span className="text-amber-400/90 font-medium">● Unsaved changes</span>
             ) : (
-              <span>All changes saved</span>
+              <span className="text-emerald-400/70">✓ Saved</span>
             )}
           </div>
-          <div>
-            {content.length} characters
-          </div>
+          {content.length > 0 && (
+            <div className="text-white/30">
+              {content.length} characters
+            </div>
+          )}
         </div>
       </div>
     </div>
