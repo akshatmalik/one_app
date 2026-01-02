@@ -24,7 +24,12 @@ export default function TodoApp() {
   const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState<'tasks' | 'stats' | 'notes'>('tasks');
   const [selectedDate, setSelectedDate] = useState(() => {
-    return new Date().toISOString().split('T')[0];
+    // Use local date instead of UTC to avoid timezone issues
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   });
   const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
 
@@ -55,31 +60,51 @@ export default function TodoApp() {
     error: statsError,
   } = useStats(user?.uid ?? null);
 
-  const today = new Date().toISOString().split('T')[0];
+  // Use local date instead of UTC to avoid timezone issues
+  const today = (() => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  })();
   const isToday = selectedDate === today;
 
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr + 'T12:00:00');
     if (dateStr === today) return 'Today';
-    const yesterday = new Date();
+
+    // Calculate yesterday using local date
+    const yesterday = new Date(today + 'T12:00:00');
     yesterday.setDate(yesterday.getDate() - 1);
-    if (dateStr === yesterday.toISOString().split('T')[0]) return 'Yesterday';
-    const tomorrow = new Date();
+    const yesterdayStr = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`;
+    if (dateStr === yesterdayStr) return 'Yesterday';
+
+    // Calculate tomorrow using local date
+    const tomorrow = new Date(today + 'T12:00:00');
     tomorrow.setDate(tomorrow.getDate() + 1);
-    if (dateStr === tomorrow.toISOString().split('T')[0]) return 'Tomorrow';
+    const tomorrowStr = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, '0')}-${String(tomorrow.getDate()).padStart(2, '0')}`;
+    if (dateStr === tomorrowStr) return 'Tomorrow';
+
     return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
   };
 
   const handlePreviousDay = () => {
-    const date = new Date(selectedDate);
+    const date = new Date(selectedDate + 'T12:00:00');
     date.setDate(date.getDate() - 1);
-    setSelectedDate(date.toISOString().split('T')[0]);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    setSelectedDate(`${year}-${month}-${day}`);
   };
 
   const handleNextDay = () => {
-    const date = new Date(selectedDate);
+    const date = new Date(selectedDate + 'T12:00:00');
     date.setDate(date.getDate() + 1);
-    setSelectedDate(date.toISOString().split('T')[0]);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    setSelectedDate(`${year}-${month}-${day}`);
   };
 
   const handleTodayClick = () => {
@@ -267,7 +292,7 @@ export default function TodoApp() {
                 >
                   {dayNumber !== null && (
                     <span className="text-xs font-medium text-purple-400 mb-0.5">
-                      Day {dayNumber}
+                      Day {dayNumber} • {new Date(selectedDate + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                     </span>
                   )}
                   <div className="flex items-center gap-2">
