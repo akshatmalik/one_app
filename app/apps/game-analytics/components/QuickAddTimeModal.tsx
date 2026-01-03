@@ -85,7 +85,7 @@ export function QuickAddTimeModal({ games, onSave, onClose }: QuickAddTimeModalP
               <input
                 type="number"
                 required
-                step="0.5"
+                step="0.1"
                 min="0.1"
                 value={hours}
                 onChange={e => setHours(e.target.value)}
