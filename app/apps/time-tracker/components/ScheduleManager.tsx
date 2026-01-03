@@ -265,18 +265,19 @@ export function ScheduleManager() {
               </div>
             )}
 
-            <div className="grid grid-cols-12 gap-2">
+            <div className="space-y-2">
               <input
                 type="text"
                 value={newBlock.activityName}
                 onChange={(e) => setNewBlock({ ...newBlock, activityName: e.target.value })}
                 placeholder="Activity name"
-                className="col-span-4 px-3 py-2 bg-white/5 border border-white/10 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm text-white placeholder-white/30"
+                className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm text-white placeholder-white/30"
               />
+
               <select
                 value={newBlock.categoryId}
                 onChange={(e) => setNewBlock({ ...newBlock, categoryId: e.target.value })}
-                className="col-span-3 px-3 py-2 bg-white/5 border border-white/10 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm text-white placeholder-white/30"
+                className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm text-white placeholder-white/30"
               >
                 <option value="">No category</option>
                 {categories.map((cat) => (
@@ -285,34 +286,39 @@ export function ScheduleManager() {
                   </option>
                 ))}
               </select>
-              <select
-                value={newBlock.startTime}
-                onChange={(e) => setNewBlock({ ...newBlock, startTime: e.target.value })}
-                className="col-span-2 px-3 py-2 bg-white/5 border border-white/10 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm text-white placeholder-white/30"
-              >
-                {timeOptions.map((time) => (
-                  <option key={time} value={time}>
-                    {time}
-                  </option>
-                ))}
-              </select>
-              <select
-                value={newBlock.endTime}
-                onChange={(e) => setNewBlock({ ...newBlock, endTime: e.target.value })}
-                className="col-span-2 px-3 py-2 bg-white/5 border border-white/10 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm text-white placeholder-white/30"
-              >
-                {timeOptions.map((time) => (
-                  <option key={time} value={time}>
-                    {time}
-                  </option>
-                ))}
-              </select>
+
+              <div className="grid grid-cols-2 gap-2">
+                <select
+                  value={newBlock.startTime}
+                  onChange={(e) => setNewBlock({ ...newBlock, startTime: e.target.value })}
+                  className="px-3 py-2 bg-white/5 border border-white/10 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm text-white placeholder-white/30"
+                >
+                  {timeOptions.map((time) => (
+                    <option key={time} value={time}>
+                      {time}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={newBlock.endTime}
+                  onChange={(e) => setNewBlock({ ...newBlock, endTime: e.target.value })}
+                  className="px-3 py-2 bg-white/5 border border-white/10 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm text-white placeholder-white/30"
+                >
+                  {timeOptions.map((time) => (
+                    <option key={time} value={time}>
+                      {time}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               <button
                 onClick={handleAddBlock}
                 disabled={!newBlock.activityName.trim()}
-                className="col-span-1 px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:bg-white/10 disabled:cursor-not-allowed flex items-center justify-center"
+                className="w-full px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:bg-white/10 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-medium"
               >
                 <Plus className="w-4 h-4" />
+                Add Time Block
               </button>
             </div>
           </div>
