@@ -9,16 +9,18 @@ import {
   calculateTotalDuration,
   sortTimeEntries,
 } from '../lib/utils';
-import { Clock, Trash2 } from 'lucide-react';
+import { Clock, Trash2, Play } from 'lucide-react';
 
 interface DailyTimelineProps {
   date: string;
   entries: TimeEntry[];
   activePreset: SchedulePreset | null;
   onDeleteEntry: (id: string) => void;
+  onStartTimer?: (activityName: string, categoryId?: string) => void;
+  isToday?: boolean;
 }
 
-export function DailyTimeline({ date, entries, activePreset, onDeleteEntry }: DailyTimelineProps) {
+export function DailyTimeline({ date, entries, activePreset, onDeleteEntry, onStartTimer, isToday = false }: DailyTimelineProps) {
   const { categories } = useCategories();
 
   const sortedEntries = useMemo(() => sortTimeEntries(entries), [entries]);
@@ -75,7 +77,7 @@ export function DailyTimeline({ date, entries, activePreset, onDeleteEntry }: Da
               return (
                 <div
                   key={block.id}
-                  className="flex items-center gap-3 bg-white/5 rounded p-2 text-sm"
+                  className="flex items-center gap-3 bg-white/5 rounded p-2 text-sm group hover:bg-white/10 transition-colors"
                 >
                   <div
                     className="w-1 h-8 rounded"
@@ -93,6 +95,15 @@ export function DailyTimeline({ date, entries, activePreset, onDeleteEntry }: Da
                   <div className="text-white/50 min-w-[60px] text-right">
                     {formatDuration(block.duration)}
                   </div>
+                  {isToday && onStartTimer && (
+                    <button
+                      onClick={() => onStartTimer(block.activityName, block.categoryId)}
+                      className="opacity-0 group-hover:opacity-100 p-2 text-white/60 hover:text-purple-400 transition-all"
+                      title="Start timer for this activity"
+                    >
+                      <Play className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
               );
             })}

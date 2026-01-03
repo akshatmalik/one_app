@@ -8,6 +8,7 @@ import { CategoryManager } from './components/CategoryManager';
 import { ManualEntryForm } from './components/ManualEntryForm';
 import { useTimeEntries } from './hooks/useTimeEntries';
 import { useSchedules } from './hooks/useSchedules';
+import { useTimer } from './hooks/useTimer';
 import { getTodayDate, addDays, formatDateReadable, getActivePresetForDate } from './lib/utils';
 import { ChevronLeft, ChevronRight, Calendar, Settings, Clock } from 'lucide-react';
 
@@ -19,6 +20,7 @@ export default function TimeTrackerPage() {
 
   const { entries, deleteEntry } = useTimeEntries(selectedDate);
   const { schedules } = useSchedules();
+  const { startTimer } = useTimer();
 
   const activePreset = useMemo(() => {
     return getActivePresetForDate(schedules, selectedDate);
@@ -138,6 +140,8 @@ export default function TimeTrackerPage() {
               entries={entries}
               activePreset={activePreset}
               onDeleteEntry={deleteEntry}
+              onStartTimer={startTimer}
+              isToday={isToday}
             />
           </div>
         )}
