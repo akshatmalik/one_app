@@ -45,9 +45,9 @@ export function CategoryManager() {
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+    <div className="bg-white/[0.03] rounded-lg border border-white/5 p-4">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="font-semibold text-gray-900">Categories</h3>
+        <h3 className="font-semibold text-white">Categories</h3>
         <button
           onClick={() => setIsAdding(!isAdding)}
           className="flex items-center gap-1 px-3 py-1.5 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
@@ -58,14 +58,14 @@ export function CategoryManager() {
       </div>
 
       {isAdding && (
-        <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+        <div className="mb-4 p-3 bg-white/5 rounded-lg">
           <div className="flex gap-2 mb-2">
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Category name"
-              className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              className="flex-1 px-3 py-2 text-sm bg-white/5 border border-white/10 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-white placeholder-white/30"
               onKeyDown={(e) => {
                 if (e.key === 'Enter') handleAdd();
                 if (e.key === 'Escape') setIsAdding(false);
@@ -75,7 +75,7 @@ export function CategoryManager() {
             <button
               onClick={handleAdd}
               disabled={!name.trim()}
-              className="px-4 py-2 bg-purple-600 text-white text-sm rounded-lg hover:bg-purple-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+              className="px-4 py-2 bg-purple-600 text-white text-sm rounded-lg hover:bg-purple-700 transition-colors disabled:bg-white/10 disabled:cursor-not-allowed"
             >
               Add
             </button>
@@ -86,7 +86,7 @@ export function CategoryManager() {
                 key={c}
                 onClick={() => setColor(c)}
                 className={`w-8 h-8 rounded transition-all ${
-                  color === c ? 'ring-2 ring-purple-500 ring-offset-2' : ''
+                  color === c ? 'ring-2 ring-purple-500 ring-offset-2 ring-offset-black/20' : ''
                 }`}
                 style={{ backgroundColor: c }}
                 title={c}
@@ -98,24 +98,24 @@ export function CategoryManager() {
 
       {categories.length === 0 ? (
         <div className="text-center py-4">
-          <Tag className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-          <p className="text-sm text-gray-400">No categories yet</p>
+          <Tag className="w-8 h-8 text-white/20 mx-auto mb-2" />
+          <p className="text-sm text-white/40">No categories yet</p>
         </div>
       ) : (
         <div className="space-y-2">
           {categories.map((category) => (
             <div
               key={category.id}
-              className="flex items-center gap-2 p-2 rounded hover:bg-gray-50 transition-colors group"
+              className="flex items-center gap-2 p-2 rounded hover:bg-white/5 transition-colors group"
             >
               <div
                 className="w-4 h-4 rounded"
                 style={{ backgroundColor: category.color }}
               />
-              <span className="flex-1 text-sm text-gray-700">{category.name}</span>
+              <span className="flex-1 text-sm text-white/70">{category.name}</span>
               <button
                 onClick={() => handleDelete(category.id, category.name)}
-                className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-600 transition-all"
+                className="opacity-0 group-hover:opacity-100 p-1 text-white/40 hover:text-red-400 transition-all"
               >
                 <Trash2 className="w-4 h-4" />
               </button>

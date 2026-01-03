@@ -50,7 +50,7 @@ export function TimerControls() {
 
   if (isRunning && activeTimer) {
     return (
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+      <div className="bg-white/[0.03] rounded-lg border border-white/5 p-6">
         <div className="flex items-start justify-between mb-4">
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-2">
@@ -58,14 +58,14 @@ export function TimerControls() {
                 className="w-3 h-3 rounded-full"
                 style={{ backgroundColor: getCategoryColor(activeTimer.categoryId) }}
               />
-              <span className="text-sm text-gray-500">{getCategoryName(activeTimer.categoryId)}</span>
+              <span className="text-sm text-white/60">{getCategoryName(activeTimer.categoryId)}</span>
             </div>
-            <h3 className="text-xl font-semibold text-gray-900">{activeTimer.activityName}</h3>
+            <h3 className="text-xl font-semibold text-white">{activeTimer.activityName}</h3>
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={handleCancel}
-              className="p-2 text-gray-400 hover:text-red-600 transition-colors"
+              className="p-2 text-white/40 hover:text-red-400 transition-colors"
               title="Cancel timer"
             >
               <X className="w-5 h-5" />
@@ -73,26 +73,26 @@ export function TimerControls() {
           </div>
         </div>
 
-        <div className="bg-red-50 rounded-lg p-4 mb-4">
+        <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4 mb-4">
           <div className="flex items-center gap-2 mb-1">
-            <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-            <span className="text-sm font-medium text-red-700">Recording</span>
+            <div className="w-2 h-2 bg-red-400 rounded-full animate-pulse" />
+            <span className="text-sm font-medium text-red-400">Recording</span>
           </div>
-          <div className="text-3xl font-bold text-red-700">
+          <div className="text-3xl font-bold text-red-400">
             {formatDuration(elapsedMinutes)}
           </div>
         </div>
 
         {showNotes && (
           <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-white/70 mb-1">
               Notes (optional)
             </label>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Add notes about this time entry..."
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
+              className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none text-white placeholder-white/30"
               rows={3}
             />
           </div>
@@ -109,7 +109,7 @@ export function TimerControls() {
           {!showNotes && (
             <button
               onClick={() => setShowNotes(true)}
-              className="px-4 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+              className="px-4 py-3 bg-white/5 text-white/70 rounded-lg hover:bg-white/10 transition-colors"
             >
               Add Notes
             </button>
@@ -120,12 +120,12 @@ export function TimerControls() {
   }
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-      <h3 className="text-lg font-semibold text-gray-900 mb-4">Start Timer</h3>
+    <div className="bg-white/[0.03] rounded-lg border border-white/5 p-6">
+      <h3 className="text-lg font-semibold text-white mb-4">Start Timer</h3>
 
       <div className="space-y-4">
         <div>
-          <label htmlFor="activity" className="block text-sm font-medium text-gray-700 mb-1">
+          <label htmlFor="activity" className="block text-sm font-medium text-white/70 mb-1">
             Activity Name *
           </label>
           <input
@@ -134,7 +134,7 @@ export function TimerControls() {
             value={activityName}
             onChange={(e) => setActivityName(e.target.value)}
             placeholder="e.g., Deep Work, Meeting, Exercise"
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+            className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-white placeholder-white/30"
             onKeyDown={(e) => {
               if (e.key === 'Enter' && activityName.trim()) {
                 handleStart();
@@ -144,14 +144,14 @@ export function TimerControls() {
         </div>
 
         <div>
-          <label htmlFor="category" className="block text-sm font-medium text-gray-700 mb-1">
+          <label htmlFor="category" className="block text-sm font-medium text-white/70 mb-1">
             Category (optional)
           </label>
           <select
             id="category"
             value={selectedCategoryId}
             onChange={(e) => setSelectedCategoryId(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+            className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-white"
           >
             <option value="">No category</option>
             {categories.map((category) => (
@@ -165,7 +165,7 @@ export function TimerControls() {
         <button
           onClick={handleStart}
           disabled={!activityName.trim()}
-          className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed font-medium"
+          className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:bg-white/10 disabled:cursor-not-allowed font-medium"
         >
           <Play className="w-5 h-5" />
           Start Timer

@@ -174,14 +174,14 @@ export function ScheduleManager() {
 
   if (isCreating || editingId) {
     return (
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+      <div className="bg-white/[0.03] rounded-lg border border-white/5 p-6">
         <div className="flex items-center justify-between mb-6">
-          <h3 className="text-lg font-semibold text-gray-900">
+          <h3 className="text-lg font-semibold text-white">
             {editingId ? 'Edit Schedule' : 'Create Schedule'}
           </h3>
           <button
             onClick={handleCancel}
-            className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+            className="p-2 text-white/40 hover:text-white/60 transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
@@ -189,7 +189,7 @@ export function ScheduleManager() {
 
         <div className="space-y-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-white/70 mb-1">
               Schedule Name *
             </label>
             <input
@@ -197,12 +197,12 @@ export function ScheduleManager() {
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               placeholder="e.g., Workday, Weekend, Deep Work Day"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-white/70 mb-2">
               Days of Week *
             </label>
             <div className="flex flex-wrap gap-2">
@@ -215,7 +215,7 @@ export function ScheduleManager() {
                     className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                       isSelected
                         ? 'bg-purple-600 text-white'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        : 'bg-white/5 text-white/70 hover:bg-white/10'
                     }`}
                   >
                     {day.slice(0, 3)}
@@ -226,7 +226,7 @@ export function ScheduleManager() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-white/70 mb-2">
               Time Blocks *
             </label>
 
@@ -235,31 +235,31 @@ export function ScheduleManager() {
                 {sortTimeBlocks(timeBlocks).map((block) => (
                   <div
                     key={block.id}
-                    className="flex items-center gap-3 p-3 border border-gray-200 rounded-lg"
+                    className="flex items-center gap-3 p-3 border border-white/5 rounded-lg"
                   >
                     <div
                       className="w-1 h-10 rounded"
                       style={{ backgroundColor: getCategoryColor(block.categoryId) }}
                     />
                     <div className="flex-1">
-                      <div className="font-medium text-gray-900">{block.activityName}</div>
-                      <div className="text-xs text-gray-500">{getCategoryName(block.categoryId)}</div>
+                      <div className="font-medium text-white">{block.activityName}</div>
+                      <div className="text-xs text-white/50">{getCategoryName(block.categoryId)}</div>
                     </div>
-                    <div className="text-sm text-gray-600">
+                    <div className="text-sm text-white/60">
                       {block.startTime} - {block.endTime}
                     </div>
-                    <div className="text-sm text-gray-500 min-w-[60px] text-right">
+                    <div className="text-sm text-white/50 min-w-[60px] text-right">
                       {formatDuration(block.duration)}
                     </div>
                     <button
                       onClick={() => handleRemoveBlock(block.id)}
-                      className="p-1 text-gray-400 hover:text-red-600 transition-colors"
+                      className="p-1 text-white/40 hover:text-red-400 transition-colors"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
                 ))}
-                <div className="text-sm text-gray-600 text-right">
+                <div className="text-sm text-white/60 text-right">
                   Total: {formatDuration(timeBlocks.reduce((sum, b) => sum + b.duration, 0))}
                 </div>
               </div>
@@ -271,12 +271,12 @@ export function ScheduleManager() {
                 value={newBlock.activityName}
                 onChange={(e) => setNewBlock({ ...newBlock, activityName: e.target.value })}
                 placeholder="Activity name"
-                className="col-span-4 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
+                className="col-span-4 px-3 py-2 bg-white/5 border border-white/10 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm text-white placeholder-white/30"
               />
               <select
                 value={newBlock.categoryId}
                 onChange={(e) => setNewBlock({ ...newBlock, categoryId: e.target.value })}
-                className="col-span-3 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
+                className="col-span-3 px-3 py-2 bg-white/5 border border-white/10 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm text-white placeholder-white/30"
               >
                 <option value="">No category</option>
                 {categories.map((cat) => (
@@ -288,7 +288,7 @@ export function ScheduleManager() {
               <select
                 value={newBlock.startTime}
                 onChange={(e) => setNewBlock({ ...newBlock, startTime: e.target.value })}
-                className="col-span-2 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
+                className="col-span-2 px-3 py-2 bg-white/5 border border-white/10 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm text-white placeholder-white/30"
               >
                 {timeOptions.map((time) => (
                   <option key={time} value={time}>
@@ -299,7 +299,7 @@ export function ScheduleManager() {
               <select
                 value={newBlock.endTime}
                 onChange={(e) => setNewBlock({ ...newBlock, endTime: e.target.value })}
-                className="col-span-2 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
+                className="col-span-2 px-3 py-2 bg-white/5 border border-white/10 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm text-white placeholder-white/30"
               >
                 {timeOptions.map((time) => (
                   <option key={time} value={time}>
@@ -310,7 +310,7 @@ export function ScheduleManager() {
               <button
                 onClick={handleAddBlock}
                 disabled={!newBlock.activityName.trim()}
-                className="col-span-1 px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center"
+                className="col-span-1 px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:bg-white/10 disabled:cursor-not-allowed flex items-center justify-center"
               >
                 <Plus className="w-4 h-4" />
               </button>
@@ -327,7 +327,7 @@ export function ScheduleManager() {
             </button>
             <button
               onClick={handleCancel}
-              className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+              className="px-4 py-2 bg-white/5 text-white/70 rounded-lg hover:bg-white/10 transition-colors"
             >
               Cancel
             </button>
@@ -340,7 +340,7 @@ export function ScheduleManager() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-gray-900">Schedule Presets</h3>
+        <h3 className="text-lg font-semibold text-white">Schedule Presets</h3>
         <button
           onClick={handleStartCreate}
           className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium"
@@ -351,10 +351,10 @@ export function ScheduleManager() {
       </div>
 
       {schedules.length === 0 ? (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
+        <div className="bg-white/[0.03] rounded-lg border border-white/5 p-8 text-center">
           <Calendar className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-          <p className="text-gray-500 mb-2">No schedule presets yet</p>
-          <p className="text-sm text-gray-400">
+          <p className="text-white/50 mb-2">No schedule presets yet</p>
+          <p className="text-sm text-white/40">
             Create a schedule to plan your daily time blocks
           </p>
         </div>
@@ -366,44 +366,44 @@ export function ScheduleManager() {
             return (
               <div
                 key={schedule.id}
-                className="bg-white rounded-lg shadow-sm border border-gray-200 p-4"
+                className="bg-white/[0.03] rounded-lg border border-white/5 p-4"
               >
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
-                      <h4 className="font-semibold text-gray-900">{schedule.name}</h4>
+                      <h4 className="font-semibold text-white">{schedule.name}</h4>
                       <span
                         className={`px-2 py-0.5 text-xs rounded-full ${
                           schedule.isActive
-                            ? 'bg-green-100 text-green-700'
-                            : 'bg-gray-100 text-gray-500'
+                            ? 'bg-green-500/20 text-green-400'
+                            : 'bg-white/5 text-white/50'
                         }`}
                       >
                         {schedule.isActive ? 'Active' : 'Inactive'}
                       </span>
                     </div>
-                    <div className="text-sm text-gray-500 mt-1">
+                    <div className="text-sm text-white/50 mt-1">
                       {schedule.daysOfWeek.map(d => d.slice(0, 3)).join(', ')} • {formatDuration(totalDuration)}
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
                     <button
                       onClick={() => handleToggleActive(schedule)}
-                      className="p-2 text-gray-400 hover:text-purple-600 transition-colors"
+                      className="p-2 text-white/40 hover:text-purple-600 transition-colors"
                       title={schedule.isActive ? 'Deactivate' : 'Activate'}
                     >
                       <Calendar className="w-4 h-4" />
                     </button>
                     <button
                       onClick={() => handleStartEdit(schedule)}
-                      className="p-2 text-gray-400 hover:text-purple-600 transition-colors"
+                      className="p-2 text-white/40 hover:text-purple-600 transition-colors"
                       title="Edit"
                     >
                       <Edit2 className="w-4 h-4" />
                     </button>
                     <button
                       onClick={() => handleDelete(schedule.id, schedule.name)}
-                      className="p-2 text-gray-400 hover:text-red-600 transition-colors"
+                      className="p-2 text-white/40 hover:text-red-400 transition-colors"
                       title="Delete"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -415,17 +415,17 @@ export function ScheduleManager() {
                   {sortTimeBlocks(schedule.timeBlocks).map((block) => (
                     <div
                       key={block.id}
-                      className="flex items-center gap-2 text-sm bg-gray-50 rounded p-2"
+                      className="flex items-center gap-2 text-sm bg-white/5 rounded p-2"
                     >
                       <div
                         className="w-1 h-6 rounded"
                         style={{ backgroundColor: getCategoryColor(block.categoryId) }}
                       />
-                      <div className="flex-1 font-medium text-gray-700">{block.activityName}</div>
-                      <div className="text-gray-500">
+                      <div className="flex-1 font-medium text-white/70">{block.activityName}</div>
+                      <div className="text-white/50">
                         {block.startTime} - {block.endTime}
                       </div>
-                      <div className="text-gray-600 min-w-[50px] text-right">
+                      <div className="text-white/60 min-w-[50px] text-right">
                         {formatDuration(block.duration)}
                       </div>
                     </div>
