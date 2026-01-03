@@ -5,6 +5,7 @@ import { TimerControls } from './components/TimerControls';
 import { DailyTimeline } from './components/DailyTimeline';
 import { ScheduleManager } from './components/ScheduleManager';
 import { CategoryManager } from './components/CategoryManager';
+import { ManualEntryForm } from './components/ManualEntryForm';
 import { useTimeEntries } from './hooks/useTimeEntries';
 import { useSchedules } from './hooks/useSchedules';
 import { getTodayDate, addDays, formatDateReadable, getActivePresetForDate } from './lib/utils';
@@ -127,6 +128,9 @@ export default function TimeTrackerPage() {
                 <TimerControls />
               </div>
             )}
+
+            {/* Manual Entry Form */}
+            <ManualEntryForm date={selectedDate} />
 
             {/* Timeline */}
             <DailyTimeline
