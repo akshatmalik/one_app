@@ -1,0 +1,176 @@
+'use client';
+
+import { useState } from 'react';
+import { useTimer } from '../hooks/useTimer';
+import { useCategories } from '../hooks/useCategories';
+import { formatDuration } from '../lib/utils';
+import { Play, Square, X } from 'lucide-react';
+
+export function TimerControls() {
+  const { activeTimer, elapsedMinutes, isRunning, startTimer, stopTimer, cancelTimer } = useTimer();
+  const { categories } = useCategories();
+
+  const [activityName, setActivityName] = useState('');
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string>('');
+  const [notes, setNotes] = useState('');
+  const [showNotes, setShowNotes] = useState(false);
+
+  const handleStart = () => {
+    if (!activityName.trim()) return;
+    startTimer(activityName.trim(), selectedCategoryId || undefined);
+    setActivityName('');
+    setSelectedCategoryId('');
+  };
+
+  const handleStop = async () => {
+    await stopTimer(notes.trim() || undefined);
+    setNotes('');
+    setShowNotes(false);
+  };
+
+  const handleCancel = () => {
+    if (confirm('Cancel this timer? Time will not be saved.')) {
+      cancelTimer();
+      setNotes('');
+      setShowNotes(false);
+    }
+  };
+
+  const getCategoryName = (categoryId?: string) => {
+    if (!categoryId) return 'No category';
+    const category = categories.find(c => c.id === categoryId);
+    return category?.name || 'Unknown';
+  };
+
+  const getCategoryColor = (categoryId?: string) => {
+    if (!categoryId) return '#6B7280';
+    const category = categories.find(c => c.id === categoryId);
+    return category?.color || '#6B7280';
+  };
+
+  if (isRunning && activeTimer) {
+    return (
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <div className="flex items-start justify-between mb-4">
+          <div className="flex-1">
+            <div className="flex items-center gap-2 mb-2">
+              <div
+                className="w-3 h-3 rounded-full"
+                style={{ backgroundColor: getCategoryColor(activeTimer.categoryId) }}
+              />
+              <span className="text-sm text-gray-500">{getCategoryName(activeTimer.categoryId)}</span>
+            </div>
+            <h3 className="text-xl font-semibold text-gray-900">{activeTimer.activityName}</h3>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleCancel}
+              className="p-2 text-gray-400 hover:text-red-600 transition-colors"
+              title="Cancel timer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+
+        <div className="bg-red-50 rounded-lg p-4 mb-4">
+          <div className="flex items-center gap-2 mb-1">
+            <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+            <span className="text-sm font-medium text-red-700">Recording</span>
+          </div>
+          <div className="text-3xl font-bold text-red-700">
+            {formatDuration(elapsedMinutes)}
+          </div>
+        </div>
+
+        {showNotes && (
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Notes (optional)
+            </label>
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Add notes about this time entry..."
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
+              rows={3}
+            />
+          </div>
+        )}
+
+        <div className="flex gap-2">
+          <button
+            onClick={handleStop}
+            className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium"
+          >
+            <Square className="w-5 h-5" />
+            Stop & Save
+          </button>
+          {!showNotes && (
+            <button
+              onClick={() => setShowNotes(true)}
+              className="px-4 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+            >
+              Add Notes
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+      <h3 className="text-lg font-semibold text-gray-900 mb-4">Start Timer</h3>
+
+      <div className="space-y-4">
+        <div>
+          <label htmlFor="activity" className="block text-sm font-medium text-gray-700 mb-1">
+            Activity Name *
+          </label>
+          <input
+            id="activity"
+            type="text"
+            value={activityName}
+            onChange={(e) => setActivityName(e.target.value)}
+            placeholder="e.g., Deep Work, Meeting, Exercise"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && activityName.trim()) {
+                handleStart();
+              }
+            }}
+          />
+        </div>
+
+        <div>
+          <label htmlFor="category" className="block text-sm font-medium text-gray-700 mb-1">
+            Category (optional)
+          </label>
+          <select
+            id="category"
+            value={selectedCategoryId}
+            onChange={(e) => setSelectedCategoryId(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+          >
+            <option value="">No category</option>
+            {categories.map((category) => (
+              <option key={category.id} value={category.id}>
+                {category.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <button
+          onClick={handleStart}
+          disabled={!activityName.trim()}
+          className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed font-medium"
+        >
+          <Play className="w-5 h-5" />
+          Start Timer
+        </button>
+      </div>
+    </div>
+  );
+}
