@@ -9,8 +9,10 @@ import { ManualEntryForm } from './components/ManualEntryForm';
 import { useTimeEntries } from './hooks/useTimeEntries';
 import { useSchedules } from './hooks/useSchedules';
 import { useTimer } from './hooks/useTimer';
+import { useCategories } from './hooks/useCategories';
 import { getTodayDate, addDays, formatDateReadable, getActivePresetForDate } from './lib/utils';
-import { ChevronLeft, ChevronRight, Calendar, Settings, Clock } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar, Settings, Clock, Sparkles } from 'lucide-react';
+import { SAMPLE_CATEGORIES, SAMPLE_SCHEDULE, createSampleTimeEntries } from './data/sample-data';
 
 type Tab = 'today' | 'schedules' | 'settings';
 
@@ -18,8 +20,9 @@ export default function TimeTrackerPage() {
   const [activeTab, setActiveTab] = useState<Tab>('today');
   const [selectedDate, setSelectedDate] = useState(getTodayDate());
 
-  const { entries, deleteEntry } = useTimeEntries(selectedDate);
-  const { schedules } = useSchedules();
+  const { entries, deleteEntry, addEntry } = useTimeEntries(selectedDate);
+  const { schedules, addSchedule } = useSchedules();
+  const { categories, addCategory } = useCategories();
   const { startTimer } = useTimer();
 
   const activePreset = useMemo(() => {
@@ -38,7 +41,31 @@ export default function TimeTrackerPage() {
     setSelectedDate(getTodayDate());
   };
 
+  const handleLoadSampleData = async () => {
+    try {
+      // Load categories
+      for (const category of SAMPLE_CATEGORIES) {
+        await addCategory(category);
+      }
+
+      // Load schedule
+      await addSchedule(SAMPLE_SCHEDULE);
+
+      // Load time entries for today
+      const today = getTodayDate();
+      const sampleEntries = createSampleTimeEntries(today);
+      for (const entry of sampleEntries) {
+        await addEntry(entry);
+      }
+
+      alert('Sample data loaded successfully! Check the Today, Schedules, and Settings tabs.');
+    } catch (error) {
+      alert('Error loading sample data: ' + (error as Error).message);
+    }
+  };
+
   const isToday = selectedDate === getTodayDate();
+  const hasNoData = categories.length === 0 && schedules.length === 0 && entries.length === 0;
 
   return (
     <div className="min-h-[calc(100vh-60px)] flex flex-col">
@@ -157,6 +184,23 @@ export default function TimeTrackerPage() {
         {activeTab === 'settings' && (
           <div className="space-y-6">
             <CategoryManager />
+
+            {/* Sample Data Button */}
+            {hasNoData && (
+              <div className="bg-purple-500/10 border border-purple-500/20 rounded-lg p-6">
+                <h3 className="font-semibold text-purple-300 mb-2">Get Started</h3>
+                <p className="text-sm text-white/60 mb-4">
+                  New to Time Tracker? Load sample data to see how it works with categories, schedules, and time entries.
+                </p>
+                <button
+                  onClick={handleLoadSampleData}
+                  className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium"
+                >
+                  <Sparkles className="w-5 h-5" />
+                  Load Sample Data
+                </button>
+              </div>
+            )}
 
             <div className="bg-white/[0.03] rounded-lg border border-white/5 p-6">
               <h3 className="font-semibold text-white mb-4">About</h3>
