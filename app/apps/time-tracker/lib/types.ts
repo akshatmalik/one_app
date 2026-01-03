@@ -120,3 +120,21 @@ export interface TimeBlockComparison {
   actualDuration: number;
   variance: number;
 }
+
+// App settings (for day concept tracking)
+export interface AppSettings {
+  id: string;
+  userId: string;
+  startDate: string; // ISO date string (YYYY-MM-DD) - represents Day 1
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Settings repository interface
+export interface SettingsRepository {
+  get(): Promise<AppSettings | null>;
+  create(settings: Omit<AppSettings, 'id' | 'createdAt' | 'updatedAt'>): Promise<AppSettings>;
+  update(id: string, updates: Partial<AppSettings>): Promise<AppSettings>;
+  delete(id: string): Promise<void>;
+  setUserId(userId: string): void;
+}
