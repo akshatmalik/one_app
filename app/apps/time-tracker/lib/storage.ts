@@ -8,6 +8,8 @@ import {
   SchedulePresetRepository,
   TimeEntry,
   TimeEntryRepository,
+  AppSettings,
+  SettingsRepository,
   DayOfWeek,
 } from './types';
 import { getFirebaseDb, isFirebaseConfigured } from '@/lib/firebase';
@@ -28,11 +30,13 @@ import {
 const CATEGORIES_KEY = 'time-tracker-categories';
 const PRESETS_KEY = 'time-tracker-presets';
 const ENTRIES_KEY = 'time-tracker-entries';
+const SETTINGS_KEY = 'time-tracker-settings';
 
 // Firestore collection names
 const CATEGORIES_COLLECTION = 'timeTrackerCategories';
 const PRESETS_COLLECTION = 'timeTrackerPresets';
 const ENTRIES_COLLECTION = 'timeTrackerEntries';
+const SETTINGS_COLLECTION = 'timeTrackerSettings';
 
 // Helper to clean undefined values (Firestore doesn't accept undefined)
 function cleanUndefinedValues<T>(obj: T): T {
@@ -638,9 +642,161 @@ class HybridTimeEntryRepository implements TimeEntryRepository {
 }
 
 // ============================================
+// SETTINGS REPOSITORIES
+// ============================================
+
+export class FirebaseSettingsRepository implements SettingsRepository {
+  private userId: string = '';
+
+  private get db() {
+    return getFirebaseDb();
+  }
+
+  private get settingsCollection() {
+    return collection(this.db, SETTINGS_COLLECTION);
+  }
+
+  setUserId(userId: string): void {
+    this.userId = userId;
+  }
+
+  async get(): Promise<AppSettings | null> {
+    if (!this.userId) return null;
+    const q = query(
+      this.settingsCollection,
+      where('userId', '==', this.userId)
+    );
+    const snapshot = await getDocs(q);
+    if (snapshot.empty) return null;
+    return snapshot.docs[0].data() as AppSettings;
+  }
+
+  async create(settingsData: Omit<AppSettings, 'id' | 'createdAt' | 'updatedAt'>): Promise<AppSettings> {
+    if (!this.userId) throw new Error('Not authenticated');
+    const now = new Date().toISOString();
+    const cleanData = cleanUndefinedValues(settingsData);
+
+    const settings: AppSettings = {
+      ...cleanData,
+      id: uuidv4(),
+      createdAt: now,
+      updatedAt: now,
+    } as AppSettings;
+
+    await setDoc(doc(this.db, SETTINGS_COLLECTION, settings.id), settings);
+    return settings;
+  }
+
+  async update(id: string, updates: Partial<AppSettings>): Promise<AppSettings> {
+    const docRef = doc(this.db, SETTINGS_COLLECTION, id);
+    const cleanUpdates = cleanUndefinedValues(updates) as Record<string, unknown>;
+    cleanUpdates.updatedAt = new Date().toISOString();
+
+    await updateDoc(docRef, cleanUpdates);
+    const updated = await getDoc(docRef);
+    return updated.data() as AppSettings;
+  }
+
+  async delete(id: string): Promise<void> {
+    await deleteDoc(doc(this.db, SETTINGS_COLLECTION, id));
+  }
+}
+
+export class LocalStorageSettingsRepository implements SettingsRepository {
+  private userId: string = 'local-user';
+
+  setUserId(userId: string): void {
+    this.userId = userId || 'local-user';
+  }
+
+  private getStorageKey(): string {
+    return `${SETTINGS_KEY}-${this.userId}`;
+  }
+
+  async get(): Promise<AppSettings | null> {
+    if (typeof window === 'undefined') return null;
+    const data = localStorage.getItem(this.getStorageKey());
+    return data ? JSON.parse(data) : null;
+  }
+
+  async create(settingsData: Omit<AppSettings, 'id' | 'createdAt' | 'updatedAt'>): Promise<AppSettings> {
+    const settings: AppSettings = {
+      ...settingsData,
+      id: uuidv4(),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    this.save(settings);
+    return settings;
+  }
+
+  async update(id: string, updates: Partial<AppSettings>): Promise<AppSettings> {
+    const existing = await this.get();
+    if (!existing || existing.id !== id) throw new Error('Settings not found');
+
+    const updated: AppSettings = {
+      ...existing,
+      ...updates,
+      id,
+      createdAt: existing.createdAt,
+      updatedAt: new Date().toISOString(),
+    };
+
+    this.save(updated);
+    return updated;
+  }
+
+  async delete(id: string): Promise<void> {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem(this.getStorageKey());
+    }
+  }
+
+  private save(settings: AppSettings): void {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(this.getStorageKey(), JSON.stringify(settings));
+    }
+  }
+}
+
+class HybridSettingsRepository implements SettingsRepository {
+  private firebaseRepo = new FirebaseSettingsRepository();
+  private localRepo = new LocalStorageSettingsRepository();
+  private useFirebase = false;
+
+  setUserId(userId: string): void {
+    const isRealUser = !!userId && userId !== 'local-user';
+    this.useFirebase = isRealUser && isFirebaseConfigured();
+    this.firebaseRepo.setUserId(userId);
+    this.localRepo.setUserId(userId || 'local-user');
+  }
+
+  private get repo(): SettingsRepository {
+    return this.useFirebase ? this.firebaseRepo : this.localRepo;
+  }
+
+  get(): Promise<AppSettings | null> {
+    return this.repo.get();
+  }
+
+  create(settingsData: Omit<AppSettings, 'id' | 'createdAt' | 'updatedAt'>): Promise<AppSettings> {
+    return this.repo.create(settingsData);
+  }
+
+  update(id: string, updates: Partial<AppSettings>): Promise<AppSettings> {
+    return this.repo.update(id, updates);
+  }
+
+  delete(id: string): Promise<void> {
+    return this.repo.delete(id);
+  }
+}
+
+// ============================================
 // EXPORT SINGLETONS
 // ============================================
 
 export const categoryRepository: CategoryRepository = new HybridCategoryRepository();
 export const schedulePresetRepository: SchedulePresetRepository = new HybridSchedulePresetRepository();
 export const timeEntryRepository: TimeEntryRepository = new HybridTimeEntryRepository();
+export const settingsRepository: SettingsRepository = new HybridSettingsRepository();
