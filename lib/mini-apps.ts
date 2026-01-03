@@ -21,6 +21,16 @@ export const MINI_APPS: MiniApp[] = [
     tags: ['productivity', 'tasks'],
     isNew: true,
   },
+  {
+    id: 'time-tracker',
+    name: 'Time Tracker',
+    description: 'Track daily activities with timers and compare against planned schedules',
+    icon: '⏱️',
+    path: '/apps/time-tracker',
+    color: '#10B981',
+    tags: ['productivity', 'time-management'],
+    isNew: true,
+  },
 ];
 
 export function getMiniAppById(id: string): MiniApp | undefined {
