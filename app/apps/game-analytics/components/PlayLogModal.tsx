@@ -111,8 +111,8 @@ export function PlayLogModal({ game, onSave, onClose }: PlayLogModalProps) {
               <label className="block text-[10px] text-white/30 mb-1">Hours</label>
               <input
                 type="number"
-                step="0.5"
-                min="0.5"
+                step="0.1"
+                min="0.1"
                 value={newLog.hours}
                 onChange={e => setNewLog({ ...newLog, hours: e.target.value })}
                 className="w-full px-2 py-2 bg-white/[0.03] border border-white/5 text-white rounded-lg text-xs focus:outline-none focus:bg-white/[0.05] focus:border-white/10 transition-all"

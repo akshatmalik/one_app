@@ -31,7 +31,7 @@ export default function GameAnalyticsPage() {
   const [playLogGame, setPlayLogGame] = useState<GameWithMetrics | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('all');
   const [tabMode, setTabMode] = useState<TabMode>('games');
-  const [sortBy, setSortBy] = useState<'name' | 'price' | 'hours' | 'rating' | 'costPerHour' | 'dateAdded'>('dateAdded');
+  const [sortBy, setSortBy] = useState<'name' | 'price' | 'hours' | 'rating' | 'costPerHour' | 'dateAdded' | 'recentlyPlayed'>('recentlyPlayed');
 
   const handleAddGame = async (gameData: Omit<Game, 'id' | 'userId' | 'createdAt' | 'updatedAt'>) => {
     try {
@@ -125,6 +125,15 @@ export default function GameAnalyticsPage() {
           const aCost = a.hours > 0 ? a.metrics.costPerHour : Infinity;
           const bCost = b.hours > 0 ? b.metrics.costPerHour : Infinity;
           return aCost - bCost;
+        case 'recentlyPlayed':
+          // Sort by most recent play log date (most recent first)
+          const aLastPlayed = a.playLogs && a.playLogs.length > 0
+            ? new Date(a.playLogs[0].date).getTime()
+            : 0;
+          const bLastPlayed = b.playLogs && b.playLogs.length > 0
+            ? new Date(b.playLogs[0].date).getTime()
+            : 0;
+          return bLastPlayed - aLastPlayed;
         case 'dateAdded':
         default:
           return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
@@ -231,8 +240,9 @@ export default function GameAnalyticsPage() {
       <div className="flex-1 px-6 py-6">
         <div className="max-w-6xl mx-auto">
           {/* Tab Navigation */}
-          <div className="flex items-center gap-4 mb-6">
-            <div className="flex items-center gap-1 bg-white/[0.02] rounded-lg p-1">
+          <div className="space-y-4 mb-6">
+            {/* Tabs Row */}
+            <div className="flex items-center gap-1 bg-white/[0.02] rounded-lg p-1 w-fit">
               {([
                 { id: 'games', label: 'Games', icon: <List size={14} /> },
                 { id: 'timeline', label: 'Timeline', icon: <Calendar size={14} /> },
@@ -256,7 +266,7 @@ export default function GameAnalyticsPage() {
 
             {/* View Mode Filter & Sort (only for games tab) */}
             {tabMode === 'games' && (
-              <div className="flex items-center gap-2 ml-auto">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
                 <div className="flex items-center gap-1 bg-white/[0.02] rounded-lg p-1">
                   {(['all', 'owned', 'wishlist'] as ViewMode[]).map((mode) => (
                     <button
@@ -273,18 +283,22 @@ export default function GameAnalyticsPage() {
                     </button>
                   ))}
                 </div>
-                <select
-                  value={sortBy}
-                  onChange={e => setSortBy(e.target.value as typeof sortBy)}
-                  className="px-3 py-1 bg-white/[0.02] border border-white/10 text-white text-xs rounded-lg focus:outline-none focus:border-purple-500/50 cursor-pointer"
-                >
-                  <option value="dateAdded">Date Added</option>
-                  <option value="name">Name</option>
-                  <option value="price">Price (High to Low)</option>
-                  <option value="hours">Hours (High to Low)</option>
-                  <option value="rating">Rating (High to Low)</option>
-                  <option value="costPerHour">Value (Best First)</option>
-                </select>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-white/40">Sort by:</span>
+                  <select
+                    value={sortBy}
+                    onChange={e => setSortBy(e.target.value as typeof sortBy)}
+                    className="px-3 py-1 bg-white/[0.02] border border-white/10 text-white text-xs rounded-lg focus:outline-none focus:border-purple-500/50 cursor-pointer"
+                  >
+                    <option value="recentlyPlayed">Recently Played</option>
+                    <option value="dateAdded">Date Added</option>
+                    <option value="name">Name</option>
+                    <option value="price">Price (High to Low)</option>
+                    <option value="hours">Hours (High to Low)</option>
+                    <option value="rating">Rating (High to Low)</option>
+                    <option value="costPerHour">Value (Best First)</option>
+                  </select>
+                </div>
               </div>
             )}
           </div>

@@ -750,32 +750,50 @@ export function StatsView({ games, summary, budgets = [], onSetBudget }: StatsVi
             </div>
 
             {/* Games List */}
-            <div className="space-y-1">
+            <div className="space-y-2">
               {(showAllGamesPlayed ? periodAllGamesPlayed : periodAllGamesPlayed.slice(0, 15)).map((game) => (
-                <div key={game.id} className="flex items-center justify-between px-3 py-2 bg-white/[0.03] rounded-lg hover:bg-white/[0.05] transition-all">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-white/80 truncate">{game.name}</span>
-                      {game.playLogs && game.playLogs.length > 0 && (
-                        <span className="text-[10px] text-white/30">
-                          Last: {new Date(game.playLogs[0].date).toLocaleDateString()}
+                <div key={game.id} className="p-3 bg-white/[0.03] rounded-lg hover:bg-white/[0.05] transition-all border border-white/5">
+                  <div className="flex items-start justify-between gap-3 mb-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <h4 className="text-base font-semibold text-white truncate">{game.name}</h4>
+                        <span className={clsx('text-xs px-2 py-0.5 rounded shrink-0', {
+                          'bg-emerald-500/20 text-emerald-400': game.status === 'Completed',
+                          'bg-blue-500/20 text-blue-400': game.status === 'In Progress',
+                          'bg-white/10 text-white/50': game.status === 'Not Started',
+                          'bg-red-500/20 text-red-400': game.status === 'Abandoned',
+                        })}>
+                          {game.status}
                         </span>
+                      </div>
+                      {game.playLogs && game.playLogs.length > 0 && (
+                        <div className="flex items-center gap-2 text-xs text-white/40">
+                          <span>Last played: {new Date(game.playLogs[0].date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                          <span className="text-white/20">•</span>
+                          <span>{game.playLogs.length} session{game.playLogs.length !== 1 ? 's' : ''}</span>
+                        </div>
                       )}
                     </div>
                   </div>
-                  <div className="flex items-center gap-3 shrink-0">
-                    <span className={clsx('text-xs px-2 py-0.5 rounded', {
-                      'bg-emerald-500/20 text-emerald-400': game.status === 'Completed',
-                      'bg-blue-500/20 text-blue-400': game.status === 'In Progress',
-                      'bg-white/10 text-white/50': game.status === 'Not Started',
-                      'bg-red-500/20 text-red-400': game.status === 'Abandoned',
-                    })}>
-                      {game.status}
-                    </span>
-                    <span className="text-sm text-purple-400 font-medium w-16 text-right">{game.hours}h</span>
-                    <span className="text-xs text-white/40 w-20 text-right">
-                      ${game.metrics.costPerHour.toFixed(2)}/hr
-                    </span>
+                  <div className="grid grid-cols-3 gap-2 text-center">
+                    <div className="p-2 bg-white/[0.02] rounded-lg">
+                      <div className="text-sm font-semibold text-purple-400">{game.hours}h</div>
+                      <div className="text-[10px] text-white/30">played</div>
+                    </div>
+                    <div className="p-2 bg-white/[0.02] rounded-lg">
+                      <div className={clsx('text-sm font-semibold',
+                        game.metrics.costPerHour <= 1 ? 'text-emerald-400' :
+                        game.metrics.costPerHour <= 3 ? 'text-blue-400' :
+                        game.metrics.costPerHour <= 5 ? 'text-yellow-400' : 'text-red-400'
+                      )}>
+                        ${game.metrics.costPerHour.toFixed(2)}/h
+                      </div>
+                      <div className="text-[10px] text-white/30">cost per hr</div>
+                    </div>
+                    <div className="p-2 bg-white/[0.02] rounded-lg">
+                      <div className="text-sm font-semibold text-yellow-400">{game.rating}/10</div>
+                      <div className="text-[10px] text-white/30">rating</div>
+                    </div>
                   </div>
                 </div>
               ))}
