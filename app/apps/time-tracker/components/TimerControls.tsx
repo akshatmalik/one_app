@@ -1,19 +1,51 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useTimer } from '../hooks/useTimer';
 import { useCategories } from '../hooks/useCategories';
+import { useTimeEntries } from '../hooks/useTimeEntries';
 import { formatDuration } from '../lib/utils';
 import { Play, Square, X } from 'lucide-react';
 
 export function TimerControls() {
   const { activeTimer, elapsedMinutes, isRunning, startTimer, stopTimer, cancelTimer } = useTimer();
   const { categories } = useCategories();
+  const { entries } = useTimeEntries(); // Get all entries for suggestions
 
   const [activityName, setActivityName] = useState('');
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('');
   const [notes, setNotes] = useState('');
   const [showNotes, setShowNotes] = useState(false);
+
+  // Get unique activity names for autocomplete suggestions
+  const activitySuggestions = useMemo(() => {
+    const activityMap = new Map<string, { name: string; count: number; lastUsed: string }>();
+
+    entries.forEach(entry => {
+      const existing = activityMap.get(entry.activityName);
+      if (existing) {
+        existing.count++;
+        if (entry.startTime > existing.lastUsed) {
+          existing.lastUsed = entry.startTime;
+        }
+      } else {
+        activityMap.set(entry.activityName, {
+          name: entry.activityName,
+          count: 1,
+          lastUsed: entry.startTime,
+        });
+      }
+    });
+
+    // Sort by most recent first, then by frequency
+    return Array.from(activityMap.values())
+      .sort((a, b) => {
+        const dateCompare = new Date(b.lastUsed).getTime() - new Date(a.lastUsed).getTime();
+        return dateCompare !== 0 ? dateCompare : b.count - a.count;
+      })
+      .map(item => item.name)
+      .slice(0, 10); // Limit to 10 suggestions
+  }, [entries]);
 
   const handleStart = () => {
     if (!activityName.trim()) return;
@@ -131,6 +163,7 @@ export function TimerControls() {
           <input
             id="activity"
             type="text"
+            list="activity-suggestions"
             value={activityName}
             onChange={(e) => setActivityName(e.target.value)}
             placeholder="e.g., Deep Work, Meeting, Exercise"
@@ -140,7 +173,13 @@ export function TimerControls() {
                 handleStart();
               }
             }}
+            autoComplete="off"
           />
+          <datalist id="activity-suggestions">
+            {activitySuggestions.map((suggestion, index) => (
+              <option key={index} value={suggestion} />
+            ))}
+          </datalist>
         </div>
 
         <div>
