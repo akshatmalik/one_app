@@ -74,10 +74,9 @@ export default function GameAnalyticsPage() {
 
   const handleSavePlayLogs = async (playLogs: PlayLog[]) => {
     if (!playLogGame) return;
-    const totalHours = playLogs.reduce((sum, log) => sum + log.hours, 0);
+    // Only update playLogs - hours field remains as baseline
     await updateGame(playLogGame.id, {
       playLogs,
-      hours: Math.max(playLogGame.hours, totalHours), // Keep manual hours if higher
     });
     setPlayLogGame(null);
     showToast('Play sessions saved', 'success');
@@ -488,10 +487,9 @@ export default function GameAnalyticsPage() {
                 if (game) {
                   const existingLogs = game.playLogs || [];
                   const updatedLogs = [...existingLogs, playLog];
-                  const totalHours = updatedLogs.reduce((sum, log) => sum + log.hours, 0);
+                  // Only update playLogs - hours field remains as baseline
                   await updateGame(gameId, {
                     playLogs: updatedLogs,
-                    hours: Math.max(game.hours, totalHours),
                   });
                   showToast('Play session added', 'success');
                 }

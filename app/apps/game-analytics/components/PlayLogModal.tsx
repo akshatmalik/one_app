@@ -54,6 +54,7 @@ export function PlayLogModal({ game, onSave, onClose }: PlayLogModalProps) {
   };
 
   const totalLoggedHours = logs.reduce((sum, log) => sum + log.hours, 0);
+  const totalHours = game.hours + totalLoggedHours; // Baseline + logged hours
 
   // Parse date string (YYYY-MM-DD) as local date to avoid timezone shift
   const parseLocalDate = (dateStr: string) => {
@@ -81,8 +82,8 @@ export function PlayLogModal({ game, onSave, onClose }: PlayLogModalProps) {
         {/* Stats Bar */}
         <div className="px-4 py-3 bg-white/[0.02] border-b border-white/5 flex items-center gap-6">
           <div>
-            <div className="text-xs text-white/40">Sessions</div>
-            <div className="text-lg font-semibold text-white">{logs.length}</div>
+            <div className="text-xs text-white/40">Baseline Hours</div>
+            <div className="text-lg font-semibold text-white/40">{game.hours}h</div>
           </div>
           <div>
             <div className="text-xs text-white/40">Logged Hours</div>
@@ -90,7 +91,7 @@ export function PlayLogModal({ game, onSave, onClose }: PlayLogModalProps) {
           </div>
           <div>
             <div className="text-xs text-white/40">Total Hours</div>
-            <div className="text-lg font-semibold text-white/60">{game.hours}h</div>
+            <div className="text-lg font-semibold text-white">{totalHours.toFixed(1)}h</div>
           </div>
         </div>
 
