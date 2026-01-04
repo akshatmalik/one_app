@@ -33,6 +33,7 @@ export interface Game {
   startDate?: string; // When you started playing
   endDate?: string; // When you finished/stopped
   playLogs?: PlayLog[]; // Individual play sessions
+  thumbnail?: string; // Game thumbnail URL from RAWG API
   createdAt: string;
   updatedAt: string;
 }

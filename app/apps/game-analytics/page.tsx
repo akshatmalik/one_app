@@ -5,6 +5,7 @@ import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Tro
 import { useGames } from './hooks/useGames';
 import { useAnalytics, GameWithMetrics } from './hooks/useAnalytics';
 import { useBudget } from './hooks/useBudget';
+import { useGameThumbnails } from './hooks/useGameThumbnails';
 import { GameForm } from './components/GameForm';
 import { PlayLogModal } from './components/PlayLogModal';
 import { TimelineView } from './components/TimelineView';
@@ -26,6 +27,7 @@ export default function GameAnalyticsPage() {
   const { games, loading, error, addGame, updateGame, deleteGame, refresh } = useGames(user?.uid ?? null);
   const { gamesWithMetrics, summary } = useAnalytics(games);
   const { budgets, setBudget } = useBudget(user?.uid ?? null);
+  const { loading: thumbnailsLoading, fetchedCount } = useGameThumbnails(games, updateGame);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingGame, setEditingGame] = useState<GameWithMetrics | null>(null);
   const [playLogGame, setPlayLogGame] = useState<GameWithMetrics | null>(null);
@@ -323,6 +325,21 @@ export default function GameAnalyticsPage() {
                       onClick={() => handleEdit(game)}
                       className="group p-4 bg-white/[0.02] hover:bg-white/[0.04] border border-white/5 hover:border-white/10 rounded-xl cursor-pointer transition-all"
                     >
+                      <div className="flex gap-4">
+                        {/* Thumbnail */}
+                        {game.thumbnail && (
+                          <div className="shrink-0">
+                            <img
+                              src={game.thumbnail}
+                              alt={game.name}
+                              className="w-24 h-24 object-cover rounded-lg"
+                              loading="lazy"
+                            />
+                          </div>
+                        )}
+
+                        {/* Main Content */}
+                        <div className="flex-1 min-w-0">
                       {/* Header: Name + Status + Actions */}
                       <div className="flex items-start justify-between gap-2 mb-2">
                         <div className="flex-1 min-w-0">
@@ -466,6 +483,8 @@ export default function GameAnalyticsPage() {
                           </div>
                         </div>
                       )}
+                        </div>
+                      </div>
                     </div>
                   ))}
                 </div>
