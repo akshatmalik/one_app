@@ -621,11 +621,13 @@ export function getDiscountEffectiveness(games: Game[]): { avgSavings: number; b
 }
 
 // Get ROI rating label based on ROI value
+// ROI = (rating * hours) / price
+// Examples: $60 game, 30h, 8/10 = 4.0 | $70 game, 20h, 9/10 = 2.57 | $20 game, 50h, 9/10 = 22.5
 export function getROIRating(roi: number): 'Excellent' | 'Good' | 'Fair' | 'Poor' {
-  if (roi >= 50) return 'Excellent';
-  if (roi >= 20) return 'Good';
-  if (roi >= 5) return 'Fair';
-  return 'Poor';
+  if (roi >= 10) return 'Excellent';  // Amazing value! (e.g., $30 game, 50h, 6+ rating)
+  if (roi >= 3) return 'Good';        // Solid value (e.g., $60 game, 30h, 6+ rating)
+  if (roi >= 1) return 'Fair';        // Decent value (e.g., $60 game, 10h, 6+ rating)
+  return 'Poor';                      // Low value (short playtime vs price)
 }
 
 // Get longest gaming streak ever
@@ -768,13 +770,13 @@ export function getQuickFixGames(games: Game[]): Game[] {
   ).sort((a, b) => getTotalHours(a) - getTotalHours(b));
 }
 
-// Get patient gamer stats (games bought at 50%+ discount)
+// Get patient gamer stats (games bought at 30%+ discount)
 export function getPatientGamerStats(games: Game[]): { count: number; avgDiscount: number; totalSaved: number } {
   const patientGames = games.filter(g =>
     !g.acquiredFree &&
     g.originalPrice &&
     g.originalPrice > g.price &&
-    ((g.originalPrice - g.price) / g.originalPrice) >= 0.5 &&
+    ((g.originalPrice - g.price) / g.originalPrice) >= 0.3 &&
     g.status !== 'Wishlist'
   );
 
