@@ -54,6 +54,8 @@ import { calculateSummary, getCumulativeSpending, getHoursByMonth, getSpendingBy
 import { GameWithMetrics } from '../hooks/useAnalytics';
 import { PeriodStatsPanel } from './PeriodStatsPanel';
 import { FunStatsPanel } from './FunStatsPanel';
+import { AdvancedCharts } from './AdvancedCharts';
+import { GamingHeatmap } from './GamingHeatmap';
 import clsx from 'clsx';
 
 interface StatsViewProps {
@@ -939,8 +941,14 @@ export function StatsView({ games, summary, budgets = [], onSetBudget }: StatsVi
       {/* Period Stats Panel (This Week / This Month) */}
       <PeriodStatsPanel games={games} />
 
+      {/* Gaming Activity Heatmap */}
+      <GamingHeatmap games={games} />
+
       {/* Fun Stats Panel */}
       <FunStatsPanel games={games} />
+
+      {/* Advanced Charts */}
+      <AdvancedCharts games={games} />
 
       {/* All-Time Summary Cards */}
       <div>
