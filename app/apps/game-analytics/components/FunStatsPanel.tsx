@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import {
   Sparkles, Gem, Frown, Package, Flame, Trophy, Target, TrendingUp, Zap,
   Award, Clock, Heart, Percent, Calendar, Star, Shield, Rocket, Crown,
@@ -31,14 +32,19 @@ import {
   getMostInvestedFranchise,
   getValueChampion,
   getAverageDiscount,
+  getTotalHours,
 } from '../lib/calculations';
+import { GameListModal } from './GameListModal';
 import clsx from 'clsx';
 
 interface FunStatsPanelProps {
   games: Game[];
 }
 
+type ModalType = 'centuryClub' | 'patientGamer' | 'freeGames' | 'quickFix' | 'shelfWarmers' | 'hiddenGems' | null;
+
 export function FunStatsPanel({ games }: FunStatsPanelProps) {
+  const [activeModal, setActiveModal] = useState<ModalType>(null);
   // Existing stats
   const hiddenGems = findHiddenGems(games);
   const regretPurchases = findRegretPurchases(games);
@@ -85,50 +91,62 @@ export function FunStatsPanel({ games }: FunStatsPanelProps) {
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
         {/* Century Club */}
         {centuryClub.length > 0 && (
-          <div className="p-3 bg-gradient-to-br from-purple-500/10 to-pink-500/10 border border-purple-500/20 rounded-xl">
+          <button
+            onClick={() => setActiveModal('centuryClub')}
+            className="p-3 bg-gradient-to-br from-purple-500/10 to-pink-500/10 border border-purple-500/20 rounded-xl hover:border-purple-500/40 transition-all cursor-pointer text-left w-full"
+          >
             <div className="flex items-center gap-2 mb-1">
               <Crown size={14} className="text-purple-400" />
               <span className="text-xs text-white/40">Century Club</span>
             </div>
             <div className="text-2xl font-bold text-purple-400">{centuryClub.length}</div>
-            <div className="text-xs text-white/30">100+ hrs</div>
-          </div>
+            <div className="text-xs text-white/30">100+ hrs • Click to view</div>
+          </button>
         )}
 
         {/* Patient Gamer */}
         {patientGamer.count > 0 && (
-          <div className="p-3 bg-gradient-to-br from-blue-500/10 to-cyan-500/10 border border-blue-500/20 rounded-xl">
+          <button
+            onClick={() => setActiveModal('patientGamer')}
+            className="p-3 bg-gradient-to-br from-blue-500/10 to-cyan-500/10 border border-blue-500/20 rounded-xl hover:border-blue-500/40 transition-all cursor-pointer text-left w-full"
+          >
             <div className="flex items-center gap-2 mb-1">
               <Percent size={14} className="text-blue-400" />
               <span className="text-xs text-white/40">Patient Gamer</span>
             </div>
             <div className="text-2xl font-bold text-blue-400">{patientGamer.count}</div>
-            <div className="text-xs text-white/30">50%+ off</div>
-          </div>
+            <div className="text-xs text-white/30">30%+ off • Click to view</div>
+          </button>
         )}
 
         {/* Free Rider */}
         {freeGames.length > 0 && (
-          <div className="p-3 bg-gradient-to-br from-emerald-500/10 to-teal-500/10 border border-emerald-500/20 rounded-xl">
+          <button
+            onClick={() => setActiveModal('freeGames')}
+            className="p-3 bg-gradient-to-br from-emerald-500/10 to-teal-500/10 border border-emerald-500/20 rounded-xl hover:border-emerald-500/40 transition-all cursor-pointer text-left w-full"
+          >
             <div className="flex items-center gap-2 mb-1">
               <Star size={14} className="text-emerald-400" />
               <span className="text-xs text-white/40">Free Rider</span>
             </div>
             <div className="text-2xl font-bold text-emerald-400">${totalFreeValue.toFixed(0)}</div>
-            <div className="text-xs text-white/30">{freeGames.length} free games</div>
-          </div>
+            <div className="text-xs text-white/30">{freeGames.length} free • Click to view</div>
+          </button>
         )}
 
         {/* Quick Fix */}
         {quickFix.length > 0 && (
-          <div className="p-3 bg-gradient-to-br from-yellow-500/10 to-orange-500/10 border border-yellow-500/20 rounded-xl">
+          <button
+            onClick={() => setActiveModal('quickFix')}
+            className="p-3 bg-gradient-to-br from-yellow-500/10 to-orange-500/10 border border-yellow-500/20 rounded-xl hover:border-yellow-500/40 transition-all cursor-pointer text-left w-full"
+          >
             <div className="flex items-center gap-2 mb-1">
               <Zap size={14} className="text-yellow-400" />
               <span className="text-xs text-white/40">Quick Fix</span>
             </div>
             <div className="text-2xl font-bold text-yellow-400">{quickFix.length}</div>
-            <div className="text-xs text-white/30">&lt;10h games</div>
-          </div>
+            <div className="text-xs text-white/30">&lt;10h • Click to view</div>
+          </button>
         )}
 
         {/* All-Rounder */}
@@ -205,11 +223,11 @@ export function FunStatsPanel({ games }: FunStatsPanelProps) {
 
       {/* Hidden Gems */}
       {hiddenGems.length > 0 && (
-        <div className="p-4 bg-gradient-to-br from-emerald-500/10 to-cyan-500/10 border border-emerald-500/20 rounded-xl">
+        <div className="p-4 bg-gradient-to-br from-emerald-500/10 to-cyan-500/10 border border-emerald-500/20 rounded-xl hover:border-emerald-500/40 transition-all cursor-pointer" onClick={() => setActiveModal('hiddenGems')}>
           <div className="flex items-center gap-2 mb-3">
             <Gem size={16} className="text-emerald-400" />
             <h4 className="text-sm font-medium text-white">Hidden Gems</h4>
-            <span className="text-xs text-white/30">Amazing value finds</span>
+            <span className="text-xs text-white/30">Amazing value finds • Click to view all</span>
           </div>
           <div className="space-y-2">
             {hiddenGems.slice(0, 3).map((gem, idx) => (
@@ -234,11 +252,11 @@ export function FunStatsPanel({ games }: FunStatsPanelProps) {
 
       {/* Shelf Warmers */}
       {shelfWarmers.length > 0 && (
-        <div className="p-4 bg-gradient-to-br from-yellow-500/10 to-orange-500/10 border border-yellow-500/20 rounded-xl">
+        <div className="p-4 bg-gradient-to-br from-yellow-500/10 to-orange-500/10 border border-yellow-500/20 rounded-xl hover:border-yellow-500/40 transition-all cursor-pointer" onClick={() => setActiveModal('shelfWarmers')}>
           <div className="flex items-center gap-2 mb-3">
             <Package size={16} className="text-yellow-400" />
             <h4 className="text-sm font-medium text-white">Shelf Warmers</h4>
-            <span className="text-xs text-white/30">Collecting dust</span>
+            <span className="text-xs text-white/30">Collecting dust • Click to view all</span>
           </div>
           <div className="space-y-2">
             {shelfWarmers.slice(0, 3).map((warmer) => (
@@ -403,6 +421,96 @@ export function FunStatsPanel({ games }: FunStatsPanelProps) {
           </div>
         </div>
       )}
+
+      {/* Modals */}
+      <GameListModal
+        title="Century Club - 100+ Hours"
+        games={centuryClub}
+        isOpen={activeModal === 'centuryClub'}
+        onClose={() => setActiveModal(null)}
+        renderGameInfo={(game) => (
+          <div className="text-xs text-white/40 mt-0.5">
+            {getTotalHours(game).toFixed(0)}h played • {game.rating}/10 rating
+          </div>
+        )}
+      />
+
+      <GameListModal
+        title={`Patient Gamer - 30%+ Discounts`}
+        games={games.filter(g =>
+          !g.acquiredFree &&
+          g.originalPrice &&
+          g.originalPrice > g.price &&
+          ((g.originalPrice - g.price) / g.originalPrice) >= 0.3 &&
+          g.status !== 'Wishlist'
+        )}
+        isOpen={activeModal === 'patientGamer'}
+        onClose={() => setActiveModal(null)}
+        renderGameInfo={(game) => {
+          const discount = game.originalPrice && game.originalPrice > game.price
+            ? ((game.originalPrice - game.price) / game.originalPrice * 100).toFixed(0)
+            : '0';
+          return (
+            <div className="text-xs text-white/40 mt-0.5">
+              ${game.price} (was ${game.originalPrice}) • {discount}% off
+            </div>
+          );
+        }}
+      />
+
+      <GameListModal
+        title="Free Games"
+        games={freeGames}
+        isOpen={activeModal === 'freeGames'}
+        onClose={() => setActiveModal(null)}
+        renderGameInfo={(game) => (
+          <div className="text-xs text-white/40 mt-0.5">
+            Worth ${game.originalPrice || 0} • {game.subscriptionSource || 'Free'}
+          </div>
+        )}
+      />
+
+      <GameListModal
+        title="Quick Fix - Completed in <10h"
+        games={quickFix}
+        isOpen={activeModal === 'quickFix'}
+        onClose={() => setActiveModal(null)}
+        renderGameInfo={(game) => (
+          <div className="text-xs text-white/40 mt-0.5">
+            {getTotalHours(game).toFixed(1)}h to complete • {game.rating}/10 rating
+          </div>
+        )}
+      />
+
+      <GameListModal
+        title="Shelf Warmers - Backlog Gathering Dust"
+        games={shelfWarmers.map(w => w.game)}
+        isOpen={activeModal === 'shelfWarmers'}
+        onClose={() => setActiveModal(null)}
+        renderGameInfo={(game) => {
+          const warmer = shelfWarmers.find(w => w.game.id === game.id);
+          return (
+            <div className="text-xs text-white/40 mt-0.5">
+              ${game.price} • Sitting for {warmer ? Math.floor(warmer.daysSitting) : 0} days
+            </div>
+          );
+        }}
+      />
+
+      <GameListModal
+        title="Hidden Gems - Amazing Value Finds"
+        games={hiddenGems.map(g => g.game)}
+        isOpen={activeModal === 'hiddenGems'}
+        onClose={() => setActiveModal(null)}
+        renderGameInfo={(game) => {
+          const costPerHour = getTotalHours(game) > 0 ? game.price / getTotalHours(game) : 0;
+          return (
+            <div className="text-xs text-white/40 mt-0.5">
+              ${game.price} • {getTotalHours(game)}h • ${costPerHour.toFixed(2)}/hr
+            </div>
+          );
+        }}
+      />
     </div>
   );
 }
