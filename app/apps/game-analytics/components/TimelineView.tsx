@@ -235,16 +235,38 @@ export function TimelineView({ games, onLogTime, onQuickAddTime }: TimelineViewP
           {/* Events */}
           <div className="space-y-3 relative">
             {/* Timeline line */}
-            <div className="absolute left-[19px] top-3 bottom-3 w-px bg-white/5" />
+            <div className="absolute left-6 top-3 bottom-3 w-px bg-white/5" />
 
             {monthEvents.map((event, idx) => (
               <div key={event.id} className="flex items-start gap-4 relative">
-                {/* Icon */}
-                <div className={clsx(
-                  'relative z-10 w-10 h-10 rounded-xl flex items-center justify-center border',
-                  getEventColor(event.type)
-                )}>
-                  {getEventIcon(event.type)}
+                {/* Thumbnail or Icon */}
+                <div className="relative z-10 shrink-0">
+                  {event.game.thumbnail ? (
+                    <div className="relative">
+                      <img
+                        src={event.game.thumbnail}
+                        alt={event.game.name}
+                        className="w-12 h-12 rounded-xl object-cover border border-white/10"
+                        loading="lazy"
+                      />
+                      {/* Event type badge overlay */}
+                      <div className={clsx(
+                        'absolute -bottom-1 -right-1 w-5 h-5 rounded-md flex items-center justify-center border border-[#1a1a24]',
+                        getEventColor(event.type)
+                      )}>
+                        <div className="scale-50">
+                          {getEventIcon(event.type)}
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className={clsx(
+                      'w-12 h-12 rounded-xl flex items-center justify-center border',
+                      getEventColor(event.type)
+                    )}>
+                      {getEventIcon(event.type)}
+                    </div>
+                  )}
                 </div>
 
                 {/* Content */}

@@ -624,9 +624,9 @@ export function getDiscountEffectiveness(games: Game[]): { avgSavings: number; b
 // ROI = (rating * hours) / price
 // Examples: $60 game, 30h, 8/10 = 4.0 | $70 game, 20h, 9/10 = 2.57 | $20 game, 50h, 9/10 = 22.5
 export function getROIRating(roi: number): 'Excellent' | 'Good' | 'Fair' | 'Poor' {
-  if (roi >= 10) return 'Excellent';  // Amazing value! (e.g., $30 game, 50h, 6+ rating)
-  if (roi >= 3) return 'Good';        // Solid value (e.g., $60 game, 30h, 6+ rating)
-  if (roi >= 1) return 'Fair';        // Decent value (e.g., $60 game, 10h, 6+ rating)
+  if (roi >= 5) return 'Excellent';   // Amazing value! (e.g., $70 game, 100h, 9 rating)
+  if (roi >= 1.5) return 'Good';      // Solid value (e.g., $70 game, 15h, 8 rating)
+  if (roi >= 0.5) return 'Fair';      // Decent value (e.g., $60 game, 5h, 6 rating)
   return 'Poor';                      // Low value (short playtime vs price)
 }
 
