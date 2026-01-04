@@ -2,6 +2,15 @@ import { Game, GameMetrics, AnalyticsSummary } from './types';
 
 const BASELINE_COST = 3.5;
 
+/**
+ * Calculate total hours for a game: baseline hours + logged session hours
+ * This allows tracking historical hours while adding new detailed play sessions
+ */
+export function getTotalHours(game: Game): number {
+  const loggedHours = game.playLogs?.reduce((sum, log) => sum + log.hours, 0) || 0;
+  return game.hours + loggedHours;
+}
+
 export function calculateCostPerHour(price: number, hours: number): number {
   return hours > 0 ? price / hours : 0;
 }
@@ -33,14 +42,15 @@ export function calculateDaysToComplete(startDate?: string, endDate?: string): n
 }
 
 export function calculateMetrics(game: Game): GameMetrics {
-  const costPerHour = calculateCostPerHour(game.price, game.hours);
+  const totalHours = getTotalHours(game);
+  const costPerHour = calculateCostPerHour(game.price, totalHours);
   const normalizedCost = costPerHour / BASELINE_COST;
   return {
     costPerHour,
     blendScore: calculateBlendScore(game.rating, costPerHour),
     normalizedCost,
     valueRating: getValueRating(costPerHour),
-    roi: calculateROI(game.rating, game.hours, game.price),
+    roi: calculateROI(game.rating, totalHours, game.price),
     daysToComplete: calculateDaysToComplete(game.startDate, game.endDate),
   };
 }
@@ -52,7 +62,7 @@ export function calculateSummary(games: Game[]): AnalyticsSummary {
   const inProgressGames = ownedGames.filter(g => g.status === 'In Progress');
   const notStartedGames = ownedGames.filter(g => g.status === 'Not Started');
   const abandonedGames = ownedGames.filter(g => g.status === 'Abandoned');
-  const playedGames = ownedGames.filter(g => g.hours > 0);
+  const playedGames = ownedGames.filter(g => getTotalHours(g) > 0);
 
   // Financial calculations
   const totalSpent = ownedGames.reduce((sum, g) => sum + g.price, 0);
@@ -75,12 +85,12 @@ export function calculateSummary(games: Game[]): AnalyticsSummary {
     : 0;
 
   // Time calculations
-  const totalHours = ownedGames.reduce((sum, g) => sum + g.hours, 0);
+  const totalHours = ownedGames.reduce((sum, g) => sum + getTotalHours(g), 0);
   const averageHoursPerGame = playedGames.length > 0 ? totalHours / playedGames.length : 0;
   const averageCostPerHour = totalHours > 0 ? totalSpent / totalHours : 0;
 
   // Rating calculations
-  const ratedGames = ownedGames.filter(g => g.hours > 0);
+  const ratedGames = ownedGames.filter(g => getTotalHours(g) > 0);
   const averageRating = ratedGames.length > 0
     ? ratedGames.reduce((sum, g) => sum + g.rating, 0) / ratedGames.length
     : 0;
@@ -106,27 +116,27 @@ export function calculateSummary(games: Game[]): AnalyticsSummary {
 
   if (playedGames.length > 0) {
     // Best value (min 5 hours, exclude free games)
-    const qualifiedForValue = playedGames.filter(g => g.hours >= 5 && !g.acquiredFree);
+    const qualifiedForValue = playedGames.filter(g => getTotalHours(g) >= 5 && !g.acquiredFree);
     if (qualifiedForValue.length > 0) {
       const sortedByValue = [...qualifiedForValue].sort((a, b) =>
-        calculateCostPerHour(a.price, a.hours) - calculateCostPerHour(b.price, b.hours)
+        calculateCostPerHour(a.price, getTotalHours(a)) - calculateCostPerHour(b.price, getTotalHours(b))
       );
       const best = sortedByValue[0];
-      bestValue = { name: best.name, costPerHour: calculateCostPerHour(best.price, best.hours) };
+      bestValue = { name: best.name, costPerHour: calculateCostPerHour(best.price, getTotalHours(best)) };
 
       // Worst value (min 2 hours, exclude free games)
-      const paidGames = qualifiedForValue.filter(g => g.price > 0 && g.hours >= 2);
+      const paidGames = qualifiedForValue.filter(g => g.price > 0 && getTotalHours(g) >= 2);
       if (paidGames.length > 0) {
         const worst = [...paidGames].sort((a, b) =>
-          calculateCostPerHour(b.price, b.hours) - calculateCostPerHour(a.price, a.hours)
+          calculateCostPerHour(b.price, getTotalHours(b)) - calculateCostPerHour(a.price, getTotalHours(a))
         )[0];
-        worstValue = { name: worst.name, costPerHour: calculateCostPerHour(worst.price, worst.hours) };
+        worstValue = { name: worst.name, costPerHour: calculateCostPerHour(worst.price, getTotalHours(worst)) };
       }
     }
 
     // Most played
-    const sortedByHours = [...playedGames].sort((a, b) => b.hours - a.hours);
-    mostPlayed = { name: sortedByHours[0].name, hours: sortedByHours[0].hours };
+    const sortedByHours = [...playedGames].sort((a, b) => getTotalHours(b) - getTotalHours(a));
+    mostPlayed = { name: sortedByHours[0].name, hours: getTotalHours(sortedByHours[0]) };
 
     // Highest rated
     const sortedByRating = [...ratedGames].sort((a, b) => b.rating - a.rating);
@@ -139,7 +149,7 @@ export function calculateSummary(games: Game[]): AnalyticsSummary {
       .filter(g => g.price > 0 && !g.acquiredFree)
       .map(g => ({
         ...g,
-        roi: calculateROI(g.rating, g.hours, g.price)
+        roi: calculateROI(g.rating, getTotalHours(g), g.price)
       }))
       .sort((a, b) => b.roi - a.roi);
     if (paidGamesWithROI.length > 0) {
@@ -161,7 +171,7 @@ export function calculateSummary(games: Game[]): AnalyticsSummary {
     // By genre
     const genre = game.genre || 'Unknown';
     spendingByGenre[genre] = (spendingByGenre[genre] || 0) + game.price;
-    hoursByGenre[genre] = (hoursByGenre[genre] || 0) + game.hours;
+    hoursByGenre[genre] = (hoursByGenre[genre] || 0) + getTotalHours(game);
 
     // By platform
     const platform = game.platform || 'Unknown';
@@ -180,7 +190,7 @@ export function calculateSummary(games: Game[]): AnalyticsSummary {
     // By franchise
     if (game.franchise) {
       spendingByFranchise[game.franchise] = (spendingByFranchise[game.franchise] || 0) + game.price;
-      hoursByFranchise[game.franchise] = (hoursByFranchise[game.franchise] || 0) + game.hours;
+      hoursByFranchise[game.franchise] = (hoursByFranchise[game.franchise] || 0) + getTotalHours(game);
       gamesByFranchise[game.franchise] = (gamesByFranchise[game.franchise] || 0) + 1;
     }
   });
@@ -196,7 +206,7 @@ export function calculateSummary(games: Game[]): AnalyticsSummary {
 
   freeGames.forEach(game => {
     const source = game.subscriptionSource || 'Other';
-    hoursBySubscription[source] = (hoursBySubscription[source] || 0) + game.hours;
+    hoursBySubscription[source] = (hoursBySubscription[source] || 0) + getTotalHours(game);
     savedBySubscription[source] = (savedBySubscription[source] || 0) + (game.originalPrice || 0);
     gamesBySubscription[source] = (gamesBySubscription[source] || 0) + 1;
   });
@@ -444,11 +454,12 @@ export interface HiddenGem {
 
 // Find "Hidden Gems" - games with amazing value (low price, high hours, high rating)
 export function findHiddenGems(games: Game[]): HiddenGem[] {
-  const playedGames = games.filter(g => g.hours >= 10 && g.status !== 'Wishlist' && !g.acquiredFree);
+  const playedGames = games.filter(g => getTotalHours(g) >= 10 && g.status !== 'Wishlist' && !g.acquiredFree);
 
   return playedGames
     .map(game => {
-      const costPerHour = calculateCostPerHour(game.price, game.hours);
+      const totalHours = getTotalHours(game);
+      const costPerHour = calculateCostPerHour(game.price, totalHours);
       const valueScore = (game.rating * 10) / (costPerHour + 0.1); // Higher is better
       return { game, score: valueScore };
     })
@@ -473,7 +484,8 @@ export function findRegretPurchases(games: Game[]): RegretPurchase[] {
         ? Math.max(1, (Date.now() - new Date(game.datePurchased).getTime()) / (1000 * 60 * 60 * 24))
         : 365;
       const expectedHours = Math.min(daysSincePurchase * 0.5, 50); // Expect at least 0.5h per day, max 50h
-      const hourDeficit = Math.max(0, expectedHours - game.hours);
+      const totalHours = getTotalHours(game);
+      const hourDeficit = Math.max(0, expectedHours - totalHours);
       const regretScore = (game.price / 10) * hourDeficit;
       return { game, regretScore };
     })
@@ -564,11 +576,11 @@ export function getCompletionVelocity(games: Game[]): number | null {
 // Platform preference score (0-100 based on hours played per platform)
 export function getPlatformPreference(games: Game[]): Array<{ platform: string; score: number; hours: number }> {
   const platformHours: Record<string, number> = {};
-  const playedGames = games.filter(g => g.hours > 0);
+  const playedGames = games.filter(g => getTotalHours(g) > 0);
 
   playedGames.forEach(game => {
     const platform = game.platform || 'Unknown';
-    platformHours[platform] = (platformHours[platform] || 0) + game.hours;
+    platformHours[platform] = (platformHours[platform] || 0) + getTotalHours(game);
   });
 
   const totalHours = Object.values(platformHours).reduce((sum, h) => sum + h, 0);
@@ -667,7 +679,7 @@ export function getImpulseBuyerStat(games: Game[]): number | null {
 
 // Calculate backlog in days (total unplayed hours / 24)
 export function getBacklogInDays(games: Game[]): number {
-  const unplayedGames = games.filter(g => g.status === 'Not Started' && g.hours === 0);
+  const unplayedGames = games.filter(g => g.status === 'Not Started' && getTotalHours(g) === 0);
   // Estimate 20 hours per unplayed game
   const estimatedHours = unplayedGames.length * 20;
   return estimatedHours / 24;
@@ -675,7 +687,7 @@ export function getBacklogInDays(games: Game[]): number {
 
 // Calculate genre diversity (number of unique genres played / total genres)
 export function getGenreDiversity(games: Game[]): { uniqueGenres: number; percentage: number } {
-  const playedGames = games.filter(g => g.hours > 0 && g.genre);
+  const playedGames = games.filter(g => getTotalHours(g) > 0 && g.genre);
   const uniqueGenres = new Set(playedGames.map(g => g.genre)).size;
   const totalGenres = new Set(games.filter(g => g.genre).map(g => g.genre)).size;
 
@@ -690,7 +702,7 @@ export function getCommitmentScore(games: Game[]): number {
   const ownedGames = games.filter(g => g.status !== 'Wishlist');
   if (ownedGames.length === 0) return 0;
 
-  const committedGames = ownedGames.filter(g => g.hours >= 10);
+  const committedGames = ownedGames.filter(g => getTotalHours(g) >= 10);
   return (committedGames.length / ownedGames.length) * 100;
 }
 
@@ -745,15 +757,15 @@ export function getLongestSession(games: Game[]): { game: Game; hours: number; d
 
 // Get "Century Club" games (100+ hours)
 export function getCenturyClubGames(games: Game[]): Game[] {
-  return games.filter(g => g.hours >= 100 && g.status !== 'Wishlist')
-    .sort((a, b) => b.hours - a.hours);
+  return games.filter(g => getTotalHours(g) >= 100 && g.status !== 'Wishlist')
+    .sort((a, b) => getTotalHours(b) - getTotalHours(a));
 }
 
 // Get "Quick Fix" games (completed in <10 hours)
 export function getQuickFixGames(games: Game[]): Game[] {
   return games.filter(g =>
-    g.status === 'Completed' && g.hours > 0 && g.hours < 10
-  ).sort((a, b) => a.hours - b.hours);
+    g.status === 'Completed' && getTotalHours(g) > 0 && getTotalHours(g) < 10
+  ).sort((a, b) => getTotalHours(a) - getTotalHours(b));
 }
 
 // Get patient gamer stats (games bought at 50%+ discount)
@@ -808,14 +820,14 @@ export function getCompletionistRate(games: Game[]): {
 // Get hidden gems (cheap games with high value)
 export function getHiddenGems(games: Game[]): Game[] {
   return games.filter(g =>
-    g.hours >= 10 &&
+    getTotalHours(g) >= 10 &&
     g.status !== 'Wishlist' &&
     !g.acquiredFree &&
     g.price <= 10 &&
     g.rating >= 8
   ).sort((a, b) => {
-    const aValue = calculateROI(a.rating, a.hours, a.price);
-    const bValue = calculateROI(b.rating, b.hours, b.price);
+    const aValue = calculateROI(a.rating, getTotalHours(a), a.price);
+    const bValue = calculateROI(b.rating, getTotalHours(b), b.price);
     return bValue - aValue;
   });
 }
@@ -835,7 +847,7 @@ export function getMostInvestedFranchise(games: Game[]): {
       franchiseStats[f] = { spent: 0, hours: 0, games: 0 };
     }
     franchiseStats[f].spent += game.price;
-    franchiseStats[f].hours += game.hours;
+    franchiseStats[f].hours += getTotalHours(game);
     franchiseStats[f].games += 1;
   });
 
@@ -849,7 +861,7 @@ export function getMostInvestedFranchise(games: Game[]): {
 // Get value champion (best cost per hour across all played games)
 export function getValueChampion(games: Game[]): { game: Game; costPerHour: number } | null {
   const playedGames = games.filter(g =>
-    g.hours >= 5 &&
+    getTotalHours(g) >= 5 &&
     g.status !== 'Wishlist' &&
     !g.acquiredFree
   );
@@ -857,10 +869,10 @@ export function getValueChampion(games: Game[]): { game: Game; costPerHour: numb
   if (playedGames.length === 0) return null;
 
   const best = playedGames.sort((a, b) =>
-    calculateCostPerHour(a.price, a.hours) - calculateCostPerHour(b.price, b.hours)
+    calculateCostPerHour(a.price, getTotalHours(a)) - calculateCostPerHour(b.price, getTotalHours(b))
   )[0];
 
-  return { game: best, costPerHour: calculateCostPerHour(best.price, best.hours) };
+  return { game: best, costPerHour: calculateCostPerHour(best.price, getTotalHours(best)) };
 }
 
 // Calculate average discount percentage
