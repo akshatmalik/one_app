@@ -325,14 +325,14 @@ export default function GameAnalyticsPage() {
                       onClick={() => handleEdit(game)}
                       className="group p-4 bg-white/[0.02] hover:bg-white/[0.04] border border-white/5 hover:border-white/10 rounded-xl cursor-pointer transition-all"
                     >
-                      <div className="flex gap-4">
+                      <div className="flex gap-3">
                         {/* Thumbnail */}
                         {game.thumbnail && (
                           <div className="shrink-0">
                             <img
                               src={game.thumbnail}
                               alt={game.name}
-                              className="w-24 h-24 object-cover rounded-lg"
+                              className="w-20 h-20 object-cover rounded-lg"
                               loading="lazy"
                             />
                           </div>
@@ -341,9 +341,9 @@ export default function GameAnalyticsPage() {
                         {/* Main Content */}
                         <div className="flex-1 min-w-0">
                           {/* Row 1: Name + All Inline Badges + Actions */}
-                          <div className="flex items-start justify-between gap-2 mb-3">
+                          <div className="flex items-start justify-between gap-2 mb-2">
                             <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 flex-wrap">
+                              <div className="flex items-center gap-1.5 flex-wrap">
                                 {/* Game Name */}
                                 <h3 className="text-white/90 font-medium">{game.name}</h3>
 
@@ -468,7 +468,16 @@ export default function GameAnalyticsPage() {
                                   <div className={clsx('font-medium text-sm', getValueColor(getROIRating(game.metrics.roi)))}>
                                     {game.metrics.roi.toFixed(1)}
                                   </div>
-                                  <div className="text-[10px] text-white/30">{getROIRating(game.metrics.roi)} ROI</div>
+                                  <div className="text-[10px] text-white/30">
+                                    {(() => {
+                                      const rating = getROIRating(game.metrics.roi);
+                                      const multiplier = Math.floor(game.metrics.roi / 5);
+                                      if (rating === 'Excellent' && multiplier >= 2) {
+                                        return `${multiplier}x Excellent`;
+                                      }
+                                      return `${rating} ROI`;
+                                    })()}
+                                  </div>
                                 </>
                               ) : (
                                 <>
