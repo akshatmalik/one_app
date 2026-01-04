@@ -286,6 +286,7 @@ export function StatsView({ games, summary, budgets = [], onSetBudget }: StatsVi
       price: g.price,
       hours: g.hours,
       percent: periodSpent > 0 ? (g.price / periodSpent) * 100 : 0,
+      thumbnail: g.thumbnail,
     }));
 
   // Monthly spending for the selected period
@@ -577,7 +578,16 @@ export function StatsView({ games, summary, budgets = [], onSetBudget }: StatsVi
             </h3>
             <div className="space-y-2">
               {periodSpendingByGame.slice(0, 8).map((game, idx) => (
-                <div key={idx} className="flex items-center gap-3">
+                <div key={idx} className="flex items-center gap-2">
+                  {/* Thumbnail */}
+                  {game.thumbnail && (
+                    <img
+                      src={game.thumbnail}
+                      alt={game.fullName}
+                      className="w-8 h-8 object-cover rounded shrink-0"
+                      loading="lazy"
+                    />
+                  )}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-xs text-white/70 truncate">{game.fullName}</span>
@@ -688,19 +698,27 @@ export function StatsView({ games, summary, budgets = [], onSetBudget }: StatsVi
                                  roiRating === 'Fair' ? 'text-yellow-400' : 'text-red-400';
                 return (
                   <div key={game.id} className="p-3 bg-white/[0.03] rounded-lg">
-                    <div className="flex items-center justify-between mb-1">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold text-white/30 w-6">#{idx + 1}</span>
-                        <span className="text-sm text-white/80 font-medium">{game.name}</span>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-xs font-bold text-white/30 w-6 shrink-0">#{idx + 1}</span>
+                      {game.thumbnail && (
+                        <img
+                          src={game.thumbnail}
+                          alt={game.name}
+                          className="w-10 h-10 object-cover rounded shrink-0"
+                          loading="lazy"
+                        />
+                      )}
+                      <div className="flex-1 min-w-0 flex items-center justify-between">
+                        <span className="text-sm text-white/80 font-medium truncate">{game.name}</span>
+                        <span className={clsx('text-xs font-medium px-2 py-0.5 rounded shrink-0 ml-2', {
+                          'bg-emerald-500/20 text-emerald-400': roiRating === 'Excellent',
+                          'bg-blue-500/20 text-blue-400': roiRating === 'Good',
+                          'bg-yellow-500/20 text-yellow-400': roiRating === 'Fair',
+                          'bg-red-500/20 text-red-400': roiRating === 'Poor',
+                        })}>
+                          {roiRating}
+                        </span>
                       </div>
-                      <span className={clsx('text-xs font-medium px-2 py-0.5 rounded', {
-                        'bg-emerald-500/20 text-emerald-400': roiRating === 'Excellent',
-                        'bg-blue-500/20 text-blue-400': roiRating === 'Good',
-                        'bg-yellow-500/20 text-yellow-400': roiRating === 'Fair',
-                        'bg-red-500/20 text-red-400': roiRating === 'Poor',
-                      })}>
-                        {roiRating}
-                      </span>
                     </div>
                     <div className="flex items-center justify-between text-xs">
                       <div className="flex items-center gap-3 text-white/40">
@@ -755,7 +773,15 @@ export function StatsView({ games, summary, budgets = [], onSetBudget }: StatsVi
             <div className="space-y-2">
               {(showAllGamesPlayed ? periodAllGamesPlayed : periodAllGamesPlayed.slice(0, 15)).map((game) => (
                 <div key={game.id} className="p-3 bg-white/[0.03] rounded-lg hover:bg-white/[0.05] transition-all border border-white/5">
-                  <div className="flex items-start justify-between gap-3 mb-2">
+                  <div className="flex items-start gap-3 mb-2">
+                    {game.thumbnail && (
+                      <img
+                        src={game.thumbnail}
+                        alt={game.name}
+                        className="w-12 h-12 object-cover rounded shrink-0"
+                        loading="lazy"
+                      />
+                    )}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
                         <h4 className="text-base font-semibold text-white truncate">{game.name}</h4>
@@ -851,9 +877,17 @@ export function StatsView({ games, summary, budgets = [], onSetBudget }: StatsVi
                     {/* Games list */}
                     <div className="ml-2 space-y-1">
                       {sub.gamesList.map((game) => (
-                        <div key={game.id} className="flex items-center justify-between px-2 py-1 bg-white/[0.02] rounded text-xs">
-                          <span className="text-white/60">{game.name}</span>
-                          <div className="flex items-center gap-2">
+                        <div key={game.id} className="flex items-center gap-2 px-2 py-1 bg-white/[0.02] rounded text-xs">
+                          {game.thumbnail && (
+                            <img
+                              src={game.thumbnail}
+                              alt={game.name}
+                              className="w-6 h-6 object-cover rounded shrink-0"
+                              loading="lazy"
+                            />
+                          )}
+                          <span className="text-white/60 flex-1 truncate">{game.name}</span>
+                          <div className="flex items-center gap-2 shrink-0">
                             {game.hours > 0 && (
                               <span className="text-blue-400/70">{game.hours}h</span>
                             )}
@@ -910,11 +944,21 @@ export function StatsView({ games, summary, budgets = [], onSetBudget }: StatsVi
                     const saved = (game.originalPrice || 0) - game.price;
                     return (
                       <div key={game.id} className="p-3 bg-white/[0.03] rounded-lg">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-sm text-white/80 font-medium">{game.name}</span>
-                          <span className="text-xs font-medium px-2 py-0.5 bg-green-500/20 text-green-400 rounded">
-                            {discount.toFixed(0)}% off
-                          </span>
+                        <div className="flex items-center gap-2 mb-1">
+                          {game.thumbnail && (
+                            <img
+                              src={game.thumbnail}
+                              alt={game.name}
+                              className="w-10 h-10 object-cover rounded shrink-0"
+                              loading="lazy"
+                            />
+                          )}
+                          <div className="flex-1 min-w-0 flex items-center justify-between">
+                            <span className="text-sm text-white/80 font-medium truncate">{game.name}</span>
+                            <span className="text-xs font-medium px-2 py-0.5 bg-green-500/20 text-green-400 rounded shrink-0 ml-2">
+                              {discount.toFixed(0)}% off
+                            </span>
+                          </div>
                         </div>
                         <div className="flex items-center justify-between text-xs">
                           <div className="flex items-center gap-2">

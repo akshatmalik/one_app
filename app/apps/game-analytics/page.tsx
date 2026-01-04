@@ -340,130 +340,144 @@ export default function GameAnalyticsPage() {
 
                         {/* Main Content */}
                         <div className="flex-1 min-w-0">
-                      {/* Header: Name + Status + Actions */}
-                      <div className="flex items-start justify-between gap-2 mb-2">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <h3 className="text-white/90 font-medium">{game.name}</h3>
-                            <span className={clsx('text-[10px] px-2 py-0.5 rounded-full font-medium shrink-0', getStatusColor(game.status))}>
-                              {game.status}
-                            </span>
-                          </div>
-                        </div>
-                        {/* Action Buttons - Always visible on mobile */}
-                        <div className="flex items-center gap-1 sm:opacity-0 sm:group-hover:opacity-100 transition-all shrink-0">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleOpenPlayLog(game);
-                            }}
-                            className="p-2 text-white/30 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg transition-all"
-                            title="Log Play Session"
-                          >
-                            <Clock size={14} />
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDelete(game.id);
-                            }}
-                            className="p-2 text-white/30 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all"
-                            title="Delete Game"
-                          >
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                            </svg>
-                          </button>
-                        </div>
-                      </div>
+                          {/* Row 1: Name + All Inline Badges + Actions */}
+                          <div className="flex items-start justify-between gap-2 mb-3">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                {/* Game Name */}
+                                <h3 className="text-white/90 font-medium">{game.name}</h3>
 
-                      {/* Tags Row */}
-                      <div className="flex items-center gap-2 flex-wrap text-xs text-white/40 mb-3">
-                        {game.platform && <span className="px-2 py-0.5 bg-white/5 rounded">{game.platform}</span>}
-                        {game.genre && <span className="px-2 py-0.5 bg-white/5 rounded">{game.genre}</span>}
-                        {game.purchaseSource && <span className="px-2 py-0.5 bg-white/5 rounded">{game.purchaseSource}</span>}
-                        {/* Value Badge */}
-                        {game.totalHours > 0 && (
-                          <span className={clsx(
-                            'px-2 py-0.5 rounded font-medium',
-                            game.metrics.valueRating === 'Excellent' && 'bg-emerald-500/20 text-emerald-400',
-                            game.metrics.valueRating === 'Good' && 'bg-blue-500/20 text-blue-400',
-                            game.metrics.valueRating === 'Fair' && 'bg-yellow-500/20 text-yellow-400',
-                            game.metrics.valueRating === 'Poor' && 'bg-red-500/20 text-red-400'
-                          )}>
-                            {game.metrics.valueRating} Value
-                          </span>
-                        )}
-                        {/* Discount Badge */}
-                        {game.originalPrice && game.originalPrice > game.price && (
-                          <span className="px-2 py-0.5 bg-green-500/20 text-green-400 rounded font-medium">
-                            {(((game.originalPrice - game.price) / game.originalPrice) * 100).toFixed(0)}% off
-                          </span>
-                        )}
-                        {/* Free Badge */}
-                        {game.acquiredFree && (
-                          <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-400 rounded font-medium">
-                            FREE
-                          </span>
-                        )}
-                      </div>
+                                {/* Status Badge */}
+                                <span className={clsx('text-[10px] px-2 py-0.5 rounded-full font-medium shrink-0', getStatusColor(game.status))}>
+                                  {game.status}
+                                </span>
 
-                      {/* Stats Row */}
-                      <div className="grid grid-cols-5 gap-2 text-center">
-                        <div className="p-2 bg-white/[0.02] rounded-lg">
-                          <div className="flex flex-col items-center gap-0.5">
-                            {game.originalPrice && game.originalPrice > game.price ? (
-                              <>
-                                <div className="text-white/30 line-through text-xs">${game.originalPrice}</div>
-                                <div className="text-emerald-400 font-medium text-sm">${game.price}</div>
-                              </>
-                            ) : (
-                              <div className="text-white/80 font-medium text-sm">${game.price}</div>
-                            )}
-                          </div>
-                          <div className="text-[10px] text-white/30">
-                            {game.acquiredFree ? 'free' : 'price'}
-                          </div>
-                        </div>
-                        <div className="p-2 bg-white/[0.02] rounded-lg">
-                          <div className="text-white/80 font-medium text-sm">{game.totalHours}h</div>
-                          <div className="text-[10px] text-white/30">played</div>
-                        </div>
-                        <div className="p-2 bg-white/[0.02] rounded-lg">
-                          <div className="text-white/80 font-medium text-sm">{game.rating}/10</div>
-                          <div className="text-[10px] text-white/30">rating</div>
-                        </div>
-                        <div className="p-2 bg-white/[0.02] rounded-lg">
-                          {game.totalHours > 0 ? (
-                            <>
-                              <div className={clsx('font-medium text-sm', getValueColor(game.metrics.valueRating))}>
-                                ${game.metrics.costPerHour.toFixed(2)}
+                                {/* Platform/Genre/Source Tags */}
+                                {game.platform && <span className="text-[10px] px-2 py-0.5 bg-white/5 rounded text-white/40">{game.platform}</span>}
+                                {game.genre && <span className="text-[10px] px-2 py-0.5 bg-white/5 rounded text-white/40">{game.genre}</span>}
+                                {game.purchaseSource && <span className="text-[10px] px-2 py-0.5 bg-white/5 rounded text-white/40">{game.purchaseSource}</span>}
+
+                                {/* Value Badge */}
+                                {game.totalHours > 0 && (
+                                  <span className={clsx(
+                                    'text-[10px] px-2 py-0.5 rounded font-medium',
+                                    game.metrics.valueRating === 'Excellent' && 'bg-emerald-500/20 text-emerald-400',
+                                    game.metrics.valueRating === 'Good' && 'bg-blue-500/20 text-blue-400',
+                                    game.metrics.valueRating === 'Fair' && 'bg-yellow-500/20 text-yellow-400',
+                                    game.metrics.valueRating === 'Poor' && 'bg-red-500/20 text-red-400'
+                                  )}>
+                                    {game.metrics.valueRating}
+                                  </span>
+                                )}
+
+                                {/* Discount Badge */}
+                                {game.originalPrice && game.originalPrice > game.price && (
+                                  <span className="text-[10px] px-2 py-0.5 bg-green-500/20 text-green-400 rounded font-medium">
+                                    {(((game.originalPrice - game.price) / game.originalPrice) * 100).toFixed(0)}% off
+                                  </span>
+                                )}
+
+                                {/* Free Badge */}
+                                {game.acquiredFree && (
+                                  <span className="text-[10px] px-2 py-0.5 bg-emerald-500/20 text-emerald-400 rounded font-medium">
+                                    FREE
+                                  </span>
+                                )}
                               </div>
-                              <div className="text-[10px] text-white/30">per hr</div>
-                            </>
-                          ) : (
-                            <>
-                              <div className="text-white/30 font-medium text-sm">-</div>
-                              <div className="text-[10px] text-white/30">per hr</div>
-                            </>
-                          )}
-                        </div>
-                        <div className="p-2 bg-white/[0.02] rounded-lg">
-                          {game.totalHours > 0 ? (
-                            <>
-                              <div className={clsx('font-medium text-sm', getValueColor(getROIRating(game.metrics.roi)))}>
-                                {game.metrics.roi.toFixed(1)}
+                            </div>
+
+                            {/* Action Buttons */}
+                            <div className="flex items-center gap-1 sm:opacity-0 sm:group-hover:opacity-100 transition-all shrink-0">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleOpenPlayLog(game);
+                                }}
+                                className="p-2 text-white/30 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg transition-all"
+                                title="Log Play Session"
+                              >
+                                <Clock size={14} />
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDelete(game.id);
+                                }}
+                                className="p-2 text-white/30 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all"
+                                title="Delete Game"
+                              >
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                                </svg>
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Row 2: Full-width Stats Grid */}
+                          <div className="grid grid-cols-5 gap-2 text-center">
+                            {/* Price */}
+                            <div className="p-2 bg-white/[0.02] rounded-lg">
+                              <div className="flex flex-col items-center gap-0.5">
+                                {game.originalPrice && game.originalPrice > game.price ? (
+                                  <>
+                                    <div className="text-white/30 line-through text-xs">${game.originalPrice}</div>
+                                    <div className="text-emerald-400 font-medium text-sm">${game.price}</div>
+                                  </>
+                                ) : (
+                                  <div className="text-white/80 font-medium text-sm">${game.price}</div>
+                                )}
                               </div>
-                              <div className="text-[10px] text-white/30">{getROIRating(game.metrics.roi)} ROI</div>
-                            </>
-                          ) : (
-                            <>
-                              <div className="text-white/30 font-medium text-sm">-</div>
-                              <div className="text-[10px] text-white/30">ROI</div>
-                            </>
-                          )}
-                        </div>
-                      </div>
+                              <div className="text-[10px] text-white/30">
+                                {game.acquiredFree ? 'free' : 'price'}
+                              </div>
+                            </div>
+
+                            {/* Hours */}
+                            <div className="p-2 bg-white/[0.02] rounded-lg">
+                              <div className="text-white/80 font-medium text-sm">{game.totalHours}h</div>
+                              <div className="text-[10px] text-white/30">played</div>
+                            </div>
+
+                            {/* Rating */}
+                            <div className="p-2 bg-white/[0.02] rounded-lg">
+                              <div className="text-white/80 font-medium text-sm">{game.rating}/10</div>
+                              <div className="text-[10px] text-white/30">rating</div>
+                            </div>
+
+                            {/* Cost per Hour */}
+                            <div className="p-2 bg-white/[0.02] rounded-lg">
+                              {game.totalHours > 0 ? (
+                                <>
+                                  <div className={clsx('font-medium text-sm', getValueColor(game.metrics.valueRating))}>
+                                    ${game.metrics.costPerHour.toFixed(2)}
+                                  </div>
+                                  <div className="text-[10px] text-white/30">per hr</div>
+                                </>
+                              ) : (
+                                <>
+                                  <div className="text-white/30 font-medium text-sm">-</div>
+                                  <div className="text-[10px] text-white/30">per hr</div>
+                                </>
+                              )}
+                            </div>
+
+                            {/* ROI */}
+                            <div className="p-2 bg-white/[0.02] rounded-lg">
+                              {game.totalHours > 0 ? (
+                                <>
+                                  <div className={clsx('font-medium text-sm', getValueColor(getROIRating(game.metrics.roi)))}>
+                                    {game.metrics.roi.toFixed(1)}
+                                  </div>
+                                  <div className="text-[10px] text-white/30">{getROIRating(game.metrics.roi)} ROI</div>
+                                </>
+                              ) : (
+                                <>
+                                  <div className="text-white/30 font-medium text-sm">-</div>
+                                  <div className="text-[10px] text-white/30">ROI</div>
+                                </>
+                              )}
+                            </div>
+                          </div>
 
                       {/* Review Preview */}
                       {game.review && (
