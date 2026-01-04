@@ -44,7 +44,7 @@ export function GameCharts({ games }: GameChartsProps) {
       name: game.name.length > 15 ? game.name.slice(0, 15) + '...' : game.name,
       fullName: game.name,
       price: game.price,
-      hours: game.hours,
+      hours: game.totalHours,
     }));
 
   // 2. Games by Status (Pie Chart)
@@ -61,10 +61,10 @@ export function GameCharts({ games }: GameChartsProps) {
 
   // 3. Value Analysis (Hours vs Price scatter)
   const valueData = ownedGames
-    .filter(g => g.hours > 0)
+    .filter(g => g.totalHours > 0)
     .map(game => ({
       name: game.name,
-      hours: game.hours,
+      hours: game.totalHours,
       price: game.price,
       rating: game.rating,
       costPerHour: game.metrics.costPerHour,

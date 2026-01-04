@@ -116,13 +116,13 @@ export default function GameAnalyticsPage() {
         case 'price':
           return b.price - a.price;
         case 'hours':
-          return b.hours - a.hours;
+          return b.totalHours - a.totalHours;
         case 'rating':
           return b.rating - a.rating;
         case 'costPerHour':
           // Handle cases where hours might be 0
-          const aCost = a.hours > 0 ? a.metrics.costPerHour : Infinity;
-          const bCost = b.hours > 0 ? b.metrics.costPerHour : Infinity;
+          const aCost = a.totalHours > 0 ? a.metrics.costPerHour : Infinity;
+          const bCost = b.totalHours > 0 ? b.metrics.costPerHour : Infinity;
           return aCost - bCost;
         case 'recentlyPlayed':
           // Sort by most recent play log date (most recent first)
@@ -366,7 +366,7 @@ export default function GameAnalyticsPage() {
                         {game.genre && <span className="px-2 py-0.5 bg-white/5 rounded">{game.genre}</span>}
                         {game.purchaseSource && <span className="px-2 py-0.5 bg-white/5 rounded">{game.purchaseSource}</span>}
                         {/* Value Badge */}
-                        {game.hours > 0 && (
+                        {game.totalHours > 0 && (
                           <span className={clsx(
                             'px-2 py-0.5 rounded font-medium',
                             game.metrics.valueRating === 'Excellent' && 'bg-emerald-500/20 text-emerald-400',
@@ -409,7 +409,7 @@ export default function GameAnalyticsPage() {
                           </div>
                         </div>
                         <div className="p-2 bg-white/[0.02] rounded-lg">
-                          <div className="text-white/80 font-medium text-sm">{game.hours}h</div>
+                          <div className="text-white/80 font-medium text-sm">{game.totalHours}h</div>
                           <div className="text-[10px] text-white/30">played</div>
                         </div>
                         <div className="p-2 bg-white/[0.02] rounded-lg">
@@ -417,7 +417,7 @@ export default function GameAnalyticsPage() {
                           <div className="text-[10px] text-white/30">rating</div>
                         </div>
                         <div className="p-2 bg-white/[0.02] rounded-lg">
-                          {game.hours > 0 ? (
+                          {game.totalHours > 0 ? (
                             <>
                               <div className={clsx('font-medium text-sm', getValueColor(game.metrics.valueRating))}>
                                 ${game.metrics.costPerHour.toFixed(2)}
@@ -432,7 +432,7 @@ export default function GameAnalyticsPage() {
                           )}
                         </div>
                         <div className="p-2 bg-white/[0.02] rounded-lg">
-                          {game.hours > 0 ? (
+                          {game.totalHours > 0 ? (
                             <>
                               <div className={clsx('font-medium text-sm', getValueColor(getROIRating(game.metrics.roi)))}>
                                 {game.metrics.roi.toFixed(1)}

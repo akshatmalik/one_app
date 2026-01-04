@@ -122,7 +122,7 @@ export function StatsView({ games, summary, budgets = [], onSetBudget }: StatsVi
 
   // Calculate period-specific stats
   const periodSpent = filteredGames.reduce((sum, g) => sum + (g.status !== 'Wishlist' ? g.price : 0), 0);
-  const periodHours = filteredGames.reduce((sum, g) => sum + g.hours, 0);
+  const periodHours = filteredGames.reduce((sum, g) => sum + g.totalHours, 0);
   const periodGamesCount = filteredGames.filter(g => g.status !== 'Wishlist').length;
   const periodAvgCostPerHour = periodHours > 0 ? periodSpent / periodHours : 0;
 
