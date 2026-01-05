@@ -113,10 +113,28 @@ Required rules in Firebase Console → Firestore → Rules:
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // Daily Tasks app
     match /tasks/{taskId} {
       allow read, write: if request.auth != null;
     }
+
+    // Game Analytics app
     match /games/{gameId} {
+      allow read, write: if request.auth != null;
+    }
+
+    // Time Tracker app - Categories
+    match /timeTrackerCategories/{categoryId} {
+      allow read, write: if request.auth != null;
+    }
+
+    // Time Tracker app - Schedule Presets
+    match /timeTrackerPresets/{presetId} {
+      allow read, write: if request.auth != null;
+    }
+
+    // Time Tracker app - Time Entries
+    match /timeTrackerEntries/{entryId} {
       allow read, write: if request.auth != null;
     }
   }
