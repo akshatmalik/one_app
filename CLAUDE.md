@@ -115,31 +115,56 @@ service cloud.firestore {
   match /databases/{database}/documents {
     // Daily Tasks app
     match /tasks/{taskId} {
-      allow read, write: if request.auth != null;
+      allow read, write: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
     }
 
     // Game Analytics app
     match /games/{gameId} {
-      allow read, write: if request.auth != null;
+      allow read, write: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
+    }
+
+    // Budget Tracker app
+    match /budgetSettings/{budgetId} {
+      allow read, write: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
+    }
+
+    // Daily Tasks app - Settings
+    match /todoAppSettings/{settingId} {
+      allow read, write: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
+    }
+
+    // Daily Tasks app - Day Notes
+    match /dayNotes/{noteId} {
+      allow read, write: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
     }
 
     // Time Tracker app - Categories
     match /timeTrackerCategories/{categoryId} {
-      allow read, write: if request.auth != null;
+      allow read, write: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
     }
 
     // Time Tracker app - Schedule Presets
     match /timeTrackerPresets/{presetId} {
-      allow read, write: if request.auth != null;
+      allow read, write: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
     }
 
     // Time Tracker app - Time Entries
     match /timeTrackerEntries/{entryId} {
-      allow read, write: if request.auth != null;
+      allow read, write: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
     }
   }
 }
 ```
+
+**Note**: These rules ensure users can only access their own data by validating the `userId` field matches the authenticated user's UID.
 
 ### Design Principles
 1. **Encapsulation** - Keep all app code in its directory
