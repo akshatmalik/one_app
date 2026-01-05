@@ -56,6 +56,7 @@ import { PeriodStatsPanel } from './PeriodStatsPanel';
 import { FunStatsPanel } from './FunStatsPanel';
 import { AdvancedCharts } from './AdvancedCharts';
 import { GamingHeatmap } from './GamingHeatmap';
+import { ExpandedStatsPanel } from './ExpandedStatsPanel';
 import clsx from 'clsx';
 
 interface StatsViewProps {
@@ -996,6 +997,9 @@ export function StatsView({ games, summary, budgets = [], onSetBudget }: StatsVi
 
       {/* Fun Stats Panel */}
       <FunStatsPanel games={games} />
+
+      {/* Expanded Deep Insights Panel */}
+      <ExpandedStatsPanel games={games} />
 
       {/* Advanced Charts */}
       <AdvancedCharts games={games} />
