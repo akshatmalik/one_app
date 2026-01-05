@@ -336,7 +336,7 @@ export interface PeriodStats {
   gamesPlayed: Game[];
   totalHours: number;
   totalSessions: number;
-  mostPlayedGame: { name: string; hours: number } | null;
+  mostPlayedGame: { name: string; hours: number; thumbnail?: string } | null;
   averageSessionLength: number;
   uniqueGames: number;
 }
@@ -373,7 +373,7 @@ export function getPeriodStats(games: Game[], days: number): PeriodStats {
     gamesPlayed,
     totalHours,
     totalSessions,
-    mostPlayedGame: mostPlayedEntry ? { name: mostPlayedEntry.game.name, hours: mostPlayedEntry.hours } : null,
+    mostPlayedGame: mostPlayedEntry ? { name: mostPlayedEntry.game.name, hours: mostPlayedEntry.hours, thumbnail: mostPlayedEntry.game.thumbnail } : null,
     averageSessionLength: totalSessions > 0 ? totalHours / totalSessions : 0,
     uniqueGames: gamesPlayed.length,
   };
@@ -409,7 +409,7 @@ export function getPeriodStatsForRange(games: Game[], startDate: Date, endDate: 
     gamesPlayed,
     totalHours,
     totalSessions,
-    mostPlayedGame: mostPlayedEntry ? { name: mostPlayedEntry.game.name, hours: mostPlayedEntry.hours } : null,
+    mostPlayedGame: mostPlayedEntry ? { name: mostPlayedEntry.game.name, hours: mostPlayedEntry.hours, thumbnail: mostPlayedEntry.game.thumbnail } : null,
     averageSessionLength: totalSessions > 0 ? totalHours / totalSessions : 0,
     uniqueGames: gamesPlayed.length,
   };

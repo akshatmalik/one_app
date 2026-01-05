@@ -81,13 +81,23 @@ export function PeriodStatsPanel({ games }: PeriodStatsPanelProps) {
 
           {weekStats.mostPlayedGame && (
             <div className="p-3 bg-white/5 rounded-xl">
-              <div className="flex items-center gap-2 mb-1">
+              <div className="flex items-center gap-2 mb-2">
                 <Gamepad2 size={14} className="text-white/40" />
                 <span className="text-xs text-white/40">Most Played</span>
               </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-white/90">{weekStats.mostPlayedGame.name}</span>
-                <span className="text-sm text-blue-400">{weekStats.mostPlayedGame.hours.toFixed(1)}h</span>
+              <div className="flex items-center gap-3">
+                {weekStats.mostPlayedGame.thumbnail && (
+                  <img
+                    src={weekStats.mostPlayedGame.thumbnail}
+                    alt={weekStats.mostPlayedGame.name}
+                    className="w-12 h-12 object-cover rounded"
+                    loading="lazy"
+                  />
+                )}
+                <div className="flex-1 min-w-0 flex items-center justify-between">
+                  <span className="text-sm font-medium text-white/90 truncate">{weekStats.mostPlayedGame.name}</span>
+                  <span className="text-sm text-blue-400 font-semibold shrink-0 ml-2">{weekStats.mostPlayedGame.hours.toFixed(1)}h</span>
+                </div>
               </div>
             </div>
           )}
@@ -108,11 +118,21 @@ export function PeriodStatsPanel({ games }: PeriodStatsPanelProps) {
               {showWeekGames && (
                 <div className="mt-2 space-y-1">
                   {weekGames.map(({ game, hours, sessions }) => (
-                    <div key={game.id} className="flex items-center justify-between px-3 py-2 bg-white/[0.03] rounded-lg">
-                      <span className="text-sm text-white/80">{game.name}</span>
-                      <div className="flex items-center gap-3">
-                        <span className="text-xs text-cyan-400">{sessions} session{sessions !== 1 ? 's' : ''}</span>
-                        <span className="text-sm text-blue-400 font-medium">{hours.toFixed(1)}h</span>
+                    <div key={game.id} className="flex items-center gap-3 px-3 py-2 bg-white/[0.03] rounded-lg">
+                      {game.thumbnail && (
+                        <img
+                          src={game.thumbnail}
+                          alt={game.name}
+                          className="w-10 h-10 object-cover rounded shrink-0"
+                          loading="lazy"
+                        />
+                      )}
+                      <div className="flex-1 min-w-0 flex items-center justify-between">
+                        <span className="text-sm text-white/80 truncate">{game.name}</span>
+                        <div className="flex items-center gap-3 shrink-0 ml-3">
+                          <span className="text-xs text-cyan-400">{sessions} session{sessions !== 1 ? 's' : ''}</span>
+                          <span className="text-sm text-blue-400 font-medium">{hours.toFixed(1)}h</span>
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -153,13 +173,23 @@ export function PeriodStatsPanel({ games }: PeriodStatsPanelProps) {
 
           {monthStats.mostPlayedGame && (
             <div className="p-3 bg-white/5 rounded-xl">
-              <div className="flex items-center gap-2 mb-1">
+              <div className="flex items-center gap-2 mb-2">
                 <Gamepad2 size={14} className="text-white/40" />
                 <span className="text-xs text-white/40">Most Played</span>
               </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-white/90">{monthStats.mostPlayedGame.name}</span>
-                <span className="text-sm text-purple-400">{monthStats.mostPlayedGame.hours.toFixed(1)}h</span>
+              <div className="flex items-center gap-3">
+                {monthStats.mostPlayedGame.thumbnail && (
+                  <img
+                    src={monthStats.mostPlayedGame.thumbnail}
+                    alt={monthStats.mostPlayedGame.name}
+                    className="w-12 h-12 object-cover rounded"
+                    loading="lazy"
+                  />
+                )}
+                <div className="flex-1 min-w-0 flex items-center justify-between">
+                  <span className="text-sm font-medium text-white/90 truncate">{monthStats.mostPlayedGame.name}</span>
+                  <span className="text-sm text-purple-400 font-semibold shrink-0 ml-2">{monthStats.mostPlayedGame.hours.toFixed(1)}h</span>
+                </div>
               </div>
             </div>
           )}
@@ -180,11 +210,21 @@ export function PeriodStatsPanel({ games }: PeriodStatsPanelProps) {
               {showMonthGames && (
                 <div className="mt-2 space-y-1">
                   {monthGames.map(({ game, hours, sessions }) => (
-                    <div key={game.id} className="flex items-center justify-between px-3 py-2 bg-white/[0.03] rounded-lg">
-                      <span className="text-sm text-white/80">{game.name}</span>
-                      <div className="flex items-center gap-3">
-                        <span className="text-xs text-cyan-400">{sessions} session{sessions !== 1 ? 's' : ''}</span>
-                        <span className="text-sm text-purple-400 font-medium">{hours.toFixed(1)}h</span>
+                    <div key={game.id} className="flex items-center gap-3 px-3 py-2 bg-white/[0.03] rounded-lg">
+                      {game.thumbnail && (
+                        <img
+                          src={game.thumbnail}
+                          alt={game.name}
+                          className="w-10 h-10 object-cover rounded shrink-0"
+                          loading="lazy"
+                        />
+                      )}
+                      <div className="flex-1 min-w-0 flex items-center justify-between">
+                        <span className="text-sm text-white/80 truncate">{game.name}</span>
+                        <div className="flex items-center gap-3 shrink-0 ml-3">
+                          <span className="text-xs text-cyan-400">{sessions} session{sessions !== 1 ? 's' : ''}</span>
+                          <span className="text-sm text-purple-400 font-medium">{hours.toFixed(1)}h</span>
+                        </div>
                       </div>
                     </div>
                   ))}
