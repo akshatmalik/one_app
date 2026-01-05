@@ -117,7 +117,15 @@ export class FirebaseRepository implements TaskRepository {
       updatedAt: now,
     };
 
-    await setDoc(doc(this.db, COLLECTION_NAME, task.id), task);
+    // Filter out undefined values - Firestore doesn't accept them
+    const cleanTask: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(task)) {
+      if (value !== undefined) {
+        cleanTask[key] = value;
+      }
+    }
+
+    await setDoc(doc(this.db, COLLECTION_NAME, task.id), cleanTask);
     return task;
   }
 
