@@ -15,11 +15,12 @@ import {
 import { Plus, Trash2, Edit2, Calendar, Save, X } from 'lucide-react';
 
 export function ScheduleManager() {
-  const { schedules, addSchedule, updateSchedule, deleteSchedule } = useSchedules();
+  const { schedules, addSchedule, updateSchedule, deleteSchedule, error: scheduleError } = useSchedules();
   const { categories } = useCategories();
 
   const [isCreating, setIsCreating] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [localError, setLocalError] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -108,18 +109,20 @@ export function ScheduleManager() {
   };
 
   const handleSave = async () => {
+    setLocalError(null);
+
     if (!formData.name.trim()) {
-      alert('Please enter a schedule name');
+      setLocalError('Please enter a schedule name');
       return;
     }
 
     if (formData.daysOfWeek.length === 0) {
-      alert('Please select at least one day');
+      setLocalError('Please select at least one day');
       return;
     }
 
     if (timeBlocks.length === 0) {
-      alert('Please add at least one time block');
+      setLocalError('Please add at least one time block');
       return;
     }
 
@@ -136,27 +139,36 @@ export function ScheduleManager() {
       } else {
         await addSchedule(data);
       }
+      setLocalError(null);
       handleCancel();
     } catch (error) {
-      alert('Error saving schedule: ' + (error as Error).message);
+      const errorMessage = (error as Error).message;
+      setLocalError(`Error saving schedule: ${errorMessage}`);
+      console.error('Schedule save error:', error);
     }
   };
 
   const handleDelete = async (id: string, name: string) => {
     if (confirm(`Delete schedule "${name}"?`)) {
+      setLocalError(null);
       try {
         await deleteSchedule(id);
       } catch (error) {
-        alert('Error deleting schedule: ' + (error as Error).message);
+        const errorMessage = (error as Error).message;
+        setLocalError(`Error deleting schedule: ${errorMessage}`);
+        console.error('Schedule delete error:', error);
       }
     }
   };
 
   const handleToggleActive = async (schedule: SchedulePreset) => {
+    setLocalError(null);
     try {
       await updateSchedule(schedule.id, { isActive: !schedule.isActive });
     } catch (error) {
-      alert('Error updating schedule: ' + (error as Error).message);
+      const errorMessage = (error as Error).message;
+      setLocalError(`Error updating schedule: ${errorMessage}`);
+      console.error('Schedule toggle error:', error);
     }
   };
 
@@ -172,22 +184,49 @@ export function ScheduleManager() {
     return category?.color || '#E5E7EB';
   };
 
+  // Combined error to display
+  const displayError = localError || (scheduleError ? scheduleError.message : null);
+
   if (isCreating || editingId) {
     return (
-      <div className="bg-white/[0.03] rounded-lg border border-white/5 p-6">
-        <div className="flex items-center justify-between mb-6">
-          <h3 className="text-lg font-semibold text-white">
-            {editingId ? 'Edit Schedule' : 'Create Schedule'}
-          </h3>
-          <button
-            onClick={handleCancel}
-            className="p-2 text-white/40 hover:text-white/60 transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
+      <div className="space-y-4">
+        {/* Error Display */}
+        {displayError && (
+          <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4">
+            <div className="flex items-start gap-3">
+              <div className="flex-shrink-0 mt-0.5">
+                <div className="w-5 h-5 rounded-full bg-red-500/20 flex items-center justify-center">
+                  <span className="text-red-400 text-xs font-bold">!</span>
+                </div>
+              </div>
+              <div className="flex-1">
+                <h4 className="text-sm font-semibold text-red-400 mb-1">Error</h4>
+                <p className="text-sm text-red-300/90 whitespace-pre-wrap break-words">{displayError}</p>
+              </div>
+              <button
+                onClick={() => setLocalError(null)}
+                className="flex-shrink-0 text-red-400/60 hover:text-red-400 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
 
-        <div className="space-y-6">
+        <div className="bg-white/[0.03] rounded-lg border border-white/5 p-6">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-lg font-semibold text-white">
+              {editingId ? 'Edit Schedule' : 'Create Schedule'}
+            </h3>
+            <button
+              onClick={handleCancel}
+              className="p-2 text-white/40 hover:text-white/60 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          <div className="space-y-6">
           <div>
             <label className="block text-sm font-medium text-white/70 mb-1">
               Schedule Name *
@@ -339,12 +378,36 @@ export function ScheduleManager() {
             </button>
           </div>
         </div>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="space-y-4">
+      {/* Error Display */}
+      {displayError && (
+        <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4">
+          <div className="flex items-start gap-3">
+            <div className="flex-shrink-0 mt-0.5">
+              <div className="w-5 h-5 rounded-full bg-red-500/20 flex items-center justify-center">
+                <span className="text-red-400 text-xs font-bold">!</span>
+              </div>
+            </div>
+            <div className="flex-1">
+              <h4 className="text-sm font-semibold text-red-400 mb-1">Error</h4>
+              <p className="text-sm text-red-300/90 whitespace-pre-wrap break-words">{displayError}</p>
+            </div>
+            <button
+              onClick={() => setLocalError(null)}
+              className="flex-shrink-0 text-red-400/60 hover:text-red-400 transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold text-white">Schedule Presets</h3>
         <button
