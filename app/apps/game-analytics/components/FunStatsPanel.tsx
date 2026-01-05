@@ -45,6 +45,7 @@ type ModalType = 'centuryClub' | 'patientGamer' | 'freeGames' | 'quickFix' | 'sh
 
 export function FunStatsPanel({ games }: FunStatsPanelProps) {
   const [activeModal, setActiveModal] = useState<ModalType>(null);
+  const [showAllRegrets, setShowAllRegrets] = useState(false);
   // Existing stats
   const hiddenGems = findHiddenGems(games);
   const regretPurchases = findRegretPurchases(games);
@@ -232,16 +233,24 @@ export function FunStatsPanel({ games }: FunStatsPanelProps) {
           <div className="space-y-2">
             {hiddenGems.slice(0, 3).map((gem, idx) => (
               <div key={gem.game.id} className="flex items-center gap-3 p-2 bg-white/5 rounded-lg">
-                <div className="flex items-center justify-center w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-bold">
+                <div className="flex items-center justify-center w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-bold shrink-0">
                   {idx + 1}
                 </div>
+                {gem.game.thumbnail && (
+                  <img
+                    src={gem.game.thumbnail}
+                    alt={gem.game.name}
+                    className="w-10 h-10 object-cover rounded shrink-0"
+                    loading="lazy"
+                  />
+                )}
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-medium text-white/90 truncate">{gem.game.name}</div>
                   <div className="text-xs text-white/40">
                     ${gem.game.price} • {gem.game.hours}h • {gem.game.rating}/10
                   </div>
                 </div>
-                <div className="text-xs text-emerald-400 font-medium">
+                <div className="text-xs text-emerald-400 font-medium shrink-0">
                   ${(gem.game.price / gem.game.hours).toFixed(2)}/h
                 </div>
               </div>
@@ -260,12 +269,20 @@ export function FunStatsPanel({ games }: FunStatsPanelProps) {
           </div>
           <div className="space-y-2">
             {shelfWarmers.slice(0, 3).map((warmer) => (
-              <div key={warmer.game.id} className="flex items-center justify-between p-2 bg-white/5 rounded-lg">
+              <div key={warmer.game.id} className="flex items-center gap-3 p-2 bg-white/5 rounded-lg">
+                {warmer.game.thumbnail && (
+                  <img
+                    src={warmer.game.thumbnail}
+                    alt={warmer.game.name}
+                    className="w-10 h-10 object-cover rounded shrink-0"
+                    loading="lazy"
+                  />
+                )}
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-medium text-white/90 truncate">{warmer.game.name}</div>
                   <div className="text-xs text-white/40">${warmer.game.price}</div>
                 </div>
-                <div className="text-right">
+                <div className="text-right shrink-0">
                   <div className="text-sm font-medium text-yellow-400">{Math.floor(warmer.daysSitting)}</div>
                   <div className="text-xs text-white/30">days</div>
                 </div>
@@ -279,21 +296,39 @@ export function FunStatsPanel({ games }: FunStatsPanelProps) {
       {/* Regret Purchases */}
       {regretPurchases.length > 0 && (
         <div className="p-4 bg-gradient-to-br from-red-500/10 to-pink-500/10 border border-red-500/20 rounded-xl">
-          <div className="flex items-center gap-2 mb-3">
-            <Frown size={16} className="text-red-400" />
-            <h4 className="text-sm font-medium text-white">Buyer&apos;s Remorse</h4>
-            <span className="text-xs text-white/30">Could use more love</span>
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Frown size={16} className="text-red-400" />
+              <h4 className="text-sm font-medium text-white">Buyer&apos;s Remorse</h4>
+              <span className="text-xs text-white/30">Could use more love</span>
+            </div>
+            {regretPurchases.length > 3 && (
+              <button
+                onClick={() => setShowAllRegrets(!showAllRegrets)}
+                className="text-xs text-white/40 hover:text-white/70 transition-all"
+              >
+                {showAllRegrets ? 'Show Less' : `Show All (${regretPurchases.length})`}
+              </button>
+            )}
           </div>
           <div className="space-y-2">
-            {regretPurchases.slice(0, 3).map((regret) => (
-              <div key={regret.game.id} className="flex items-center justify-between p-2 bg-white/5 rounded-lg">
+            {(showAllRegrets ? regretPurchases : regretPurchases.slice(0, 3)).map((regret) => (
+              <div key={regret.game.id} className="flex items-center gap-3 p-2 bg-white/5 rounded-lg">
+                {regret.game.thumbnail && (
+                  <img
+                    src={regret.game.thumbnail}
+                    alt={regret.game.name}
+                    className="w-10 h-10 object-cover rounded shrink-0"
+                    loading="lazy"
+                  />
+                )}
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-medium text-white/90 truncate">{regret.game.name}</div>
                   <div className="text-xs text-white/40">
                     ${regret.game.price} • {regret.game.hours}h played
                   </div>
                 </div>
-                <div className="text-xs text-red-400">
+                <div className="text-xs text-red-400 shrink-0">
                   Regret: {regret.regretScore.toFixed(0)}
                 </div>
               </div>
@@ -312,10 +347,22 @@ export function FunStatsPanel({ games }: FunStatsPanelProps) {
             <span className="text-xs text-white/30">Best $/hour</span>
           </div>
           <div className="p-3 bg-white/5 rounded-lg">
-            <div className="text-sm font-medium text-white/90 mb-2">{valueChampion.game.name}</div>
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-white/40">{valueChampion.game.hours}h • ${valueChampion.game.price}</span>
-              <span className="text-lg font-bold text-emerald-400">${valueChampion.costPerHour.toFixed(2)}/hr</span>
+            <div className="flex items-center gap-3 mb-2">
+              {valueChampion.game.thumbnail && (
+                <img
+                  src={valueChampion.game.thumbnail}
+                  alt={valueChampion.game.name}
+                  className="w-12 h-12 object-cover rounded shrink-0"
+                  loading="lazy"
+                />
+              )}
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-medium text-white/90 truncate">{valueChampion.game.name}</div>
+                <div className="text-xs text-white/40">{valueChampion.game.hours}h • ${valueChampion.game.price}</div>
+              </div>
+            </div>
+            <div className="flex items-center justify-center">
+              <span className="text-2xl font-bold text-emerald-400">${valueChampion.costPerHour.toFixed(2)}/hr</span>
             </div>
           </div>
         </div>
@@ -377,27 +424,57 @@ export function FunStatsPanel({ games }: FunStatsPanelProps) {
             {fastestCompletion && (
               <div className="p-2 bg-white/5 rounded-lg">
                 <div className="text-xs text-white/40 mb-1">⚡ Speed Demon</div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-white/80">{fastestCompletion.game.name}</span>
-                  <span className="text-sm font-medium text-yellow-400">{fastestCompletion.days}d</span>
+                <div className="flex items-center gap-3">
+                  {fastestCompletion.game.thumbnail && (
+                    <img
+                      src={fastestCompletion.game.thumbnail}
+                      alt={fastestCompletion.game.name}
+                      className="w-10 h-10 object-cover rounded shrink-0"
+                      loading="lazy"
+                    />
+                  )}
+                  <div className="flex-1 min-w-0 flex items-center justify-between">
+                    <span className="text-sm text-white/80 truncate">{fastestCompletion.game.name}</span>
+                    <span className="text-sm font-medium text-yellow-400 shrink-0 ml-2">{fastestCompletion.days}d</span>
+                  </div>
                 </div>
               </div>
             )}
             {slowestCompletion && (
               <div className="p-2 bg-white/5 rounded-lg">
                 <div className="text-xs text-white/40 mb-1">🐌 Slow Burn</div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-white/80">{slowestCompletion.game.name}</span>
-                  <span className="text-sm font-medium text-orange-400">{slowestCompletion.days}d</span>
+                <div className="flex items-center gap-3">
+                  {slowestCompletion.game.thumbnail && (
+                    <img
+                      src={slowestCompletion.game.thumbnail}
+                      alt={slowestCompletion.game.name}
+                      className="w-10 h-10 object-cover rounded shrink-0"
+                      loading="lazy"
+                    />
+                  )}
+                  <div className="flex-1 min-w-0 flex items-center justify-between">
+                    <span className="text-sm text-white/80 truncate">{slowestCompletion.game.name}</span>
+                    <span className="text-sm font-medium text-orange-400 shrink-0 ml-2">{slowestCompletion.days}d</span>
+                  </div>
                 </div>
               </div>
             )}
             {longestSession && (
               <div className="p-2 bg-white/5 rounded-lg">
                 <div className="text-xs text-white/40 mb-1">🎯 Marathon Session</div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-white/80">{longestSession.game.name}</span>
-                  <span className="text-sm font-medium text-red-400">{longestSession.hours.toFixed(1)}h</span>
+                <div className="flex items-center gap-3">
+                  {longestSession.game.thumbnail && (
+                    <img
+                      src={longestSession.game.thumbnail}
+                      alt={longestSession.game.name}
+                      className="w-10 h-10 object-cover rounded shrink-0"
+                      loading="lazy"
+                    />
+                  )}
+                  <div className="flex-1 min-w-0 flex items-center justify-between">
+                    <span className="text-sm text-white/80 truncate">{longestSession.game.name}</span>
+                    <span className="text-sm font-medium text-red-400 shrink-0 ml-2">{longestSession.hours.toFixed(1)}h</span>
+                  </div>
                 </div>
               </div>
             )}

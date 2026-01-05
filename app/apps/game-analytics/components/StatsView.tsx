@@ -83,6 +83,7 @@ export function StatsView({ games, summary, budgets = [], onSetBudget }: StatsVi
   const [showDiscountGames, setShowDiscountGames] = useState(false);
   const [showAllGamesPlayed, setShowAllGamesPlayed] = useState(false);
   const [showROIRankings, setShowROIRankings] = useState(false);
+  const [showAllFranchises, setShowAllFranchises] = useState(false);
 
   const isAllTime = selectedPeriod === 'all';
   const selectedYear = isAllTime ? currentYear : selectedPeriod;
@@ -632,12 +633,22 @@ export function StatsView({ games, summary, budgets = [], onSetBudget }: StatsVi
         {/* Franchise Stats */}
         {franchiseStats.length > 0 && (
           <div className="p-4 bg-white/[0.02] border border-white/5 rounded-xl">
-            <h3 className="text-sm font-medium text-white/70 mb-3 flex items-center gap-2">
-              <Layers size={14} className="text-purple-400" />
-              {isAllTime ? 'All Time' : selectedYear} Franchise Stats
-            </h3>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-medium text-white/70 flex items-center gap-2">
+                <Layers size={14} className="text-purple-400" />
+                {isAllTime ? 'All Time' : selectedYear} Franchise Stats
+              </h3>
+              {franchiseStats.length > 6 && (
+                <button
+                  onClick={() => setShowAllFranchises(!showAllFranchises)}
+                  className="text-xs text-white/40 hover:text-white/70 transition-all"
+                >
+                  {showAllFranchises ? 'Show Less' : `Show All (${franchiseStats.length})`}
+                </button>
+              )}
+            </div>
             <div className="space-y-3">
-              {franchiseStats.slice(0, 6).map((franchise, idx) => (
+              {(showAllFranchises ? franchiseStats : franchiseStats.slice(0, 6)).map((franchise, idx) => (
                 <div key={idx} className="p-3 bg-white/[0.03] rounded-lg">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-sm font-medium text-white/90">{franchise.name}</span>
@@ -666,11 +677,6 @@ export function StatsView({ games, summary, budgets = [], onSetBudget }: StatsVi
                   </div>
                 </div>
               ))}
-              {franchiseStats.length > 6 && (
-                <p className="text-[10px] text-white/30 text-center pt-1">
-                  +{franchiseStats.length - 6} more franchises
-                </p>
-              )}
             </div>
           </div>
         )}
