@@ -31,6 +31,16 @@ export const MINI_APPS: MiniApp[] = [
     tags: ['productivity', 'time-management'],
     isNew: true,
   },
+  {
+    id: 'mood-tracker',
+    name: 'Mood Tracker',
+    description: 'Track daily moods, tags, and journal entries in a beautiful year view',
+    icon: '😊',
+    path: '/apps/mood-tracker',
+    color: '#EC4899',
+    tags: ['wellness', 'journaling'],
+    isNew: true,
+  },
 ];
 
 export function getMiniAppById(id: string): MiniApp | undefined {
