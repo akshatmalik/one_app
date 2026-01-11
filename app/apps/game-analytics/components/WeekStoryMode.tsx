@@ -7,6 +7,7 @@ import { WeekInReviewData } from '../lib/calculations';
 import { OpeningScreen } from './story-screens/OpeningScreen';
 import { TotalHoursScreen } from './story-screens/TotalHoursScreen';
 import { TopGameScreen } from './story-screens/TopGameScreen';
+import { Top3GamesScreen } from './story-screens/Top3GamesScreen';
 import { DailyBreakdownScreen } from './story-screens/DailyBreakdownScreen';
 import { GamingPersonalityScreen } from './story-screens/GamingPersonalityScreen';
 import { AchievementsScreen } from './story-screens/AchievementsScreen';
@@ -16,6 +17,10 @@ import { FunFactsScreen } from './story-screens/FunFactsScreen';
 import { ClosingScreen } from './story-screens/ClosingScreen';
 import { ValueUtilizedScreen } from './story-screens/ValueUtilizedScreen';
 import { SessionTypesScreen } from './story-screens/SessionTypesScreen';
+import { GenreUniverseScreen } from './story-screens/GenreUniverseScreen';
+import { TimeTravelScreen } from './story-screens/TimeTravelScreen';
+import { GamingHeatmapScreen } from './story-screens/GamingHeatmapScreen';
+import { BestValueScreen } from './story-screens/BestValueScreen';
 
 interface WeekStoryModeProps {
   data: WeekInReviewData;
@@ -30,14 +35,19 @@ export function WeekStoryMode({ data, onClose }: WeekStoryModeProps) {
   const screens = [
     <OpeningScreen key="opening" data={data} />,
     <TotalHoursScreen key="hours" data={data} />,
+    data.gamesPlayed.length >= 3 ? <Top3GamesScreen key="top-3" data={data} /> : null,
     data.topGame ? <TopGameScreen key="top-game" data={data} /> : null,
     <DailyBreakdownScreen key="daily" data={data} />,
+    <GamingHeatmapScreen key="heatmap" data={data} />,
     <SessionTypesScreen key="session-types" data={data} />,
+    data.genresPlayed.length > 0 ? <GenreUniverseScreen key="genres" data={data} /> : null,
     <GamingPersonalityScreen key="personality" data={data} />,
     (data.completedGames.length > 0 || data.newGamesStarted.length > 0 || data.milestonesReached.length > 0) ?
       <AchievementsScreen key="achievements" data={data} /> : null,
     <WeekVibeScreen key="vibe" data={data} />,
+    <TimeTravelScreen key="time-travel" data={data} />,
     data.totalValueUtilized > 0 ? <ValueUtilizedScreen key="value" data={data} /> : null,
+    data.gamesPlayed.filter(g => g.game.price > 0).length > 0 ? <BestValueScreen key="best-value" data={data} /> : null,
     <ComparisonScreen key="comparison" data={data} />,
     <FunFactsScreen key="fun-facts" data={data} />,
     <ClosingScreen key="closing" data={data} />,
