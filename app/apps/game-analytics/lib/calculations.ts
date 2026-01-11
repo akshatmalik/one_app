@@ -1746,18 +1746,18 @@ export interface WeekInReviewData {
   weekdayGrind: boolean; // 70%+ on weekdays
 }
 
-// Get last completed week (Monday-Sunday) with comprehensive stats
-export function getLastCompletedWeekStats(games: Game[]): WeekInReviewData {
+// Get week stats for any week by offset (0 = last completed week, 1 = week before, etc.)
+export function getWeekStatsForOffset(games: Game[], weekOffset: number = 0): WeekInReviewData {
   const today = new Date();
   const currentDayOfWeek = today.getDay(); // 0 = Sunday, 1 = Monday, etc.
 
-  // Calculate last Monday (start of last complete week)
+  // Calculate the Monday of the target week
   const daysToLastMonday = currentDayOfWeek === 0 ? 6 : currentDayOfWeek - 1;
   const lastMonday = new Date(today);
-  lastMonday.setDate(today.getDate() - daysToLastMonday - 7);
+  lastMonday.setDate(today.getDate() - daysToLastMonday - 7 - (weekOffset * 7));
   lastMonday.setHours(0, 0, 0, 0);
 
-  // Calculate last Sunday (end of last complete week)
+  // Calculate the Sunday of the target week
   const lastSunday = new Date(lastMonday);
   lastSunday.setDate(lastMonday.getDate() + 6);
   lastSunday.setHours(23, 59, 59, 999);
@@ -2135,4 +2135,27 @@ export function getLastCompletedWeekStats(games: Game[]): WeekInReviewData {
     weekendWarrior,
     weekdayGrind,
   };
+}
+
+// Get last completed week (Monday-Sunday) with comprehensive stats
+// This is a wrapper around getWeekStatsForOffset for backwards compatibility
+export function getLastCompletedWeekStats(games: Game[]): WeekInReviewData {
+  return getWeekStatsForOffset(games, 0);
+}
+
+// Get the number of weeks with data (to know how far back we can navigate)
+export function getAvailableWeeksCount(games: Game[]): number {
+  const allLogs = getAllPlayLogs(games);
+  if (allLogs.length === 0) return 0;
+
+  // Find oldest play log
+  const oldestLog = allLogs[allLogs.length - 1]; // Already sorted by date descending
+  const oldestDate = new Date(oldestLog.log.date);
+
+  // Calculate weeks from oldest log to now
+  const now = new Date();
+  const diffTime = now.getTime() - oldestDate.getTime();
+  const diffWeeks = Math.ceil(diffTime / (7 * 24 * 60 * 60 * 1000));
+
+  return diffWeeks;
 }

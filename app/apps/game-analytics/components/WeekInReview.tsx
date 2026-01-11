@@ -1,6 +1,6 @@
 'use client';
 
-import { Gamepad2, Clock, TrendingUp, TrendingDown, Minus, Trophy, Zap, Calendar, Target, Flame, Award, Star, DollarSign, Film, Book, Tv } from 'lucide-react';
+import { Gamepad2, Clock, TrendingUp, TrendingDown, Minus, Trophy, Zap, Calendar, Target, Flame, Award, Star, DollarSign, Film, Book, Tv, ChevronLeft, ChevronRight } from 'lucide-react';
 import { WeekInReviewData } from '../lib/calculations';
 import { DailyActivityChart } from './DailyActivityChart';
 import { GameBreakdownChart } from './GameBreakdownChart';
@@ -8,24 +8,99 @@ import clsx from 'clsx';
 
 interface WeekInReviewProps {
   data: WeekInReviewData;
+  weekOffset: number;
+  maxWeeksBack: number;
+  onPreviousWeek: () => void;
+  onNextWeek: () => void;
 }
 
-export function WeekInReview({ data }: WeekInReviewProps) {
+export function WeekInReview({ data, weekOffset, maxWeeksBack, onPreviousWeek, onNextWeek }: WeekInReviewProps) {
+  const canGoBack = weekOffset < maxWeeksBack - 1;
+  const canGoForward = weekOffset > 0;
+
   if (data.totalHours === 0) {
     return (
       <div className="p-8 bg-gradient-to-br from-purple-500/10 to-blue-500/10 rounded-2xl border border-purple-500/20 text-center">
         <Calendar size={48} className="mx-auto mb-4 text-white/20" />
-        <h3 className="text-xl font-bold text-white mb-2">No Gaming Activity Last Week</h3>
+        <h3 className="text-xl font-bold text-white mb-2">No Gaming Activity This Week</h3>
         <p className="text-white/50 text-sm">{data.weekLabel}</p>
         <p className="text-white/30 text-sm mt-2">Start logging play sessions to see your Week in Review!</p>
+
+        {/* Week Navigation */}
+        <div className="flex items-center justify-center gap-2 mt-6">
+          <button
+            onClick={onPreviousWeek}
+            disabled={!canGoBack}
+            className={clsx(
+              'p-2 rounded-lg transition-all',
+              canGoBack
+                ? 'bg-purple-500/20 hover:bg-purple-500/30 text-purple-400'
+                : 'bg-white/5 text-white/20 cursor-not-allowed'
+            )}
+            title="Previous week"
+          >
+            <ChevronLeft size={20} />
+          </button>
+          <span className="text-sm text-white/50">
+            {weekOffset === 0 ? 'Last week' : `${weekOffset + 1} weeks ago`}
+          </span>
+          <button
+            onClick={onNextWeek}
+            disabled={!canGoForward}
+            className={clsx(
+              'p-2 rounded-lg transition-all',
+              canGoForward
+                ? 'bg-purple-500/20 hover:bg-purple-500/30 text-purple-400'
+                : 'bg-white/5 text-white/20 cursor-not-allowed'
+            )}
+            title="Next week"
+          >
+            <ChevronRight size={20} />
+          </button>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      {/* Hero Header */}
+      {/* Hero Header with Navigation */}
       <div className="relative overflow-hidden p-8 bg-gradient-to-br from-purple-600/20 via-blue-600/20 to-cyan-600/20 rounded-2xl border border-purple-500/30">
+        {/* Week Navigation - Top Right */}
+        <div className="absolute top-4 right-4 flex items-center gap-2 z-20">
+          <button
+            onClick={onPreviousWeek}
+            disabled={!canGoBack}
+            className={clsx(
+              'p-2 rounded-lg backdrop-blur-sm transition-all',
+              canGoBack
+                ? 'bg-white/10 hover:bg-white/20 text-white'
+                : 'bg-white/5 text-white/20 cursor-not-allowed'
+            )}
+            title="Previous week"
+          >
+            <ChevronLeft size={20} />
+          </button>
+          <div className="px-3 py-1 bg-white/10 backdrop-blur-sm rounded-lg">
+            <span className="text-xs text-white/80">
+              {weekOffset === 0 ? 'Last week' : `${weekOffset + 1} week${weekOffset > 0 ? 's' : ''} ago`}
+            </span>
+          </div>
+          <button
+            onClick={onNextWeek}
+            disabled={!canGoForward}
+            className={clsx(
+              'p-2 rounded-lg backdrop-blur-sm transition-all',
+              canGoForward
+                ? 'bg-white/10 hover:bg-white/20 text-white'
+                : 'bg-white/5 text-white/20 cursor-not-allowed'
+            )}
+            title="Next week"
+          >
+            <ChevronRight size={20} />
+          </button>
+        </div>
+
         <div className="relative z-10 text-center">
           <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 rounded-full mb-4">
             <Calendar size={16} className="text-purple-300" />

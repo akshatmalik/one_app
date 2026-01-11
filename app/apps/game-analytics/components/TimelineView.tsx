@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import { Calendar, Clock, Gamepad2, DollarSign, Play, CheckCircle, XCircle, Plus } from 'lucide-react';
 import { Game, PlayLog } from '../lib/types';
-import { getAllPlayLogs, getLastCompletedWeekStats } from '../lib/calculations';
+import { getAllPlayLogs, getWeekStatsForOffset, getAvailableWeeksCount } from '../lib/calculations';
 import { TimelinePeriodCards } from './TimelinePeriodCards';
 import { QuickAddTimeModal } from './QuickAddTimeModal';
 import { WeekInReview } from './WeekInReview';
@@ -27,11 +27,25 @@ type TimelineEvent = {
 
 export function TimelineView({ games, onLogTime, onQuickAddTime }: TimelineViewProps) {
   const [showQuickAdd, setShowQuickAdd] = useState(false);
+  const [weekOffset, setWeekOffset] = useState(0); // 0 = last week, 1 = week before, etc.
 
-  // Get week in review data
-  const weekInReviewData = useMemo(() => {
-    return getLastCompletedWeekStats(games);
+  // Get maximum weeks we can navigate back
+  const maxWeeksBack = useMemo(() => {
+    return Math.max(1, getAvailableWeeksCount(games));
   }, [games]);
+
+  // Get week in review data for current offset
+  const weekInReviewData = useMemo(() => {
+    return getWeekStatsForOffset(games, weekOffset);
+  }, [games, weekOffset]);
+
+  const handlePreviousWeek = () => {
+    setWeekOffset(prev => Math.min(prev + 1, maxWeeksBack - 1));
+  };
+
+  const handleNextWeek = () => {
+    setWeekOffset(prev => Math.max(prev - 1, 0));
+  };
 
   const events = useMemo(() => {
     const allEvents: TimelineEvent[] = [];
@@ -168,7 +182,13 @@ export function TimelineView({ games, onLogTime, onQuickAddTime }: TimelineViewP
       <div className="space-y-6">
         {/* Week in Review */}
         {weekInReviewData.totalHours > 0 && (
-          <WeekInReview data={weekInReviewData} />
+          <WeekInReview
+            data={weekInReviewData}
+            weekOffset={weekOffset}
+            maxWeeksBack={maxWeeksBack}
+            onPreviousWeek={handlePreviousWeek}
+            onNextWeek={handleNextWeek}
+          />
         )}
 
         {/* Period Cards */}
@@ -209,7 +229,13 @@ export function TimelineView({ games, onLogTime, onQuickAddTime }: TimelineViewP
     <div className="space-y-6">
       {/* Week in Review */}
       {weekInReviewData.totalHours > 0 && (
-        <WeekInReview data={weekInReviewData} />
+        <WeekInReview
+          data={weekInReviewData}
+          weekOffset={weekOffset}
+          maxWeeksBack={maxWeeksBack}
+          onPreviousWeek={handlePreviousWeek}
+          onNextWeek={handleNextWeek}
+        />
       )}
 
       {/* Period Cards */}
