@@ -3,9 +3,10 @@
 import { useMemo, useState } from 'react';
 import { Calendar, Clock, Gamepad2, DollarSign, Play, CheckCircle, XCircle, Plus } from 'lucide-react';
 import { Game, PlayLog } from '../lib/types';
-import { getAllPlayLogs } from '../lib/calculations';
+import { getAllPlayLogs, getLastCompletedWeekStats } from '../lib/calculations';
 import { TimelinePeriodCards } from './TimelinePeriodCards';
 import { QuickAddTimeModal } from './QuickAddTimeModal';
+import { WeekInReview } from './WeekInReview';
 import clsx from 'clsx';
 
 interface TimelineViewProps {
@@ -26,6 +27,11 @@ type TimelineEvent = {
 
 export function TimelineView({ games, onLogTime, onQuickAddTime }: TimelineViewProps) {
   const [showQuickAdd, setShowQuickAdd] = useState(false);
+
+  // Get week in review data
+  const weekInReviewData = useMemo(() => {
+    return getLastCompletedWeekStats(games);
+  }, [games]);
 
   const events = useMemo(() => {
     const allEvents: TimelineEvent[] = [];
@@ -159,7 +165,12 @@ export function TimelineView({ games, onLogTime, onQuickAddTime }: TimelineViewP
 
   if (events.length === 0) {
     return (
-      <>
+      <div className="space-y-6">
+        {/* Week in Review */}
+        {weekInReviewData.totalHours > 0 && (
+          <WeekInReview data={weekInReviewData} />
+        )}
+
         {/* Period Cards */}
         <TimelinePeriodCards games={games} />
 
@@ -190,12 +201,17 @@ export function TimelineView({ games, onLogTime, onQuickAddTime }: TimelineViewP
             onClose={() => setShowQuickAdd(false)}
           />
         )}
-      </>
+      </div>
     );
   }
 
   return (
     <div className="space-y-6">
+      {/* Week in Review */}
+      {weekInReviewData.totalHours > 0 && (
+        <WeekInReview data={weekInReviewData} />
+      )}
+
       {/* Period Cards */}
       <TimelinePeriodCards games={games} />
 
