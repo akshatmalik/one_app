@@ -17,8 +17,13 @@ export function WeekInReview({ data, weekOffset, maxWeeksBack, onWeekChange }: W
   const [showStory, setShowStory] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
 
-  // Generate week options
+  // Generate week options - including current week
   const weekOptions = [];
+
+  // Add "This Week" option
+  weekOptions.push({ offset: -1, label: 'This Week' });
+
+  // Add past weeks
   for (let i = 0; i < maxWeeksBack; i++) {
     let label = '';
     if (i === 0) label = 'Last Week';

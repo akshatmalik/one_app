@@ -56,23 +56,25 @@ export function DailyBreakdownScreen({ data }: DailyBreakdownScreenProps) {
             const isBusiestDay = data.busiestDay?.day === day.day;
 
             return (
-              <motion.div
+              <div
                 key={day.day}
-                initial={{ scaleY: 0 }}
-                animate={{ scaleY: 1 }}
-                transition={{
-                  delay: 0.3 + dayIndex * 0.08,
-                  duration: 0.5,
-                  type: 'spring',
-                  bounce: 0.3,
-                }}
-                className="flex-1 flex flex-col items-center"
-                style={{ originY: 1 }}
+                className="flex-1 flex flex-col items-center justify-end h-full"
               >
-                {/* Bar */}
-                <div
+                {/* Bar with animation */}
+                <motion.div
+                  initial={{ scaleY: 0 }}
+                  animate={{ scaleY: 1 }}
+                  transition={{
+                    delay: 0.3 + dayIndex * 0.08,
+                    duration: 0.5,
+                    type: 'spring',
+                    bounce: 0.3,
+                  }}
                   className="w-full relative group cursor-pointer mb-3 rounded-t-lg overflow-hidden"
-                  style={{ height: `${heightPercentage}%` }}
+                  style={{
+                    height: `${heightPercentage}%`,
+                    transformOrigin: 'bottom'
+                  }}
                 >
                   {day.hours > 0 ? (
                     <>
@@ -131,7 +133,7 @@ export function DailyBreakdownScreen({ data }: DailyBreakdownScreenProps) {
                   ) : (
                     <div className="h-2 w-full bg-white/5 rounded-lg" />
                   )}
-                </div>
+                </motion.div>
 
                 {/* Day label */}
                 <div className="text-center">
@@ -152,7 +154,7 @@ export function DailyBreakdownScreen({ data }: DailyBreakdownScreenProps) {
                     </motion.div>
                   )}
                 </div>
-              </motion.div>
+              </div>
             );
           })}
         </div>
