@@ -1,9 +1,11 @@
 'use client';
 
-import { Gamepad2, Clock, TrendingUp, TrendingDown, Minus, Trophy, Zap, Calendar, Target, Flame, Award, Star, DollarSign, Film, Book, Tv, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useState } from 'react';
+import { Gamepad2, Clock, TrendingUp, TrendingDown, Minus, Trophy, Zap, Calendar, Target, Flame, Award, Star, DollarSign, Film, Book, Tv, ChevronLeft, ChevronRight, Sparkles } from 'lucide-react';
 import { WeekInReviewData } from '../lib/calculations';
 import { DailyActivityChart } from './DailyActivityChart';
 import { GameBreakdownChart } from './GameBreakdownChart';
+import { WeekStoryMode } from './WeekStoryMode';
 import clsx from 'clsx';
 
 interface WeekInReviewProps {
@@ -17,6 +19,7 @@ interface WeekInReviewProps {
 export function WeekInReview({ data, weekOffset, maxWeeksBack, onPreviousWeek, onNextWeek }: WeekInReviewProps) {
   const canGoBack = weekOffset < maxWeeksBack - 1;
   const canGoForward = weekOffset > 0;
+  const [showStory, setShowStory] = useState(false);
 
   if (data.totalHours === 0) {
     return (
@@ -63,56 +66,69 @@ export function WeekInReview({ data, weekOffset, maxWeeksBack, onPreviousWeek, o
   }
 
   return (
-    <div className="space-y-6">
-      {/* Hero Header with Navigation */}
-      <div className="relative overflow-hidden p-8 bg-gradient-to-br from-purple-600/20 via-blue-600/20 to-cyan-600/20 rounded-2xl border border-purple-500/30">
-        {/* Week Navigation - Top Right */}
-        <div className="absolute top-4 right-4 flex items-center gap-2 z-20">
-          <button
-            onClick={onPreviousWeek}
-            disabled={!canGoBack}
-            className={clsx(
-              'p-2 rounded-lg backdrop-blur-sm transition-all',
-              canGoBack
-                ? 'bg-white/10 hover:bg-white/20 text-white'
-                : 'bg-white/5 text-white/20 cursor-not-allowed'
-            )}
-            title="Previous week"
-          >
-            <ChevronLeft size={20} />
-          </button>
-          <div className="px-3 py-1 bg-white/10 backdrop-blur-sm rounded-lg">
-            <span className="text-xs text-white/80">
-              {weekOffset === 0 ? 'Last week' : `${weekOffset + 1} week${weekOffset > 0 ? 's' : ''} ago`}
-            </span>
-          </div>
-          <button
-            onClick={onNextWeek}
-            disabled={!canGoForward}
-            className={clsx(
-              'p-2 rounded-lg backdrop-blur-sm transition-all',
-              canGoForward
-                ? 'bg-white/10 hover:bg-white/20 text-white'
-                : 'bg-white/5 text-white/20 cursor-not-allowed'
-            )}
-            title="Next week"
-          >
-            <ChevronRight size={20} />
-          </button>
-        </div>
+    <>
+      {/* Story Mode Modal */}
+      {showStory && <WeekStoryMode data={data} onClose={() => setShowStory(false)} />}
 
-        <div className="relative z-10 text-center">
-          <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 rounded-full mb-4">
-            <Calendar size={16} className="text-purple-300" />
-            <span className="text-sm font-medium text-purple-200">{data.weekLabel}</span>
+      <div className="space-y-6">
+        {/* Hero Header with Navigation */}
+        <div className="relative overflow-hidden p-8 bg-gradient-to-br from-purple-600/20 via-blue-600/20 to-cyan-600/20 rounded-2xl border border-purple-500/30">
+          {/* Week Navigation - Top Right */}
+          <div className="absolute top-4 right-4 flex items-center gap-2 z-20">
+            <button
+              onClick={onPreviousWeek}
+              disabled={!canGoBack}
+              className={clsx(
+                'p-2 rounded-lg backdrop-blur-sm transition-all',
+                canGoBack
+                  ? 'bg-white/10 hover:bg-white/20 text-white'
+                  : 'bg-white/5 text-white/20 cursor-not-allowed'
+              )}
+              title="Previous week"
+            >
+              <ChevronLeft size={20} />
+            </button>
+            <div className="px-3 py-1 bg-white/10 backdrop-blur-sm rounded-lg">
+              <span className="text-xs text-white/80">
+                {weekOffset === 0 ? 'Last week' : `${weekOffset + 1} week${weekOffset > 0 ? 's' : ''} ago`}
+              </span>
+            </div>
+            <button
+              onClick={onNextWeek}
+              disabled={!canGoForward}
+              className={clsx(
+                'p-2 rounded-lg backdrop-blur-sm transition-all',
+                canGoForward
+                  ? 'bg-white/10 hover:bg-white/20 text-white'
+                  : 'bg-white/5 text-white/20 cursor-not-allowed'
+              )}
+              title="Next week"
+            >
+              <ChevronRight size={20} />
+            </button>
           </div>
-          <h2 className="text-4xl md:text-5xl font-bold text-white mb-3">
-            Your Week in Gaming
-          </h2>
-          <p className="text-2xl font-semibold text-purple-300">{data.weekVibe}</p>
+
+          <div className="relative z-10 text-center">
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 rounded-full mb-4">
+              <Calendar size={16} className="text-purple-300" />
+              <span className="text-sm font-medium text-purple-200">{data.weekLabel}</span>
+            </div>
+            <h2 className="text-4xl md:text-5xl font-bold text-white mb-3">
+              Your Week in Gaming
+            </h2>
+            <p className="text-2xl font-semibold text-purple-300 mb-6">{data.weekVibe}</p>
+
+            {/* View as Story Button */}
+            <button
+              onClick={() => setShowStory(true)}
+              className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold rounded-full transition-all transform hover:scale-105 shadow-lg hover:shadow-purple-500/50"
+            >
+              <Sparkles size={20} />
+              <span>View Week Recap</span>
+            </button>
+          </div>
+          <div className="absolute inset-0 bg-gradient-to-t from-[#1a1a24] via-transparent to-transparent opacity-50" />
         </div>
-        <div className="absolute inset-0 bg-gradient-to-t from-[#1a1a24] via-transparent to-transparent opacity-50" />
-      </div>
 
       {/* Core Stats - The Big 4 */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -539,7 +555,8 @@ export function WeekInReview({ data, weekOffset, maxWeeksBack, onPreviousWeek, o
           </div>
         )}
       </Section>
-    </div>
+      </div>
+    </>
   );
 }
 
