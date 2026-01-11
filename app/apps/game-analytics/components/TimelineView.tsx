@@ -39,12 +39,8 @@ export function TimelineView({ games, onLogTime, onQuickAddTime }: TimelineViewP
     return getWeekStatsForOffset(games, weekOffset);
   }, [games, weekOffset]);
 
-  const handlePreviousWeek = () => {
-    setWeekOffset(prev => Math.min(prev + 1, maxWeeksBack - 1));
-  };
-
-  const handleNextWeek = () => {
-    setWeekOffset(prev => Math.max(prev - 1, 0));
+  const handleWeekChange = (offset: number) => {
+    setWeekOffset(offset);
   };
 
   const events = useMemo(() => {
@@ -181,15 +177,12 @@ export function TimelineView({ games, onLogTime, onQuickAddTime }: TimelineViewP
     return (
       <div className="space-y-6">
         {/* Week in Review */}
-        {weekInReviewData.totalHours > 0 && (
-          <WeekInReview
-            data={weekInReviewData}
-            weekOffset={weekOffset}
-            maxWeeksBack={maxWeeksBack}
-            onPreviousWeek={handlePreviousWeek}
-            onNextWeek={handleNextWeek}
-          />
-        )}
+        <WeekInReview
+          data={weekInReviewData}
+          weekOffset={weekOffset}
+          maxWeeksBack={maxWeeksBack}
+          onWeekChange={handleWeekChange}
+        />
 
         {/* Period Cards */}
         <TimelinePeriodCards games={games} />
@@ -228,15 +221,12 @@ export function TimelineView({ games, onLogTime, onQuickAddTime }: TimelineViewP
   return (
     <div className="space-y-6">
       {/* Week in Review */}
-      {weekInReviewData.totalHours > 0 && (
-        <WeekInReview
-          data={weekInReviewData}
-          weekOffset={weekOffset}
-          maxWeeksBack={maxWeeksBack}
-          onPreviousWeek={handlePreviousWeek}
-          onNextWeek={handleNextWeek}
-        />
-      )}
+      <WeekInReview
+        data={weekInReviewData}
+        weekOffset={weekOffset}
+        maxWeeksBack={maxWeeksBack}
+        onWeekChange={handleWeekChange}
+      />
 
       {/* Period Cards */}
       <TimelinePeriodCards games={games} />

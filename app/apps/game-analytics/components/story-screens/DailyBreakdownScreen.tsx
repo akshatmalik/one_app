@@ -9,7 +9,7 @@ interface DailyBreakdownScreenProps {
 }
 
 export function DailyBreakdownScreen({ data }: DailyBreakdownScreenProps) {
-  const maxHours = Math.max(...data.dailyHours.map(d => d.hours));
+  const maxHours = Math.max(...data.dailyHours.map(d => d.hours), 0.1);
 
   // Color palette for different games
   const gameColors = [
@@ -32,25 +32,25 @@ export function DailyBreakdownScreen({ data }: DailyBreakdownScreenProps) {
   );
 
   return (
-    <div className="w-full max-w-4xl mx-auto">
+    <div className="w-full max-w-3xl mx-auto px-4">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6 }}
-        className="text-center mb-12"
+        className="text-center mb-6"
       >
-        <div className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-500/20 to-cyan-500/20 rounded-full mb-4 backdrop-blur-sm border border-blue-500/30">
-          <Calendar size={24} className="text-blue-300" />
-          <span className="text-blue-200 font-bold uppercase tracking-wide">Daily Breakdown</span>
+        <div className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500/20 to-cyan-500/20 rounded-full mb-3 backdrop-blur-sm border border-blue-500/30">
+          <Calendar size={18} className="text-blue-300" />
+          <span className="text-blue-200 font-bold uppercase tracking-wide text-sm">Daily Breakdown</span>
         </div>
-        <h2 className="text-4xl md:text-5xl font-bold text-white">
+        <h2 className="text-3xl md:text-4xl font-bold text-white">
           Your Week at a Glance
         </h2>
       </motion.div>
 
-      {/* Bar chart */}
-      <div className="mb-8">
-        <div className="flex items-end justify-between gap-2 md:gap-4 h-80">
+      {/* Bar chart - reduced height */}
+      <div className="mb-6">
+        <div className="flex items-end justify-between gap-2 h-48 md:h-56">
           {data.dailyHours.map((day, dayIndex) => {
             const heightPercentage = maxHours > 0 ? (day.hours / maxHours) * 100 : 0;
             const isBusiestDay = data.busiestDay?.day === day.day;
@@ -61,10 +61,10 @@ export function DailyBreakdownScreen({ data }: DailyBreakdownScreenProps) {
                 initial={{ scaleY: 0 }}
                 animate={{ scaleY: 1 }}
                 transition={{
-                  delay: 0.3 + dayIndex * 0.1,
-                  duration: 0.6,
+                  delay: 0.3 + dayIndex * 0.08,
+                  duration: 0.5,
                   type: 'spring',
-                  bounce: 0.4,
+                  bounce: 0.3,
                 }}
                 className="flex-1 flex flex-col items-center"
                 style={{ originY: 1 }}

@@ -1739,11 +1739,29 @@ export interface WeekInReviewData {
   movieEquivalent: number;
   bookEquivalent: number;
   tvEpisodeEquivalent: number;
+  podcastEquivalent: number; // 1hr episodes
+  workDaysEquivalent: number; // 8hr work days
+  netflixBindgeEquivalent: number; // 25min episodes
+  gymSessionsEquivalent: number; // 1hr sessions
+  sleepCyclesEquivalent: number; // 8hr sleep
+
+  // Value stats
+  totalValueUtilized: number; // Total price of games played this week
+  averageGameValue: number; // Average price per game played
+  savingsVsRenting: number; // How much saved vs renting at $60/week
+  libraryPercentagePlayed: number; // What % of library was played
 
   // Fun stats
   perfectWeek: boolean; // Played all 7 days
   weekendWarrior: boolean; // 70%+ on weekend
   weekdayGrind: boolean; // 70%+ on weekdays
+
+  // Additional insights
+  averageHoursPerDay: number;
+  daysActive: number;
+  longestStreak: number; // Consecutive days played this week
+  earliestSession: string | null; // Day with earliest session
+  latestSession: string | null; // Day with latest session
 }
 
 // Get week stats for any week by offset (0 = last completed week, 1 = week before, etc.)
@@ -2086,11 +2104,45 @@ export function getWeekStatsForOffset(games: Game[], weekOffset: number = 0): We
   const movieEquivalent = Math.floor(totalHours / 2);
   const bookEquivalent = Math.floor(totalHours / 8);
   const tvEpisodeEquivalent = Math.floor(totalHours / 0.75); // 45min episodes
+  const podcastEquivalent = Math.floor(totalHours); // 1hr episodes
+  const workDaysEquivalent = parseFloat((totalHours / 8).toFixed(1)); // 8hr work days
+  const netflixBindgeEquivalent = Math.floor(totalHours / 0.42); // 25min episodes
+  const gymSessionsEquivalent = Math.floor(totalHours); // 1hr sessions
+  const sleepCyclesEquivalent = parseFloat((totalHours / 8).toFixed(1)); // 8hr sleep
+
+  // Value stats
+  const totalValueUtilized = gamesPlayed.reduce((sum, g) => sum + g.game.price, 0);
+  const averageGameValue = uniqueGames > 0 ? totalValueUtilized / uniqueGames : 0;
+  const weeklyRentalCost = 60; // Assumed weekly rental cost
+  const savingsVsRenting = totalValueUtilized > 0 ? weeklyRentalCost - (totalCostPerHour * totalHours) : 0;
+  const totalLibraryGames = games.filter(g => g.status !== 'Wishlist').length;
+  const libraryPercentagePlayed = totalLibraryGames > 0 ? (uniqueGames / totalLibraryGames) * 100 : 0;
 
   // Fun stats
   const perfectWeek = dailyHours.every(d => d.hours > 0);
   const weekendWarrior = weekendPercentage >= 70;
   const weekdayGrind = weekdayPercentage >= 70;
+
+  // Additional insights
+  const daysActive = dailyHours.filter(d => d.hours > 0).length;
+  const averageHoursPerDay = daysActive > 0 ? totalHours / daysActive : 0;
+
+  // Calculate longest streak this week
+  let longestStreak = 0;
+  let currentStreakCount = 0;
+  for (const day of dailyHours) {
+    if (day.hours > 0) {
+      currentStreakCount++;
+      longestStreak = Math.max(longestStreak, currentStreakCount);
+    } else {
+      currentStreakCount = 0;
+    }
+  }
+
+  // Find earliest and latest session days
+  const activeDays = dailyHours.filter(d => d.hours > 0);
+  const earliestSession = activeDays.length > 0 ? activeDays[0].day : null;
+  const latestSession = activeDays.length > 0 ? activeDays[activeDays.length - 1].day : null;
 
   return {
     weekStart: lastMonday,
@@ -2131,9 +2183,23 @@ export function getWeekStatsForOffset(games: Game[], weekOffset: number = 0): We
     movieEquivalent,
     bookEquivalent,
     tvEpisodeEquivalent,
+    podcastEquivalent,
+    workDaysEquivalent,
+    netflixBindgeEquivalent,
+    gymSessionsEquivalent,
+    sleepCyclesEquivalent,
+    totalValueUtilized,
+    averageGameValue,
+    savingsVsRenting,
+    libraryPercentagePlayed,
     perfectWeek,
     weekendWarrior,
     weekdayGrind,
+    averageHoursPerDay,
+    daysActive,
+    longestStreak,
+    earliestSession,
+    latestSession,
   };
 }
 
