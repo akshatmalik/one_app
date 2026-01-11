@@ -50,18 +50,32 @@ export function DailyBreakdownScreen({ data }: DailyBreakdownScreenProps) {
 
       {/* Bar chart - reduced height */}
       <div className="mb-6">
-        <div className="flex justify-between gap-2">
-          {data.dailyHours.map((day, dayIndex) => {
-            const heightPercentage = maxHours > 0 ? (day.hours / maxHours) * 100 : 0;
-            const isBusiestDay = data.busiestDay?.day === day.day;
+        <div className="flex gap-3">
+          {/* Y-axis */}
+          <div className="flex flex-col justify-between h-48 md:h-56 text-xs text-white/40 pt-3 pb-3">
+            {Array.from({ length: 5 }).map((_, i) => {
+              const value = Math.ceil(maxHours * (4 - i) / 4);
+              return (
+                <div key={i} className="text-right pr-2">
+                  {value > 0 ? `${value}h` : ''}
+                </div>
+              );
+            })}
+          </div>
 
-            return (
-              <div
-                key={day.day}
-                className="flex-1 flex flex-col items-center"
-              >
-                {/* Bar container with fixed height for percentage calculation */}
-                <div className="w-full h-48 md:h-56 flex items-end mb-3">
+          {/* Bars */}
+          <div className="flex-1 flex justify-between gap-2">
+            {data.dailyHours.map((day, dayIndex) => {
+              const heightPercentage = maxHours > 0 ? (day.hours / maxHours) * 100 : 0;
+              const isBusiestDay = data.busiestDay?.day === day.day;
+
+              return (
+                <div
+                  key={day.day}
+                  className="flex-1 flex flex-col items-center"
+                >
+                  {/* Bar container with fixed height for percentage calculation */}
+                  <div className="w-full h-48 md:h-56 flex items-end mb-3">
                   <motion.div
                     initial={{ scaleY: 0 }}
                     animate={{ scaleY: 1 }}
@@ -159,6 +173,7 @@ export function DailyBreakdownScreen({ data }: DailyBreakdownScreenProps) {
               </div>
             );
           })}
+          </div>
         </div>
       </div>
 
