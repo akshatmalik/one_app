@@ -1764,7 +1764,7 @@ export interface WeekInReviewData {
   latestSession: string | null; // Day with latest session
 }
 
-// Get week stats for any week by offset (0 = last completed week, 1 = week before, etc.)
+// Get week stats for any week by offset (-1 = current week, 0 = last completed week, 1 = week before, etc.)
 export function getWeekStatsForOffset(games: Game[], weekOffset: number = 0): WeekInReviewData {
   const today = new Date();
   const currentDayOfWeek = today.getDay(); // 0 = Sunday, 1 = Monday, etc.
@@ -1772,7 +1772,14 @@ export function getWeekStatsForOffset(games: Game[], weekOffset: number = 0): We
   // Calculate the Monday of the target week
   const daysToLastMonday = currentDayOfWeek === 0 ? 6 : currentDayOfWeek - 1;
   const lastMonday = new Date(today);
-  lastMonday.setDate(today.getDate() - daysToLastMonday - 7 - (weekOffset * 7));
+
+  // For current week (offset -1), use this week's Monday
+  // For completed weeks (offset 0+), go back in time
+  if (weekOffset === -1) {
+    lastMonday.setDate(today.getDate() - daysToLastMonday);
+  } else {
+    lastMonday.setDate(today.getDate() - daysToLastMonday - 7 - (weekOffset * 7));
+  }
   lastMonday.setHours(0, 0, 0, 0);
 
   // Calculate the Sunday of the target week

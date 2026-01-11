@@ -50,30 +50,47 @@ export function DailyBreakdownScreen({ data }: DailyBreakdownScreenProps) {
 
       {/* Bar chart - reduced height */}
       <div className="mb-6">
-        <div className="flex items-end justify-between gap-2 h-48 md:h-56">
-          {data.dailyHours.map((day, dayIndex) => {
-            const heightPercentage = maxHours > 0 ? (day.hours / maxHours) * 100 : 0;
-            const isBusiestDay = data.busiestDay?.day === day.day;
+        <div className="flex gap-3">
+          {/* Y-axis */}
+          <div className="flex flex-col justify-between h-48 md:h-56 text-xs text-white/40 pt-3 pb-3">
+            {Array.from({ length: 5 }).map((_, i) => {
+              const value = Math.ceil(maxHours * (4 - i) / 4);
+              return (
+                <div key={i} className="text-right pr-2">
+                  {value > 0 ? `${value}h` : ''}
+                </div>
+              );
+            })}
+          </div>
 
-            return (
-              <motion.div
-                key={day.day}
-                initial={{ scaleY: 0 }}
-                animate={{ scaleY: 1 }}
-                transition={{
-                  delay: 0.3 + dayIndex * 0.08,
-                  duration: 0.5,
-                  type: 'spring',
-                  bounce: 0.3,
-                }}
-                className="flex-1 flex flex-col items-center"
-                style={{ originY: 1 }}
-              >
-                {/* Bar */}
+          {/* Bars */}
+          <div className="flex-1 flex justify-between gap-2">
+            {data.dailyHours.map((day, dayIndex) => {
+              const heightPercentage = maxHours > 0 ? (day.hours / maxHours) * 100 : 0;
+              const isBusiestDay = data.busiestDay?.day === day.day;
+
+              return (
                 <div
-                  className="w-full relative group cursor-pointer mb-3 rounded-t-lg overflow-hidden"
-                  style={{ height: `${heightPercentage}%` }}
+                  key={day.day}
+                  className="flex-1 flex flex-col items-center"
                 >
+                  {/* Bar container with fixed height for percentage calculation */}
+                  <div className="w-full h-48 md:h-56 flex items-end mb-3">
+                  <motion.div
+                    initial={{ scaleY: 0 }}
+                    animate={{ scaleY: 1 }}
+                    transition={{
+                      delay: 0.3 + dayIndex * 0.08,
+                      duration: 0.5,
+                      type: 'spring',
+                      bounce: 0.3,
+                    }}
+                    className="w-full relative group cursor-pointer rounded-t-lg overflow-hidden"
+                    style={{
+                      height: `${heightPercentage}%`,
+                      transformOrigin: 'bottom'
+                    }}
+                  >
                   {day.hours > 0 ? (
                     <>
                       {/* Stacked segments for each game */}
@@ -131,10 +148,11 @@ export function DailyBreakdownScreen({ data }: DailyBreakdownScreenProps) {
                   ) : (
                     <div className="h-2 w-full bg-white/5 rounded-lg" />
                   )}
+                  </motion.div>
                 </div>
 
                 {/* Day label */}
-                <div className="text-center">
+                <div className="text-center shrink-0">
                   <div
                     className={`text-sm md:text-base font-bold mb-1 ${
                       isBusiestDay ? 'text-purple-400' : 'text-white/70'
@@ -152,9 +170,10 @@ export function DailyBreakdownScreen({ data }: DailyBreakdownScreenProps) {
                     </motion.div>
                   )}
                 </div>
-              </motion.div>
+              </div>
             );
           })}
+          </div>
         </div>
       </div>
 
