@@ -69,13 +69,13 @@ export function YearGrid({
     <div className="overflow-x-auto pb-4">
       <div className="inline-block min-w-full">
         {/* Month labels */}
-        <div className="flex ml-12 mb-2">
+        <div className="flex ml-12 mb-2 relative" style={{ height: '16px' }}>
           {monthLabels.map(({ month, weekIndex }) => (
             <div
               key={`${month}-${weekIndex}`}
-              className="text-xs font-medium text-white/40"
+              className="text-xs font-medium text-white/40 absolute"
               style={{
-                marginLeft: weekIndex === 0 ? 0 : `${(weekIndex - (monthLabels.find(l => l.month === month)?.weekIndex || 0)) * (BLOCK_SIZE + 2)}px`,
+                left: `${weekIndex * (BLOCK_SIZE + 2)}px`,
               }}
             >
               {month}
