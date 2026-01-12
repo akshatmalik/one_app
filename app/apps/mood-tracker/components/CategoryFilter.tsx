@@ -25,8 +25,8 @@ export function CategoryFilter({
         className={clsx(
           'px-3 py-1.5 rounded-full text-sm font-medium transition-all',
           selectedCategoryId === null
-            ? 'bg-gray-900 text-white'
-            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            ? 'bg-purple-600 text-white'
+            : 'bg-white/[0.02] border border-white/10 text-white/60 hover:text-white/80 hover:bg-white/[0.04]'
         )}
       >
         All Tags
@@ -39,7 +39,7 @@ export function CategoryFilter({
             'px-3 py-1.5 rounded-full text-sm font-medium transition-all',
             selectedCategoryId === category.id
               ? 'text-white shadow-md'
-              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              : 'bg-white/[0.02] border border-white/10 text-white/60 hover:text-white/80 hover:bg-white/[0.04]'
           )}
           style={{
             backgroundColor:

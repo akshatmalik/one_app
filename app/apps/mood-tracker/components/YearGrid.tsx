@@ -57,7 +57,7 @@ export function YearGrid({
 
   if (yearDays.length === 0) {
     return (
-      <div className="text-center text-gray-500 py-8">
+      <div className="text-center text-white/40 py-8">
         No days to display for year {year}
       </div>
     );
@@ -73,7 +73,7 @@ export function YearGrid({
           {monthLabels.map(({ month, weekIndex }) => (
             <div
               key={`${month}-${weekIndex}`}
-              className="text-xs font-medium text-gray-600"
+              className="text-xs font-medium text-white/40"
               style={{
                 marginLeft: weekIndex === 0 ? 0 : `${(weekIndex - (monthLabels.find(l => l.month === month)?.weekIndex || 0)) * (BLOCK_SIZE + 2)}px`,
               }}
@@ -90,7 +90,7 @@ export function YearGrid({
             {weekdayLabels.map((day, index) => (
               <div
                 key={day}
-                className="text-xs font-medium text-gray-600 flex items-center justify-end"
+                className="text-xs font-medium text-white/40 flex items-center justify-end"
                 style={{ height: `${BLOCK_SIZE}px` }}
               >
                 {index % 2 === 1 ? day : ''}

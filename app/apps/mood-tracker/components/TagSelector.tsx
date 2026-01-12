@@ -18,7 +18,7 @@ export function TagSelector({
 }: TagSelectorProps) {
   if (tags.length === 0) {
     return (
-      <div className={clsx('text-sm text-gray-500', className)}>
+      <div className={clsx('text-sm text-white/40', className)}>
         No tags available. Create tags in the tag manager first.
       </div>
     );
@@ -26,7 +26,7 @@ export function TagSelector({
 
   return (
     <div className={clsx('space-y-4', className)}>
-      <label className="block text-sm font-medium text-gray-700">
+      <label className="block text-sm font-medium text-white/70">
         Tags
       </label>
       <div className="space-y-3">
@@ -51,8 +51,8 @@ export function TagSelector({
                       'px-3 py-1.5 rounded-full text-sm font-medium transition-all',
                       'border-2 hover:scale-105',
                       selectedTagIds.includes(tag.id)
-                        ? 'border-gray-900 shadow-md scale-105'
-                        : 'border-gray-200 bg-white hover:border-gray-300'
+                        ? 'border-white/20 shadow-md scale-105'
+                        : 'border-white/10 bg-white/[0.02] hover:border-white/20'
                     )}
                     style={{
                       backgroundColor: selectedTagIds.includes(tag.id)
