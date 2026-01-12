@@ -1659,3 +1659,576 @@ export function getMonthlyTrends(games: Game[], monthCount: number = 12): Monthl
 
   return trends;
 }
+
+// ========================================
+// WEEK IN REVIEW
+// ========================================
+
+export interface WeekInReviewData {
+  // Time range
+  weekStart: Date;
+  weekEnd: Date;
+  weekLabel: string; // e.g., "Dec 2 - Dec 8, 2024"
+
+  // Core stats
+  totalHours: number;
+  totalSessions: number;
+  uniqueGames: number;
+  currentStreak: number;
+
+  // Daily breakdown
+  dailyHours: Array<{
+    day: string; // Day name (Mon, Tue, etc)
+    date: string; // YYYY-MM-DD
+    hours: number;
+    sessions: number;
+    games: number;
+    gameNames: string[];
+  }>;
+  busiestDay: { day: string; date: string; hours: number; sessions: number } | null;
+  restDays: string[];
+
+  // Game breakdown
+  gamesPlayed: Array<{
+    game: Game;
+    hours: number;
+    sessions: number;
+    percentage: number;
+    daysPlayed: number;
+  }>;
+  topGame: { game: Game; hours: number; sessions: number; percentage: number } | null;
+
+  // Sessions
+  avgSessionLength: number;
+  longestSession: { game: Game; hours: number; date: string; day: string } | null;
+  marathonSessions: number; // 3h+
+  powerSessions: number; // 1-3h
+  quickSessions: number; // <1h
+  mostConsistentGame: { game: Game; daysPlayed: number } | null;
+
+  // Patterns
+  weekdayHours: number;
+  weekendHours: number;
+  weekdayPercentage: number;
+  weekendPercentage: number;
+
+  // Genre
+  favoriteGenre: { genre: string; hours: number; percentage: number } | null;
+  genresPlayed: string[];
+  genreDiversityScore: number;
+
+  // Achievements
+  completedGames: Game[];
+  newGamesStarted: Game[];
+  milestonesReached: Array<{ game: Game; milestone: string }>;
+
+  // Comparisons
+  vsLastWeek: { hoursDiff: number; gamesDiff: number; sessionsDiff: number; trend: 'up' | 'down' | 'same' };
+  vsAverage: { percentage: number; hoursDiff: number };
+
+  // Value
+  totalCostPerHour: number;
+  bestValueGame: { game: Game; costPerHour: number } | null;
+
+  // Personality
+  gamingStyle: 'Monogamous' | 'Dabbler' | 'Variety Seeker' | 'Juggler';
+  weekVibe: string;
+  focusScore: number; // 0-100, how concentrated on one game
+
+  // Equivalents
+  movieEquivalent: number;
+  bookEquivalent: number;
+  tvEpisodeEquivalent: number;
+  podcastEquivalent: number; // 1hr episodes
+  workDaysEquivalent: number; // 8hr work days
+  netflixBindgeEquivalent: number; // 25min episodes
+  gymSessionsEquivalent: number; // 1hr sessions
+  sleepCyclesEquivalent: number; // 8hr sleep
+
+  // Value stats
+  totalValueUtilized: number; // Total price of games played this week
+  averageGameValue: number; // Average price per game played
+  savingsVsRenting: number; // How much saved vs renting at $60/week
+  libraryPercentagePlayed: number; // What % of library was played
+
+  // Fun stats
+  perfectWeek: boolean; // Played all 7 days
+  weekendWarrior: boolean; // 70%+ on weekend
+  weekdayGrind: boolean; // 70%+ on weekdays
+
+  // Additional insights
+  averageHoursPerDay: number;
+  daysActive: number;
+  longestStreak: number; // Consecutive days played this week
+  earliestSession: string | null; // Day with earliest session
+  latestSession: string | null; // Day with latest session
+}
+
+// Get week stats for any week by offset (-1 = current week, 0 = last completed week, 1 = week before, etc.)
+export function getWeekStatsForOffset(games: Game[], weekOffset: number = 0): WeekInReviewData {
+  const today = new Date();
+  const currentDayOfWeek = today.getDay(); // 0 = Sunday, 1 = Monday, etc.
+
+  // Calculate the Monday of the target week
+  const daysToLastMonday = currentDayOfWeek === 0 ? 6 : currentDayOfWeek - 1;
+  const lastMonday = new Date(today);
+
+  // For current week (offset -1), use this week's Monday
+  // For completed weeks (offset 0+), go back in time
+  if (weekOffset === -1) {
+    lastMonday.setDate(today.getDate() - daysToLastMonday);
+  } else {
+    lastMonday.setDate(today.getDate() - daysToLastMonday - 7 - (weekOffset * 7));
+  }
+  lastMonday.setHours(0, 0, 0, 0);
+
+  // Calculate the Sunday of the target week
+  const lastSunday = new Date(lastMonday);
+  lastSunday.setDate(lastMonday.getDate() + 6);
+  lastSunday.setHours(23, 59, 59, 999);
+
+  // Format week label
+  const weekLabel = `${lastMonday.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${lastSunday.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+
+  // Initialize tracking structures
+  const gameStatsMap = new Map<string, {
+    game: Game;
+    hours: number;
+    sessions: number;
+    daysPlayed: Set<string>;
+  }>();
+
+  const dailyStatsMap = new Map<string, {
+    hours: number;
+    sessions: number;
+    games: Set<string>;
+    gameNames: Set<string>;
+  }>();
+
+  const hoursByGenre: Record<string, number> = {};
+  const allSessionHours: number[] = [];
+
+  let totalHours = 0;
+  let totalSessions = 0;
+  let longestSession: WeekInReviewData['longestSession'] = null;
+  let weekdayHours = 0;
+  let weekendHours = 0;
+
+  const completedGames: Game[] = [];
+  const newGamesStarted: Game[] = [];
+  const milestonesReached: Array<{ game: Game; milestone: string }> = [];
+
+  // Initialize daily stats for all 7 days
+  for (let i = 0; i < 7; i++) {
+    const date = new Date(lastMonday);
+    date.setDate(lastMonday.getDate() + i);
+    const dateStr = date.toISOString().split('T')[0];
+    dailyStatsMap.set(dateStr, {
+      hours: 0,
+      sessions: 0,
+      games: new Set(),
+      gameNames: new Set(),
+    });
+  }
+
+  // Process all games
+  games.forEach(game => {
+    // Check for completions this week
+    if (game.endDate && game.status === 'Completed') {
+      const endDate = new Date(game.endDate);
+      if (endDate >= lastMonday && endDate <= lastSunday) {
+        completedGames.push(game);
+      }
+    }
+
+    // Check for new games started
+    if (game.startDate) {
+      const startDate = new Date(game.startDate);
+      if (startDate >= lastMonday && startDate <= lastSunday) {
+        newGamesStarted.push(game);
+      }
+    }
+
+    // Process play logs
+    if (game.playLogs) {
+      let hadPreviousLogs = false;
+
+      game.playLogs.forEach(log => {
+        const logDate = new Date(log.date);
+
+        // Check if this is a new game (first log this week)
+        if (logDate < lastMonday && getTotalHours(game) > 0) {
+          hadPreviousLogs = true;
+        }
+
+        if (logDate >= lastMonday && logDate <= lastSunday) {
+          const dateStr = log.date;
+
+          // Update game stats
+          const existing = gameStatsMap.get(game.id) || {
+            game,
+            hours: 0,
+            sessions: 0,
+            daysPlayed: new Set<string>()
+          };
+          existing.hours += log.hours;
+          existing.sessions += 1;
+          existing.daysPlayed.add(dateStr);
+          gameStatsMap.set(game.id, existing);
+
+          // Update daily stats
+          const dailyStats = dailyStatsMap.get(dateStr);
+          if (dailyStats) {
+            dailyStats.hours += log.hours;
+            dailyStats.sessions += 1;
+            dailyStats.games.add(game.id);
+            dailyStats.gameNames.add(game.name);
+          }
+
+          // Update totals
+          totalHours += log.hours;
+          totalSessions += 1;
+          allSessionHours.push(log.hours);
+
+          // Track weekday vs weekend
+          const dayOfWeek = logDate.getDay();
+          if (dayOfWeek === 0 || dayOfWeek === 6) {
+            weekendHours += log.hours;
+          } else {
+            weekdayHours += log.hours;
+          }
+
+          // Track longest session
+          if (!longestSession || log.hours > longestSession.hours) {
+            longestSession = {
+              game,
+              hours: log.hours,
+              date: log.date,
+              day: logDate.toLocaleDateString('en-US', { weekday: 'long' })
+            };
+          }
+
+          // Track hours by genre
+          if (game.genre) {
+            hoursByGenre[game.genre] = (hoursByGenre[game.genre] || 0) + log.hours;
+          }
+        }
+      });
+
+      // Mark as new game started if first log is this week
+      if (!hadPreviousLogs && gameStatsMap.has(game.id)) {
+        if (!newGamesStarted.includes(game)) {
+          newGamesStarted.push(game);
+        }
+      }
+    }
+
+    // Check for milestones
+    const totalGameHours = getTotalHours(game);
+    if (gameStatsMap.has(game.id)) {
+      if (totalGameHours >= 100 && totalGameHours - (gameStatsMap.get(game.id)?.hours || 0) < 100) {
+        milestonesReached.push({ game, milestone: 'Century Club (100h)' });
+      } else if (totalGameHours >= 50 && totalGameHours - (gameStatsMap.get(game.id)?.hours || 0) < 50) {
+        milestonesReached.push({ game, milestone: 'Half Century (50h)' });
+      }
+    }
+  });
+
+  // Build daily breakdown array
+  const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const dailyHours: WeekInReviewData['dailyHours'] = [];
+  const restDays: string[] = [];
+
+  for (let i = 0; i < 7; i++) {
+    const date = new Date(lastMonday);
+    date.setDate(lastMonday.getDate() + i);
+    const dateStr = date.toISOString().split('T')[0];
+    const dailyStats = dailyStatsMap.get(dateStr)!;
+
+    dailyHours.push({
+      day: dayNames[i],
+      date: dateStr,
+      hours: dailyStats.hours,
+      sessions: dailyStats.sessions,
+      games: dailyStats.games.size,
+      gameNames: Array.from(dailyStats.gameNames),
+    });
+
+    if (dailyStats.hours === 0) {
+      restDays.push(dayNames[i]);
+    }
+  }
+
+  // Find busiest day
+  const busiestDayData = dailyHours.reduce((max, day) =>
+    day.hours > max.hours ? day : max
+  , dailyHours[0]);
+
+  const busiestDay = busiestDayData.hours > 0 ? {
+    day: busiestDayData.day,
+    date: busiestDayData.date,
+    hours: busiestDayData.hours,
+    sessions: busiestDayData.sessions,
+  } : null;
+
+  // Build games played array and calculate percentages
+  const gamesPlayedArray = Array.from(gameStatsMap.values());
+  const gamesPlayed = gamesPlayedArray.map(g => ({
+    game: g.game,
+    hours: g.hours,
+    sessions: g.sessions,
+    percentage: totalHours > 0 ? (g.hours / totalHours) * 100 : 0,
+    daysPlayed: g.daysPlayed.size,
+  })).sort((a, b) => b.hours - a.hours);
+
+  // Top game
+  const topGame = gamesPlayed.length > 0 ? {
+    game: gamesPlayed[0].game,
+    hours: gamesPlayed[0].hours,
+    sessions: gamesPlayed[0].sessions,
+    percentage: gamesPlayed[0].percentage,
+  } : null;
+
+  // Session analytics
+  const avgSessionLength = totalSessions > 0 ? totalHours / totalSessions : 0;
+  const marathonSessions = allSessionHours.filter(h => h >= 3).length;
+  const powerSessions = allSessionHours.filter(h => h >= 1 && h < 3).length;
+  const quickSessions = allSessionHours.filter(h => h < 1).length;
+
+  // Most consistent game (played most days)
+  const mostConsistentGame = gamesPlayed.length > 0
+    ? gamesPlayed.reduce((max, g) => g.daysPlayed > max.daysPlayed ? g : max, gamesPlayed[0])
+    : null;
+
+  const mostConsistentGameData = mostConsistentGame && mostConsistentGame.daysPlayed > 1 ? {
+    game: mostConsistentGame.game,
+    daysPlayed: mostConsistentGame.daysPlayed,
+  } : null;
+
+  // Weekday vs weekend percentages
+  const weekdayPercentage = totalHours > 0 ? (weekdayHours / totalHours) * 100 : 0;
+  const weekendPercentage = totalHours > 0 ? (weekendHours / totalHours) * 100 : 0;
+
+  // Genre stats
+  const genreEntries = Object.entries(hoursByGenre).sort((a, b) => b[1] - a[1]);
+  const favoriteGenre = genreEntries.length > 0 ? {
+    genre: genreEntries[0][0],
+    hours: genreEntries[0][1],
+    percentage: totalHours > 0 ? (genreEntries[0][1] / totalHours) * 100 : 0,
+  } : null;
+
+  const genresPlayed = genreEntries.map(([genre]) => genre);
+  const genreDiversityScore = genresPlayed.length;
+
+  // Gaming style
+  let gamingStyle: WeekInReviewData['gamingStyle'];
+  const uniqueGames = gamesPlayed.length;
+
+  if (uniqueGames === 1) gamingStyle = 'Monogamous';
+  else if (uniqueGames <= 3) gamingStyle = 'Dabbler';
+  else if (uniqueGames <= 5) gamingStyle = 'Variety Seeker';
+  else gamingStyle = 'Juggler';
+
+  // Focus score (how much time in top game)
+  const focusScore = topGame ? Math.round(topGame.percentage) : 0;
+
+  // Week vibe
+  let weekVibe = 'Balanced Gamer';
+  if (totalHours >= 25) weekVibe = '🔥 POWER GAMER MODE';
+  else if (totalHours >= 15) weekVibe = '😎 Solid Gaming Week';
+  else if (totalHours >= 5) weekVibe = '✨ Quality Gaming';
+  else if (totalHours > 0) weekVibe = '🎮 Light Week';
+  else weekVibe = '💤 Rest Week';
+
+  if (uniqueGames === 1 && totalHours > 10) weekVibe = '🎯 Laser Focused';
+  else if (uniqueGames >= 6) weekVibe = '🌈 Gaming Buffet';
+  else if (weekendPercentage >= 70) weekVibe = '🎉 Weekend Legend';
+  else if (weekdayPercentage >= 70) weekVibe = '💼 Weekday Warrior';
+
+  // Calculate current streak (days with gaming in a row, ending last Sunday)
+  let currentStreak = 0;
+  for (let i = 6; i >= 0; i--) {
+    if (dailyHours[i].hours > 0) {
+      currentStreak++;
+    } else {
+      break;
+    }
+  }
+
+  // Compare to previous week
+  const twoWeeksAgo = new Date(lastMonday);
+  twoWeeksAgo.setDate(lastMonday.getDate() - 7);
+  const previousWeekEnd = new Date(lastMonday);
+  previousWeekEnd.setDate(lastMonday.getDate() - 1);
+  previousWeekEnd.setHours(23, 59, 59, 999);
+
+  const previousWeekStats = getPeriodStatsForRange(games, twoWeeksAgo, previousWeekEnd);
+  const hoursDiff = totalHours - previousWeekStats.totalHours;
+  const gamesDiff = uniqueGames - previousWeekStats.uniqueGames;
+  const sessionsDiff = totalSessions - previousWeekStats.totalSessions;
+
+  let trend: 'up' | 'down' | 'same';
+  if (Math.abs(hoursDiff) < 0.5) trend = 'same';
+  else if (hoursDiff > 0) trend = 'up';
+  else trend = 'down';
+
+  // Compare to average (last 4 weeks)
+  let avgWeeklyHours = 0;
+  for (let i = 0; i < 4; i++) {
+    const weekStart = new Date(lastMonday);
+    weekStart.setDate(lastMonday.getDate() - (7 * (i + 1)));
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekStart.getDate() + 6);
+    weekEnd.setHours(23, 59, 59, 999);
+
+    const weekStats = getPeriodStatsForRange(games, weekStart, weekEnd);
+    avgWeeklyHours += weekStats.totalHours;
+  }
+  avgWeeklyHours = avgWeeklyHours / 4;
+
+  const vsAveragePercentage = avgWeeklyHours > 0 ? (totalHours / avgWeeklyHours) * 100 : 0;
+  const vsAverageHoursDiff = totalHours - avgWeeklyHours;
+
+  // Value calculation
+  const paidGamesPlayed = gamesPlayed.filter(g => !g.game.acquiredFree && g.game.price > 0);
+  const totalSpent = paidGamesPlayed.reduce((sum, g) => sum + g.game.price, 0);
+  const totalCostPerHour = totalHours > 0 && totalSpent > 0 ? totalSpent / totalHours : 0;
+
+  const bestValueGame = paidGamesPlayed.length > 0
+    ? paidGamesPlayed.reduce((best, g) => {
+        const costPerHour = g.game.price / g.hours;
+        const bestCost = best.game.price / best.hours;
+        return costPerHour < bestCost ? g : best;
+      }, paidGamesPlayed[0])
+    : null;
+
+  const bestValueGameData = bestValueGame ? {
+    game: bestValueGame.game,
+    costPerHour: bestValueGame.game.price / bestValueGame.hours,
+  } : null;
+
+  // Equivalents
+  const movieEquivalent = Math.floor(totalHours / 2);
+  const bookEquivalent = Math.floor(totalHours / 8);
+  const tvEpisodeEquivalent = Math.floor(totalHours / 0.75); // 45min episodes
+  const podcastEquivalent = Math.floor(totalHours); // 1hr episodes
+  const workDaysEquivalent = parseFloat((totalHours / 8).toFixed(1)); // 8hr work days
+  const netflixBindgeEquivalent = Math.floor(totalHours / 0.42); // 25min episodes
+  const gymSessionsEquivalent = Math.floor(totalHours); // 1hr sessions
+  const sleepCyclesEquivalent = parseFloat((totalHours / 8).toFixed(1)); // 8hr sleep
+
+  // Value stats
+  const totalValueUtilized = gamesPlayed.reduce((sum, g) => sum + g.game.price, 0);
+  const averageGameValue = uniqueGames > 0 ? totalValueUtilized / uniqueGames : 0;
+  const weeklyRentalCost = 60; // Assumed weekly rental cost
+  const savingsVsRenting = totalValueUtilized > 0 ? weeklyRentalCost - (totalCostPerHour * totalHours) : 0;
+  const totalLibraryGames = games.filter(g => g.status !== 'Wishlist').length;
+  const libraryPercentagePlayed = totalLibraryGames > 0 ? (uniqueGames / totalLibraryGames) * 100 : 0;
+
+  // Fun stats
+  const perfectWeek = dailyHours.every(d => d.hours > 0);
+  const weekendWarrior = weekendPercentage >= 70;
+  const weekdayGrind = weekdayPercentage >= 70;
+
+  // Additional insights
+  const daysActive = dailyHours.filter(d => d.hours > 0).length;
+  const averageHoursPerDay = daysActive > 0 ? totalHours / daysActive : 0;
+
+  // Calculate longest streak this week
+  let longestStreak = 0;
+  let currentStreakCount = 0;
+  for (const day of dailyHours) {
+    if (day.hours > 0) {
+      currentStreakCount++;
+      longestStreak = Math.max(longestStreak, currentStreakCount);
+    } else {
+      currentStreakCount = 0;
+    }
+  }
+
+  // Find earliest and latest session days
+  const activeDays = dailyHours.filter(d => d.hours > 0);
+  const earliestSession = activeDays.length > 0 ? activeDays[0].day : null;
+  const latestSession = activeDays.length > 0 ? activeDays[activeDays.length - 1].day : null;
+
+  return {
+    weekStart: lastMonday,
+    weekEnd: lastSunday,
+    weekLabel,
+    totalHours,
+    totalSessions,
+    uniqueGames,
+    currentStreak,
+    dailyHours,
+    busiestDay,
+    restDays,
+    gamesPlayed,
+    topGame,
+    avgSessionLength,
+    longestSession,
+    marathonSessions,
+    powerSessions,
+    quickSessions,
+    mostConsistentGame: mostConsistentGameData,
+    weekdayHours,
+    weekendHours,
+    weekdayPercentage,
+    weekendPercentage,
+    favoriteGenre,
+    genresPlayed,
+    genreDiversityScore,
+    completedGames,
+    newGamesStarted,
+    milestonesReached,
+    vsLastWeek: { hoursDiff, gamesDiff, sessionsDiff, trend },
+    vsAverage: { percentage: vsAveragePercentage, hoursDiff: vsAverageHoursDiff },
+    totalCostPerHour,
+    bestValueGame: bestValueGameData,
+    gamingStyle,
+    weekVibe,
+    focusScore,
+    movieEquivalent,
+    bookEquivalent,
+    tvEpisodeEquivalent,
+    podcastEquivalent,
+    workDaysEquivalent,
+    netflixBindgeEquivalent,
+    gymSessionsEquivalent,
+    sleepCyclesEquivalent,
+    totalValueUtilized,
+    averageGameValue,
+    savingsVsRenting,
+    libraryPercentagePlayed,
+    perfectWeek,
+    weekendWarrior,
+    weekdayGrind,
+    averageHoursPerDay,
+    daysActive,
+    longestStreak,
+    earliestSession,
+    latestSession,
+  };
+}
+
+// Get last completed week (Monday-Sunday) with comprehensive stats
+// This is a wrapper around getWeekStatsForOffset for backwards compatibility
+export function getLastCompletedWeekStats(games: Game[]): WeekInReviewData {
+  return getWeekStatsForOffset(games, 0);
+}
+
+// Get the number of weeks with data (to know how far back we can navigate)
+export function getAvailableWeeksCount(games: Game[]): number {
+  const allLogs = getAllPlayLogs(games);
+  if (allLogs.length === 0) return 0;
+
+  // Find oldest play log
+  const oldestLog = allLogs[allLogs.length - 1]; // Already sorted by date descending
+  const oldestDate = new Date(oldestLog.log.date);
+
+  // Calculate weeks from oldest log to now
+  const now = new Date();
+  const diffTime = now.getTime() - oldestDate.getTime();
+  const diffWeeks = Math.ceil(diffTime / (7 * 24 * 60 * 60 * 1000));
+
+  return diffWeeks;
+}
