@@ -68,21 +68,21 @@ export function DayDetailModal({
 
   return (
     <div
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4"
       onClick={handleBackdropClick}
     >
-      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-[#0a0a0f] border border-white/10 rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         {/* Header */}
-        <div className="sticky top-0 bg-white border-b border-gray-200 p-4 flex items-center justify-between">
+        <div className="sticky top-0 bg-[#0a0a0f] border-b border-white/10 p-4 flex items-center justify-between">
           <div>
-            <h2 className="text-xl font-bold text-gray-900">
+            <h2 className="text-xl font-bold text-white">
               Day {dayData.dayNumber}
             </h2>
-            <p className="text-sm text-gray-600">{formatDate(dayData.date)}</p>
+            <p className="text-sm text-white/60">{formatDate(dayData.date)}</p>
           </div>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors text-2xl"
+            className="text-white/40 hover:text-white/60 transition-colors text-2xl"
           >
             ×
           </button>
@@ -91,7 +91,7 @@ export function DayDetailModal({
         {/* Content */}
         <div className="p-6 space-y-6">
           {error && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
+            <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 text-sm text-red-400">
               {error}
             </div>
           )}
@@ -109,10 +109,10 @@ export function DayDetailModal({
         </div>
 
         {/* Footer */}
-        <div className="sticky bottom-0 bg-white border-t border-gray-200 p-4 flex items-center justify-end gap-3">
+        <div className="sticky bottom-0 bg-[#0a0a0f] border-t border-white/10 p-4 flex items-center justify-end gap-3">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-gray-700 hover:text-gray-900 font-medium transition-colors"
+            className="px-4 py-2 text-white/70 hover:text-white font-medium transition-colors"
             disabled={saving}
           >
             Cancel

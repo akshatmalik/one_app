@@ -15,7 +15,7 @@ export function MoodRatingSelector({ value, onChange, className }: MoodRatingSel
 
   return (
     <div className={clsx('space-y-2', className)}>
-      <label className="block text-sm font-medium text-gray-700">
+      <label className="block text-sm font-medium text-white/70">
         How was your day?
       </label>
       <div className="flex gap-2">
@@ -27,12 +27,12 @@ export function MoodRatingSelector({ value, onChange, className }: MoodRatingSel
               'flex-1 py-3 px-2 rounded-lg font-medium text-sm transition-all',
               'border-2 hover:scale-105',
               value === mood
-                ? 'border-gray-900 shadow-md scale-105'
-                : 'border-gray-200 hover:border-gray-300'
+                ? 'border-white/20 shadow-md scale-105'
+                : 'border-white/10 hover:border-white/20 bg-white/[0.02]'
             )}
             style={{
-              backgroundColor: value === mood ? MOOD_COLORS[mood] : '#ffffff',
-              color: value === mood ? '#ffffff' : '#000000',
+              backgroundColor: value === mood ? MOOD_COLORS[mood] : undefined,
+              color: value === mood ? '#ffffff' : undefined,
             }}
             title={MOOD_LABELS[mood]}
           >

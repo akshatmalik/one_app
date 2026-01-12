@@ -19,7 +19,7 @@ export function DiaryEditor({ content, onChange, className }: DiaryEditorProps) 
     },
     editorProps: {
       attributes: {
-        class: 'prose prose-sm max-w-none focus:outline-none min-h-[150px] p-3',
+        class: 'prose prose-sm prose-invert max-w-none focus:outline-none min-h-[150px] p-3 text-white/80',
       },
     },
   });
@@ -30,19 +30,19 @@ export function DiaryEditor({ content, onChange, className }: DiaryEditorProps) 
 
   return (
     <div className={clsx('space-y-2', className)}>
-      <label className="block text-sm font-medium text-gray-700">
+      <label className="block text-sm font-medium text-white/70">
         Diary Entry
       </label>
-      <div className="border border-gray-200 rounded-lg overflow-hidden">
+      <div className="border border-white/10 rounded-lg overflow-hidden bg-white/[0.02]">
         {/* Toolbar */}
-        <div className="bg-gray-50 border-b border-gray-200 p-2 flex gap-1 flex-wrap">
+        <div className="bg-white/[0.02] border-b border-white/10 p-2 flex gap-1 flex-wrap">
           <button
             onClick={() => editor.chain().focus().toggleBold().run()}
             className={clsx(
               'px-2 py-1 rounded text-sm font-medium transition-colors',
               editor.isActive('bold')
                 ? 'bg-purple-600 text-white'
-                : 'bg-white text-gray-700 hover:bg-gray-100'
+                : 'bg-white/[0.02] text-white/70 hover:bg-white/[0.04] hover:text-white'
             )}
             title="Bold"
           >
@@ -54,7 +54,7 @@ export function DiaryEditor({ content, onChange, className }: DiaryEditorProps) 
               'px-2 py-1 rounded text-sm font-medium italic transition-colors',
               editor.isActive('italic')
                 ? 'bg-purple-600 text-white'
-                : 'bg-white text-gray-700 hover:bg-gray-100'
+                : 'bg-white/[0.02] text-white/70 hover:bg-white/[0.04] hover:text-white'
             )}
             title="Italic"
           >
@@ -66,20 +66,20 @@ export function DiaryEditor({ content, onChange, className }: DiaryEditorProps) 
               'px-2 py-1 rounded text-sm font-medium line-through transition-colors',
               editor.isActive('strike')
                 ? 'bg-purple-600 text-white'
-                : 'bg-white text-gray-700 hover:bg-gray-100'
+                : 'bg-white/[0.02] text-white/70 hover:bg-white/[0.04] hover:text-white'
             )}
             title="Strikethrough"
           >
             S
           </button>
-          <div className="w-px bg-gray-300 mx-1" />
+          <div className="w-px bg-white/10 mx-1" />
           <button
             onClick={() => editor.chain().focus().toggleBulletList().run()}
             className={clsx(
               'px-2 py-1 rounded text-sm font-medium transition-colors',
               editor.isActive('bulletList')
                 ? 'bg-purple-600 text-white'
-                : 'bg-white text-gray-700 hover:bg-gray-100'
+                : 'bg-white/[0.02] text-white/70 hover:bg-white/[0.04] hover:text-white'
             )}
             title="Bullet List"
           >
@@ -91,7 +91,7 @@ export function DiaryEditor({ content, onChange, className }: DiaryEditorProps) 
               'px-2 py-1 rounded text-sm font-medium transition-colors',
               editor.isActive('orderedList')
                 ? 'bg-purple-600 text-white'
-                : 'bg-white text-gray-700 hover:bg-gray-100'
+                : 'bg-white/[0.02] text-white/70 hover:bg-white/[0.04] hover:text-white'
             )}
             title="Numbered List"
           >
