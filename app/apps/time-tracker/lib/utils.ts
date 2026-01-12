@@ -117,6 +117,20 @@ export function isSameDay(date1: string, date2: string): boolean {
 }
 
 /**
+ * Calculate day number relative to a start date
+ * @param currentDate - Date to calculate day number for (YYYY-MM-DD)
+ * @param startDate - Start date representing Day 1 (YYYY-MM-DD)
+ * @returns Day number (1, 2, 3, etc.)
+ */
+export function calculateDayNumber(currentDate: string, startDate: string): number {
+  const current = new Date(currentDate + 'T00:00:00');
+  const start = new Date(startDate + 'T00:00:00');
+  const diffTime = current.getTime() - start.getTime();
+  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+  return diffDays + 1; // Start date is Day 1
+}
+
+/**
  * Calculate total duration from time entries
  */
 export function calculateTotalDuration(entries: TimeEntry[]): number {

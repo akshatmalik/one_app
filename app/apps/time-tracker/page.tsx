@@ -6,11 +6,13 @@ import { DailyTimeline } from './components/DailyTimeline';
 import { ScheduleManager } from './components/ScheduleManager';
 import { CategoryManager } from './components/CategoryManager';
 import { ManualEntryForm } from './components/ManualEntryForm';
+import { StartDateSetup } from './components/StartDateSetup';
 import { useTimeEntries } from './hooks/useTimeEntries';
 import { useSchedules } from './hooks/useSchedules';
 import { useTimer } from './hooks/useTimer';
 import { useCategories } from './hooks/useCategories';
-import { getTodayDate, addDays, formatDateReadable, getActivePresetForDate } from './lib/utils';
+import { useSettings } from './hooks/useSettings';
+import { getTodayDate, addDays, formatDateReadable, getActivePresetForDate, calculateDayNumber } from './lib/utils';
 import { ChevronLeft, ChevronRight, Calendar, Settings, Clock, Sparkles } from 'lucide-react';
 import { SAMPLE_CATEGORIES, SAMPLE_SCHEDULE, createSampleTimeEntries } from './data/sample-data';
 
@@ -24,6 +26,7 @@ export default function TimeTrackerPage() {
   const { schedules, addSchedule } = useSchedules();
   const { categories, addCategory } = useCategories();
   const { startTimer } = useTimer();
+  const { settings, loading: settingsLoading, createSettings } = useSettings();
 
   const activePreset = useMemo(() => {
     return getActivePresetForDate(schedules, selectedDate);
@@ -39,6 +42,10 @@ export default function TimeTrackerPage() {
 
   const handleToday = () => {
     setSelectedDate(getTodayDate());
+  };
+
+  const handleSetStartDate = async (date: string) => {
+    await createSettings({ startDate: date });
   };
 
   const handleLoadSampleData = async () => {
@@ -66,6 +73,23 @@ export default function TimeTrackerPage() {
 
   const isToday = selectedDate === getTodayDate();
   const hasNoData = categories.length === 0 && schedules.length === 0 && entries.length === 0;
+
+  // Show loading state while settings are loading
+  if (settingsLoading) {
+    return (
+      <div className="min-h-[calc(100vh-60px)] flex items-center justify-center">
+        <div className="text-white/60">Loading...</div>
+      </div>
+    );
+  }
+
+  // Show start date setup if no settings exist
+  if (!settings) {
+    return <StartDateSetup onSetStartDate={handleSetStartDate} />;
+  }
+
+  // Calculate day number for display
+  const dayNumber = calculateDayNumber(selectedDate, settings.startDate);
 
   return (
     <div className="min-h-[calc(100vh-60px)] flex flex-col">
@@ -129,7 +153,7 @@ export default function TimeTrackerPage() {
 
                 <div className="text-center">
                   <div className="text-lg font-semibold text-white">
-                    {formatDateReadable(selectedDate)}
+                    Day {dayNumber} • {formatDateReadable(selectedDate)}
                   </div>
                   {!isToday && (
                     <button
