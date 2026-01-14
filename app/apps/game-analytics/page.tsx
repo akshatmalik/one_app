@@ -61,7 +61,14 @@ export default function GameAnalyticsPage() {
     setEditingGame(null);
   };
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = async (id: string, gameName: string) => {
+    // Show confirmation dialog
+    const confirmed = window.confirm(
+      `Are you sure you want to delete "${gameName}"?\n\nThis action cannot be undone.`
+    );
+
+    if (!confirmed) return;
+
     try {
       await deleteGame(id);
       showToast('Game deleted', 'success');
@@ -402,7 +409,7 @@ export default function GameAnalyticsPage() {
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              handleDelete(game.id);
+                              handleDelete(game.id, game.name);
                             }}
                             className="p-2 text-white/30 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all"
                             title="Delete Game"

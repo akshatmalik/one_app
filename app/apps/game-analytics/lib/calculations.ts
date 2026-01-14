@@ -1742,8 +1742,21 @@ export interface WeekInReviewData {
   podcastEquivalent: number; // 1hr episodes
   workDaysEquivalent: number; // 8hr work days
   netflixBindgeEquivalent: number; // 25min episodes
-  gymSessionsEquivalent: number; // 1hr sessions
+  coffeeShopVisits: number; // 2hr visits
   sleepCyclesEquivalent: number; // 8hr sleep
+
+  // Cost comparisons
+  movieTheaterCost: number; // Cost if watched movies in theater
+  streamingCost: number; // Equivalent streaming service cost
+
+  // Fun stats
+  pizzaSlicesEquivalent: number; // Pizza slices consumed while gaming
+  energyDrinksEquivalent: number; // Energy drinks
+  snackBudget: number; // Estimated snack budget
+  buttonPressesEstimate: number; // Total button presses
+  totalMinutesOfFun: number; // Total minutes
+  averageEnjoymentRating: number; // Average game rating
+  entertainmentValueScore: number; // Hours × rating
 
   // Value stats
   totalValueUtilized: number; // Total price of games played this week
@@ -2114,8 +2127,23 @@ export function getWeekStatsForOffset(games: Game[], weekOffset: number = 0): We
   const podcastEquivalent = Math.floor(totalHours); // 1hr episodes
   const workDaysEquivalent = parseFloat((totalHours / 8).toFixed(1)); // 8hr work days
   const netflixBindgeEquivalent = Math.floor(totalHours / 0.42); // 25min episodes
-  const gymSessionsEquivalent = Math.floor(totalHours); // 1hr sessions
+  const coffeeShopVisits = Math.floor(totalHours / 2); // 2hr visits
   const sleepCyclesEquivalent = parseFloat((totalHours / 8).toFixed(1)); // 8hr sleep
+
+  // Cost comparisons
+  const movieTheaterCost = movieEquivalent * 15; // $15 per movie ticket
+  const streamingCost = (totalHours / 730) * 15.99; // Netflix monthly cost ($15.99) spread over avg monthly hours (730h = ~30 days * 24h)
+
+  // Fun stats
+  const pizzaSlicesEquivalent = Math.floor(totalHours * 2); // Eat ~2 slices per hour while gaming
+  const energyDrinksEquivalent = Math.floor(totalHours / 2); // One energy drink per 2 hours
+  const snackBudget = pizzaSlicesEquivalent * 3 + energyDrinksEquivalent * 3; // $3 per pizza slice + $3 per energy drink
+  const buttonPressesEstimate = Math.floor(totalHours * 3000); // ~3000 button presses per hour (conservative)
+  const totalMinutesOfFun = totalHours * 60;
+  const averageEnjoymentRating = gamesPlayed.length > 0
+    ? gamesPlayed.reduce((sum, g) => sum + g.game.rating, 0) / gamesPlayed.length
+    : 0;
+  const entertainmentValueScore = totalHours * averageEnjoymentRating; // Hours × avg rating = entertainment value
 
   // Value stats
   const totalValueUtilized = gamesPlayed.reduce((sum, g) => sum + g.game.price, 0);
@@ -2193,8 +2221,17 @@ export function getWeekStatsForOffset(games: Game[], weekOffset: number = 0): We
     podcastEquivalent,
     workDaysEquivalent,
     netflixBindgeEquivalent,
-    gymSessionsEquivalent,
+    coffeeShopVisits,
     sleepCyclesEquivalent,
+    movieTheaterCost,
+    streamingCost,
+    pizzaSlicesEquivalent,
+    energyDrinksEquivalent,
+    snackBudget,
+    buttonPressesEstimate,
+    totalMinutesOfFun,
+    averageEnjoymentRating,
+    entertainmentValueScore,
     totalValueUtilized,
     averageGameValue,
     savingsVsRenting,

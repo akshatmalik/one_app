@@ -11,10 +11,19 @@ interface QuickAddTimeModalProps {
   onClose: () => void;
 }
 
+// Get local date in YYYY-MM-DD format (not UTC)
+function getLocalDateString(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 export function QuickAddTimeModal({ games, onSave, onClose }: QuickAddTimeModalProps) {
   const [selectedGameId, setSelectedGameId] = useState('');
   const [hours, setHours] = useState('');
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [date, setDate] = useState(getLocalDateString());
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
 
