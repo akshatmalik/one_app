@@ -51,7 +51,12 @@ export async function generateAIBlurb(
     const text = result.response.text();
     return text.trim();
   } catch (error) {
-    console.error('AI generation error:', error);
+    console.error(`AI generation error for type "${type}":`, error);
+    console.error('Error details:', JSON.stringify(error, null, 2));
+    if (error instanceof Error) {
+      console.error('Error message:', error.message);
+      console.error('Error stack:', error.stack);
+    }
     return getFallbackBlurb(type);
   }
 }
@@ -237,6 +242,11 @@ User: ${userMessage}`;
     return text.trim();
   } catch (error) {
     console.error('AI chat error:', error);
+    console.error('Error details:', JSON.stringify(error, null, 2));
+    if (error instanceof Error) {
+      console.error('Error message:', error.message);
+      console.error('Error stack:', error.stack);
+    }
     return "Sorry, I'm having trouble right now. Could you try asking that again?";
   }
 }
