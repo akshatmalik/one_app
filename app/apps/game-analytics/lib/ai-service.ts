@@ -109,83 +109,72 @@ ${data.totalValueUtilized > 0 ? `- Value utilized: $${data.totalValueUtilized.to
   const prompts: Record<AIBlurbType, string> = {
     'opening-personality': `${baseContext}
 
-Create an engaging opening insight about this player's gaming personality.
-Their ${data.gamingStyle} style and ${data.totalHours.toFixed(1)} hours this week tell a story - what is it?
-Be creative, enthusiastic, and personal. Use metaphors, analogies, or comparisons if they fit. Make them feel seen and understood.`,
+Write a SHORT, fun 2-3 line observation about their ${data.gamingStyle} gaming style and ${data.totalHours.toFixed(1)} hours played.
+Be punchy and enthusiastic. Keep it brief!`,
 
     'top-game-deep-dive': `${baseContext}
 
 ${data.topGame ? `They spent ${data.topGame.hours.toFixed(1)} hours on ${data.topGame.game.name} this week.` : ''}
 
-Provide a thoughtful, creative observation about their dedication to this game.
-What does this level of focus reveal? Use your creativity - maybe a comparison, a story, or an interesting angle.
-Be genuine and specific. Make it feel like you truly understand their connection to this game.`,
+Write a SHORT, fun 2-3 line comment about their dedication to this game.
+Be creative and specific. Keep it brief!`,
 
     'session-patterns': `${baseContext}
 
 Daily pattern: ${data.dailyHours.map(d => `${d.day}: ${d.hours.toFixed(1)}h`).join(', ')}
 Session mix: ${data.marathonSessions} marathon, ${data.powerSessions} power, ${data.quickSessions} quick sessions
 
-Analyze their gaming rhythm and patterns in a creative, insightful way.
-Find the interesting story in their data. Be constructive and make them see their habits in a new light.`,
+Write a SHORT, fun 2-3 line observation about their gaming rhythm.
+Be playful about their pattern. Keep it brief!`,
 
     'achievement-motivation': `${baseContext}
 
 ${data.completedGames.length > 0 ? `Completed: ${data.completedGames.map(g => g.name).join(', ')}` : ''}
 ${data.milestonesReached.length > 0 ? `Milestones: ${data.milestonesReached.join(', ')}` : ''}
 
-Write motivational, creative commentary about their progress and achievements.
-Be encouraging and celebratory. If they had few achievements, celebrate their journey and exploration instead.
-Use your creativity to make them feel proud of their gaming time.`,
+Write a SHORT, fun 2-3 line celebration of their achievements.
+Be encouraging and upbeat. Keep it brief!`,
 
     'genre-insights': `${baseContext}
 
 Genres: ${data.genresPlayed.join(', ') || 'Various'}
 Diversity score: ${data.genreDiversityScore.toFixed(1)}/10
 
-Provide creative insights into their genre preferences and exploration.
-What does their genre mix say about them? Use interesting comparisons or observations.
-Be playful and insightful about their gaming palette.`,
+Write a SHORT, fun 2-3 line comment about their genre choices.
+Be playful about their gaming taste. Keep it brief!`,
 
     'value-wisdom': `${baseContext}
 
 ${data.totalValueUtilized > 0 ? `Value utilized: $${data.totalValueUtilized.toFixed(2)}` : ''}
 ${data.bestValueGame ? `Best value: ${data.bestValueGame.game.name} at $${data.bestValueGame.costPerHour.toFixed(2)}/hour` : ''}
 
-Share creative insights about their gaming value and library utilization.
-Celebrate smart habits or gently encourage diving into their collection. Be fun and financially savvy.
-Make value feel rewarding, not restrictive.`,
+Write a SHORT, fun 2-3 line comment about their gaming value.
+Be playful about bang-for-buck. Keep it brief!`,
 
     'gaming-behavior': `${baseContext}
 
-Observe their gaming behavior with humor, creativity, and personality.
-Find the quirky, interesting patterns. Late-night sessions? Weekend warrior? Game rotation rituals?
-Be playful, make them smile, and celebrate what makes their gaming habits uniquely theirs.
-Let your creativity shine - use comparisons, jokes, or fun observations.`,
+Write a SHORT, fun 2-3 line observation about their gaming habits.
+Be humorous and quirky. Keep it brief!`,
 
     'comeback-games': `${baseContext}
 
 Games they returned to: ${data.gamesPlayed.filter(g => g.daysPlayed > 1).map(g => `${g.game.name} (${g.daysPlayed} days)`).join(', ') || 'N/A'}
 
-What makes these games irresistible? Why do they keep coming back?
-Be creative and insightful about player loyalty. Maybe they're comfort food, maybe they're habit-forming.
-Find the interesting story in their comeback champions.`,
+Write a SHORT, fun 2-3 line comment about why they keep coming back to these games.
+Be creative about player loyalty. Keep it brief!`,
 
     'binge-sessions': `${baseContext}
 
 Marathon sessions: ${data.marathonSessions} (3h+)
 ${data.longestSession ? `Longest: ${data.longestSession.hours.toFixed(1)}h on ${data.longestSession.game.name}` : ''}
 
-Celebrate their epic gaming sessions with enthusiasm and creativity!
-These marathon moments create the best memories. Make binge gaming sound legendary.
-Use your creativity - comparisons to movie marathons, epic adventures, or whatever fits.`,
+Write a SHORT, fun 2-3 line celebration of their epic gaming sessions.
+Be enthusiastic about the marathons. Keep it brief!`,
 
     'closing-reflection': `${baseContext}
 
-Create a memorable closing reflection on their gaming week.
-Synthesize the story of their week creatively. Use whatever style feels right - poetic, motivational, humorous, or thoughtful.
-End with something that makes them excited for next week.
-This is your chance to leave a lasting impression - make it count!`,
+Write a SHORT, fun 2-3 line closing thought about their gaming week.
+Be upbeat and forward-looking. Keep it brief!`,
   };
 
   return prompts[type];
@@ -196,16 +185,16 @@ This is your chance to leave a lasting impression - make it count!`,
  */
 function getFallbackBlurb(type: AIBlurbType): string {
   const fallbacks: Record<AIBlurbType, string> = {
-    'opening-personality': "Every gaming week tells a story. Let's dive into yours.",
-    'top-game-deep-dive': "When you find a game that clicks, magic happens. That dedication is paying off.",
-    'session-patterns': "Your gaming rhythm is unique to you - and that's what makes it special.",
-    'achievement-motivation': "Progress isn't always measured in achievements. Every hour played is a step forward.",
-    'genre-insights': "The beauty of gaming is the incredible variety at your fingertips. You're making the most of it.",
-    'value-wisdom': "Smart gamers know it's not about the money spent, but the experiences earned.",
-    'gaming-behavior': "Your gaming habits tell a unique story. Every session, every choice, adds another chapter to your gaming journey.",
-    'comeback-games': "The games you return to say a lot about what you love. There's comfort in the familiar, and that's beautiful.",
-    'binge-sessions': "Epic gaming sessions create the best memories. When you find the zone, ride that wave!",
-    'closing-reflection': "Another week of gaming in the books. Here's to the adventures ahead. Keep playing, keep exploring, keep being awesome.",
+    'opening-personality': "Your gaming week has its own unique rhythm and story.",
+    'top-game-deep-dive': "When you find a game that clicks, magic happens.",
+    'session-patterns': "Your gaming rhythm is uniquely yours.",
+    'achievement-motivation': "Every hour played is progress earned.",
+    'genre-insights': "You're exploring a diverse gaming palette.",
+    'value-wisdom': "Smart gaming is about experiences, not just dollars.",
+    'gaming-behavior': "Your gaming habits tell their own story.",
+    'comeback-games': "The games you return to reveal what you truly love.",
+    'binge-sessions': "Epic sessions create the best memories!",
+    'closing-reflection': "Another week of adventures in the books. Here's to the next!",
   };
 
   return fallbacks[type];
