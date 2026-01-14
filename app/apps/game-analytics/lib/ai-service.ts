@@ -3,6 +3,7 @@
 import { getAI, getGenerativeModel, GoogleAIBackend } from 'firebase/ai';
 import { initializeApp, getApps } from 'firebase/app';
 import { WeekInReviewData } from './calculations';
+import { Game } from './types';
 
 const firebaseConfig = {
   apiKey: "AIzaSyBS3IVvszDrm_zjjXu8TATgs1H-FlegHtM",
@@ -30,6 +31,9 @@ export type AIBlurbType =
   | 'achievement-motivation' // After achievements, motivational
   | 'genre-insights'         // After genres, preference analysis
   | 'value-wisdom'           // After value screens, spending insights
+  | 'gaming-behavior'        // Fun behavioral observations
+  | 'comeback-games'         // Games player returned to
+  | 'binge-sessions'         // Marathon gaming insights
   | 'closing-reflection';    // Final reflection
 
 /**
@@ -125,6 +129,30 @@ Analyze how they're maximizing value from their library, or encourage them to di
 Be financially mindful but fun - celebrate smart gaming habits.
 Make it relevant and actionable.`,
 
+    'gaming-behavior': `${baseContext}
+
+Write 2-3 sentences with fun, playful observations about their gaming behavior and habits this week.
+Focus on quirky patterns, favorite play times, or interesting gaming rituals.
+Be lighthearted, humorous, and make them smile. Celebrate their unique gaming personality.
+Examples: late-night gaming sessions, weekend warrior tendencies, specific game rotation patterns.`,
+
+    'comeback-games': `${baseContext}
+
+Games played multiple days: ${data.gamesPlayed.filter(g => g.daysPlayed > 1).map(g => `${g.game.name} (${g.daysPlayed} days)`).join(', ') || 'N/A'}
+
+Write 2-3 sentences about games they keep coming back to this week.
+Analyze what makes these games sticky and why they're in rotation.
+Be insightful about player loyalty and what these comeback games reveal about their preferences.`,
+
+    'binge-sessions': `${baseContext}
+
+Marathon sessions: ${data.marathonSessions} (3h+)
+Longest session: ${data.longestSession ? `${data.longestSession.hours.toFixed(1)}h on ${data.longestSession.game.name}` : 'N/A'}
+
+Write 2-3 sentences celebrating their marathon gaming sessions and dedication.
+Make binge gaming sound epic and impressive (because it is!).
+Be enthusiastic and supportive - these are the sessions that create memories.`,
+
     'closing-reflection': `${baseContext}
 
 Write a 3-4 sentence closing reflection on their gaming week.
@@ -148,6 +176,9 @@ function getFallbackBlurb(type: AIBlurbType): string {
     'achievement-motivation': "Progress isn't always measured in achievements. Every hour played is a step forward.",
     'genre-insights': "The beauty of gaming is the incredible variety at your fingertips. You're making the most of it.",
     'value-wisdom': "Smart gamers know it's not about the money spent, but the experiences earned.",
+    'gaming-behavior': "Your gaming habits tell a unique story. Every session, every choice, adds another chapter to your gaming journey.",
+    'comeback-games': "The games you return to say a lot about what you love. There's comfort in the familiar, and that's beautiful.",
+    'binge-sessions': "Epic gaming sessions create the best memories. When you find the zone, ride that wave!",
     'closing-reflection': "Another week of gaming in the books. Here's to the adventures ahead. Keep playing, keep exploring, keep being awesome.",
   };
 
@@ -172,4 +203,107 @@ export async function generateMultipleBlurbs(
     acc[type] = blurb;
     return acc;
   }, {} as Record<AIBlurbType, string>);
+}
+
+/**
+ * Generate AI chat response with gaming data context
+ */
+export async function generateChatResponse(
+  userMessage: string,
+  context: {
+    weekData: WeekInReviewData | null;
+    monthGames: Game[];
+    allGames: Game[];
+    conversationHistory: Array<{ role: string; content: string }>;
+  }
+): Promise<string> {
+  const model = getAIModel();
+
+  // Build context prompt with gaming data
+  const contextPrompt = buildChatContext(context);
+
+  // Include recent conversation history (last 6 messages)
+  const recentHistory = context.conversationHistory.slice(-6);
+  const historyText = recentHistory
+    .map((msg) => `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.content}`)
+    .join('\n');
+
+  const fullPrompt = `${contextPrompt}
+
+${historyText ? `Recent conversation:\n${historyText}\n` : ''}
+User: ${userMessage}
+Assistant: Provide a helpful, conversational response. Be friendly, insightful, and use the data above to give personalized insights.
+Keep responses concise (2-4 sentences unless asked for more detail).
+Be specific with numbers and game names when relevant.
+`;
+
+  try {
+    const result = await model.generateContent(fullPrompt);
+    const text = result.response.text();
+    return text.trim();
+  } catch (error) {
+    console.error('AI chat error:', error);
+    return "Sorry, I'm having trouble right now. Could you try asking that again?";
+  }
+}
+
+/**
+ * Build context prompt for chat with gaming data
+ */
+function buildChatContext(context: {
+  weekData: WeekInReviewData | null;
+  monthGames: Game[];
+  allGames: Game[];
+}): string {
+  let contextText = `You are a friendly AI gaming coach and companion. You have access to the player's gaming data and can provide insights, recommendations, and answer questions about their gaming habits.
+
+`;
+
+  // Week data
+  if (context.weekData) {
+    contextText += `LAST WEEK DATA:
+`;
+    contextText += `- Total hours: ${context.weekData.totalHours.toFixed(1)}h
+`;
+    contextText += `- Games played: ${context.weekData.gamesPlayed.length}
+`;
+    contextText += `- Top game: ${context.weekData.topGame?.game.name || 'None'} (${context.weekData.topGame?.hours.toFixed(1) || 0}h)
+`;
+    contextText += `- Gaming style: ${context.weekData.gamingStyle}
+`;
+    contextText += `- Genres: ${context.weekData.genresPlayed.join(', ') || 'None'}
+`;
+    contextText += `- Completed: ${context.weekData.completedGames.length}
+
+`;
+  }
+
+  // Month data
+  if (context.monthGames.length > 0) {
+    contextText += `LAST MONTH DATA:
+`;
+    contextText += `- Games played: ${context.monthGames.length}
+`;
+    const monthHours = context.monthGames.reduce((sum, g) => sum + (g.hours || 0), 0);
+    contextText += `- Total hours: ${monthHours.toFixed(1)}h
+
+`;
+  }
+
+  // Library overview
+  if (context.allGames.length > 0) {
+    const owned = context.allGames.filter(g => g.status !== 'Wishlist');
+    const completed = owned.filter(g => g.status === 'Completed');
+    contextText += `LIBRARY OVERVIEW:
+`;
+    contextText += `- Total games owned: ${owned.length}
+`;
+    contextText += `- Completed: ${completed.length}
+`;
+    contextText += `- Completion rate: ${owned.length > 0 ? ((completed.length / owned.length) * 100).toFixed(1) : 0}%
+
+`;
+  }
+
+  return contextText;
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Sparkles, Brain, Target, Trophy, Palette, DollarSign, Heart, Loader2 } from 'lucide-react';
+import { Sparkles, Brain, Target, Trophy, Palette, DollarSign, Heart, Loader2, Zap, RotateCcw, Flame } from 'lucide-react';
 import { AIBlurbType } from '../../lib/ai-service';
 
 interface AIBlurbScreenProps {
@@ -59,6 +59,27 @@ const blurbConfig: Record<AIBlurbType, {
     gradient: 'from-green-500/20 to-emerald-500/20',
     border: 'border-green-500/30',
     title: 'Value Insights',
+  },
+  'gaming-behavior': {
+    icon: Zap,
+    color: 'text-yellow-400',
+    gradient: 'from-yellow-500/20 to-orange-500/20',
+    border: 'border-yellow-500/30',
+    title: 'Gaming Behavior',
+  },
+  'comeback-games': {
+    icon: RotateCcw,
+    color: 'text-indigo-400',
+    gradient: 'from-indigo-500/20 to-violet-500/20',
+    border: 'border-indigo-500/30',
+    title: 'Comeback Champions',
+  },
+  'binge-sessions': {
+    icon: Flame,
+    color: 'text-orange-400',
+    gradient: 'from-orange-500/20 to-red-500/20',
+    border: 'border-orange-500/30',
+    title: 'Epic Sessions',
   },
   'closing-reflection': {
     icon: Heart,
