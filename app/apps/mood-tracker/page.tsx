@@ -10,6 +10,7 @@ import { ViewModeToggle } from './components/ViewModeToggle';
 import { CategoryFilter } from './components/CategoryFilter';
 import { TagManager } from './components/TagManager';
 import { ErrorDisplay } from './components/ErrorDisplay';
+import { VoiceJournalModal } from './components/VoiceJournalModal';
 import { createDummyData } from './data/dummy-data';
 
 export default function MoodTrackerPage() {
@@ -36,6 +37,7 @@ export default function MoodTrackerPage() {
   const [selectedYear, setSelectedYear] = useState(getCurrentYear());
   const [selectedDay, setSelectedDay] = useState<DayData | null>(null);
   const [showTagManager, setShowTagManager] = useState(false);
+  const [showVoiceJournal, setShowVoiceJournal] = useState(false);
   const [generatingDummyData, setGeneratingDummyData] = useState(false);
 
   // Create a map for quick day data lookup
@@ -141,6 +143,46 @@ export default function MoodTrackerPage() {
     await createCategory({ name, color });
   };
 
+  const handleVoiceJournalSave = async (
+    mood: number | null,
+    tagIds: string[],
+    diaryContent: string
+  ) => {
+    // Use the current day for voice journal
+    const today = getTodayDate();
+    const todayEntry = entries.find(e => e.date === today);
+
+    if (todayEntry) {
+      await updateEntry(todayEntry.id, {
+        mood,
+        tagIds,
+        diaryContent,
+      });
+    } else {
+      // Calculate day number for today
+      if (!settings?.startDate) return;
+      const start = new Date(settings.startDate);
+      const current = new Date(today);
+      const diffTime = current.getTime() - start.getTime();
+      const dayNumber = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1;
+
+      await createEntry({
+        dayNumber,
+        date: today,
+        mood,
+        tagIds,
+        diaryContent,
+      });
+    }
+
+    await refreshAll();
+  };
+
+  const handleVoiceJournalEdit = (dayData: DayData) => {
+    setSelectedDay(dayData);
+    setShowVoiceJournal(false);
+  };
+
   if (loading && !settings) {
     return (
       <div className="min-h-[calc(100vh-60px)] flex items-center justify-center">
@@ -190,12 +232,21 @@ export default function MoodTrackerPage() {
                 Start Date: {settings.startDate} (Day 1)
               </p>
             </div>
-            <button
-              onClick={() => setShowTagManager(true)}
-              className="px-4 py-2 bg-purple-600 text-white font-medium rounded-lg hover:bg-purple-700 transition-colors"
-            >
-              Manage Tags
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowVoiceJournal(true)}
+                className="px-4 py-2 bg-purple-600 text-white font-medium rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-2"
+              >
+                <span>🎤</span>
+                <span>Voice Journal</span>
+              </button>
+              <button
+                onClick={() => setShowTagManager(true)}
+                className="px-4 py-2 bg-white/[0.02] border border-white/10 text-white font-medium rounded-lg hover:bg-white/[0.04] transition-colors"
+              >
+                Manage Tags
+              </button>
+            </div>
           </div>
 
           <ErrorDisplay error={error} />
@@ -309,6 +360,38 @@ export default function MoodTrackerPage() {
           onCreateCategory={handleCreateCategory}
           onDeleteCategory={deleteCategory}
           onClose={() => setShowTagManager(false)}
+        />
+      )}
+
+      {/* Voice Journal Modal */}
+      {showVoiceJournal && settings?.startDate && (
+        <VoiceJournalModal
+          currentDate={getTodayDate()}
+          startDate={settings.startDate}
+          currentDayNumber={(() => {
+            const start = new Date(settings.startDate);
+            const current = new Date(getTodayDate());
+            const diffTime = current.getTime() - start.getTime();
+            return Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1;
+          })()}
+          tags={tags}
+          categories={categories}
+          onSave={handleVoiceJournalSave}
+          onEdit={handleVoiceJournalEdit}
+          onClose={() => setShowVoiceJournal(false)}
+          existingEntry={(() => {
+            const todayEntry = entries.find(e => e.date === getTodayDate());
+            if (!todayEntry) return null;
+            const dayTags = tags.filter(tag => todayEntry.tagIds.includes(tag.id));
+            return {
+              dayNumber: todayEntry.dayNumber,
+              date: todayEntry.date,
+              mood: todayEntry.mood,
+              tags: dayTags,
+              diaryContent: todayEntry.diaryContent,
+              hasEntry: true,
+            };
+          })()}
         />
       )}
     </div>
