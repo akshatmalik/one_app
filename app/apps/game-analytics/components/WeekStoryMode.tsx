@@ -87,7 +87,8 @@ export function WeekStoryMode({ data, onClose, prefetchedBlurbs, isLoadingPrefet
     };
 
     loadAIBlurbs();
-  }, [data, prefetchedBlurbs, isLoadingPrefetch]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run once on mount - prefetched blurbs are passed as props and set in state initialization
 
   // Define all screens with conditional rendering and AI blurbs
   const screens = [
