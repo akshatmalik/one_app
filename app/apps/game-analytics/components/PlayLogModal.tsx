@@ -12,11 +12,20 @@ interface PlayLogModalProps {
   onClose: () => void;
 }
 
+// Get local date in YYYY-MM-DD format (not UTC)
+function getLocalDateString(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 export function PlayLogModal({ game, onSave, onClose }: PlayLogModalProps) {
   const [logs, setLogs] = useState<PlayLog[]>(game.playLogs || []);
   const [loading, setLoading] = useState(false);
   const [newLog, setNewLog] = useState({
-    date: new Date().toISOString().split('T')[0],
+    date: getLocalDateString(),
     hours: '1',
     notes: '',
   });
@@ -33,7 +42,7 @@ export function PlayLogModal({ game, onSave, onClose }: PlayLogModalProps) {
     };
     setLogs([log, ...logs].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
     setNewLog({
-      date: new Date().toISOString().split('T')[0],
+      date: getLocalDateString(),
       hours: '1',
       notes: '',
     });

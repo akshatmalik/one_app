@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Film, Book, Tv, Headphones, Briefcase, Dumbbell, DollarSign, Star } from 'lucide-react';
+import { Film, Book, Tv, Headphones, Briefcase, Coffee, DollarSign, Star } from 'lucide-react';
 import { WeekInReviewData } from '../../lib/calculations';
 
 interface FunFactsScreenProps {
@@ -56,13 +56,13 @@ export function FunFactsScreen({ data }: FunFactsScreenProps) {
       border: 'border-amber-500/30',
     },
     {
-      icon: Dumbbell,
-      value: data.gymSessionsEquivalent,
-      label: 'Gym Sessions',
-      subLabel: '1hr each',
-      color: 'pink',
-      gradient: 'from-pink-500/20 to-pink-600/20',
-      border: 'border-pink-500/30',
+      icon: Coffee,
+      value: data.coffeeShopVisits,
+      label: 'Coffee Visits',
+      subLabel: '2hr each',
+      color: 'orange',
+      gradient: 'from-orange-500/20 to-orange-600/20',
+      border: 'border-orange-500/30',
     },
   ];
 
@@ -72,7 +72,7 @@ export function FunFactsScreen({ data }: FunFactsScreenProps) {
     cyan: 'text-cyan-400',
     emerald: 'text-emerald-400',
     amber: 'text-amber-400',
-    pink: 'text-pink-400',
+    orange: 'text-orange-400',
   };
 
   return (
@@ -147,6 +147,52 @@ export function FunFactsScreen({ data }: FunFactsScreenProps) {
         <div className="text-white/50 text-sm mb-1">Instead of gaming, you could have binged</div>
         <div className="text-3xl font-bold text-red-400">{data.netflixBindgeEquivalent} episodes</div>
         <div className="text-xs text-white/30">of your favorite show (25min each)</div>
+      </motion.div>
+
+      {/* Fun Gaming Stats Grid */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 1.6, duration: 0.6 }}
+        className="mt-6 space-y-3"
+      >
+        <h3 className="text-xl font-bold text-white text-center mb-4">🎮 Gaming Fuel Stats</h3>
+
+        <div className="grid grid-cols-2 gap-3">
+          {/* Pizza */}
+          <div className="p-4 bg-gradient-to-br from-orange-500/10 to-red-500/10 rounded-xl border border-orange-500/20 text-center">
+            <div className="text-3xl mb-2">🍕</div>
+            <div className="text-2xl font-bold text-orange-400">{data.pizzaSlicesEquivalent}</div>
+            <div className="text-xs text-white/50">Pizza slices</div>
+          </div>
+
+          {/* Energy Drinks */}
+          <div className="p-4 bg-gradient-to-br from-blue-500/10 to-cyan-500/10 rounded-xl border border-blue-500/20 text-center">
+            <div className="text-3xl mb-2">⚡</div>
+            <div className="text-2xl font-bold text-cyan-400">{data.energyDrinksEquivalent}</div>
+            <div className="text-xs text-white/50">Energy drinks</div>
+          </div>
+        </div>
+
+        {/* Button Presses */}
+        <div className="p-4 bg-gradient-to-r from-purple-500/10 to-pink-500/10 rounded-xl border border-purple-500/20 text-center">
+          <div className="text-3xl mb-2">🎯</div>
+          <h4 className="text-sm font-medium text-purple-300 mb-1">Epic Button Presses</h4>
+          <div className="text-3xl font-black text-purple-400">{data.buttonPressesEstimate.toLocaleString()}</div>
+          <div className="text-xs text-white/40 mt-1">That&apos;s a lot of clicking!</div>
+        </div>
+
+        {/* Entertainment Value */}
+        {data.averageEnjoymentRating > 0 && (
+          <div className="p-4 bg-gradient-to-r from-emerald-500/10 to-green-500/10 rounded-xl border border-emerald-500/20 text-center">
+            <div className="text-3xl mb-2">⭐</div>
+            <h4 className="text-sm font-medium text-emerald-300 mb-1">Entertainment Value Score</h4>
+            <div className="text-3xl font-black text-emerald-400">{data.entertainmentValueScore.toFixed(0)}</div>
+            <div className="text-xs text-white/40 mt-1">
+              {data.totalHours.toFixed(1)}h × {data.averageEnjoymentRating.toFixed(1)} avg rating = pure joy!
+            </div>
+          </div>
+        )}
       </motion.div>
     </div>
   );

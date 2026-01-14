@@ -153,20 +153,42 @@ export function TimeTravelScreen({ data }: TimeTravelScreenProps) {
         </motion.div>
       )}
 
-      {/* Gym Sessions */}
-      {data.gymSessionsEquivalent > 0 && (
+      {/* Coffee Shop Visits */}
+      {data.coffeeShopVisits > 0 && (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 1.6 }}
-          className="mt-4 p-4 bg-emerald-500/10 rounded-xl border border-emerald-500/20 text-center"
+          className="mt-4 p-4 bg-amber-500/10 rounded-xl border border-amber-500/20 text-center"
         >
           <p className="text-white/70 text-sm">
-            Or hit the gym for{' '}
-            <span className="text-emerald-300 font-bold">
-              {data.gymSessionsEquivalent.toFixed(1)} sessions
+            You could&apos;ve enjoyed{' '}
+            <span className="text-amber-300 font-bold">
+              {data.coffeeShopVisits} coffee shop visits
             </span>
-            {' '}💪 (but games are more fun!)
+            {' '}☕ (but gaming is way more fun!)
+          </p>
+        </motion.div>
+      )}
+
+      {/* Movie Theater Cost Comparison */}
+      {data.movieTheaterCost > 0 && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 1.8 }}
+          className="mt-4 p-4 bg-gradient-to-r from-red-500/10 to-pink-500/10 rounded-xl border border-red-500/20 text-center"
+        >
+          <div className="text-4xl mb-2">🎬</div>
+          <h3 className="text-lg font-bold text-white mb-1">
+            Movie Theater Comparison
+          </h3>
+          <p className="text-white/70 text-sm">
+            Watching <span className="text-red-300 font-bold">{data.movieEquivalent} movies</span> in theaters would&apos;ve cost you{' '}
+            <span className="text-red-300 font-bold">${data.movieTheaterCost}</span>!
+          </p>
+          <p className="text-emerald-400 text-xs mt-2 font-medium">
+            Gaming saved you money! 💰
           </p>
         </motion.div>
       )}
