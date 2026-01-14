@@ -18,7 +18,8 @@ const firebaseConfig = {
 function getAIModel() {
   const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
   const ai = getAI(app, { backend: new GoogleAIBackend() });
-  return getGenerativeModel(ai, { model: "gemini-2.0-flash-exp" });
+  // Use stable Gemini Flash model (not experimental)
+  return getGenerativeModel(ai, { model: "gemini-1.5-flash" });
 }
 
 /**
@@ -37,27 +38,49 @@ export type AIBlurbType =
   | 'closing-reflection';    // Final reflection
 
 /**
+ * Result from AI generation including error information
+ */
+export interface AIBlurbResult {
+  text: string;
+  error?: string;
+  isFallback: boolean;
+}
+
+/**
  * Generate contextual AI blurb based on gaming data and type
  */
 export async function generateAIBlurb(
   data: WeekInReviewData,
   type: AIBlurbType
-): Promise<string> {
+): Promise<AIBlurbResult> {
   const model = getAIModel();
   const prompt = buildPrompt(data, type);
 
   try {
     const result = await model.generateContent(prompt);
     const text = result.response.text();
-    return text.trim();
+    return {
+      text: text.trim(),
+      isFallback: false,
+    };
   } catch (error) {
     console.error(`AI generation error for type "${type}":`, error);
     console.error('Error details:', JSON.stringify(error, null, 2));
+
+    let errorMessage = 'Unknown error occurred';
     if (error instanceof Error) {
       console.error('Error message:', error.message);
       console.error('Error stack:', error.stack);
+      errorMessage = error.message;
+    } else if (typeof error === 'object' && error !== null) {
+      errorMessage = JSON.stringify(error);
     }
-    return getFallbackBlurb(type);
+
+    return {
+      text: getFallbackBlurb(type),
+      error: errorMessage,
+      isFallback: true,
+    };
   }
 }
 
@@ -194,18 +217,18 @@ function getFallbackBlurb(type: AIBlurbType): string {
 export async function generateMultipleBlurbs(
   data: WeekInReviewData,
   types: AIBlurbType[]
-): Promise<Record<AIBlurbType, string>> {
+): Promise<Record<AIBlurbType, AIBlurbResult>> {
   const promises = types.map(async (type) => ({
     type,
-    blurb: await generateAIBlurb(data, type),
+    result: await generateAIBlurb(data, type),
   }));
 
   const results = await Promise.all(promises);
 
-  return results.reduce((acc, { type, blurb }) => {
-    acc[type] = blurb;
+  return results.reduce((acc, { type, result }) => {
+    acc[type] = result;
     return acc;
-  }, {} as Record<AIBlurbType, string>);
+  }, {} as Record<AIBlurbType, AIBlurbResult>);
 }
 
 /**
