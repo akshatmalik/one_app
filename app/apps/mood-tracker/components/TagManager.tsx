@@ -131,31 +131,31 @@ export function TagManager({
 
   return (
     <div
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4"
       onClick={handleBackdropClick}
     >
-      <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-[#0a0a0f] border border-white/10 rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
         {/* Header */}
-        <div className="sticky top-0 bg-white border-b border-gray-200 p-4 flex items-center justify-between">
-          <h2 className="text-xl font-bold text-gray-900">Manage Tags & Categories</h2>
+        <div className="sticky top-0 bg-[#0a0a0f] border-b border-white/10 p-4 flex items-center justify-between">
+          <h2 className="text-xl font-bold text-white">Manage Tags & Categories</h2>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors text-2xl"
+            className="text-white/40 hover:text-white/60 transition-colors text-2xl"
           >
             ×
           </button>
         </div>
 
         {/* Tabs */}
-        <div className="border-b border-gray-200">
+        <div className="border-b border-white/10">
           <div className="flex">
             <button
               onClick={() => setActiveTab('tags')}
               className={clsx(
                 'flex-1 py-3 px-4 font-medium transition-colors',
                 activeTab === 'tags'
-                  ? 'border-b-2 border-purple-600 text-purple-600'
-                  : 'text-gray-600 hover:text-gray-900'
+                  ? 'border-b-2 border-purple-600 text-purple-400'
+                  : 'text-white/60 hover:text-white/80'
               )}
             >
               Tags ({tags.length})
@@ -165,8 +165,8 @@ export function TagManager({
               className={clsx(
                 'flex-1 py-3 px-4 font-medium transition-colors',
                 activeTab === 'categories'
-                  ? 'border-b-2 border-purple-600 text-purple-600'
-                  : 'text-gray-600 hover:text-gray-900'
+                  ? 'border-b-2 border-purple-600 text-purple-400'
+                  : 'text-white/60 hover:text-white/80'
               )}
             >
               Categories ({categories.length})
@@ -177,7 +177,7 @@ export function TagManager({
         {/* Content */}
         <div className="p-6 space-y-6">
           {error && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
+            <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 text-sm text-red-400">
               {error}
             </div>
           )}
@@ -185,11 +185,11 @@ export function TagManager({
           {activeTab === 'tags' && (
             <>
               {/* Create Tag Form */}
-              <form onSubmit={handleCreateTag} className="space-y-4 bg-gray-50 p-4 rounded-lg">
-                <h3 className="font-medium text-gray-900">Create New Tag</h3>
+              <form onSubmit={handleCreateTag} className="space-y-4 bg-white/[0.02] border border-white/10 p-4 rounded-lg">
+                <h3 className="font-medium text-white">Create New Tag</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-sm font-medium text-white/70 mb-1">
                       Tag Name
                     </label>
                     <input
@@ -197,18 +197,18 @@ export function TagManager({
                       value={tagName}
                       onChange={(e) => setTagName(e.target.value)}
                       placeholder="e.g., Running"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      className="w-full px-3 py-2 bg-white/[0.02] border border-white/10 text-white rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent placeholder-white/30"
                       disabled={saving}
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-sm font-medium text-white/70 mb-1">
                       Category
                     </label>
                     <select
                       value={tagCategoryId}
                       onChange={(e) => setTagCategoryId(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      className="w-full px-3 py-2 bg-white/[0.02] border border-white/10 text-white rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                       disabled={saving}
                     >
                       <option value="">Select a category</option>
@@ -221,13 +221,13 @@ export function TagManager({
                   </div>
                 </div>
                 <div className="relative">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-white/70 mb-1">
                     Emoji
                   </label>
                   <button
                     type="button"
                     onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                    className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-2xl"
+                    className="px-4 py-2 border border-white/10 bg-white/[0.02] rounded-lg hover:bg-white/[0.04] text-2xl"
                     disabled={saving}
                   >
                     {tagEmoji}
@@ -249,9 +249,9 @@ export function TagManager({
 
               {/* Tags List */}
               <div className="space-y-3">
-                <h3 className="font-medium text-gray-900">Existing Tags</h3>
+                <h3 className="font-medium text-white">Existing Tags</h3>
                 {tags.length === 0 ? (
-                  <p className="text-sm text-gray-500">No tags yet. Create one above!</p>
+                  <p className="text-sm text-white/40">No tags yet. Create one above!</p>
                 ) : (
                   <div className="space-y-2">
                     {categories.map((category) => {
@@ -270,15 +270,15 @@ export function TagManager({
                             {categoryTags.map((tag) => (
                               <div
                                 key={tag.id}
-                                className="flex items-center justify-between p-2 bg-white border border-gray-200 rounded-lg"
+                                className="flex items-center justify-between p-2 bg-white/[0.02] border border-white/10 rounded-lg"
                               >
                                 <div className="flex items-center gap-2">
                                   <span className="text-xl">{tag.emoji}</span>
-                                  <span className="text-sm font-medium">{tag.name}</span>
+                                  <span className="text-sm font-medium text-white">{tag.name}</span>
                                 </div>
                                 <button
                                   onClick={() => handleDeleteTag(tag.id)}
-                                  className="text-red-400 hover:text-red-600 text-sm"
+                                  className="text-red-400 hover:text-red-300 text-sm"
                                   disabled={saving}
                                 >
                                   ×
@@ -298,10 +298,10 @@ export function TagManager({
           {activeTab === 'categories' && (
             <>
               {/* Create Category Form */}
-              <form onSubmit={handleCreateCategory} className="space-y-4 bg-gray-50 p-4 rounded-lg">
-                <h3 className="font-medium text-gray-900">Create New Category</h3>
+              <form onSubmit={handleCreateCategory} className="space-y-4 bg-white/[0.02] border border-white/10 p-4 rounded-lg">
+                <h3 className="font-medium text-white">Create New Category</h3>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-white/70 mb-1">
                     Category Name
                   </label>
                   <input
@@ -309,12 +309,12 @@ export function TagManager({
                     value={categoryName}
                     onChange={(e) => setCategoryName(e.target.value)}
                     placeholder="e.g., Health"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    className="w-full px-3 py-2 bg-white/[0.02] border border-white/10 text-white rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent placeholder-white/30"
                     disabled={saving}
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-white/70 mb-1">
                     Color
                   </label>
                   <div className="flex gap-2 flex-wrap">
@@ -325,7 +325,7 @@ export function TagManager({
                         onClick={() => setCategoryColor(color)}
                         className={clsx(
                           'w-8 h-8 rounded-full transition-all',
-                          categoryColor === color && 'ring-2 ring-gray-900 ring-offset-2'
+                          categoryColor === color && 'ring-2 ring-white ring-offset-2 ring-offset-[#0a0a0f]'
                         )}
                         style={{ backgroundColor: color }}
                         disabled={saving}
@@ -344,9 +344,9 @@ export function TagManager({
 
               {/* Categories List */}
               <div className="space-y-3">
-                <h3 className="font-medium text-gray-900">Existing Categories</h3>
+                <h3 className="font-medium text-white">Existing Categories</h3>
                 {categories.length === 0 ? (
-                  <p className="text-sm text-gray-500">No categories yet. Create one above!</p>
+                  <p className="text-sm text-white/40">No categories yet. Create one above!</p>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                     {categories.map((category) => {
@@ -354,7 +354,7 @@ export function TagManager({
                       return (
                         <div
                           key={category.id}
-                          className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg"
+                          className="flex items-center justify-between p-3 bg-white/[0.02] border border-white/10 rounded-lg"
                         >
                           <div className="flex items-center gap-3">
                             <div
@@ -362,15 +362,15 @@ export function TagManager({
                               style={{ backgroundColor: category.color }}
                             />
                             <div>
-                              <div className="font-medium">{category.name}</div>
-                              <div className="text-xs text-gray-500">
+                              <div className="font-medium text-white">{category.name}</div>
+                              <div className="text-xs text-white/40">
                                 {categoryTags.length} tag{categoryTags.length !== 1 ? 's' : ''}
                               </div>
                             </div>
                           </div>
                           <button
                             onClick={() => handleDeleteCategory(category.id)}
-                            className="text-red-400 hover:text-red-600"
+                            className="text-red-400 hover:text-red-300"
                             disabled={saving}
                           >
                             ×

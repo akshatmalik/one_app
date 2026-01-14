@@ -143,10 +143,10 @@ export default function MoodTrackerPage() {
 
   if (loading && !settings) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-[calc(100vh-60px)] flex items-center justify-center">
         <div className="text-center">
           <div className="text-4xl mb-4">⏳</div>
-          <p className="text-gray-600">Loading mood tracker...</p>
+          <p className="text-white/60">Loading mood tracker...</p>
         </div>
       </div>
     );
@@ -154,13 +154,13 @@ export default function MoodTrackerPage() {
 
   if (!settings?.startDate) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-6 text-center">
+      <div className="min-h-[calc(100vh-60px)] flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-white/[0.02] border border-white/5 rounded-lg p-6 text-center">
           <div className="text-4xl mb-4">📅</div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">
+          <h2 className="text-2xl font-bold text-white mb-2">
             Welcome to Mood Tracker!
           </h2>
-          <p className="text-gray-600 mb-6">
+          <p className="text-white/60 mb-6">
             No start date found. This app uses the same Day 1 concept as the Todo app.
             Please set up your todo app first, or manually set a start date.
           </p>
@@ -176,17 +176,17 @@ export default function MoodTrackerPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 md:p-8">
+    <div className="min-h-[calc(100vh-60px)] p-4 md:p-8">
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Header */}
-        <div className="bg-white rounded-lg shadow-sm p-6">
+        <div className="bg-white/[0.02] border border-white/5 rounded-lg p-6">
           <div className="flex items-start justify-between mb-4">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Mood Tracker</h1>
-              <p className="text-gray-600 mt-1">
+              <h1 className="text-3xl font-bold text-white">Mood Tracker</h1>
+              <p className="text-white/60 mt-1">
                 Track your daily moods, tags, and journal entries
               </p>
-              <p className="text-sm text-gray-500 mt-1">
+              <p className="text-sm text-white/40 mt-1">
                 Start Date: {settings.startDate} (Day 1)
               </p>
             </div>
@@ -215,16 +215,16 @@ export default function MoodTrackerPage() {
             <div className="ml-auto flex items-center gap-2">
               <button
                 onClick={() => setSelectedYear((y) => y - 1)}
-                className="px-3 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                className="px-3 py-2 bg-white/[0.02] border border-white/10 rounded-lg hover:bg-white/[0.04] transition-colors text-white/70"
               >
                 ←
               </button>
-              <span className="px-4 py-2 font-medium text-gray-900">
+              <span className="px-4 py-2 font-medium text-white">
                 {selectedYear}
               </span>
               <button
                 onClick={() => setSelectedYear((y) => y + 1)}
-                className="px-3 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                className="px-3 py-2 bg-white/[0.02] border border-white/10 rounded-lg hover:bg-white/[0.04] transition-colors text-white/70"
               >
                 →
               </button>
@@ -233,15 +233,15 @@ export default function MoodTrackerPage() {
 
           {/* Dev Tools */}
           {(entries.length === 0 || categories.length === 0) && (
-            <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-              <p className="text-sm text-blue-900 mb-2">
+            <div className="mt-4 p-4 bg-purple-500/10 border border-purple-500/20 rounded-lg">
+              <p className="text-sm text-purple-300 mb-2">
                 <strong>Dev Mode:</strong> No data found. Want to generate dummy
                 data for testing?
               </p>
               <button
                 onClick={handleGenerateDummyData}
                 disabled={generatingDummyData}
-                className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                className="px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50"
               >
                 {generatingDummyData
                   ? 'Generating...'
@@ -252,7 +252,7 @@ export default function MoodTrackerPage() {
         </div>
 
         {/* Year Grid */}
-        <div className="bg-white rounded-lg shadow-sm p-6">
+        <div className="bg-white/[0.02] border border-white/5 rounded-lg p-6">
           <YearGrid
             year={selectedYear}
             startDate={settings.startDate}
@@ -267,21 +267,21 @@ export default function MoodTrackerPage() {
 
         {/* Stats */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <div className="text-sm font-medium text-gray-600">Total Entries</div>
-            <div className="text-3xl font-bold text-gray-900 mt-1">
+          <div className="bg-white/[0.02] border border-white/5 rounded-lg p-6">
+            <div className="text-sm font-medium text-white/40">Total Entries</div>
+            <div className="text-3xl font-bold text-white mt-1">
               {entries.length}
             </div>
           </div>
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <div className="text-sm font-medium text-gray-600">Tags</div>
-            <div className="text-3xl font-bold text-gray-900 mt-1">
+          <div className="bg-white/[0.02] border border-white/5 rounded-lg p-6">
+            <div className="text-sm font-medium text-white/40">Tags</div>
+            <div className="text-3xl font-bold text-white mt-1">
               {tags.length}
             </div>
           </div>
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <div className="text-sm font-medium text-gray-600">Categories</div>
-            <div className="text-3xl font-bold text-gray-900 mt-1">
+          <div className="bg-white/[0.02] border border-white/5 rounded-lg p-6">
+            <div className="text-sm font-medium text-white/40">Categories</div>
+            <div className="text-3xl font-bold text-white mt-1">
               {categories.length}
             </div>
           </div>

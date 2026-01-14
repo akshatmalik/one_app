@@ -26,8 +26,8 @@ export function DayBlock({
     const backgroundColor = dayData.mood
       ? MOOD_COLORS[dayData.mood]
       : isFutureDate
-      ? '#f3f4f6' // gray-100 for future dates
-      : '#ffffff';
+      ? '#1a1a1f' // dark gray for future dates
+      : '#0a0a0f'; // very dark for no mood
 
     return (
       <button
@@ -35,9 +35,9 @@ export function DayBlock({
         className={clsx(
           'transition-all hover:scale-110 hover:shadow-md rounded-sm',
           'border',
-          isToday && 'ring-2 ring-blue-500 ring-offset-1',
+          isToday && 'ring-2 ring-purple-500 ring-offset-1 ring-offset-[#0a0a0f]',
           isFutureDate && 'cursor-default opacity-50',
-          !dayData.mood && !isFutureDate && 'border-gray-200',
+          !dayData.mood && !isFutureDate && 'border-white/10',
           dayData.mood && 'border-transparent',
           className
         )}
@@ -61,9 +61,9 @@ export function DayBlock({
       onClick={onClick}
       className={clsx(
         'transition-all hover:scale-110 hover:shadow-md rounded-sm',
-        'border border-gray-200 bg-white',
+        'border border-white/10 bg-white/[0.02]',
         'flex items-center justify-center',
-        isToday && 'ring-2 ring-blue-500 ring-offset-1',
+        isToday && 'ring-2 ring-purple-500 ring-offset-1 ring-offset-[#0a0a0f]',
         isFutureDate && 'cursor-default opacity-50',
         className
       )}
@@ -79,7 +79,7 @@ export function DayBlock({
           {displayTags.slice(0, 2).map((tag) => (
             <span key={tag.id}>{tag.emoji}</span>
           ))}
-          {displayTags.length > 2 && <span className="text-[8px]">+{displayTags.length - 2}</span>}
+          {displayTags.length > 2 && <span className="text-[8px] text-white/40">+{displayTags.length - 2}</span>}
         </div>
       )}
     </button>
