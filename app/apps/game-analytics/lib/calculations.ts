@@ -2269,3 +2269,16 @@ export function getAvailableWeeksCount(games: Game[]): number {
 
   return diffWeeks;
 }
+
+// Get games that have play logs within a specific time range
+export function getGamesPlayedInTimeRange(games: Game[], startDate: Date, endDate: Date): Game[] {
+  return games.filter(game => {
+    if (!game.playLogs || game.playLogs.length === 0) return false;
+    
+    return game.playLogs.some(log => {
+      const logDate = new Date(log.date);
+      return logDate >= startDate && logDate <= endDate;
+    });
+  });
+}
+

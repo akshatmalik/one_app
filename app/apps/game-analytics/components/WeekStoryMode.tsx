@@ -21,6 +21,9 @@ import { GenreUniverseScreen } from './story-screens/GenreUniverseScreen';
 import { TimeTravelScreen } from './story-screens/TimeTravelScreen';
 import { GamingHeatmapScreen } from './story-screens/GamingHeatmapScreen';
 import { BestValueScreen } from './story-screens/BestValueScreen';
+import { AIBlurbScreen } from './story-screens/AIBlurbScreen';
+import { MoneyComparisonScreen } from './story-screens/MoneyComparisonScreen';
+import { generateMultipleBlurbs, AIBlurbType } from '../lib/ai-service';
 
 interface WeekStoryModeProps {
   data: WeekInReviewData;
@@ -30,26 +33,154 @@ interface WeekStoryModeProps {
 export function WeekStoryMode({ data, onClose }: WeekStoryModeProps) {
   const [currentScreen, setCurrentScreen] = useState(0);
   const [direction, setDirection] = useState(0);
+  const [aiBlurbs, setAiBlurbs] = useState<Partial<Record<AIBlurbType, string>>>({});
+  const [isLoadingAI, setIsLoadingAI] = useState(true);
 
-  // Define all screens with conditional rendering
+  // Generate AI blurbs on mount
+  useEffect(() => {
+    const loadAIBlurbs = async () => {
+      try {
+        // Determine which blurb types to generate based on available data
+        const blurbTypes: AIBlurbType[] = [
+          'opening-personality',
+          'top-game-deep-dive',
+          'session-patterns',
+          'gaming-behavior', // Fun behavioral observations
+        ];
+
+        // Add conditional blurb types
+        if (data.gamesPlayed.filter(g => g.daysPlayed > 1).length > 0) {
+          blurbTypes.push('comeback-games'); // Games played multiple days
+        }
+        if (data.marathonSessions > 0 || data.longestSession) {
+          blurbTypes.push('binge-sessions'); // Marathon gaming
+        }
+        if (data.completedGames.length > 0 || data.newGamesStarted.length > 0 || data.milestonesReached.length > 0) {
+          blurbTypes.push('achievement-motivation');
+        }
+        if (data.genresPlayed.length > 0) {
+          blurbTypes.push('genre-insights');
+        }
+        if (data.gamesPlayed.filter(g => g.game.price > 0).length > 0) {
+          blurbTypes.push('value-wisdom');
+        }
+        blurbTypes.push('closing-reflection');
+
+        const generatedBlurbs = await generateMultipleBlurbs(data, blurbTypes);
+        setAiBlurbs(generatedBlurbs);
+      } catch (error) {
+        console.error('Failed to generate AI blurbs:', error);
+        // Blurbs will use fallbacks
+      } finally {
+        setIsLoadingAI(false);
+      }
+    };
+
+    loadAIBlurbs();
+  }, [data]);
+
+  // Define all screens with conditional rendering and AI blurbs
   const screens = [
     <OpeningScreen key="opening" data={data} />,
+    // AI: Opening personality insight
+    <AIBlurbScreen
+      key="ai-opening"
+      blurb={aiBlurbs['opening-personality'] || null}
+      type="opening-personality"
+      isLoading={isLoadingAI && !aiBlurbs['opening-personality']}
+    />,
     <TotalHoursScreen key="hours" data={data} />,
     data.gamesPlayed.length >= 3 ? <Top3GamesScreen key="top-3" data={data} /> : null,
     data.topGame ? <TopGameScreen key="top-game" data={data} /> : null,
+    // AI: Top game deep dive
+    data.topGame ? (
+      <AIBlurbScreen
+        key="ai-top-game"
+        blurb={aiBlurbs['top-game-deep-dive'] || null}
+        type="top-game-deep-dive"
+        isLoading={isLoadingAI && !aiBlurbs['top-game-deep-dive']}
+      />
+    ) : null,
     <DailyBreakdownScreen key="daily" data={data} />,
     <GamingHeatmapScreen key="heatmap" data={data} />,
     <SessionTypesScreen key="session-types" data={data} />,
+    // AI: Session patterns analysis
+    <AIBlurbScreen
+      key="ai-sessions"
+      blurb={aiBlurbs['session-patterns'] || null}
+      type="session-patterns"
+      isLoading={isLoadingAI && !aiBlurbs['session-patterns']}
+    />,
+    // AI: Marathon/binge sessions celebration
+    (data.marathonSessions > 0 || data.longestSession) ? (
+      <AIBlurbScreen
+        key="ai-binge"
+        blurb={aiBlurbs['binge-sessions'] || null}
+        type="binge-sessions"
+        isLoading={isLoadingAI && !aiBlurbs['binge-sessions']}
+      />
+    ) : null,
     data.genresPlayed.length > 0 ? <GenreUniverseScreen key="genres" data={data} /> : null,
+    // AI: Genre insights
+    data.genresPlayed.length > 0 ? (
+      <AIBlurbScreen
+        key="ai-genres"
+        blurb={aiBlurbs['genre-insights'] || null}
+        type="genre-insights"
+        isLoading={isLoadingAI && !aiBlurbs['genre-insights']}
+      />
+    ) : null,
     <GamingPersonalityScreen key="personality" data={data} />,
+    // AI: Fun gaming behavior observations
+    <AIBlurbScreen
+      key="ai-behavior"
+      blurb={aiBlurbs['gaming-behavior'] || null}
+      type="gaming-behavior"
+      isLoading={isLoadingAI && !aiBlurbs['gaming-behavior']}
+    />,
     (data.completedGames.length > 0 || data.newGamesStarted.length > 0 || data.milestonesReached.length > 0) ?
       <AchievementsScreen key="achievements" data={data} /> : null,
+    // AI: Achievement motivation
+    (data.completedGames.length > 0 || data.newGamesStarted.length > 0 || data.milestonesReached.length > 0) ? (
+      <AIBlurbScreen
+        key="ai-achievements"
+        blurb={aiBlurbs['achievement-motivation'] || null}
+        type="achievement-motivation"
+        isLoading={isLoadingAI && !aiBlurbs['achievement-motivation']}
+      />
+    ) : null,
     <WeekVibeScreen key="vibe" data={data} />,
+    // AI: Comeback games (games they keep returning to)
+    data.gamesPlayed.filter(g => g.daysPlayed > 1).length > 0 ? (
+      <AIBlurbScreen
+        key="ai-comeback"
+        blurb={aiBlurbs['comeback-games'] || null}
+        type="comeback-games"
+        isLoading={isLoadingAI && !aiBlurbs['comeback-games']}
+      />
+    ) : null,
     <TimeTravelScreen key="time-travel" data={data} />,
     data.totalValueUtilized > 0 ? <ValueUtilizedScreen key="value" data={data} /> : null,
     data.gamesPlayed.filter(g => g.game.price > 0).length > 0 ? <BestValueScreen key="best-value" data={data} /> : null,
+    // AI: Value wisdom
+    data.gamesPlayed.filter(g => g.game.price > 0).length > 0 ? (
+      <AIBlurbScreen
+        key="ai-value"
+        blurb={aiBlurbs['value-wisdom'] || null}
+        type="value-wisdom"
+        isLoading={isLoadingAI && !aiBlurbs['value-wisdom']}
+      />
+    ) : null,
     <ComparisonScreen key="comparison" data={data} />,
     <FunFactsScreen key="fun-facts" data={data} />,
+    <MoneyComparisonScreen key="money-comparison" data={data} />,
+    // AI: Closing reflection
+    <AIBlurbScreen
+      key="ai-closing"
+      blurb={aiBlurbs['closing-reflection'] || null}
+      type="closing-reflection"
+      isLoading={isLoadingAI && !aiBlurbs['closing-reflection']}
+    />,
     <ClosingScreen key="closing" data={data} />,
   ].filter(Boolean); // Remove null screens
 

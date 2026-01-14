@@ -1,13 +1,14 @@
 'use client';
 
-import { useState } from 'react';
-import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, List } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, List, MessageCircle } from 'lucide-react';
 import { useGames } from './hooks/useGames';
 import { useAnalytics, GameWithMetrics } from './hooks/useAnalytics';
 import { useBudget } from './hooks/useBudget';
 import { useGameThumbnails } from './hooks/useGameThumbnails';
 import { GameForm } from './components/GameForm';
 import { PlayLogModal } from './components/PlayLogModal';
+import { AIChatModal } from './components/AIChatModal';
 import { TimelineView } from './components/TimelineView';
 import { StatsView } from './components/StatsView';
 import { Game, GameStatus, PlayLog } from './lib/types';
@@ -15,7 +16,7 @@ import { gameRepository } from './lib/storage';
 import { BASELINE_GAMES_2025 } from './data/baseline-games';
 import { useAuthContext } from '@/lib/AuthContext';
 import { useToast } from '@/components/Toast';
-import { getROIRating } from './lib/calculations';
+import { getROIRating, getWeekStatsForOffset, getGamesPlayedInTimeRange } from './lib/calculations';
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist';
@@ -31,9 +32,26 @@ export default function GameAnalyticsPage() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingGame, setEditingGame] = useState<GameWithMetrics | null>(null);
   const [playLogGame, setPlayLogGame] = useState<GameWithMetrics | null>(null);
+  const [isChatOpen, setIsChatOpen] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('all');
   const [tabMode, setTabMode] = useState<TabMode>('games');
   const [sortBy, setSortBy] = useState<'name' | 'price' | 'hours' | 'rating' | 'costPerHour' | 'dateAdded' | 'recentlyPlayed'>('recentlyPlayed');
+
+  // Calculate week and month data for AI chat
+  const weekData = useMemo(() => {
+    try {
+      return getWeekStatsForOffset(games, -1); // Current week
+    } catch (e) {
+      return null;
+    }
+  }, [games]);
+
+  const monthGames = useMemo(() => {
+    const now = new Date();
+    const monthAgo = new Date(now);
+    monthAgo.setMonth(monthAgo.getMonth() - 1);
+    return getGamesPlayedInTimeRange(games, monthAgo, now);
+  }, [games]);
 
   const handleAddGame = async (gameData: Omit<Game, 'id' | 'userId' | 'createdAt' | 'updatedAt'>) => {
     try {
@@ -187,6 +205,16 @@ export default function GameAnalyticsPage() {
                 >
                   <Sparkles size={14} />
                   Load Samples
+                </button>
+              )}
+              {games.length > 0 && (
+                <button
+                  onClick={() => setIsChatOpen(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600/20 to-pink-600/20 text-purple-300 border border-purple-500/30 rounded-lg hover:from-purple-600/30 hover:to-pink-600/30 hover:border-purple-500/50 transition-all text-sm font-medium"
+                  title="Chat with AI about your gaming stats"
+                >
+                  <MessageCircle size={16} />
+                  AI Coach
                 </button>
               )}
               <button
@@ -589,6 +617,15 @@ export default function GameAnalyticsPage() {
           onClose={() => setPlayLogGame(null)}
         />
       )}
+
+      {/* AI Chat Modal */}
+      <AIChatModal
+        isOpen={isChatOpen}
+        onClose={() => setIsChatOpen(false)}
+        weekData={weekData}
+        monthGames={monthGames}
+        allGames={games}
+      />
     </div>
   );
 }
