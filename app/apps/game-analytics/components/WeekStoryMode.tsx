@@ -22,6 +22,7 @@ import { TimeTravelScreen } from './story-screens/TimeTravelScreen';
 import { GamingHeatmapScreen } from './story-screens/GamingHeatmapScreen';
 import { BestValueScreen } from './story-screens/BestValueScreen';
 import { AIBlurbScreen } from './story-screens/AIBlurbScreen';
+import { MoneyComparisonScreen } from './story-screens/MoneyComparisonScreen';
 import { generateMultipleBlurbs, AIBlurbType } from '../lib/ai-service';
 
 interface WeekStoryModeProps {
@@ -172,6 +173,7 @@ export function WeekStoryMode({ data, onClose }: WeekStoryModeProps) {
     ) : null,
     <ComparisonScreen key="comparison" data={data} />,
     <FunFactsScreen key="fun-facts" data={data} />,
+    <MoneyComparisonScreen key="money-comparison" data={data} />,
     // AI: Closing reflection
     <AIBlurbScreen
       key="ai-closing"
