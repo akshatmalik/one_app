@@ -18,8 +18,8 @@ const firebaseConfig = {
 function getAIModel() {
   const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
   const ai = getAI(app, { backend: new GoogleAIBackend() });
-  // Use stable Gemini Flash model (not experimental)
-  return getGenerativeModel(ai, { model: "gemini-1.5-flash" });
+  // Use Gemini 2.5 Flash model
+  return getGenerativeModel(ai, { model: "gemini-2.5-flash" });
 }
 
 /**
