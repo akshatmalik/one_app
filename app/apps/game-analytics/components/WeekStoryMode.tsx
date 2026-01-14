@@ -28,16 +28,26 @@ import { generateMultipleBlurbs, AIBlurbType, AIBlurbResult } from '../lib/ai-se
 interface WeekStoryModeProps {
   data: WeekInReviewData;
   onClose: () => void;
+  prefetchedBlurbs?: Partial<Record<AIBlurbType, AIBlurbResult>>;
+  isLoadingPrefetch?: boolean;
 }
 
-export function WeekStoryMode({ data, onClose }: WeekStoryModeProps) {
+export function WeekStoryMode({ data, onClose, prefetchedBlurbs, isLoadingPrefetch }: WeekStoryModeProps) {
   const [currentScreen, setCurrentScreen] = useState(0);
   const [direction, setDirection] = useState(0);
-  const [aiBlurbs, setAiBlurbs] = useState<Partial<Record<AIBlurbType, AIBlurbResult>>>({});
-  const [isLoadingAI, setIsLoadingAI] = useState(true);
+  const [aiBlurbs, setAiBlurbs] = useState<Partial<Record<AIBlurbType, AIBlurbResult>>>(prefetchedBlurbs || {});
+  const [isLoadingAI, setIsLoadingAI] = useState(isLoadingPrefetch ?? true);
 
-  // Generate AI blurbs on mount
+  // Use prefetched blurbs if available, otherwise generate them
   useEffect(() => {
+    // If we already have prefetched blurbs, use them
+    if (prefetchedBlurbs && Object.keys(prefetchedBlurbs).length > 0) {
+      setAiBlurbs(prefetchedBlurbs);
+      setIsLoadingAI(isLoadingPrefetch ?? false);
+      return;
+    }
+
+    // Otherwise, generate blurbs (fallback if prefetch didn't happen)
     const loadAIBlurbs = async () => {
       try {
         // Determine which blurb types to generate based on available data
@@ -45,15 +55,15 @@ export function WeekStoryMode({ data, onClose }: WeekStoryModeProps) {
           'opening-personality',
           'top-game-deep-dive',
           'session-patterns',
-          'gaming-behavior', // Fun behavioral observations
+          'gaming-behavior',
         ];
 
         // Add conditional blurb types
         if (data.gamesPlayed.filter(g => g.daysPlayed > 1).length > 0) {
-          blurbTypes.push('comeback-games'); // Games played multiple days
+          blurbTypes.push('comeback-games');
         }
         if (data.marathonSessions > 0 || data.longestSession) {
-          blurbTypes.push('binge-sessions'); // Marathon gaming
+          blurbTypes.push('binge-sessions');
         }
         if (data.completedGames.length > 0 || data.newGamesStarted.length > 0 || data.milestonesReached.length > 0) {
           blurbTypes.push('achievement-motivation');
@@ -77,7 +87,7 @@ export function WeekStoryMode({ data, onClose }: WeekStoryModeProps) {
     };
 
     loadAIBlurbs();
-  }, [data]);
+  }, [data, prefetchedBlurbs, isLoadingPrefetch]);
 
   // Define all screens with conditional rendering and AI blurbs
   const screens = [
