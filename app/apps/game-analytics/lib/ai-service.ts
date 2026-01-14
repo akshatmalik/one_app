@@ -81,85 +81,83 @@ ${data.totalValueUtilized > 0 ? `- Value utilized: $${data.totalValueUtilized.to
   const prompts: Record<AIBlurbType, string> = {
     'opening-personality': `${baseContext}
 
-Write a 2-3 sentence opening insight about this player's gaming personality this week. Be enthusiastic and observant.
-Focus on their play style (${data.gamingStyle}), time commitment, and what it says about them as a gamer.
-Make it personal and engaging, like a friend who knows their gaming habits well.`,
+Create an engaging opening insight about this player's gaming personality.
+Their ${data.gamingStyle} style and ${data.totalHours.toFixed(1)} hours this week tell a story - what is it?
+Be creative, enthusiastic, and personal. Use metaphors, analogies, or comparisons if they fit. Make them feel seen and understood.`,
 
     'top-game-deep-dive': `${baseContext}
 
-${data.topGame ? `The player spent ${data.topGame.hours.toFixed(1)} hours on ${data.topGame.game.name} this week.` : ''}
+${data.topGame ? `They spent ${data.topGame.hours.toFixed(1)} hours on ${data.topGame.game.name} this week.` : ''}
 
-Write 2-3 sentences providing a deep, insightful observation about their dedication to this top game.
-Consider the time invested, how it compares to other games, and what this focus might mean.
-Be thoughtful and specific - avoid generic praise. Make it feel like you understand their journey with this game.`,
+Provide a thoughtful, creative observation about their dedication to this game.
+What does this level of focus reveal? Use your creativity - maybe a comparison, a story, or an interesting angle.
+Be genuine and specific. Make it feel like you truly understand their connection to this game.`,
 
     'session-patterns': `${baseContext}
 
-Write 2-3 sentences analyzing their gaming session patterns this week.
-Look at daily distribution (${data.dailyHours.map(d => `${d.day}: ${d.hours.toFixed(1)}h`).join(', ')}), gaming style (${data.gamingStyle}), and session types (${data.marathonSessions} marathon, ${data.powerSessions} power, ${data.quickSessions} quick).
-Provide a smart observation about their time management or gaming rhythm.
-Be constructive and insightful, not judgmental.`,
+Daily pattern: ${data.dailyHours.map(d => `${d.day}: ${d.hours.toFixed(1)}h`).join(', ')}
+Session mix: ${data.marathonSessions} marathon, ${data.powerSessions} power, ${data.quickSessions} quick sessions
+
+Analyze their gaming rhythm and patterns in a creative, insightful way.
+Find the interesting story in their data. Be constructive and make them see their habits in a new light.`,
 
     'achievement-motivation': `${baseContext}
 
 ${data.completedGames.length > 0 ? `Completed: ${data.completedGames.map(g => g.name).join(', ')}` : ''}
 ${data.milestonesReached.length > 0 ? `Milestones: ${data.milestonesReached.join(', ')}` : ''}
 
-Write 2-3 sentences of motivational commentary about their achievements and progress.
-Be genuinely encouraging and specific to their accomplishments.
-If they had few/no achievements, still find something positive to highlight about their gaming journey.`,
+Write motivational, creative commentary about their progress and achievements.
+Be encouraging and celebratory. If they had few achievements, celebrate their journey and exploration instead.
+Use your creativity to make them feel proud of their gaming time.`,
 
     'genre-insights': `${baseContext}
 
-Genres this week: ${data.genresPlayed.join(', ') || 'Various'}
-Genre diversity score: ${data.genreDiversityScore.toFixed(1)}/10
+Genres: ${data.genresPlayed.join(', ') || 'Various'}
+Diversity score: ${data.genreDiversityScore.toFixed(1)}/10
 
-Write 2-3 sentences analyzing their genre preferences and diversity this week.
-Look for patterns, shifts, or interesting variety in their choices.
-Provide insight into what their genre mix reveals about their gaming mood or exploration.
-Be observant and thoughtful.`,
+Provide creative insights into their genre preferences and exploration.
+What does their genre mix say about them? Use interesting comparisons or observations.
+Be playful and insightful about their gaming palette.`,
 
     'value-wisdom': `${baseContext}
 
 ${data.totalValueUtilized > 0 ? `Value utilized: $${data.totalValueUtilized.toFixed(2)}` : ''}
 ${data.bestValueGame ? `Best value: ${data.bestValueGame.game.name} at $${data.bestValueGame.costPerHour.toFixed(2)}/hour` : ''}
 
-Write 2-3 sentences about their gaming value and spending wisdom this week.
-Analyze how they're maximizing value from their library, or encourage them to dive into games they own.
-Be financially mindful but fun - celebrate smart gaming habits.
-Make it relevant and actionable.`,
+Share creative insights about their gaming value and library utilization.
+Celebrate smart habits or gently encourage diving into their collection. Be fun and financially savvy.
+Make value feel rewarding, not restrictive.`,
 
     'gaming-behavior': `${baseContext}
 
-Write 2-3 sentences with fun, playful observations about their gaming behavior and habits this week.
-Focus on quirky patterns, favorite play times, or interesting gaming rituals.
-Be lighthearted, humorous, and make them smile. Celebrate their unique gaming personality.
-Examples: late-night gaming sessions, weekend warrior tendencies, specific game rotation patterns.`,
+Observe their gaming behavior with humor, creativity, and personality.
+Find the quirky, interesting patterns. Late-night sessions? Weekend warrior? Game rotation rituals?
+Be playful, make them smile, and celebrate what makes their gaming habits uniquely theirs.
+Let your creativity shine - use comparisons, jokes, or fun observations.`,
 
     'comeback-games': `${baseContext}
 
-Games played multiple days: ${data.gamesPlayed.filter(g => g.daysPlayed > 1).map(g => `${g.game.name} (${g.daysPlayed} days)`).join(', ') || 'N/A'}
+Games they returned to: ${data.gamesPlayed.filter(g => g.daysPlayed > 1).map(g => `${g.game.name} (${g.daysPlayed} days)`).join(', ') || 'N/A'}
 
-Write 2-3 sentences about games they keep coming back to this week.
-Analyze what makes these games sticky and why they're in rotation.
-Be insightful about player loyalty and what these comeback games reveal about their preferences.`,
+What makes these games irresistible? Why do they keep coming back?
+Be creative and insightful about player loyalty. Maybe they're comfort food, maybe they're habit-forming.
+Find the interesting story in their comeback champions.`,
 
     'binge-sessions': `${baseContext}
 
 Marathon sessions: ${data.marathonSessions} (3h+)
-Longest session: ${data.longestSession ? `${data.longestSession.hours.toFixed(1)}h on ${data.longestSession.game.name}` : 'N/A'}
+${data.longestSession ? `Longest: ${data.longestSession.hours.toFixed(1)}h on ${data.longestSession.game.name}` : ''}
 
-Write 2-3 sentences celebrating their marathon gaming sessions and dedication.
-Make binge gaming sound epic and impressive (because it is!).
-Be enthusiastic and supportive - these are the sessions that create memories.`,
+Celebrate their epic gaming sessions with enthusiasm and creativity!
+These marathon moments create the best memories. Make binge gaming sound legendary.
+Use your creativity - comparisons to movie marathons, epic adventures, or whatever fits.`,
 
     'closing-reflection': `${baseContext}
 
-Write a 3-4 sentence closing reflection on their gaming week.
-Synthesize the key themes: their time investment, game choices, achievements, and overall journey.
-End with an encouraging forward-looking statement about the week ahead.
-Be warm, personal, and make them feel good about their gaming time.
-This is the finale - make it memorable and uplifting.`,
+Create a memorable closing reflection on their gaming week.
+Synthesize the story of their week creatively. Use whatever style feels right - poetic, motivational, humorous, or thoughtful.
+End with something that makes them excited for next week.
+This is your chance to leave a lasting impression - make it count!`,
   };
 
   return prompts[type];
@@ -231,11 +229,7 @@ export async function generateChatResponse(
   const fullPrompt = `${contextPrompt}
 
 ${historyText ? `Recent conversation:\n${historyText}\n` : ''}
-User: ${userMessage}
-Assistant: Provide a helpful, conversational response. Be friendly, insightful, and use the data above to give personalized insights.
-Keep responses concise (2-4 sentences unless asked for more detail).
-Be specific with numbers and game names when relevant.
-`;
+User: ${userMessage}`;
 
   try {
     const result = await model.generateContent(fullPrompt);

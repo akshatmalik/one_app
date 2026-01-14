@@ -44,9 +44,16 @@ export function WeekStoryMode({ data, onClose }: WeekStoryModeProps) {
           'opening-personality',
           'top-game-deep-dive',
           'session-patterns',
+          'gaming-behavior', // Fun behavioral observations
         ];
 
         // Add conditional blurb types
+        if (data.gamesPlayed.filter(g => g.daysPlayed > 1).length > 0) {
+          blurbTypes.push('comeback-games'); // Games played multiple days
+        }
+        if (data.marathonSessions > 0 || data.longestSession) {
+          blurbTypes.push('binge-sessions'); // Marathon gaming
+        }
         if (data.completedGames.length > 0 || data.newGamesStarted.length > 0 || data.milestonesReached.length > 0) {
           blurbTypes.push('achievement-motivation');
         }
@@ -103,6 +110,15 @@ export function WeekStoryMode({ data, onClose }: WeekStoryModeProps) {
       type="session-patterns"
       isLoading={isLoadingAI && !aiBlurbs['session-patterns']}
     />,
+    // AI: Marathon/binge sessions celebration
+    (data.marathonSessions > 0 || data.longestSession) ? (
+      <AIBlurbScreen
+        key="ai-binge"
+        blurb={aiBlurbs['binge-sessions'] || null}
+        type="binge-sessions"
+        isLoading={isLoadingAI && !aiBlurbs['binge-sessions']}
+      />
+    ) : null,
     data.genresPlayed.length > 0 ? <GenreUniverseScreen key="genres" data={data} /> : null,
     // AI: Genre insights
     data.genresPlayed.length > 0 ? (
@@ -114,6 +130,13 @@ export function WeekStoryMode({ data, onClose }: WeekStoryModeProps) {
       />
     ) : null,
     <GamingPersonalityScreen key="personality" data={data} />,
+    // AI: Fun gaming behavior observations
+    <AIBlurbScreen
+      key="ai-behavior"
+      blurb={aiBlurbs['gaming-behavior'] || null}
+      type="gaming-behavior"
+      isLoading={isLoadingAI && !aiBlurbs['gaming-behavior']}
+    />,
     (data.completedGames.length > 0 || data.newGamesStarted.length > 0 || data.milestonesReached.length > 0) ?
       <AchievementsScreen key="achievements" data={data} /> : null,
     // AI: Achievement motivation
@@ -126,6 +149,15 @@ export function WeekStoryMode({ data, onClose }: WeekStoryModeProps) {
       />
     ) : null,
     <WeekVibeScreen key="vibe" data={data} />,
+    // AI: Comeback games (games they keep returning to)
+    data.gamesPlayed.filter(g => g.daysPlayed > 1).length > 0 ? (
+      <AIBlurbScreen
+        key="ai-comeback"
+        blurb={aiBlurbs['comeback-games'] || null}
+        type="comeback-games"
+        isLoading={isLoadingAI && !aiBlurbs['comeback-games']}
+      />
+    ) : null,
     <TimeTravelScreen key="time-travel" data={data} />,
     data.totalValueUtilized > 0 ? <ValueUtilizedScreen key="value" data={data} /> : null,
     data.gamesPlayed.filter(g => g.game.price > 0).length > 0 ? <BestValueScreen key="best-value" data={data} /> : null,
