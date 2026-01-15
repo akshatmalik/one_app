@@ -17,22 +17,23 @@ const firebaseConfig = {
 // Initialize AI service
 function getAIModel() {
   try {
-    console.log('[AI Service] Initializing Firebase AI...');
+    logToUI('[AI Service] Initializing Firebase AI...');
     const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
-    console.log('[AI Service] Firebase app initialized:', app.name);
+    logToUI(`[AI Service] ✅ Firebase app initialized: ${app.name}`);
 
     const ai = getAI(app, { backend: new GoogleAIBackend() });
-    console.log('[AI Service] AI instance created');
+    logToUI('[AI Service] ✅ AI instance created');
 
     // Try Gemini 2.0 Flash (recommended by Firebase docs)
     const modelName = "gemini-2.0-flash-exp";
-    console.log('[AI Service] Requesting model:', modelName);
+    logToUI(`[AI Service] Requesting model: ${modelName}`);
 
     const model = getGenerativeModel(ai, { model: modelName });
-    console.log('[AI Service] Model obtained successfully');
+    logToUI('[AI Service] ✅ Model obtained successfully');
 
     return model;
   } catch (error) {
+    logToUI(`[AI Service] ❌ Failed to initialize: ${error}`);
     console.error('[AI Service] Failed to initialize AI model:', error);
     throw error;
   }
@@ -55,6 +56,24 @@ export interface AIInterpretationResult {
   data: InterpretedData | null;
   error?: string;
   isFallback: boolean;
+  logs?: string[];  // Capture logs for UI display
+}
+
+// Logging system for UI display
+let uiLogs: string[] = [];
+
+export function getUILogs(): string[] {
+  return [...uiLogs];
+}
+
+export function clearUILogs(): void {
+  uiLogs = [];
+}
+
+function logToUI(message: string): void {
+  const timestamp = new Date().toLocaleTimeString();
+  uiLogs.push(`[${timestamp}] ${message}`);
+  console.log(message);
 }
 
 /**
@@ -64,70 +83,80 @@ export async function interpretVoiceJournal(
   transcript: string,
   context: VoiceContext
 ): Promise<AIInterpretationResult> {
-  console.log('[AI Service] interpretVoiceJournal called');
-  console.log('[AI Service] Transcript length:', transcript.length);
+  clearUILogs();  // Clear previous logs
+  logToUI('🎙️ Starting voice journal interpretation...');
+  logToUI(`📝 Transcript: "${transcript.substring(0, 50)}${transcript.length > 50 ? '...' : ''}"`);
 
   try {
-    console.log('[AI Service] Step 1: Getting AI model...');
+    logToUI('📋 Step 1/7: Getting AI model...');
     const model = getAIModel();
 
-    console.log('[AI Service] Step 2: Building prompt...');
+    logToUI('📋 Step 2/7: Building prompt...');
     const prompt = buildInterpretationPrompt(transcript, context);
-    console.log('[AI Service] Prompt length:', prompt.length);
+    logToUI(`✅ Prompt built (${prompt.length} chars)`);
 
-    console.log('[AI Service] Step 3: Calling generateContent...');
+    logToUI('📋 Step 3/7: Calling Firebase AI (Gemini)...');
     const result = await model.generateContent(prompt);
-    console.log('[AI Service] Step 4: Got result from AI');
+    logToUI('✅ Step 4/7: Got response from AI!');
 
     const text = result.response.text();
-    console.log('[AI Service] Step 5: Extracted response text, length:', text.length);
+    logToUI(`✅ Step 5/7: Extracted text (${text.length} chars)`);
 
     // Parse the JSON response
-    console.log('[AI Service] Step 6: Parsing response...');
+    logToUI('📋 Step 6/7: Parsing AI response...');
     const parsed = parseAIResponse(text, transcript, context);
-    console.log('[AI Service] Step 7: Parse successful!');
+    logToUI('✅ Step 7/7: Parse successful! 🎉');
 
     return {
       data: parsed,
       isFallback: false,
+      logs: getUILogs(),
     };
   } catch (error) {
+    logToUI('❌ ERROR occurred!');
     console.error('AI interpretation error:', error);
     console.error('Error details:', JSON.stringify(error, null, 2));
 
     let errorMessage = 'Unknown error occurred';
-    let errorDetails = '';
 
     if (error instanceof Error) {
-      console.error('Error message:', error.message);
-      console.error('Error stack:', error.stack);
+      logToUI(`❌ Error: ${error.message}`);
       errorMessage = error.message;
-      errorDetails = error.stack || '';
 
       // Check for Firebase AI specific errors
       if (errorMessage.includes('service-not-allowed')) {
         errorMessage = '🔥 Firebase AI not enabled. Enable Firebase AI (Gemini) in Firebase Console → Build → AI';
+        logToUI('❌ service-not-allowed: Firebase AI is NOT enabled');
+        logToUI('💡 Fix: Go to Firebase Console → Build → AI → Enable');
       } else if (errorMessage.includes('permission-denied')) {
         errorMessage = '🔒 Permission denied. Check Firebase API key permissions for Generative AI';
+        logToUI('❌ permission-denied: API key lacks permissions');
       } else if (errorMessage.includes('quota-exceeded')) {
         errorMessage = '📊 API quota exceeded. Check Firebase AI usage limits';
+        logToUI('❌ quota-exceeded: You hit the rate limit');
       } else if (errorMessage.includes('not-found')) {
         errorMessage = '❓ Gemini model not found. Check Firebase AI configuration';
+        logToUI('❌ not-found: Model does not exist');
       }
     } else if (typeof error === 'object' && error !== null) {
       const errObj = error as any;
       if (errObj.code) {
         errorMessage = `Firebase Error: ${errObj.code} - ${errObj.message || 'No message'}`;
+        logToUI(`❌ Firebase Error Code: ${errObj.code}`);
       } else {
         errorMessage = JSON.stringify(error);
+        logToUI(`❌ Unknown error: ${JSON.stringify(error).substring(0, 100)}`);
       }
     }
+
+    logToUI('🔄 Falling back to local interpretation (no AI)');
 
     // Return fallback interpretation with detailed error
     return {
       data: getFallbackInterpretation(transcript, context),
       error: `${errorMessage}\n\nFalling back to local interpretation (no AI).`,
       isFallback: true,
+      logs: getUILogs(),
     };
   }
 }

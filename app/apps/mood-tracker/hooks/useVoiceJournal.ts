@@ -18,6 +18,9 @@ export interface VoiceJournalState {
   // Error state
   error: string | null;
   isSupported: boolean;
+
+  // Logs for UI display
+  aiLogs: string[];
 }
 
 export interface VoiceJournalControls {
@@ -48,6 +51,7 @@ export function useVoiceJournal({
   const [isProcessing, setIsProcessing] = useState(false);
   const [interpretation, setInterpretation] = useState<InterpretedData | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [aiLogs, setAiLogs] = useState<string[]>([]);
 
   /**
    * Start voice recording
@@ -105,6 +109,11 @@ export function useVoiceJournal({
         // Use AI interpretation
         console.log('[VoiceJournal] Attempting AI interpretation...');
         const aiResult = await interpretVoiceJournal(currentTranscript, context);
+
+        // Store logs from AI service
+        if (aiResult.logs) {
+          setAiLogs(aiResult.logs);
+        }
 
         if (aiResult.error) {
           console.log('[VoiceJournal] AI error:', aiResult.error);
@@ -172,6 +181,9 @@ export function useVoiceJournal({
     // Error state
     error: error || voiceRecognition.error,
     isSupported: voiceRecognition.isSupported,
+
+    // Logs for UI
+    aiLogs,
 
     // Controls
     startRecording,

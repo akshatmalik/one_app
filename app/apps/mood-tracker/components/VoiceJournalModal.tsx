@@ -231,21 +231,42 @@ export function VoiceJournalModal({
             </div>
           )}
 
-          {/* Debug Info */}
+          {/* Debug Info & AI Logs */}
           <div className="mb-4 bg-blue-500/10 border border-blue-500/20 rounded-lg p-4">
             <p className="text-blue-300 font-bold mb-2">🔍 Debug Info:</p>
-            <div className="text-blue-300 text-xs font-mono space-y-1">
+            <div className="text-blue-300 text-xs font-mono space-y-1 mb-3">
               <div>Modal State: <span className="text-blue-100">{modalState}</span></div>
               <div>Voice Supported: <span className="text-blue-100">{voiceJournal.isSupported ? '✅ YES' : '❌ NO'}</span></div>
               <div>Is Listening: <span className="text-blue-100">{voiceJournal.isListening ? '🔴 YES' : '⚪ NO'}</span></div>
               <div>Is Processing: <span className="text-blue-100">{voiceJournal.isProcessing ? '⏳ YES' : '⚪ NO'}</span></div>
               <div>Has Transcript: <span className="text-blue-100">{voiceJournal.transcript ? `✅ ${voiceJournal.transcript.length} chars` : '❌ NO'}</span></div>
               <div>Has Interpretation: <span className="text-blue-100">{voiceJournal.interpretation ? '✅ YES' : '❌ NO'}</span></div>
-              <div className="mt-2 pt-2 border-t border-blue-500/20">
-                <div className="text-yellow-300 font-bold">📋 Check Browser Console for detailed logs</div>
-                <div className="text-yellow-200 text-xs mt-1">Press F12 → Console tab to see step-by-step AI errors</div>
-              </div>
             </div>
+
+            {/* AI Processing Logs */}
+            {voiceJournal.aiLogs.length > 0 && (
+              <div className="mt-3 pt-3 border-t border-blue-500/20">
+                <p className="text-blue-300 font-bold mb-2">📋 AI Processing Logs:</p>
+                <div className="bg-black/40 rounded p-3 max-h-48 overflow-y-auto">
+                  <div className="text-xs font-mono space-y-1">
+                    {voiceJournal.aiLogs.map((log, idx) => (
+                      <div
+                        key={idx}
+                        className={clsx(
+                          'leading-relaxed',
+                          log.includes('❌') ? 'text-red-300' :
+                          log.includes('✅') ? 'text-green-300' :
+                          log.includes('💡') ? 'text-yellow-300' :
+                          'text-blue-200'
+                        )}
+                      >
+                        {log}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Browser Support Check */}
