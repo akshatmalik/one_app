@@ -76,9 +76,11 @@ export function useVoiceJournal({
     console.log('[VoiceJournal] Starting recording, clearing previous errors');
 
     // Detect browser
-    const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
-    const isChrome = /chrome/i.test(navigator.userAgent) && !/edge/i.test(navigator.userAgent);
-    const browserName = isChrome ? 'Chrome' : isSafari ? 'Safari' : 'Other';
+    const isChromeBased = /chrome|crios|android/i.test(navigator.userAgent);
+    const hasSafari = /safari/i.test(navigator.userAgent);
+    const isSafari = hasSafari && !isChromeBased;
+    const isEdge = /edge|edg/i.test(navigator.userAgent);
+    const browserName = isEdge ? 'Edge' : isChromeBased ? 'Chrome' : isSafari ? 'Safari' : 'Other';
 
     // Check secure context
     const isSecure = window.isSecureContext;
