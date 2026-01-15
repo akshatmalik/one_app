@@ -193,15 +193,31 @@ export function VoiceJournalModal({
           </div>
 
           {/* Error Display */}
-          {voiceJournal.error && modalState === 'processing' && (
-            <div className="mb-4 bg-orange-500/10 border border-orange-500/20 rounded-lg p-4">
-              <p className="text-orange-300 font-bold mb-2">⚠️ AI Processing Note:</p>
-              <p className="text-orange-300 text-sm font-mono break-all whitespace-pre-wrap">{voiceJournal.error}</p>
-              <p className="text-orange-300 text-xs mt-2">✅ Your recording still works! We&apos;ll save it without AI interpretation.</p>
+          {voiceJournal.error && voiceJournal.error.includes('Firebase') && (
+            <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-lg p-6">
+              <p className="text-red-300 font-bold text-lg mb-3">🛑 Setup Required</p>
+              <p className="text-red-300 text-sm mb-4 font-mono break-all whitespace-pre-wrap">{voiceJournal.error}</p>
+
+              <div className="bg-black/30 rounded-lg p-4 mb-4">
+                <p className="text-white font-bold mb-3">📋 How to Fix:</p>
+                <ol className="text-white/90 text-sm space-y-2 list-decimal list-inside">
+                  <li>Go to <a href="https://console.firebase.google.com" target="_blank" rel="noopener noreferrer" className="text-blue-400 underline hover:text-blue-300">Firebase Console</a></li>
+                  <li>Select project: <span className="font-mono bg-white/10 px-2 py-0.5 rounded">oneapp-943e3</span></li>
+                  <li>Click <span className="font-bold">Build</span> → <span className="font-bold">AI</span> (or search &quot;AI&quot;)</li>
+                  <li>Click <span className="font-bold">&quot;Get Started&quot;</span> or <span className="font-bold">&quot;Enable&quot;</span></li>
+                  <li>Accept terms for Gemini API</li>
+                  <li>Wait 30-60 seconds for activation</li>
+                  <li>Refresh this page and try again!</li>
+                </ol>
+              </div>
+
+              <p className="text-yellow-300 text-xs">
+                💡 Note: Firebase AI is free for 15 requests/minute. Perfect for personal use!
+              </p>
             </div>
           )}
 
-          {voiceJournal.error && modalState !== 'processing' && modalState !== 'listening' && (
+          {voiceJournal.error && !voiceJournal.error.includes('Firebase') && (
             <div className="mb-4 bg-red-500/10 border border-red-500/20 rounded-lg p-4">
               <p className="text-red-300 font-bold mb-2">⚠️ Error:</p>
               <p className="text-red-300 text-sm font-mono break-all whitespace-pre-wrap">{voiceJournal.error}</p>
