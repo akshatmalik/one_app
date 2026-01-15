@@ -142,8 +142,17 @@ export function useVoiceRecognition(): VoiceRecognitionState & VoiceRecognitionC
             // User manually stopped, not an error
             setError(null);
             break;
+          case 'service-not-allowed':
+            // Safari-specific error
+            const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+            if (isSafari) {
+              setError('Safari voice recognition blocked. Please check: (1) Safari Settings → Privacy & Security → Microphone → Allow this site, (2) Site is using HTTPS (not HTTP), (3) Try Chrome or Edge instead.');
+            } else {
+              setError('Voice service not allowed. Please enable microphone permissions in your browser settings.');
+            }
+            break;
           default:
-            setError(`Error: ${event.error}`);
+            setError(`Voice recognition error: ${event.error}. Please check browser permissions and try again.`);
         }
       };
 

@@ -294,6 +294,22 @@ export function VoiceJournalModal({
             </div>
           )}
 
+          {/* Safari Compatibility Warning */}
+          {voiceJournal.isSupported && typeof navigator !== 'undefined' && /^((?!chrome|android).)*safari/i.test(navigator.userAgent) && (
+            <div className="mb-4 bg-orange-500/10 border border-orange-500/20 rounded-lg p-4">
+              <p className="text-orange-300 font-bold mb-2">⚠️ Safari Limitations</p>
+              <p className="text-orange-300/80 text-sm mb-3">
+                Safari has stricter voice recognition requirements. If voice recording fails:
+              </p>
+              <ol className="text-orange-300/80 text-sm space-y-1 list-decimal list-inside">
+                <li>Check Safari Settings → Privacy & Security → Microphone</li>
+                <li>Ensure you&apos;re using HTTPS (not HTTP)</li>
+                <li>Grant microphone permission when prompted</li>
+                <li>For best results, use Chrome or Edge instead</li>
+              </ol>
+            </div>
+          )}
+
           {/* Ready State */}
           {modalState === 'ready' && voiceJournal.isSupported && (
             <div className="text-center space-y-6">

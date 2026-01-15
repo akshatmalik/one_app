@@ -75,12 +75,27 @@ export function useVoiceJournal({
   const startRecording = useCallback(() => {
     console.log('[VoiceJournal] Starting recording, clearing previous errors');
 
+    // Detect browser
+    const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+    const isChrome = /chrome/i.test(navigator.userAgent) && !/edge/i.test(navigator.userAgent);
+    const browserName = isChrome ? 'Chrome' : isSafari ? 'Safari' : 'Other';
+
+    // Check secure context
+    const isSecure = window.isSecureContext;
+
     // Add initial logs
     const initialLogs = [
       `[${new Date().toLocaleTimeString()}] 🎤 Voice recording requested`,
-      `[${new Date().toLocaleTimeString()}] 📱 Browser: ${navigator.userAgent.includes('Chrome') ? 'Chrome' : navigator.userAgent.includes('Safari') ? 'Safari' : 'Other'}`,
+      `[${new Date().toLocaleTimeString()}] 📱 Browser: ${browserName}`,
+      `[${new Date().toLocaleTimeString()}] 🔒 Secure context (HTTPS): ${isSecure ? '✅ YES' : '❌ NO'}`,
       `[${new Date().toLocaleTimeString()}] 🔊 Microphone permission: checking...`,
     ];
+
+    // Add Safari-specific warning
+    if (isSafari) {
+      initialLogs.push(`[${new Date().toLocaleTimeString()}] ⚠️ Safari detected - voice recognition may have limitations`);
+    }
+
     setAiLogs(initialLogs);
 
     setError(null);
