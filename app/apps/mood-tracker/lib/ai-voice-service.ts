@@ -118,10 +118,18 @@ export async function interpretVoiceJournal(
     console.error('Error details:', JSON.stringify(error, null, 2));
 
     let errorMessage = 'Unknown error occurred';
+    let stackTrace = '';
 
     if (error instanceof Error) {
       logToUI(`❌ Error: ${error.message}`);
       errorMessage = error.message;
+      stackTrace = error.stack || '';
+
+      // Log full stack trace
+      if (error.stack) {
+        const stackLines = error.stack.split('\n').slice(0, 5); // First 5 lines
+        stackLines.forEach(line => logToUI(`   ${line.trim()}`));
+      }
 
       // Check for Firebase AI specific errors
       if (errorMessage.includes('service-not-allowed')) {
@@ -140,6 +148,8 @@ export async function interpretVoiceJournal(
       }
     } else if (typeof error === 'object' && error !== null) {
       const errObj = error as any;
+      logToUI(`❌ Error object: ${JSON.stringify(errObj, null, 2).substring(0, 200)}`);
+
       if (errObj.code) {
         errorMessage = `Firebase Error: ${errObj.code} - ${errObj.message || 'No message'}`;
         logToUI(`❌ Firebase Error Code: ${errObj.code}`);
@@ -152,9 +162,13 @@ export async function interpretVoiceJournal(
     logToUI('🔄 Falling back to local interpretation (no AI)');
 
     // Return fallback interpretation with detailed error
+    const finalError = stackTrace
+      ? `${errorMessage}\n\nStack trace:\n${stackTrace}\n\nFalling back to local interpretation (no AI).`
+      : `${errorMessage}\n\nFalling back to local interpretation (no AI).`;
+
     return {
       data: getFallbackInterpretation(transcript, context),
-      error: `${errorMessage}\n\nFalling back to local interpretation (no AI).`,
+      error: finalError,
       isFallback: true,
       logs: getUILogs(),
     };

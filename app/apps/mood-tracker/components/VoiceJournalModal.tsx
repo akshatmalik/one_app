@@ -193,34 +193,39 @@ export function VoiceJournalModal({
           </div>
 
           {/* Error Display */}
-          {voiceJournal.error && voiceJournal.error.includes('Firebase') && (
+          {voiceJournal.error && (
             <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-lg p-6">
-              <p className="text-red-300 font-bold text-lg mb-3">🛑 Setup Required</p>
-              <p className="text-red-300 text-sm mb-4 font-mono break-all whitespace-pre-wrap">{voiceJournal.error}</p>
+              <p className="text-red-300 font-bold text-lg mb-3">
+                {voiceJournal.error.includes('Firebase') ? '🛑 Setup Required' : '⚠️ Error'}
+              </p>
 
-              <div className="bg-black/30 rounded-lg p-4 mb-4">
-                <p className="text-white font-bold mb-3">📋 How to Fix:</p>
-                <ol className="text-white/90 text-sm space-y-2 list-decimal list-inside">
-                  <li>Go to <a href="https://console.firebase.google.com" target="_blank" rel="noopener noreferrer" className="text-blue-400 underline hover:text-blue-300">Firebase Console</a></li>
-                  <li>Select project: <span className="font-mono bg-white/10 px-2 py-0.5 rounded">oneapp-943e3</span></li>
-                  <li>Click <span className="font-bold">Build</span> → <span className="font-bold">AI</span> (or search &quot;AI&quot;)</li>
-                  <li>Click <span className="font-bold">&quot;Get Started&quot;</span> or <span className="font-bold">&quot;Enable&quot;</span></li>
-                  <li>Accept terms for Gemini API</li>
-                  <li>Wait 30-60 seconds for activation</li>
-                  <li>Refresh this page and try again!</li>
-                </ol>
+              {/* Full Error with Stack Trace */}
+              <div className="bg-black/50 rounded p-4 mb-4 max-h-64 overflow-y-auto">
+                <pre className="text-red-300 text-xs font-mono whitespace-pre-wrap break-all">
+                  {voiceJournal.error}
+                </pre>
               </div>
 
-              <p className="text-yellow-300 text-xs">
-                💡 Note: Firebase AI is free for 15 requests/minute. Perfect for personal use!
-              </p>
-            </div>
-          )}
+              {voiceJournal.error.includes('Firebase') && (
+                <>
+                  <div className="bg-black/30 rounded-lg p-4 mb-4">
+                    <p className="text-white font-bold mb-3">📋 How to Fix:</p>
+                    <ol className="text-white/90 text-sm space-y-2 list-decimal list-inside">
+                      <li>Go to <a href="https://console.firebase.google.com" target="_blank" rel="noopener noreferrer" className="text-blue-400 underline hover:text-blue-300">Firebase Console</a></li>
+                      <li>Select project: <span className="font-mono bg-white/10 px-2 py-0.5 rounded">oneapp-943e3</span></li>
+                      <li>Click <span className="font-bold">Build</span> → <span className="font-bold">AI</span> (or search &quot;AI&quot;)</li>
+                      <li>Click <span className="font-bold">&quot;Get Started&quot;</span> or <span className="font-bold">&quot;Enable&quot;</span></li>
+                      <li>Accept terms for Gemini API</li>
+                      <li>Wait 30-60 seconds for activation</li>
+                      <li>Refresh this page and try again!</li>
+                    </ol>
+                  </div>
 
-          {voiceJournal.error && !voiceJournal.error.includes('Firebase') && (
-            <div className="mb-4 bg-red-500/10 border border-red-500/20 rounded-lg p-4">
-              <p className="text-red-300 font-bold mb-2">⚠️ Error:</p>
-              <p className="text-red-300 text-sm font-mono break-all whitespace-pre-wrap">{voiceJournal.error}</p>
+                  <p className="text-yellow-300 text-xs">
+                    💡 Note: Firebase AI is free for 15 requests/minute. Perfect for personal use!
+                  </p>
+                </>
+              )}
             </div>
           )}
 
@@ -241,22 +246,24 @@ export function VoiceJournalModal({
               <div>Is Processing: <span className="text-blue-100">{voiceJournal.isProcessing ? '⏳ YES' : '⚪ NO'}</span></div>
               <div>Has Transcript: <span className="text-blue-100">{voiceJournal.transcript ? `✅ ${voiceJournal.transcript.length} chars` : '❌ NO'}</span></div>
               <div>Has Interpretation: <span className="text-blue-100">{voiceJournal.interpretation ? '✅ YES' : '❌ NO'}</span></div>
+              <div>AI Logs Count: <span className="text-blue-100">{voiceJournal.aiLogs.length} logs</span></div>
             </div>
 
-            {/* AI Processing Logs */}
-            {voiceJournal.aiLogs.length > 0 && (
-              <div className="mt-3 pt-3 border-t border-blue-500/20">
-                <p className="text-blue-300 font-bold mb-2">📋 AI Processing Logs:</p>
-                <div className="bg-black/40 rounded p-3 max-h-48 overflow-y-auto">
+            {/* AI Processing Logs - Always show section */}
+            <div className="mt-3 pt-3 border-t border-blue-500/20">
+              <p className="text-blue-300 font-bold mb-2">📋 AI Processing Logs:</p>
+              {voiceJournal.aiLogs.length > 0 ? (
+                <div className="bg-black/40 rounded p-3 max-h-64 overflow-y-auto">
                   <div className="text-xs font-mono space-y-1">
                     {voiceJournal.aiLogs.map((log, idx) => (
                       <div
                         key={idx}
                         className={clsx(
                           'leading-relaxed',
-                          log.includes('❌') ? 'text-red-300' :
+                          log.includes('❌') ? 'text-red-300 font-bold' :
                           log.includes('✅') ? 'text-green-300' :
-                          log.includes('💡') ? 'text-yellow-300' :
+                          log.includes('💡') ? 'text-yellow-300 font-bold' :
+                          log.includes('📋') || log.includes('🎙️') || log.includes('📝') ? 'text-cyan-300' :
                           'text-blue-200'
                         )}
                       >
@@ -265,8 +272,14 @@ export function VoiceJournalModal({
                     ))}
                   </div>
                 </div>
-              </div>
-            )}
+              ) : (
+                <div className="bg-black/40 rounded p-3 text-center">
+                  <p className="text-white/40 text-xs italic">
+                    No logs yet. Logs will appear here when you record and process voice input.
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Browser Support Check */}
