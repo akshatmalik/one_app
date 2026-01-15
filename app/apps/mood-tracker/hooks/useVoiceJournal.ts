@@ -90,26 +90,6 @@ export function useVoiceJournal({
   }, [voiceRecognition]);
 
   /**
-   * Stop voice recording and automatically process
-   */
-  const stopRecording = useCallback(async () => {
-    setAiLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] 🛑 Stopping voice recording...`]);
-    voiceRecognition.stopListening();
-
-    // Auto-process the transcript after stopping
-    // Wait a bit for final transcript to be captured
-    setTimeout(() => {
-      const currentTranscript = voiceRecognition.transcript.trim();
-      setAiLogs(prev => [
-        ...prev,
-        `[${new Date().toLocaleTimeString()}] 📝 Transcript captured: ${currentTranscript.length} chars`,
-        currentTranscript ? `[${new Date().toLocaleTimeString()}] ✅ Processing transcript...` : `[${new Date().toLocaleTimeString()}] ❌ No transcript captured!`
-      ]);
-      processTranscript();
-    }, 500);
-  }, [voiceRecognition, processTranscript]);
-
-  /**
    * Process the current transcript with AI
    */
   const processTranscript = useCallback(async (useLocalFallback: boolean = false) => {
@@ -189,6 +169,26 @@ export function useVoiceJournal({
       setIsProcessing(false);
     }
   }, [voiceRecognition.transcript, currentDate, startDate, availableTags, availableCategories]);
+
+  /**
+   * Stop voice recording and automatically process
+   */
+  const stopRecording = useCallback(async () => {
+    setAiLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] 🛑 Stopping voice recording...`]);
+    voiceRecognition.stopListening();
+
+    // Auto-process the transcript after stopping
+    // Wait a bit for final transcript to be captured
+    setTimeout(() => {
+      const currentTranscript = voiceRecognition.transcript.trim();
+      setAiLogs(prev => [
+        ...prev,
+        `[${new Date().toLocaleTimeString()}] 📝 Transcript captured: ${currentTranscript.length} chars`,
+        currentTranscript ? `[${new Date().toLocaleTimeString()}] ✅ Processing transcript...` : `[${new Date().toLocaleTimeString()}] ❌ No transcript captured!`
+      ]);
+      processTranscript();
+    }, 500);
+  }, [voiceRecognition, processTranscript]);
 
   /**
    * Reset all state
