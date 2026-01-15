@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useVoiceRecognition } from './useVoiceRecognition';
 import { interpretVoiceJournal, simpleLocalInterpretation, VoiceContext } from '../lib/ai-voice-service';
 import { InterpretedData, Tag, Category } from '../lib/types';
@@ -53,11 +53,36 @@ export function useVoiceJournal({
   const [error, setError] = useState<string | null>(null);
   const [aiLogs, setAiLogs] = useState<string[]>([]);
 
+  // Track voice recognition state changes
+  useEffect(() => {
+    if (voiceRecognition.isListening) {
+      setAiLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ✅ Voice recording started!`]);
+    } else if (aiLogs.length > 0 && !voiceRecognition.isListening) {
+      setAiLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ⏸️ Voice recording stopped`]);
+    }
+  }, [voiceRecognition.isListening]);
+
+  // Track errors from voice recognition
+  useEffect(() => {
+    if (voiceRecognition.error) {
+      setAiLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ❌ Voice error: ${voiceRecognition.error}`]);
+    }
+  }, [voiceRecognition.error]);
+
   /**
    * Start voice recording
    */
   const startRecording = useCallback(() => {
     console.log('[VoiceJournal] Starting recording, clearing previous errors');
+
+    // Add initial logs
+    const initialLogs = [
+      `[${new Date().toLocaleTimeString()}] 🎤 Voice recording requested`,
+      `[${new Date().toLocaleTimeString()}] 📱 Browser: ${navigator.userAgent.includes('Chrome') ? 'Chrome' : navigator.userAgent.includes('Safari') ? 'Safari' : 'Other'}`,
+      `[${new Date().toLocaleTimeString()}] 🔊 Microphone permission: checking...`,
+    ];
+    setAiLogs(initialLogs);
+
     setError(null);
     setInterpretation(null);
     setIsProcessing(false);
@@ -68,14 +93,21 @@ export function useVoiceJournal({
    * Stop voice recording and automatically process
    */
   const stopRecording = useCallback(async () => {
+    setAiLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] 🛑 Stopping voice recording...`]);
     voiceRecognition.stopListening();
 
     // Auto-process the transcript after stopping
     // Wait a bit for final transcript to be captured
     setTimeout(() => {
+      const currentTranscript = voiceRecognition.transcript.trim();
+      setAiLogs(prev => [
+        ...prev,
+        `[${new Date().toLocaleTimeString()}] 📝 Transcript captured: ${currentTranscript.length} chars`,
+        currentTranscript ? `[${new Date().toLocaleTimeString()}] ✅ Processing transcript...` : `[${new Date().toLocaleTimeString()}] ❌ No transcript captured!`
+      ]);
       processTranscript();
     }, 500);
-  }, [voiceRecognition]);
+  }, [voiceRecognition, processTranscript]);
 
   /**
    * Process the current transcript with AI
