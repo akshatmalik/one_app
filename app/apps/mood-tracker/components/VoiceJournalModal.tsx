@@ -241,6 +241,10 @@ export function VoiceJournalModal({
               <div>Is Processing: <span className="text-blue-100">{voiceJournal.isProcessing ? '⏳ YES' : '⚪ NO'}</span></div>
               <div>Has Transcript: <span className="text-blue-100">{voiceJournal.transcript ? `✅ ${voiceJournal.transcript.length} chars` : '❌ NO'}</span></div>
               <div>Has Interpretation: <span className="text-blue-100">{voiceJournal.interpretation ? '✅ YES' : '❌ NO'}</span></div>
+              <div className="mt-2 pt-2 border-t border-blue-500/20">
+                <div className="text-yellow-300 font-bold">📋 Check Browser Console for detailed logs</div>
+                <div className="text-yellow-200 text-xs mt-1">Press F12 → Console tab to see step-by-step AI errors</div>
+              </div>
             </div>
           </div>
 

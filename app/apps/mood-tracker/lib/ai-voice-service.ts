@@ -16,10 +16,26 @@ const firebaseConfig = {
 
 // Initialize AI service
 function getAIModel() {
-  const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
-  const ai = getAI(app, { backend: new GoogleAIBackend() });
-  // Use Gemini 2.5 Flash model
-  return getGenerativeModel(ai, { model: "gemini-2.5-flash" });
+  try {
+    console.log('[AI Service] Initializing Firebase AI...');
+    const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
+    console.log('[AI Service] Firebase app initialized:', app.name);
+
+    const ai = getAI(app, { backend: new GoogleAIBackend() });
+    console.log('[AI Service] AI instance created');
+
+    // Try Gemini 2.0 Flash (recommended by Firebase docs)
+    const modelName = "gemini-2.0-flash-exp";
+    console.log('[AI Service] Requesting model:', modelName);
+
+    const model = getGenerativeModel(ai, { model: modelName });
+    console.log('[AI Service] Model obtained successfully');
+
+    return model;
+  } catch (error) {
+    console.error('[AI Service] Failed to initialize AI model:', error);
+    throw error;
+  }
 }
 
 /**
@@ -48,15 +64,28 @@ export async function interpretVoiceJournal(
   transcript: string,
   context: VoiceContext
 ): Promise<AIInterpretationResult> {
-  const model = getAIModel();
-  const prompt = buildInterpretationPrompt(transcript, context);
+  console.log('[AI Service] interpretVoiceJournal called');
+  console.log('[AI Service] Transcript length:', transcript.length);
 
   try {
+    console.log('[AI Service] Step 1: Getting AI model...');
+    const model = getAIModel();
+
+    console.log('[AI Service] Step 2: Building prompt...');
+    const prompt = buildInterpretationPrompt(transcript, context);
+    console.log('[AI Service] Prompt length:', prompt.length);
+
+    console.log('[AI Service] Step 3: Calling generateContent...');
     const result = await model.generateContent(prompt);
+    console.log('[AI Service] Step 4: Got result from AI');
+
     const text = result.response.text();
+    console.log('[AI Service] Step 5: Extracted response text, length:', text.length);
 
     // Parse the JSON response
+    console.log('[AI Service] Step 6: Parsing response...');
     const parsed = parseAIResponse(text, transcript, context);
+    console.log('[AI Service] Step 7: Parse successful!');
 
     return {
       data: parsed,
