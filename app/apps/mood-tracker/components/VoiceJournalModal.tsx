@@ -41,6 +41,8 @@ export function VoiceJournalModal({
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
+  console.log('[VoiceJournalModal] Rendered', { modalState, currentDayNumber });
+
   const voiceJournal = useVoiceJournal({
     currentDate,
     startDate,
@@ -75,6 +77,8 @@ export function VoiceJournalModal({
   }, [onClose]);
 
   const handleStartRecording = () => {
+    console.log('[VoiceJournalModal] handleStartRecording called');
+    console.log('[VoiceJournalModal] Voice recognition supported:', voiceJournal.isSupported);
     setSaveError(null);
     voiceJournal.startRecording();
     setModalState('listening');
@@ -190,16 +194,31 @@ export function VoiceJournalModal({
 
           {/* Error Display */}
           {voiceJournal.error && (
-            <div className="mb-4 bg-red-500/10 border border-red-500/20 rounded-lg p-3">
-              <p className="text-red-300 text-sm">{voiceJournal.error}</p>
+            <div className="mb-4 bg-red-500/10 border border-red-500/20 rounded-lg p-4">
+              <p className="text-red-300 font-bold mb-2">⚠️ Error:</p>
+              <p className="text-red-300 text-sm font-mono break-all">{voiceJournal.error}</p>
             </div>
           )}
 
           {saveError && (
-            <div className="mb-4 bg-red-500/10 border border-red-500/20 rounded-lg p-3">
-              <p className="text-red-300 text-sm">{saveError}</p>
+            <div className="mb-4 bg-red-500/10 border border-red-500/20 rounded-lg p-4">
+              <p className="text-red-300 font-bold mb-2">⚠️ Save Error:</p>
+              <p className="text-red-300 text-sm font-mono break-all">{saveError}</p>
             </div>
           )}
+
+          {/* Debug Info */}
+          <div className="mb-4 bg-blue-500/10 border border-blue-500/20 rounded-lg p-4">
+            <p className="text-blue-300 font-bold mb-2">🔍 Debug Info:</p>
+            <div className="text-blue-300 text-xs font-mono space-y-1">
+              <div>Modal State: <span className="text-blue-100">{modalState}</span></div>
+              <div>Voice Supported: <span className="text-blue-100">{voiceJournal.isSupported ? '✅ YES' : '❌ NO'}</span></div>
+              <div>Is Listening: <span className="text-blue-100">{voiceJournal.isListening ? '🔴 YES' : '⚪ NO'}</span></div>
+              <div>Is Processing: <span className="text-blue-100">{voiceJournal.isProcessing ? '⏳ YES' : '⚪ NO'}</span></div>
+              <div>Has Transcript: <span className="text-blue-100">{voiceJournal.transcript ? `✅ ${voiceJournal.transcript.length} chars` : '❌ NO'}</span></div>
+              <div>Has Interpretation: <span className="text-blue-100">{voiceJournal.interpretation ? '✅ YES' : '❌ NO'}</span></div>
+            </div>
+          </div>
 
           {/* Browser Support Check */}
           {!voiceJournal.isSupported && (

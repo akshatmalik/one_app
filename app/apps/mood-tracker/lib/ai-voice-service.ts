@@ -67,18 +67,37 @@ export async function interpretVoiceJournal(
     console.error('Error details:', JSON.stringify(error, null, 2));
 
     let errorMessage = 'Unknown error occurred';
+    let errorDetails = '';
+
     if (error instanceof Error) {
       console.error('Error message:', error.message);
       console.error('Error stack:', error.stack);
       errorMessage = error.message;
+      errorDetails = error.stack || '';
+
+      // Check for Firebase AI specific errors
+      if (errorMessage.includes('service-not-allowed')) {
+        errorMessage = '🔥 Firebase AI not enabled. Enable Firebase AI (Gemini) in Firebase Console → Build → AI';
+      } else if (errorMessage.includes('permission-denied')) {
+        errorMessage = '🔒 Permission denied. Check Firebase API key permissions for Generative AI';
+      } else if (errorMessage.includes('quota-exceeded')) {
+        errorMessage = '📊 API quota exceeded. Check Firebase AI usage limits';
+      } else if (errorMessage.includes('not-found')) {
+        errorMessage = '❓ Gemini model not found. Check Firebase AI configuration';
+      }
     } else if (typeof error === 'object' && error !== null) {
-      errorMessage = JSON.stringify(error);
+      const errObj = error as any;
+      if (errObj.code) {
+        errorMessage = `Firebase Error: ${errObj.code} - ${errObj.message || 'No message'}`;
+      } else {
+        errorMessage = JSON.stringify(error);
+      }
     }
 
-    // Return fallback interpretation
+    // Return fallback interpretation with detailed error
     return {
       data: getFallbackInterpretation(transcript, context),
-      error: errorMessage,
+      error: `${errorMessage}\n\nFalling back to local interpretation (no AI).`,
       isFallback: true,
     };
   }

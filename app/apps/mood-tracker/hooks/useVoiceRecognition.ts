@@ -188,8 +188,15 @@ export function useVoiceRecognition(): VoiceRecognitionState & VoiceRecognitionC
   }, [isSupported]);
 
   const startListening = useCallback(() => {
+    console.log('[VoiceRecognition] startListening called', {
+      hasRecognition: !!recognitionRef.current,
+      isSupported,
+    });
+
     if (!recognitionRef.current || !isSupported) {
-      setError('Speech recognition is not available');
+      const msg = 'Speech recognition is not available';
+      console.error('[VoiceRecognition]', msg);
+      setError(msg);
       return;
     }
 
@@ -199,10 +206,11 @@ export function useVoiceRecognition(): VoiceRecognitionState & VoiceRecognitionC
       setInterimTranscript('');
       setError(null);
 
+      console.log('[VoiceRecognition] Starting recognition...');
       // Start recognition
       recognitionRef.current.start();
     } catch (e) {
-      console.error('Failed to start recognition:', e);
+      console.error('[VoiceRecognition] Failed to start recognition:', e);
       setError('Failed to start voice recognition. Please try again.');
     }
   }, [isSupported]);

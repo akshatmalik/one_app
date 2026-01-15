@@ -234,7 +234,10 @@ export default function MoodTrackerPage() {
             </div>
             <div className="flex gap-2">
               <button
-                onClick={() => setShowVoiceJournal(true)}
+                onClick={() => {
+                  console.log('[MoodTrackerPage] Voice Journal button clicked');
+                  setShowVoiceJournal(true);
+                }}
                 className="px-4 py-2 bg-purple-600 text-white font-medium rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-2"
               >
                 <span>🎤</span>
