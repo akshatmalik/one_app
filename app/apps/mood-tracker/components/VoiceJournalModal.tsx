@@ -193,10 +193,18 @@ export function VoiceJournalModal({
           </div>
 
           {/* Error Display */}
-          {voiceJournal.error && (
+          {voiceJournal.error && modalState === 'processing' && (
+            <div className="mb-4 bg-orange-500/10 border border-orange-500/20 rounded-lg p-4">
+              <p className="text-orange-300 font-bold mb-2">⚠️ AI Processing Note:</p>
+              <p className="text-orange-300 text-sm font-mono break-all whitespace-pre-wrap">{voiceJournal.error}</p>
+              <p className="text-orange-300 text-xs mt-2">✅ Your recording still works! We&apos;ll save it without AI interpretation.</p>
+            </div>
+          )}
+
+          {voiceJournal.error && modalState !== 'processing' && modalState !== 'listening' && (
             <div className="mb-4 bg-red-500/10 border border-red-500/20 rounded-lg p-4">
               <p className="text-red-300 font-bold mb-2">⚠️ Error:</p>
-              <p className="text-red-300 text-sm font-mono break-all">{voiceJournal.error}</p>
+              <p className="text-red-300 text-sm font-mono break-all whitespace-pre-wrap">{voiceJournal.error}</p>
             </div>
           )}
 

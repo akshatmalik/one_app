@@ -53,8 +53,10 @@ export function useVoiceJournal({
    * Start voice recording
    */
   const startRecording = useCallback(() => {
+    console.log('[VoiceJournal] Starting recording, clearing previous errors');
     setError(null);
     setInterpretation(null);
+    setIsProcessing(false);
     voiceRecognition.startListening();
   }, [voiceRecognition]);
 
@@ -97,27 +99,35 @@ export function useVoiceJournal({
 
       if (useLocalFallback) {
         // Use simple local interpretation without AI
+        console.log('[VoiceJournal] Using local interpretation (no AI)');
         result = simpleLocalInterpretation(currentTranscript, context);
       } else {
         // Use AI interpretation
+        console.log('[VoiceJournal] Attempting AI interpretation...');
         const aiResult = await interpretVoiceJournal(currentTranscript, context);
 
         if (aiResult.error) {
-          setError(`AI interpretation warning: ${aiResult.error}`);
+          console.log('[VoiceJournal] AI error:', aiResult.error);
+          setError(aiResult.error);
         }
 
         if (!aiResult.data) {
           // Fall back to local interpretation
+          console.log('[VoiceJournal] AI failed, using local fallback');
           result = simpleLocalInterpretation(currentTranscript, context);
-          setError('AI interpretation failed. Using basic interpretation.');
+          if (!aiResult.error) {
+            setError('AI interpretation failed. Using basic interpretation.');
+          }
         } else {
+          console.log('[VoiceJournal] AI interpretation successful');
           result = aiResult.data;
         }
       }
 
+      console.log('[VoiceJournal] Interpretation ready:', result);
       setInterpretation(result);
     } catch (e) {
-      console.error('Failed to process transcript:', e);
+      console.error('[VoiceJournal] Failed to process transcript:', e);
       setError((e as Error).message || 'Failed to process voice input');
 
       // Try local fallback as last resort
@@ -128,10 +138,11 @@ export function useVoiceJournal({
           availableTags,
           availableCategories,
         };
+        console.log('[VoiceJournal] Using emergency fallback interpretation');
         const fallback = simpleLocalInterpretation(currentTranscript, context);
         setInterpretation(fallback);
       } catch (fallbackError) {
-        console.error('Fallback interpretation also failed:', fallbackError);
+        console.error('[VoiceJournal] Fallback interpretation also failed:', fallbackError);
       }
     } finally {
       setIsProcessing(false);
