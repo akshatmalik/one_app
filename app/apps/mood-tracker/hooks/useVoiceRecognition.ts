@@ -41,7 +41,7 @@ export function useVoiceRecognition(): VoiceRecognitionState & VoiceRecognitionC
     return null;
   };
 
-  const startListening = useCallback(() => {
+  const startListening = useCallback(async () => {
     console.log('[VoiceRecognition] startListening called', {
       isSupported,
       currentlyListening: listening,
@@ -52,11 +52,25 @@ export function useVoiceRecognition(): VoiceRecognitionState & VoiceRecognitionC
       return;
     }
 
-    console.log('[VoiceRecognition] Starting recognition...');
-    SpeechRecognition.startListening({
-      continuous: true,
-      language: 'en-US',
-    });
+    try {
+      // Request microphone permission explicitly
+      console.log('[VoiceRecognition] Requesting microphone permission...');
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      console.log('[VoiceRecognition] ✅ Microphone permission granted');
+
+      // Stop the test stream immediately (we only needed it for permission)
+      stream.getTracks().forEach(track => track.stop());
+
+      console.log('[VoiceRecognition] Starting speech recognition...');
+      SpeechRecognition.startListening({
+        continuous: true,
+        interimResults: true,
+        language: 'en-US',
+      });
+    } catch (error) {
+      console.error('[VoiceRecognition] ❌ Microphone permission denied:', error);
+      throw new Error('Microphone access denied. Please grant permission in your browser settings.');
+    }
   }, [isSupported, listening]);
 
   const stopListening = useCallback(() => {

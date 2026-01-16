@@ -8,6 +8,7 @@ import { useBudget } from './hooks/useBudget';
 import { useGameThumbnails } from './hooks/useGameThumbnails';
 import { GameForm } from './components/GameForm';
 import { PlayLogModal } from './components/PlayLogModal';
+import { AIChatModal } from './components/AIChatModal';
 import { TimelineView } from './components/TimelineView';
 import { StatsView } from './components/StatsView';
 import { AIChatTab } from './components/AIChatTab';
@@ -32,6 +33,7 @@ export default function GameAnalyticsPage() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingGame, setEditingGame] = useState<GameWithMetrics | null>(null);
   const [playLogGame, setPlayLogGame] = useState<GameWithMetrics | null>(null);
+  const [isChatOpen, setIsChatOpen] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('all');
   const [tabMode, setTabMode] = useState<TabMode>('games');
   const [sortBy, setSortBy] = useState<'name' | 'price' | 'hours' | 'rating' | 'costPerHour' | 'dateAdded' | 'recentlyPlayed'>('recentlyPlayed');
@@ -204,6 +206,16 @@ export default function GameAnalyticsPage() {
                 >
                   <Sparkles size={14} />
                   Load Samples
+                </button>
+              )}
+              {games.length > 0 && (
+                <button
+                  onClick={() => setIsChatOpen(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600/20 to-pink-600/20 text-purple-300 border border-purple-500/30 rounded-lg hover:from-purple-600/30 hover:to-pink-600/30 hover:border-purple-500/50 transition-all text-sm font-medium"
+                  title="Chat with AI about your gaming stats"
+                >
+                  <MessageCircle size={16} />
+                  AI Coach
                 </button>
               )}
               <button
@@ -616,6 +628,15 @@ export default function GameAnalyticsPage() {
           onClose={() => setPlayLogGame(null)}
         />
       )}
+
+      {/* AI Chat Modal */}
+      <AIChatModal
+        isOpen={isChatOpen}
+        onClose={() => setIsChatOpen(false)}
+        weekData={weekData}
+        monthGames={monthGames}
+        allGames={games}
+      />
     </div>
   );
 }

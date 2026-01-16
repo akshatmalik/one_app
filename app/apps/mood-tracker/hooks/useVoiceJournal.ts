@@ -62,6 +62,13 @@ export function useVoiceJournal({
     }
   }, [voiceRecognition.isListening]);
 
+  // Track transcript changes during recording (for debugging)
+  useEffect(() => {
+    if (voiceRecognition.isListening && voiceRecognition.transcript) {
+      console.log('[VoiceJournal] Live transcript update:', voiceRecognition.transcript.length, 'chars');
+    }
+  }, [voiceRecognition.transcript, voiceRecognition.isListening]);
+
   // Track errors from voice recognition
   useEffect(() => {
     if (voiceRecognition.error) {
@@ -72,7 +79,7 @@ export function useVoiceJournal({
   /**
    * Start voice recording
    */
-  const startRecording = useCallback(() => {
+  const startRecording = useCallback(async () => {
     console.log('[VoiceJournal] Starting recording, clearing previous errors');
 
     // Detect browser
@@ -90,7 +97,7 @@ export function useVoiceJournal({
       `[${new Date().toLocaleTimeString()}] 🎤 Voice recording requested`,
       `[${new Date().toLocaleTimeString()}] 📱 Browser: ${browserName}`,
       `[${new Date().toLocaleTimeString()}] 🔒 Secure context (HTTPS): ${isSecure ? '✅ YES' : '❌ NO'}`,
-      `[${new Date().toLocaleTimeString()}] 🔊 Microphone permission: checking...`,
+      `[${new Date().toLocaleTimeString()}] 🔊 Requesting microphone permission...`,
     ];
 
     // Add Safari-specific warning
@@ -103,7 +110,15 @@ export function useVoiceJournal({
     setError(null);
     setInterpretation(null);
     setIsProcessing(false);
-    voiceRecognition.startListening();
+
+    try {
+      await voiceRecognition.startListening();
+      setAiLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ✅ Microphone permission granted, recording started`]);
+    } catch (err) {
+      const errorMsg = (err as Error).message || 'Failed to start recording';
+      setError(errorMsg);
+      setAiLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ❌ ${errorMsg}`]);
+    }
   }, [voiceRecognition]);
 
   /**
@@ -195,16 +210,27 @@ export function useVoiceJournal({
     voiceRecognition.stopListening();
 
     // Auto-process the transcript after stopping
-    // Wait a bit for final transcript to be captured
+    // Wait for final transcript to be captured (increased timeout for reliability)
     setTimeout(() => {
       const currentTranscript = voiceRecognition.transcript.trim();
+      const interimText = voiceRecognition.interimTranscript.trim();
+
+      console.log('[VoiceJournal] Transcript check:', {
+        transcript: currentTranscript,
+        transcriptLength: currentTranscript.length,
+        interimTranscript: interimText,
+        interimLength: interimText.length,
+      });
+
       setAiLogs(prev => [
         ...prev,
         `[${new Date().toLocaleTimeString()}] 📝 Transcript captured: ${currentTranscript.length} chars`,
-        currentTranscript ? `[${new Date().toLocaleTimeString()}] ✅ Processing transcript...` : `[${new Date().toLocaleTimeString()}] ❌ No transcript captured!`
-      ]);
+        interimText ? `[${new Date().toLocaleTimeString()}] 📝 Interim text: ${interimText.length} chars` : '',
+        currentTranscript ? `[${new Date().toLocaleTimeString()}] ✅ Processing transcript...` : `[${new Date().toLocaleTimeString()}] ❌ No transcript captured - try speaking louder or closer to mic`
+      ].filter(Boolean));
+
       processTranscript();
-    }, 500);
+    }, 1000); // Increased from 500ms to 1000ms for better reliability
   }, [voiceRecognition, processTranscript]);
 
   /**

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
+import clsx from 'clsx';
 import { useMoodTracker } from './hooks/useMoodTracker';
 import { ViewMode, DayData } from './lib/types';
 import { getCurrentYear, getTodayDate } from './lib/utils';
@@ -10,7 +11,7 @@ import { ViewModeToggle } from './components/ViewModeToggle';
 import { CategoryFilter } from './components/CategoryFilter';
 import { TagManager } from './components/TagManager';
 import { ErrorDisplay } from './components/ErrorDisplay';
-import { VoiceJournalModal } from './components/VoiceJournalModal';
+import { VoiceJournalTab } from './components/VoiceJournalTab';
 import { createDummyData } from './data/dummy-data';
 
 export default function MoodTrackerPage() {
@@ -32,12 +33,12 @@ export default function MoodTrackerPage() {
     refreshAll,
   } = useMoodTracker();
 
+  const [activeTab, setActiveTab] = useState<'year' | 'voice' | 'tags'>('year');
   const [viewMode, setViewMode] = useState<ViewMode>('mood');
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [selectedYear, setSelectedYear] = useState(getCurrentYear());
   const [selectedDay, setSelectedDay] = useState<DayData | null>(null);
   const [showTagManager, setShowTagManager] = useState(false);
-  const [showVoiceJournal, setShowVoiceJournal] = useState(false);
   const [generatingDummyData, setGeneratingDummyData] = useState(false);
 
   // Create a map for quick day data lookup
@@ -178,11 +179,6 @@ export default function MoodTrackerPage() {
     await refreshAll();
   };
 
-  const handleVoiceJournalEdit = (dayData: DayData) => {
-    setSelectedDay(dayData);
-    setShowVoiceJournal(false);
-  };
-
   if (loading && !settings) {
     return (
       <div className="min-h-[calc(100vh-60px)] flex items-center justify-center">
@@ -232,114 +228,196 @@ export default function MoodTrackerPage() {
                 Start Date: {settings.startDate} (Day 1)
               </p>
             </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => {
-                  console.log('[MoodTrackerPage] Voice Journal button clicked');
-                  setShowVoiceJournal(true);
-                }}
-                className="px-4 py-2 bg-purple-600 text-white font-medium rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-2"
-              >
-                <span>🎤</span>
-                <span>Voice Journal</span>
-              </button>
-              <button
-                onClick={() => setShowTagManager(true)}
-                className="px-4 py-2 bg-white/[0.02] border border-white/10 text-white font-medium rounded-lg hover:bg-white/[0.04] transition-colors"
-              >
-                Manage Tags
-              </button>
-            </div>
           </div>
 
           <ErrorDisplay error={error} />
 
-          {/* Controls */}
-          <div className="flex flex-wrap items-center gap-4">
-            <ViewModeToggle mode={viewMode} onChange={setViewMode} />
-
-            {viewMode === 'tags' && (
-              <CategoryFilter
-                categories={categories}
-                selectedCategoryId={selectedCategoryId}
-                onSelectCategory={setSelectedCategoryId}
-              />
-            )}
-
-            <div className="ml-auto flex items-center gap-2">
-              <button
-                onClick={() => setSelectedYear((y) => y - 1)}
-                className="px-3 py-2 bg-white/[0.02] border border-white/10 rounded-lg hover:bg-white/[0.04] transition-colors text-white/70"
-              >
-                ←
-              </button>
-              <span className="px-4 py-2 font-medium text-white">
-                {selectedYear}
-              </span>
-              <button
-                onClick={() => setSelectedYear((y) => y + 1)}
-                className="px-3 py-2 bg-white/[0.02] border border-white/10 rounded-lg hover:bg-white/[0.04] transition-colors text-white/70"
-              >
-                →
-              </button>
-            </div>
+          {/* Tab Navigation */}
+          <div className="flex gap-2 border-b border-white/10">
+            <button
+              onClick={() => setActiveTab('year')}
+              className={clsx(
+                'px-4 py-2 font-medium transition-colors relative',
+                activeTab === 'year'
+                  ? 'text-purple-400'
+                  : 'text-white/60 hover:text-white/80'
+              )}
+            >
+              📊 Year View
+              {activeTab === 'year' && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-purple-400"></div>
+              )}
+            </button>
+            <button
+              onClick={() => setActiveTab('voice')}
+              className={clsx(
+                'px-4 py-2 font-medium transition-colors relative',
+                activeTab === 'voice'
+                  ? 'text-purple-400'
+                  : 'text-white/60 hover:text-white/80'
+              )}
+            >
+              🎤 Voice Journal
+              {activeTab === 'voice' && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-purple-400"></div>
+              )}
+            </button>
+            <button
+              onClick={() => setActiveTab('tags')}
+              className={clsx(
+                'px-4 py-2 font-medium transition-colors relative',
+                activeTab === 'tags'
+                  ? 'text-purple-400'
+                  : 'text-white/60 hover:text-white/80'
+              )}
+            >
+              🏷️ Tags
+              {activeTab === 'tags' && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-purple-400"></div>
+              )}
+            </button>
           </div>
 
-          {/* Dev Tools */}
-          {(entries.length === 0 || categories.length === 0) && (
-            <div className="mt-4 p-4 bg-purple-500/10 border border-purple-500/20 rounded-lg">
-              <p className="text-sm text-purple-300 mb-2">
-                <strong>Dev Mode:</strong> No data found. Want to generate dummy
-                data for testing?
-              </p>
-              <button
-                onClick={handleGenerateDummyData}
-                disabled={generatingDummyData}
-                className="px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50"
-              >
-                {generatingDummyData
-                  ? 'Generating...'
-                  : 'Generate Dummy Data (60 days)'}
-              </button>
-            </div>
+          {/* Year View Controls - Only show on year tab */}
+          {activeTab === 'year' && (
+            <>
+              <div className="flex flex-wrap items-center gap-4 mt-4">
+                <ViewModeToggle mode={viewMode} onChange={setViewMode} />
+
+                {viewMode === 'tags' && (
+                  <CategoryFilter
+                    categories={categories}
+                    selectedCategoryId={selectedCategoryId}
+                    onSelectCategory={setSelectedCategoryId}
+                  />
+                )}
+
+                <div className="ml-auto flex items-center gap-2">
+                  <button
+                    onClick={() => setSelectedYear((y) => y - 1)}
+                    className="px-3 py-2 bg-white/[0.02] border border-white/10 rounded-lg hover:bg-white/[0.04] transition-colors text-white/70"
+                  >
+                    ←
+                  </button>
+                  <span className="px-4 py-2 font-medium text-white">
+                    {selectedYear}
+                  </span>
+                  <button
+                    onClick={() => setSelectedYear((y) => y + 1)}
+                    className="px-3 py-2 bg-white/[0.02] border border-white/10 rounded-lg hover:bg-white/[0.04] transition-colors text-white/70"
+                  >
+                    →
+                  </button>
+                </div>
+              </div>
+
+              {/* Dev Tools */}
+              {(entries.length === 0 || categories.length === 0) && (
+                <div className="mt-4 p-4 bg-purple-500/10 border border-purple-500/20 rounded-lg">
+                  <p className="text-sm text-purple-300 mb-2">
+                    <strong>Dev Mode:</strong> No data found. Want to generate dummy
+                    data for testing?
+                  </p>
+                  <button
+                    onClick={handleGenerateDummyData}
+                    disabled={generatingDummyData}
+                    className="px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50"
+                  >
+                    {generatingDummyData
+                      ? 'Generating...'
+                      : 'Generate Dummy Data (60 days)'}
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </div>
 
-        {/* Year Grid */}
-        <div className="bg-white/[0.02] border border-white/5 rounded-lg p-6">
-          <YearGrid
-            year={selectedYear}
-            startDate={settings.startDate}
-            dayDataMap={dayDataMap}
-            viewMode={viewMode}
-            selectedCategoryId={selectedCategoryId}
-            tags={tags}
-            categories={categories}
-            onDayClick={handleDayClick}
-          />
-        </div>
+        {/* Tab Content */}
+        {activeTab === 'year' && (
+          <>
+            {/* Year Grid */}
+            <div className="bg-white/[0.02] border border-white/5 rounded-lg p-6">
+              <YearGrid
+                year={selectedYear}
+                startDate={settings.startDate}
+                dayDataMap={dayDataMap}
+                viewMode={viewMode}
+                selectedCategoryId={selectedCategoryId}
+                tags={tags}
+                categories={categories}
+                onDayClick={handleDayClick}
+              />
+            </div>
 
-        {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-white/[0.02] border border-white/5 rounded-lg p-6">
-            <div className="text-sm font-medium text-white/40">Total Entries</div>
-            <div className="text-3xl font-bold text-white mt-1">
-              {entries.length}
+            {/* Stats */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="bg-white/[0.02] border border-white/5 rounded-lg p-6">
+                <div className="text-sm font-medium text-white/40">Total Entries</div>
+                <div className="text-3xl font-bold text-white mt-1">
+                  {entries.length}
+                </div>
+              </div>
+              <div className="bg-white/[0.02] border border-white/5 rounded-lg p-6">
+                <div className="text-sm font-medium text-white/40">Tags</div>
+                <div className="text-3xl font-bold text-white mt-1">
+                  {tags.length}
+                </div>
+              </div>
+              <div className="bg-white/[0.02] border border-white/5 rounded-lg p-6">
+                <div className="text-sm font-medium text-white/40">Categories</div>
+                <div className="text-3xl font-bold text-white mt-1">
+                  {categories.length}
+                </div>
+              </div>
             </div>
-          </div>
+          </>
+        )}
+
+        {activeTab === 'voice' && (
           <div className="bg-white/[0.02] border border-white/5 rounded-lg p-6">
-            <div className="text-sm font-medium text-white/40">Tags</div>
-            <div className="text-3xl font-bold text-white mt-1">
-              {tags.length}
-            </div>
+            <VoiceJournalTab
+              currentDate={getTodayDate()}
+              startDate={settings.startDate}
+              currentDayNumber={(() => {
+                const start = new Date(settings.startDate);
+                const current = new Date(getTodayDate());
+                const diffTime = current.getTime() - start.getTime();
+                return Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1;
+              })()}
+              tags={tags}
+              categories={categories}
+              onSave={handleVoiceJournalSave}
+              existingEntry={(() => {
+                const todayEntry = entries.find(e => e.date === getTodayDate());
+                if (!todayEntry) return null;
+                const dayTags = tags.filter(tag => todayEntry.tagIds.includes(tag.id));
+                return {
+                  dayNumber: todayEntry.dayNumber,
+                  date: todayEntry.date,
+                  mood: todayEntry.mood,
+                  tags: dayTags,
+                  diaryContent: todayEntry.diaryContent,
+                  hasEntry: true,
+                };
+              })()}
+            />
           </div>
+        )}
+
+        {activeTab === 'tags' && (
           <div className="bg-white/[0.02] border border-white/5 rounded-lg p-6">
-            <div className="text-sm font-medium text-white/40">Categories</div>
-            <div className="text-3xl font-bold text-white mt-1">
-              {categories.length}
-            </div>
+            <TagManager
+              tags={tags}
+              categories={categories}
+              onCreateTag={handleCreateTag}
+              onDeleteTag={deleteTag}
+              onCreateCategory={handleCreateCategory}
+              onDeleteCategory={deleteCategory}
+              onClose={() => setActiveTab('year')}
+            />
           </div>
-        </div>
+        )}
       </div>
 
       {/* Day Detail Modal */}
@@ -350,51 +428,6 @@ export default function MoodTrackerPage() {
           categories={categories}
           onSave={handleSaveDay}
           onClose={() => setSelectedDay(null)}
-        />
-      )}
-
-      {/* Tag Manager Modal */}
-      {showTagManager && (
-        <TagManager
-          tags={tags}
-          categories={categories}
-          onCreateTag={handleCreateTag}
-          onDeleteTag={deleteTag}
-          onCreateCategory={handleCreateCategory}
-          onDeleteCategory={deleteCategory}
-          onClose={() => setShowTagManager(false)}
-        />
-      )}
-
-      {/* Voice Journal Modal */}
-      {showVoiceJournal && settings?.startDate && (
-        <VoiceJournalModal
-          currentDate={getTodayDate()}
-          startDate={settings.startDate}
-          currentDayNumber={(() => {
-            const start = new Date(settings.startDate);
-            const current = new Date(getTodayDate());
-            const diffTime = current.getTime() - start.getTime();
-            return Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1;
-          })()}
-          tags={tags}
-          categories={categories}
-          onSave={handleVoiceJournalSave}
-          onEdit={handleVoiceJournalEdit}
-          onClose={() => setShowVoiceJournal(false)}
-          existingEntry={(() => {
-            const todayEntry = entries.find(e => e.date === getTodayDate());
-            if (!todayEntry) return null;
-            const dayTags = tags.filter(tag => todayEntry.tagIds.includes(tag.id));
-            return {
-              dayNumber: todayEntry.dayNumber,
-              date: todayEntry.date,
-              mood: todayEntry.mood,
-              tags: dayTags,
-              diaryContent: todayEntry.diaryContent,
-              hasEntry: true,
-            };
-          })()}
         />
       )}
     </div>
