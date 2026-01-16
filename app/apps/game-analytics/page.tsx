@@ -8,9 +8,9 @@ import { useBudget } from './hooks/useBudget';
 import { useGameThumbnails } from './hooks/useGameThumbnails';
 import { GameForm } from './components/GameForm';
 import { PlayLogModal } from './components/PlayLogModal';
-import { AIChatModal } from './components/AIChatModal';
 import { TimelineView } from './components/TimelineView';
 import { StatsView } from './components/StatsView';
+import { AIChatTab } from './components/AIChatTab';
 import { Game, GameStatus, PlayLog } from './lib/types';
 import { gameRepository } from './lib/storage';
 import { BASELINE_GAMES_2025 } from './data/baseline-games';
@@ -20,7 +20,7 @@ import { getROIRating, getWeekStatsForOffset, getGamesPlayedInTimeRange } from '
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist';
-type TabMode = 'games' | 'timeline' | 'stats';
+type TabMode = 'games' | 'timeline' | 'stats' | 'ai-coach';
 
 export default function GameAnalyticsPage() {
   const { user, loading: authLoading } = useAuthContext();
@@ -32,7 +32,6 @@ export default function GameAnalyticsPage() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingGame, setEditingGame] = useState<GameWithMetrics | null>(null);
   const [playLogGame, setPlayLogGame] = useState<GameWithMetrics | null>(null);
-  const [isChatOpen, setIsChatOpen] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('all');
   const [tabMode, setTabMode] = useState<TabMode>('games');
   const [sortBy, setSortBy] = useState<'name' | 'price' | 'hours' | 'rating' | 'costPerHour' | 'dateAdded' | 'recentlyPlayed'>('recentlyPlayed');
@@ -207,16 +206,6 @@ export default function GameAnalyticsPage() {
                   Load Samples
                 </button>
               )}
-              {games.length > 0 && (
-                <button
-                  onClick={() => setIsChatOpen(true)}
-                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600/20 to-pink-600/20 text-purple-300 border border-purple-500/30 rounded-lg hover:from-purple-600/30 hover:to-pink-600/30 hover:border-purple-500/50 transition-all text-sm font-medium"
-                  title="Chat with AI about your gaming stats"
-                >
-                  <MessageCircle size={16} />
-                  AI Coach
-                </button>
-              )}
               <button
                 onClick={() => setIsFormOpen(true)}
                 className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-500 transition-all text-sm font-medium"
@@ -283,6 +272,7 @@ export default function GameAnalyticsPage() {
                 { id: 'games', label: 'Games', icon: <List size={14} /> },
                 { id: 'timeline', label: 'Timeline', icon: <Calendar size={14} /> },
                 { id: 'stats', label: 'Stats', icon: <BarChart3 size={14} /> },
+                { id: 'ai-coach', label: 'AI Coach', icon: <MessageCircle size={14} /> },
               ] as const).map((tab) => (
                 <button
                   key={tab.id}
@@ -596,6 +586,14 @@ export default function GameAnalyticsPage() {
               <p className="text-white/20 text-xs mt-1">Add some games to see analytics</p>
             </div>
           )}
+
+          {tabMode === 'ai-coach' && (
+            <AIChatTab
+              weekData={weekData}
+              monthGames={monthGames}
+              allGames={games}
+            />
+          )}
         </div>
       </div>
 
@@ -617,15 +615,6 @@ export default function GameAnalyticsPage() {
           onClose={() => setPlayLogGame(null)}
         />
       )}
-
-      {/* AI Chat Modal */}
-      <AIChatModal
-        isOpen={isChatOpen}
-        onClose={() => setIsChatOpen(false)}
-        weekData={weekData}
-        monthGames={monthGames}
-        allGames={games}
-      />
     </div>
   );
 }
