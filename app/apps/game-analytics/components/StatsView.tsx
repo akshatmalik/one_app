@@ -1052,12 +1052,14 @@ export function StatsView({ games, summary, budgets = [], onSetBudget }: StatsVi
         </div>
       </div>
 
-      {/* Highlights - Last Month */}
+      {/* Highlights - Last Month (Horizontal Scroll) */}
       {(() => {
         // Calculate last month highlights
         const now = new Date();
         const lastMonthStart = new Date(now);
         lastMonthStart.setDate(lastMonthStart.getDate() - 30);
+        const previousMonthStart = new Date(now);
+        previousMonthStart.setDate(previousMonthStart.getDate() - 60);
 
         // Filter games with play activity in last 30 days
         const lastMonthGames = games.filter(g => {
@@ -1068,7 +1070,16 @@ export function StatsView({ games, summary, budgets = [], onSetBudget }: StatsVi
           const lastMonthHours = g.playLogs!
             .filter(log => new Date(log.date) >= lastMonthStart)
             .reduce((sum, log) => sum + log.hours, 0);
-          return { ...g, lastMonthHours };
+
+          // Calculate hours in previous month (30-60 days ago)
+          const previousMonthHours = g.playLogs!
+            .filter(log => {
+              const logDate = new Date(log.date);
+              return logDate >= previousMonthStart && logDate < lastMonthStart;
+            })
+            .reduce((sum, log) => sum + log.hours, 0);
+
+          return { ...g, lastMonthHours, previousMonthHours };
         }).filter(g => g.lastMonthHours > 0);
 
         // Calculate metrics for last month
@@ -1087,35 +1098,154 @@ export function StatsView({ games, summary, budgets = [], onSetBudget }: StatsVi
           .filter(g => g.rating > 0)
           .sort((a, b) => b.rating - a.rating)[0];
 
-        return (lastMonthBestValue || lastMonthMostPlayed || lastMonthHighestRated) && (
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-            {lastMonthBestValue && (
-              <HighlightCard
-                icon={<Trophy size={16} />}
-                label="Best Value (Last Month)"
-                value={lastMonthBestValue.name}
-                subValue={`$${(lastMonthBestValue.price / lastMonthBestValue.hours).toFixed(2)}/hr`}
-                color="emerald"
-              />
-            )}
-            {lastMonthMostPlayed && (
-              <HighlightCard
-                icon={<Flame size={16} />}
-                label="Most Played (Last Month)"
-                value={lastMonthMostPlayed.name}
-                subValue={`${lastMonthMostPlayed.lastMonthHours.toFixed(1)}h`}
-                color="blue"
-              />
-            )}
-            {lastMonthHighestRated && (
-              <HighlightCard
-                icon={<Star size={16} />}
-                label="Highest Rated (Last Month)"
-                value={lastMonthHighestRated.name}
-                subValue={`${lastMonthHighestRated.rating}/10`}
-                color="yellow"
-              />
-            )}
+        // Total hours and sessions in last month
+        const lastMonthTotalHours = lastMonthGames.reduce((sum, g) => sum + g.lastMonthHours, 0);
+        const lastMonthSessions = lastMonthGames.reduce((sum, g) => {
+          const sessions = g.playLogs!.filter(log => new Date(log.date) >= lastMonthStart).length;
+          return sum + sessions;
+        }, 0);
+        const lastMonthAvgSession = lastMonthSessions > 0 ? lastMonthTotalHours / lastMonthSessions : 0;
+
+        // Most improved game (biggest hour increase)
+        const mostImproved = lastMonthGames
+          .filter(g => g.previousMonthHours > 0)
+          .map(g => ({
+            ...g,
+            improvement: g.lastMonthHours - g.previousMonthHours,
+            improvementPercent: ((g.lastMonthHours - g.previousMonthHours) / g.previousMonthHours) * 100
+          }))
+          .sort((a, b) => b.improvement - a.improvement)[0];
+
+        // Comeback game (played this month after 30+ day break)
+        const comebackGame = lastMonthGames.find(g => {
+          if (!g.playLogs || g.playLogs.length < 2) return false;
+          const sortedLogs = [...g.playLogs].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+          const recentLogs = sortedLogs.filter(log => new Date(log.date) >= lastMonthStart);
+          const olderLogs = sortedLogs.filter(log => new Date(log.date) < lastMonthStart);
+
+          if (recentLogs.length === 0 || olderLogs.length === 0) return false;
+
+          const mostRecentOld = new Date(olderLogs[0].date);
+          const daysSinceLastPlay = Math.floor((lastMonthStart.getTime() - mostRecentOld.getTime()) / (1000 * 60 * 60 * 24));
+          return daysSinceLastPlay >= 30;
+        });
+
+        // Most played genre
+        const genreHours = lastMonthGames.reduce((acc, g) => {
+          if (g.genre) {
+            acc[g.genre] = (acc[g.genre] || 0) + g.lastMonthHours;
+          }
+          return acc;
+        }, {} as Record<string, number>);
+
+        const topGenre = Object.entries(genreHours).sort((a, b) => b[1] - a[1])[0];
+
+        return lastMonthGames.length > 0 && (
+          <div className="space-y-2">
+            <h3 className="text-sm font-medium text-white/50">Last 30 Days</h3>
+            <div className="flex gap-3 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
+              {/* Total Hours */}
+              <div className="shrink-0 w-[160px]">
+                <HighlightCard
+                  icon={<Clock size={16} />}
+                  label="Total Hours"
+                  value={`${lastMonthTotalHours.toFixed(1)}h`}
+                  subValue={`${lastMonthGames.length} games`}
+                  color="blue"
+                />
+              </div>
+
+              {/* Average Session */}
+              {lastMonthAvgSession > 0 && (
+                <div className="shrink-0 w-[160px]">
+                  <HighlightCard
+                    icon={<Activity size={16} />}
+                    label="Avg Session"
+                    value={`${lastMonthAvgSession.toFixed(1)}h`}
+                    subValue={`${lastMonthSessions} sessions`}
+                    color="purple"
+                  />
+                </div>
+              )}
+
+              {/* Most Played */}
+              {lastMonthMostPlayed && (
+                <div className="shrink-0 w-[180px]">
+                  <HighlightCard
+                    icon={<Flame size={16} />}
+                    label="Most Played"
+                    value={lastMonthMostPlayed.name}
+                    subValue={`${lastMonthMostPlayed.lastMonthHours.toFixed(1)}h`}
+                    color="blue"
+                  />
+                </div>
+              )}
+
+              {/* Best Value */}
+              {lastMonthBestValue && (
+                <div className="shrink-0 w-[180px]">
+                  <HighlightCard
+                    icon={<Trophy size={16} />}
+                    label="Best Value"
+                    value={lastMonthBestValue.name}
+                    subValue={`$${(lastMonthBestValue.price / lastMonthBestValue.hours).toFixed(2)}/hr`}
+                    color="emerald"
+                  />
+                </div>
+              )}
+
+              {/* Highest Rated */}
+              {lastMonthHighestRated && (
+                <div className="shrink-0 w-[180px]">
+                  <HighlightCard
+                    icon={<Star size={16} />}
+                    label="Highest Rated"
+                    value={lastMonthHighestRated.name}
+                    subValue={`${lastMonthHighestRated.rating}/10`}
+                    color="yellow"
+                  />
+                </div>
+              )}
+
+              {/* Most Improved */}
+              {mostImproved && mostImproved.improvement > 1 && (
+                <div className="shrink-0 w-[180px]">
+                  <HighlightCard
+                    icon={<TrendingUp size={16} />}
+                    label="Most Improved"
+                    value={mostImproved.name}
+                    subValue={`+${mostImproved.improvement.toFixed(1)}h`}
+                    color="emerald"
+                  />
+                </div>
+              )}
+
+              {/* Comeback Game */}
+              {comebackGame && (
+                <div className="shrink-0 w-[180px]">
+                  <HighlightCard
+                    icon={<Target size={16} />}
+                    label="Comeback"
+                    value={comebackGame.name}
+                    subValue={`${comebackGame.lastMonthHours.toFixed(1)}h`}
+                    color="cyan"
+                  />
+                </div>
+              )}
+
+              {/* Top Genre */}
+              {topGenre && (
+                <div className="shrink-0 w-[160px]">
+                  <HighlightCard
+                    icon={<Gamepad2 size={16} />}
+                    label="Top Genre"
+                    value={topGenre[0]}
+                    subValue={`${topGenre[1].toFixed(1)}h`}
+                    color="purple"
+                  />
+                </div>
+              )}
+            </div>
           </div>
         );
       })()}
@@ -1486,13 +1616,15 @@ function HighlightCard({ icon, label, value, subValue, color }: {
   label: string;
   value: string;
   subValue: string;
-  color: 'emerald' | 'blue' | 'yellow' | 'red';
+  color: 'emerald' | 'blue' | 'yellow' | 'red' | 'purple' | 'cyan';
 }) {
   const colors = {
     emerald: 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400',
     blue: 'bg-blue-500/10 border-blue-500/20 text-blue-400',
     yellow: 'bg-yellow-500/10 border-yellow-500/20 text-yellow-400',
     red: 'bg-red-500/10 border-red-500/20 text-red-400',
+    purple: 'bg-purple-500/10 border-purple-500/20 text-purple-400',
+    cyan: 'bg-cyan-500/10 border-cyan-500/20 text-cyan-400',
   };
 
   return (
