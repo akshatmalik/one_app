@@ -1052,47 +1052,73 @@ export function StatsView({ games, summary, budgets = [], onSetBudget }: StatsVi
         </div>
       </div>
 
-      {/* Highlights */}
-      {(summary.bestValue || summary.mostPlayed || summary.highestRated || summary.bestROI) && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          {summary.bestValue && (
-            <HighlightCard
-              icon={<Trophy size={16} />}
-              label="Best Value"
-              value={summary.bestValue.name}
-              subValue={`$${summary.bestValue.costPerHour.toFixed(2)}/hr`}
-              color="emerald"
-            />
-          )}
-          {summary.worstValue && (
-            <HighlightCard
-              icon={<TrendingDown size={16} />}
-              label="Worst Value"
-              value={summary.worstValue.name}
-              subValue={`$${summary.worstValue.costPerHour.toFixed(2)}/hr`}
-              color="red"
-            />
-          )}
-          {summary.mostPlayed && (
-            <HighlightCard
-              icon={<Flame size={16} />}
-              label="Most Played"
-              value={summary.mostPlayed.name}
-              subValue={`${summary.mostPlayed.hours}h`}
-              color="blue"
-            />
-          )}
-          {summary.highestRated && (
-            <HighlightCard
-              icon={<Star size={16} />}
-              label="Highest Rated"
-              value={summary.highestRated.name}
-              subValue={`${summary.highestRated.rating}/10`}
-              color="yellow"
-            />
-          )}
-        </div>
-      )}
+      {/* Highlights - Last Month */}
+      {(() => {
+        // Calculate last month highlights
+        const now = new Date();
+        const lastMonthStart = new Date(now);
+        lastMonthStart.setDate(lastMonthStart.getDate() - 30);
+
+        // Filter games with play activity in last 30 days
+        const lastMonthGames = games.filter(g => {
+          if (!g.playLogs || g.playLogs.length === 0) return false;
+          return g.playLogs.some(log => new Date(log.date) >= lastMonthStart);
+        }).map(g => {
+          // Calculate hours played in last month
+          const lastMonthHours = g.playLogs!
+            .filter(log => new Date(log.date) >= lastMonthStart)
+            .reduce((sum, log) => sum + log.hours, 0);
+          return { ...g, lastMonthHours };
+        }).filter(g => g.lastMonthHours > 0);
+
+        // Calculate metrics for last month
+        const lastMonthBestValue = lastMonthGames
+          .filter(g => g.status !== 'Wishlist' && g.hours > 0 && g.price > 0)
+          .sort((a, b) => {
+            const aCost = a.price / a.hours;
+            const bCost = b.price / b.hours;
+            return aCost - bCost;
+          })[0];
+
+        const lastMonthMostPlayed = lastMonthGames
+          .sort((a, b) => b.lastMonthHours - a.lastMonthHours)[0];
+
+        const lastMonthHighestRated = lastMonthGames
+          .filter(g => g.rating > 0)
+          .sort((a, b) => b.rating - a.rating)[0];
+
+        return (lastMonthBestValue || lastMonthMostPlayed || lastMonthHighestRated) && (
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            {lastMonthBestValue && (
+              <HighlightCard
+                icon={<Trophy size={16} />}
+                label="Best Value (Last Month)"
+                value={lastMonthBestValue.name}
+                subValue={`$${(lastMonthBestValue.price / lastMonthBestValue.hours).toFixed(2)}/hr`}
+                color="emerald"
+              />
+            )}
+            {lastMonthMostPlayed && (
+              <HighlightCard
+                icon={<Flame size={16} />}
+                label="Most Played (Last Month)"
+                value={lastMonthMostPlayed.name}
+                subValue={`${lastMonthMostPlayed.lastMonthHours.toFixed(1)}h`}
+                color="blue"
+              />
+            )}
+            {lastMonthHighestRated && (
+              <HighlightCard
+                icon={<Star size={16} />}
+                label="Highest Rated (Last Month)"
+                value={lastMonthHighestRated.name}
+                subValue={`${lastMonthHighestRated.rating}/10`}
+                color="yellow"
+              />
+            )}
+          </div>
+        );
+      })()}
 
       {/* Charts Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

@@ -69,7 +69,7 @@ export function WeekInReview({ data, weekOffset, maxWeeksBack, onWeekChange }: W
 
     prefetchBlurbs();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [weekOffset]); // Only re-fetch when week changes, not when data object reference changes
+  }, [weekOffset, data.weekLabel]); // Re-fetch when week changes or when actual week data changes
 
   // Generate week options - including current week
   const weekOptions = [];
