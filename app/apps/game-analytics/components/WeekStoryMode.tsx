@@ -23,21 +23,31 @@ import { GamingHeatmapScreen } from './story-screens/GamingHeatmapScreen';
 import { BestValueScreen } from './story-screens/BestValueScreen';
 import { AIBlurbScreen } from './story-screens/AIBlurbScreen';
 import { MoneyComparisonScreen } from './story-screens/MoneyComparisonScreen';
-import { generateMultipleBlurbs, AIBlurbType } from '../lib/ai-service';
+import { generateMultipleBlurbs, AIBlurbType, AIBlurbResult } from '../lib/ai-service';
 
 interface WeekStoryModeProps {
   data: WeekInReviewData;
   onClose: () => void;
+  prefetchedBlurbs?: Partial<Record<AIBlurbType, AIBlurbResult>>;
+  isLoadingPrefetch?: boolean;
 }
 
-export function WeekStoryMode({ data, onClose }: WeekStoryModeProps) {
+export function WeekStoryMode({ data, onClose, prefetchedBlurbs, isLoadingPrefetch }: WeekStoryModeProps) {
   const [currentScreen, setCurrentScreen] = useState(0);
   const [direction, setDirection] = useState(0);
-  const [aiBlurbs, setAiBlurbs] = useState<Partial<Record<AIBlurbType, string>>>({});
-  const [isLoadingAI, setIsLoadingAI] = useState(true);
+  const [aiBlurbs, setAiBlurbs] = useState<Partial<Record<AIBlurbType, AIBlurbResult>>>(prefetchedBlurbs || {});
+  const [isLoadingAI, setIsLoadingAI] = useState(isLoadingPrefetch ?? true);
 
-  // Generate AI blurbs on mount
+  // Use prefetched blurbs if available, otherwise generate them
   useEffect(() => {
+    // If we already have prefetched blurbs, use them
+    if (prefetchedBlurbs && Object.keys(prefetchedBlurbs).length > 0) {
+      setAiBlurbs(prefetchedBlurbs);
+      setIsLoadingAI(isLoadingPrefetch ?? false);
+      return;
+    }
+
+    // Otherwise, generate blurbs (fallback if prefetch didn't happen)
     const loadAIBlurbs = async () => {
       try {
         // Determine which blurb types to generate based on available data
@@ -45,15 +55,15 @@ export function WeekStoryMode({ data, onClose }: WeekStoryModeProps) {
           'opening-personality',
           'top-game-deep-dive',
           'session-patterns',
-          'gaming-behavior', // Fun behavioral observations
+          'gaming-behavior',
         ];
 
         // Add conditional blurb types
         if (data.gamesPlayed.filter(g => g.daysPlayed > 1).length > 0) {
-          blurbTypes.push('comeback-games'); // Games played multiple days
+          blurbTypes.push('comeback-games');
         }
         if (data.marathonSessions > 0 || data.longestSession) {
-          blurbTypes.push('binge-sessions'); // Marathon gaming
+          blurbTypes.push('binge-sessions');
         }
         if (data.completedGames.length > 0 || data.newGamesStarted.length > 0 || data.milestonesReached.length > 0) {
           blurbTypes.push('achievement-motivation');
@@ -77,7 +87,8 @@ export function WeekStoryMode({ data, onClose }: WeekStoryModeProps) {
     };
 
     loadAIBlurbs();
-  }, [data]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run once on mount - prefetched blurbs are passed as props and set in state initialization
 
   // Define all screens with conditional rendering and AI blurbs
   const screens = [
@@ -85,9 +96,11 @@ export function WeekStoryMode({ data, onClose }: WeekStoryModeProps) {
     // AI: Opening personality insight
     <AIBlurbScreen
       key="ai-opening"
-      blurb={aiBlurbs['opening-personality'] || null}
+      blurb={aiBlurbs['opening-personality']?.text || null}
       type="opening-personality"
       isLoading={isLoadingAI && !aiBlurbs['opening-personality']}
+      error={aiBlurbs['opening-personality']?.error}
+      isFallback={aiBlurbs['opening-personality']?.isFallback}
     />,
     <TotalHoursScreen key="hours" data={data} />,
     data.gamesPlayed.length >= 3 ? <Top3GamesScreen key="top-3" data={data} /> : null,
@@ -96,9 +109,11 @@ export function WeekStoryMode({ data, onClose }: WeekStoryModeProps) {
     data.topGame ? (
       <AIBlurbScreen
         key="ai-top-game"
-        blurb={aiBlurbs['top-game-deep-dive'] || null}
+        blurb={aiBlurbs['top-game-deep-dive']?.text || null}
         type="top-game-deep-dive"
         isLoading={isLoadingAI && !aiBlurbs['top-game-deep-dive']}
+        error={aiBlurbs['top-game-deep-dive']?.error}
+        isFallback={aiBlurbs['top-game-deep-dive']?.isFallback}
       />
     ) : null,
     <DailyBreakdownScreen key="daily" data={data} />,
@@ -107,17 +122,21 @@ export function WeekStoryMode({ data, onClose }: WeekStoryModeProps) {
     // AI: Session patterns analysis
     <AIBlurbScreen
       key="ai-sessions"
-      blurb={aiBlurbs['session-patterns'] || null}
+      blurb={aiBlurbs['session-patterns']?.text || null}
       type="session-patterns"
       isLoading={isLoadingAI && !aiBlurbs['session-patterns']}
+      error={aiBlurbs['session-patterns']?.error}
+      isFallback={aiBlurbs['session-patterns']?.isFallback}
     />,
     // AI: Marathon/binge sessions celebration
     (data.marathonSessions > 0 || data.longestSession) ? (
       <AIBlurbScreen
         key="ai-binge"
-        blurb={aiBlurbs['binge-sessions'] || null}
+        blurb={aiBlurbs['binge-sessions']?.text || null}
         type="binge-sessions"
         isLoading={isLoadingAI && !aiBlurbs['binge-sessions']}
+        error={aiBlurbs['binge-sessions']?.error}
+        isFallback={aiBlurbs['binge-sessions']?.isFallback}
       />
     ) : null,
     data.genresPlayed.length > 0 ? <GenreUniverseScreen key="genres" data={data} /> : null,
@@ -125,18 +144,22 @@ export function WeekStoryMode({ data, onClose }: WeekStoryModeProps) {
     data.genresPlayed.length > 0 ? (
       <AIBlurbScreen
         key="ai-genres"
-        blurb={aiBlurbs['genre-insights'] || null}
+        blurb={aiBlurbs['genre-insights']?.text || null}
         type="genre-insights"
         isLoading={isLoadingAI && !aiBlurbs['genre-insights']}
+        error={aiBlurbs['genre-insights']?.error}
+        isFallback={aiBlurbs['genre-insights']?.isFallback}
       />
     ) : null,
     <GamingPersonalityScreen key="personality" data={data} />,
     // AI: Fun gaming behavior observations
     <AIBlurbScreen
       key="ai-behavior"
-      blurb={aiBlurbs['gaming-behavior'] || null}
+      blurb={aiBlurbs['gaming-behavior']?.text || null}
       type="gaming-behavior"
       isLoading={isLoadingAI && !aiBlurbs['gaming-behavior']}
+      error={aiBlurbs['gaming-behavior']?.error}
+      isFallback={aiBlurbs['gaming-behavior']?.isFallback}
     />,
     (data.completedGames.length > 0 || data.newGamesStarted.length > 0 || data.milestonesReached.length > 0) ?
       <AchievementsScreen key="achievements" data={data} /> : null,
@@ -144,9 +167,11 @@ export function WeekStoryMode({ data, onClose }: WeekStoryModeProps) {
     (data.completedGames.length > 0 || data.newGamesStarted.length > 0 || data.milestonesReached.length > 0) ? (
       <AIBlurbScreen
         key="ai-achievements"
-        blurb={aiBlurbs['achievement-motivation'] || null}
+        blurb={aiBlurbs['achievement-motivation']?.text || null}
         type="achievement-motivation"
         isLoading={isLoadingAI && !aiBlurbs['achievement-motivation']}
+        error={aiBlurbs['achievement-motivation']?.error}
+        isFallback={aiBlurbs['achievement-motivation']?.isFallback}
       />
     ) : null,
     <WeekVibeScreen key="vibe" data={data} />,
@@ -154,9 +179,11 @@ export function WeekStoryMode({ data, onClose }: WeekStoryModeProps) {
     data.gamesPlayed.filter(g => g.daysPlayed > 1).length > 0 ? (
       <AIBlurbScreen
         key="ai-comeback"
-        blurb={aiBlurbs['comeback-games'] || null}
+        blurb={aiBlurbs['comeback-games']?.text || null}
         type="comeback-games"
         isLoading={isLoadingAI && !aiBlurbs['comeback-games']}
+        error={aiBlurbs['comeback-games']?.error}
+        isFallback={aiBlurbs['comeback-games']?.isFallback}
       />
     ) : null,
     <TimeTravelScreen key="time-travel" data={data} />,
@@ -166,9 +193,11 @@ export function WeekStoryMode({ data, onClose }: WeekStoryModeProps) {
     data.gamesPlayed.filter(g => g.game.price > 0).length > 0 ? (
       <AIBlurbScreen
         key="ai-value"
-        blurb={aiBlurbs['value-wisdom'] || null}
+        blurb={aiBlurbs['value-wisdom']?.text || null}
         type="value-wisdom"
         isLoading={isLoadingAI && !aiBlurbs['value-wisdom']}
+        error={aiBlurbs['value-wisdom']?.error}
+        isFallback={aiBlurbs['value-wisdom']?.isFallback}
       />
     ) : null,
     <ComparisonScreen key="comparison" data={data} />,
@@ -177,9 +206,11 @@ export function WeekStoryMode({ data, onClose }: WeekStoryModeProps) {
     // AI: Closing reflection
     <AIBlurbScreen
       key="ai-closing"
-      blurb={aiBlurbs['closing-reflection'] || null}
+      blurb={aiBlurbs['closing-reflection']?.text || null}
       type="closing-reflection"
       isLoading={isLoadingAI && !aiBlurbs['closing-reflection']}
+      error={aiBlurbs['closing-reflection']?.error}
+      isFallback={aiBlurbs['closing-reflection']?.isFallback}
     />,
     <ClosingScreen key="closing" data={data} />,
   ].filter(Boolean); // Remove null screens

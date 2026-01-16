@@ -1,9 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Calendar, Sparkles, ChevronDown } from 'lucide-react';
 import { WeekInReviewData } from '../lib/calculations';
 import { WeekStoryMode } from './WeekStoryMode';
+import { generateMultipleBlurbs, AIBlurbType, AIBlurbResult } from '../lib/ai-service';
 import clsx from 'clsx';
 
 interface WeekInReviewProps {
@@ -16,6 +17,59 @@ interface WeekInReviewProps {
 export function WeekInReview({ data, weekOffset, maxWeeksBack, onWeekChange }: WeekInReviewProps) {
   const [showStory, setShowStory] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [aiBlurbs, setAiBlurbs] = useState<Partial<Record<AIBlurbType, AIBlurbResult>>>({});
+  const [isLoadingAI, setIsLoadingAI] = useState(true);
+
+  // Prefetch AI blurbs as soon as data is available
+  useEffect(() => {
+    // Only prefetch if there's gaming activity
+    if (data.totalHours === 0) {
+      setIsLoadingAI(false);
+      return;
+    }
+
+    const prefetchBlurbs = async () => {
+      try {
+        setIsLoadingAI(true);
+
+        // Determine which blurb types to generate based on available data
+        const blurbTypes: AIBlurbType[] = [
+          'opening-personality',
+          'top-game-deep-dive',
+          'session-patterns',
+          'gaming-behavior',
+        ];
+
+        // Add conditional blurb types
+        if (data.gamesPlayed.filter(g => g.daysPlayed > 1).length > 0) {
+          blurbTypes.push('comeback-games');
+        }
+        if (data.marathonSessions > 0 || data.longestSession) {
+          blurbTypes.push('binge-sessions');
+        }
+        if (data.completedGames.length > 0 || data.newGamesStarted.length > 0 || data.milestonesReached.length > 0) {
+          blurbTypes.push('achievement-motivation');
+        }
+        if (data.genresPlayed.length > 0) {
+          blurbTypes.push('genre-insights');
+        }
+        if (data.gamesPlayed.filter(g => g.game.price > 0).length > 0) {
+          blurbTypes.push('value-wisdom');
+        }
+        blurbTypes.push('closing-reflection');
+
+        const generatedBlurbs = await generateMultipleBlurbs(data, blurbTypes);
+        setAiBlurbs(generatedBlurbs);
+      } catch (error) {
+        console.error('Failed to prefetch AI blurbs:', error);
+      } finally {
+        setIsLoadingAI(false);
+      }
+    };
+
+    prefetchBlurbs();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [weekOffset, data.weekLabel]); // Re-fetch when week changes or when actual week data changes
 
   // Generate week options - including current week
   const weekOptions = [];
@@ -78,7 +132,14 @@ export function WeekInReview({ data, weekOffset, maxWeeksBack, onWeekChange }: W
   return (
     <>
       {/* Story Mode Modal */}
-      {showStory && <WeekStoryMode data={data} onClose={() => setShowStory(false)} />}
+      {showStory && (
+        <WeekStoryMode
+          data={data}
+          onClose={() => setShowStory(false)}
+          prefetchedBlurbs={aiBlurbs}
+          isLoadingPrefetch={isLoadingAI}
+        />
+      )}
 
       <div className="relative overflow-hidden p-6 bg-gradient-to-br from-purple-600/20 via-blue-600/20 to-cyan-600/20 rounded-2xl border border-purple-500/30">
         {/* Background decoration */}

@@ -1,13 +1,15 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Sparkles, Brain, Target, Trophy, Palette, DollarSign, Heart, Loader2, Zap, RotateCcw, Flame } from 'lucide-react';
+import { Sparkles, Brain, Target, Trophy, Palette, DollarSign, Heart, Loader2, Zap, RotateCcw, Flame, AlertCircle } from 'lucide-react';
 import { AIBlurbType } from '../../lib/ai-service';
 
 interface AIBlurbScreenProps {
   blurb: string | null;
   type: AIBlurbType;
   isLoading?: boolean;
+  error?: string;
+  isFallback?: boolean;
 }
 
 // Icon and color mapping for different blurb types
@@ -90,7 +92,7 @@ const blurbConfig: Record<AIBlurbType, {
   },
 };
 
-export function AIBlurbScreen({ blurb, type, isLoading = false }: AIBlurbScreenProps) {
+export function AIBlurbScreen({ blurb, type, isLoading = false, error, isFallback = false }: AIBlurbScreenProps) {
   const config = blurbConfig[type];
   const Icon = config.icon;
 
@@ -169,6 +171,33 @@ export function AIBlurbScreen({ blurb, type, isLoading = false }: AIBlurbScreenP
           <div className="inline-flex items-center gap-2 text-white/30 text-xs">
             <Sparkles size={14} />
             <span>Powered by Gemini AI</span>
+          </div>
+        </motion.div>
+      )}
+
+      {/* Error Display */}
+      {error && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.5, duration: 0.4 }}
+          className="mt-4 p-4 bg-red-500/10 border border-red-500/30 rounded-lg"
+        >
+          <div className="flex items-start gap-3">
+            <AlertCircle size={20} className="text-red-400 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <h4 className="text-red-300 font-semibold text-sm mb-1">
+                {isFallback ? 'AI Generation Failed' : 'Error'}
+              </h4>
+              <p className="text-red-200/80 text-xs leading-relaxed break-words">
+                {error}
+              </p>
+              {isFallback && (
+                <p className="text-red-200/60 text-xs mt-2 italic">
+                  Showing fallback message instead
+                </p>
+              )}
+            </div>
           </div>
         </motion.div>
       )}

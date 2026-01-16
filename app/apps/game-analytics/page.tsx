@@ -11,6 +11,7 @@ import { PlayLogModal } from './components/PlayLogModal';
 import { AIChatModal } from './components/AIChatModal';
 import { TimelineView } from './components/TimelineView';
 import { StatsView } from './components/StatsView';
+import { AIChatTab } from './components/AIChatTab';
 import { Game, GameStatus, PlayLog } from './lib/types';
 import { gameRepository } from './lib/storage';
 import { BASELINE_GAMES_2025 } from './data/baseline-games';
@@ -20,7 +21,7 @@ import { getROIRating, getWeekStatsForOffset, getGamesPlayedInTimeRange } from '
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist';
-type TabMode = 'games' | 'timeline' | 'stats';
+type TabMode = 'games' | 'timeline' | 'stats' | 'ai-coach';
 
 export default function GameAnalyticsPage() {
   const { user, loading: authLoading } = useAuthContext();
@@ -283,6 +284,7 @@ export default function GameAnalyticsPage() {
                 { id: 'games', label: 'Games', icon: <List size={14} /> },
                 { id: 'timeline', label: 'Timeline', icon: <Calendar size={14} /> },
                 { id: 'stats', label: 'Stats', icon: <BarChart3 size={14} /> },
+                { id: 'ai-coach', label: 'AI Coach', icon: <MessageCircle size={14} /> },
               ] as const).map((tab) => (
                 <button
                   key={tab.id}
@@ -595,6 +597,15 @@ export default function GameAnalyticsPage() {
               <p className="text-white/30 text-sm">No stats to display</p>
               <p className="text-white/20 text-xs mt-1">Add some games to see analytics</p>
             </div>
+          )}
+
+          {tabMode === 'ai-coach' && (
+            <AIChatTab
+              weekData={weekData}
+              monthGames={monthGames}
+              allGames={games}
+              onBack={() => setTabMode('games')}
+            />
           )}
         </div>
       </div>
