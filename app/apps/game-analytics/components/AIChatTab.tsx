@@ -1,24 +1,17 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { Send, Sparkles, MessageCircle, Loader2 } from 'lucide-react';
+import { Send, Sparkles, MessageCircle, Loader2, ArrowLeft } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Game } from '../lib/types';
 import { WeekInReviewData } from '../lib/calculations';
 import { generateChatResponse } from '../lib/ai-service';
-import {
-  MainContainer,
-  ChatContainer,
-  MessageList,
-  Message,
-  MessageInput,
-  TypingIndicator,
-} from '@chatscope/chat-ui-kit-react';
-import '@chatscope/chat-ui-kit-styles/dist/default/styles.min.css';
 
 interface AIChatTabProps {
   weekData: WeekInReviewData | null;
   monthGames: Game[];
   allGames: Game[];
+  onBack?: () => void;
 }
 
 interface ChatMessage {
@@ -28,10 +21,12 @@ interface ChatMessage {
   timestamp: Date;
 }
 
-export function AIChatTab({ weekData, monthGames, allGames }: AIChatTabProps) {
+export function AIChatTab({ weekData, monthGames, allGames, onBack }: AIChatTabProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -50,21 +45,27 @@ export function AIChatTab({ weekData, monthGames, allGames }: AIChatTabProps) {
     }
   }, []);
 
-  const handleSend = async (text: string) => {
-    if (!text.trim() || isLoading) return;
+  // Focus input
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+
+  const handleSend = async () => {
+    if (!input.trim() || isLoading) return;
 
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
       role: 'user',
-      content: text.trim(),
+      content: input.trim(),
       timestamp: new Date(),
     };
 
     setMessages(prev => [...prev, userMessage]);
+    setInput('');
     setIsLoading(true);
 
     try {
-      const response = await generateChatResponse(text.trim(), {
+      const response = await generateChatResponse(input.trim(), {
         weekData,
         monthGames,
         allGames,
@@ -93,6 +94,13 @@ export function AIChatTab({ weekData, monthGames, allGames }: AIChatTabProps) {
     }
   };
 
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  };
+
   const suggestedQuestions = [
     "What games should I focus on this week?",
     "How is my gaming balance?",
@@ -102,79 +110,86 @@ export function AIChatTab({ weekData, monthGames, allGames }: AIChatTabProps) {
   ];
 
   return (
-    <div className="h-[calc(100vh-280px)] flex flex-col bg-white/[0.02] rounded-xl border border-white/5 overflow-hidden">
+    <div className="fixed inset-0 z-40 bg-[#0a0a0a] flex flex-col">
       {/* Header */}
-      <div className="flex items-center gap-3 p-4 border-b border-white/10 bg-gradient-to-r from-purple-500/10 to-pink-500/10">
+      <div className="flex items-center gap-3 px-4 py-4 border-b border-white/10 bg-gradient-to-r from-purple-500/10 to-pink-500/10">
+        {onBack && (
+          <button
+            onClick={onBack}
+            className="p-2 rounded-lg hover:bg-white/10 transition-colors"
+            aria-label="Go back"
+          >
+            <ArrowLeft size={20} className="text-white/70" />
+          </button>
+        )}
         <div className="p-2 bg-gradient-to-r from-purple-600/30 to-pink-600/30 rounded-lg">
-          <Sparkles size={20} className="text-purple-400" />
+          <Sparkles size={24} className="text-purple-400" />
         </div>
         <div>
-          <h2 className="text-lg font-bold text-white">AI Gaming Coach</h2>
-          <p className="text-xs text-white/50">Ask me anything about your gaming</p>
+          <h2 className="text-xl font-bold text-white">AI Gaming Coach</h2>
+          <p className="text-sm text-white/50">Ask me anything about your gaming</p>
         </div>
       </div>
 
-      {/* Chat Messages - Using @chatscope/chat-ui-kit-react */}
-      <div className="flex-1 relative" style={{ minHeight: 0 }}>
-        <MainContainer>
-          <ChatContainer>
-            <MessageList
-              typingIndicator={isLoading ? <TypingIndicator content="AI Coach is thinking..." /> : null}
-              style={{
-                backgroundColor: 'transparent',
-              }}
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+        <AnimatePresence>
+          {messages.map((message) => (
+            <motion.div
+              key={message.id}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.2 }}
+              className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
             >
-              {messages.map((msg) => (
-                <Message
-                  key={msg.id}
-                  model={{
-                    message: msg.content,
-                    sentTime: msg.timestamp.toISOString(),
-                    sender: msg.role === 'user' ? 'You' : 'AI Coach',
-                    direction: msg.role === 'user' ? 'outgoing' : 'incoming',
-                    position: 'single',
-                  }}
-                  style={{
-                    marginBottom: '12px',
-                  }}
-                >
-                  {msg.role === 'assistant' && (
-                    <Message.Header>
-                      <div className="flex items-center gap-2">
-                        <MessageCircle size={14} className="text-purple-400" />
-                        <span className="text-xs text-purple-300 font-medium">AI Coach</span>
-                      </div>
-                    </Message.Header>
-                  )}
-                </Message>
-              ))}
-              <div ref={messagesEndRef} />
-            </MessageList>
+              <div
+                className={`max-w-[85%] rounded-2xl px-4 py-3 ${
+                  message.role === 'user'
+                    ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white'
+                    : 'bg-white/10 text-white border border-white/5'
+                }`}
+              >
+                {message.role === 'assistant' && (
+                  <div className="flex items-center gap-2 mb-2">
+                    <MessageCircle size={16} className="text-purple-400" />
+                    <span className="text-xs text-purple-300 font-medium">AI Coach</span>
+                  </div>
+                )}
+                <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.content}</p>
+                <p className="text-xs text-white/30 mt-1">
+                  {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </p>
+              </div>
+            </motion.div>
+          ))}
+        </AnimatePresence>
 
-            <MessageInput
-              placeholder="Ask about your gaming stats, habits, or recommendations..."
-              onSend={handleSend}
-              disabled={isLoading}
-              attachButton={false}
-              style={{
-                borderTop: '1px solid rgba(255, 255, 255, 0.1)',
-                backgroundColor: 'rgba(255, 255, 255, 0.02)',
-              }}
-            />
-          </ChatContainer>
-        </MainContainer>
+        {isLoading && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex justify-start"
+          >
+            <div className="bg-white/10 rounded-2xl px-4 py-3 flex items-center gap-2 border border-white/5">
+              <Loader2 size={16} className="text-purple-400 animate-spin" />
+              <span className="text-sm text-white/70">AI Coach is thinking...</span>
+            </div>
+          </motion.div>
+        )}
+
+        <div ref={messagesEndRef} />
       </div>
 
-      {/* Suggested Questions (show only if minimal messages) */}
+      {/* Suggested Questions */}
       {messages.length <= 1 && !isLoading && (
-        <div className="px-4 py-3 border-t border-white/10 bg-white/[0.01]">
+        <div className="px-4 pb-3">
           <p className="text-xs text-white/40 mb-2">Try asking:</p>
           <div className="flex flex-wrap gap-2">
-            {suggestedQuestions.slice(0, 3).map((question, index) => (
+            {suggestedQuestions.map((question, index) => (
               <button
                 key={index}
-                onClick={() => handleSend(question)}
-                className="text-xs px-3 py-1.5 bg-white/5 hover:bg-white/10 text-white/70 hover:text-white rounded-full transition-colors"
+                onClick={() => setInput(question)}
+                className="text-xs px-3 py-2 bg-white/5 hover:bg-white/10 text-white/70 hover:text-white rounded-full transition-colors border border-white/5"
               >
                 {question}
               </button>
@@ -183,9 +198,30 @@ export function AIChatTab({ weekData, monthGames, allGames }: AIChatTabProps) {
         </div>
       )}
 
-      {/* Helper Text */}
-      <div className="px-4 py-2 border-t border-white/5 bg-white/[0.01]">
-        <p className="text-xs text-white/30 text-center">AI has access to your week & month gaming data</p>
+      {/* Input Area */}
+      <div className="px-4 pb-6 pt-3 border-t border-white/10 bg-[#0a0a0a]">
+        <div className="flex gap-3 items-end">
+          <input
+            ref={inputRef}
+            type="text"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyPress={handleKeyPress}
+            placeholder="Ask about your gaming stats, habits, or recommendations..."
+            className="flex-1 px-5 py-4 bg-white/5 border border-white/10 rounded-2xl text-white text-base placeholder-white/40 focus:outline-none focus:border-purple-500/50 focus:bg-white/10 transition-colors"
+            disabled={isLoading}
+          />
+          <button
+            onClick={handleSend}
+            disabled={!input.trim() || isLoading}
+            className="px-6 py-4 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 disabled:from-gray-600 disabled:to-gray-600 disabled:cursor-not-allowed text-white rounded-2xl transition-all font-medium flex items-center gap-2 shadow-lg disabled:shadow-none"
+          >
+            <Send size={20} />
+          </button>
+        </div>
+        <p className="text-xs text-white/30 mt-3 text-center">
+          Press Enter to send • AI has access to your week & month gaming data
+        </p>
       </div>
     </div>
   );

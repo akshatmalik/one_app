@@ -592,6 +592,7 @@ export default function GameAnalyticsPage() {
               weekData={weekData}
               monthGames={monthGames}
               allGames={games}
+              onBack={() => setTabMode('games')}
             />
           )}
         </div>
