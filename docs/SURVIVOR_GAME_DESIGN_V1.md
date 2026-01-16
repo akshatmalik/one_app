@@ -613,43 +613,514 @@ Example: "You try to fly but... you're human. You stay firmly on the ground. Wha
 
 ---
 
-## Story Structure
+## Story Structure - Event-Driven System
 
-### Act 1: Scavenging (Tutorial)
-**Goal**: Find food, establish core mechanics
+### NOT a Linear Story
 
-**Beats**:
-1. You enter an abandoned house
-2. Learn basic commands (look around, search, move)
-3. Find some supplies
-4. Hear sounds (tension building)
-5. Encounter triggered
+This is **not** Act 1 → Act 2 → Act 3. Instead, the AI watches what you do and triggers appropriate encounters.
 
-### Act 2: The Encounter
-**Goal**: Survive meeting with The Stranger
+**Philosophy**: The Stranger exists in the world. He's watching, evaluating. Your actions determine when and how you meet.
 
-**Beats**:
-1. Stranger appears, armed and suspicious
-2. Interrogation begins
-3. They ask questions, judge your answers
-4. You make choices (truth, lies, negotiation)
-5. They make a decision about you
+### The Stranger - Character Profile
 
-**Possible Outcomes**:
-- They let you go peacefully
-- They let you go but warn you
-- They attack (you must flee or fight)
-- They trust you enough to lower weapon
-- They invite you to their group (future content)
+**Who is he?**
+- Another survivor in this neighborhood
+- Has been here a while, knows the area
+- Cautious, not aggressive
+- **Primary motivation**: Assess if you're a threat
+- **Not recruiting** - just wants to know who's in his territory
+- Will defend himself if threatened
+- Has a group somewhere (not shown yet)
 
-### Act 3: Resolution
-**Goal**: Complete the encounter and set up next episode
+**Personality**:
+- Guarded but not hostile
+- Observant - notices your patterns
+- Fair - gives benefit of doubt if you seem harmless
+- Protective - has people he cares about
+- Suspicious of strangers (it's the apocalypse)
 
-**Endings**:
-- Survive and move on
-- Join their group (Episode 2 setup)
-- Barely escape
-- Game over (death)
+**Decision Framework**:
+```typescript
+The Stranger's Internal Logic:
+- Are they dangerous? (armed, aggressive actions)
+- Are they careless? (loud, not stealthy)
+- Are they reasonable? (respond to questions, make sense)
+- Do they respect boundaries? (leave when asked, don't trespass)
+
+Based on this, he decides:
+1. Ignore you (you're harmless and leaving soon)
+2. Talk to you (need to assess you)
+3. Warn you (you're being problematic)
+4. Threaten you (you're dangerous)
+5. Attack you (clear threat)
+```
+
+### Modular Encounter System
+
+Instead of scripted beats, we have **trigger conditions** that cause encounters.
+
+```typescript
+interface EncounterTrigger {
+  id: string;
+  type: 'stranger_encounter' | 'zombie_threat' | 'discovery';
+  conditions: TriggerCondition[];
+  probability: number;  // 0-1, increases over time
+  cooldown: number;     // Turns before can trigger again
+  hasTriggered: boolean;
+}
+
+interface TriggerCondition {
+  type: 'player_behavior' | 'location' | 'time' | 'world_state';
+  check: () => boolean;
+}
+
+// Example triggers for The Stranger
+const strangerTriggers: EncounterTrigger[] = [
+  {
+    id: 'stranger_knock',
+    type: 'stranger_encounter',
+    conditions: [
+      { type: 'location', check: () => player.location.includes('house') },
+      { type: 'time', check: () => player.turnsInLocation > 5 },
+      { type: 'player_behavior', check: () => !player.isBeingStealthy }
+    ],
+    probability: 0.3,  // 30% chance after conditions met
+    cooldown: 10
+  },
+
+  {
+    id: 'stranger_street_stop',
+    type: 'stranger_encounter',
+    conditions: [
+      { type: 'location', check: () => player.location === 'street' },
+      { type: 'player_behavior', check: () => player.movementCount > 3 },
+      { type: 'world_state', check: () => !player.wasStealthy }
+    ],
+    probability: 0.5,
+    cooldown: 10
+  },
+
+  {
+    id: 'stranger_peek_window',
+    type: 'stranger_encounter',
+    conditions: [
+      { type: 'player_behavior', check: () => player.ignoredKnock },
+      { type: 'world_state', check: () => house.windowsOpen },
+      { type: 'player_behavior', check: () => !player.isHiding }
+    ],
+    probability: 0.8,  // Very likely if conditions met
+    cooldown: 5
+  }
+];
+```
+
+### Dynamic Encounter Scenarios
+
+#### Scenario 1: The Knock
+
+**Conditions**:
+- You've been in a house for 5+ turns
+- You made noise (searching, moving around)
+- Windows are visible from outside OR you turned on lights
+
+**What happens**:
+```
+[SYSTEM checks: Should Stranger appear? → YES]
+
+NARRATION: "You hear footsteps outside. They stop at the front door.
+A moment of silence. Then... knock knock knock."
+
+[AI generates Stranger's approach based on player behavior]
+
+STRANGER: "I know someone's in there. I'm not here to hurt you.
+Just want to talk."
+
+PLAYER OPTIONS (free text or):
+- [Answer the door]
+- [Stay silent]
+- [Hide]
+- [Prepare weapon]
+- [Try to escape through back]
+```
+
+**If player stays silent**:
+```
+[AI decides what Stranger does next based on clues]
+
+IF windows_open AND player_not_hiding:
+  STRANGER tries to peek inside
+
+IF player_made_recent_noise:
+  STRANGER: "I heard you moving around. Come on, don't make this
+  difficult."
+
+IF player_stays_silent_long_enough:
+  STRANGER: "Fine. But I'm watching this place. If you're trouble,
+  we'll have problems." [Leaves for now]
+```
+
+**If player answers**:
+```
+[Conversation begins - AI generates dialogue]
+
+STRANGER appears: "Mid-30s, weathered face, holding a crowbar
+loosely. Not pointing it at you, but ready."
+
+STRANGER: "Who are you and how long you planning to stay?"
+
+[Player's response affects trust/suspicion]
+```
+
+#### Scenario 2: Car Encounter
+
+**Conditions**:
+- Player found a working car (rare)
+- Player is driving through area
+- Not being stealthy (engine noise)
+- Stranger has noticed player before
+
+**What happens**:
+```
+NARRATION: "You're driving down the empty street when a figure
+steps out in front of you. It's a man, hands raised. He's blocking
+your path."
+
+STRANGER: "Stop! I need to talk to you!"
+
+PLAYER OPTIONS:
+- [Stop the car]
+- [Slow down and talk through window]
+- [Drive around him]
+- [Speed up and run him over]
+- [Reverse and go another way]
+```
+
+**If player stops**:
+```
+STRANGER approaches cautiously: "You've been moving through here
+a lot. Who are you with?"
+
+[Conversation continues]
+```
+
+**If player tries to run him over**:
+```
+[AI decides outcome based on Stranger's reflexes, player's driving skill]
+
+POSSIBLE OUTCOMES:
+1. He dives out of the way (survives, now hostile)
+2. You hit him but he's injured, not dead (consequences later)
+3. You kill him (his group will remember this)
+
+IF he survives:
+  STRANGER: "You just made a big mistake!" [Retreats, marks player as hostile]
+
+  [Later encounter triggered: His group comes looking for you]
+```
+
+#### Scenario 3: Trying to Leave Quietly
+
+**Conditions**:
+- Player is trying to be stealthy
+- Moving carefully, staying quiet
+- Checking surroundings
+
+**What happens**:
+```
+[AI checks: Does Stranger notice player? Lower probability if stealthy]
+
+IF player_very_stealthy:
+  [No encounter - Stranger doesn't notice you]
+
+IF player_moderately_stealthy:
+  [Chance encounter]
+  NARRATION: "As you move carefully down the alley, you hear a voice:
+  'You're pretty good at staying quiet. But not good enough.'"
+
+  STRANGER appears, not aggressive: "Don't worry, I'm not going to
+  hurt you. You seem smart - staying quiet, being careful. That's
+  good. Just wanted to say hi."
+```
+
+#### Scenario 4: Aggressive Player
+
+**Conditions**:
+- Player attacked Stranger or was clearly hostile
+- OR player tried to kill him but failed
+
+**What happens**:
+```
+[Stranger's response based on threat level]
+
+IF player_attacked_but_stranger_escaped:
+  [Future encounter - more cautious]
+
+  STRANGER appears with backup: "Two others with him, armed"
+
+  STRANGER: "You tried to kill me. That was stupid. We've been
+  watching you. Time to leave our area. Now."
+
+  PLAYER OPTIONS:
+  - [Leave peacefully]
+  - [Try to fight 3 people] (probably die)
+  - [Negotiate]
+```
+
+### AI Decision Engine
+
+The AI makes real-time decisions about Stranger's behavior:
+
+```typescript
+async function getStrangerAction(
+  playerBehavior: PlayerBehavior,
+  encounterContext: EncounterContext
+): Promise<StrangerAction> {
+
+  const prompt = `
+You are playing The Stranger, a cautious survivor.
+
+PLAYER BEHAVIOR SUMMARY:
+- Actions taken: ${playerBehavior.recentActions.join(', ')}
+- Threat level: ${calculateThreatLevel(playerBehavior)} / 10
+- Stealth level: ${playerBehavior.stealthScore} / 10
+- Has weapon visible: ${playerBehavior.hasWeapon}
+- Answered questions honestly: ${playerBehavior.beenHonest}
+
+STRANGER'S KNOWLEDGE:
+- First time meeting: ${!encounterContext.hasMet}
+- Previous interaction: ${encounterContext.lastInteraction}
+- Current trust: ${encounterContext.trust} / 100
+- Current suspicion: ${encounterContext.suspicion} / 100
+
+SITUATION:
+${encounterContext.currentSituation}
+
+Based on this, what does The Stranger do?
+- What does he say?
+- What's his body language?
+- Does he escalate or de-escalate?
+- What does he want from this interaction?
+
+Your response should be realistic and consistent with a cautious but
+fair person trying to survive.
+
+Return JSON:
+{
+  "dialogue": "What he says",
+  "action": "approach|stay_back|leave|threaten|attack",
+  "bodyLanguage": "Description of how he holds himself",
+  "intent": "What he's trying to accomplish",
+  "trustChange": -10 to +10,
+  "suspicionChange": -10 to +10
+}
+`;
+
+  const result = await model.generateContent(prompt);
+  return JSON.parse(result.response.text());
+}
+```
+
+### Modular Code Architecture
+
+To make this all work without hardcoding:
+
+```typescript
+// lib/encounter-engine.ts
+
+export class EncounterEngine {
+  private triggers: EncounterTrigger[] = [];
+  private activeEncounter: Encounter | null = null;
+
+  // Register possible encounters
+  registerTrigger(trigger: EncounterTrigger) {
+    this.triggers.push(trigger);
+  }
+
+  // Check if any encounters should trigger
+  checkTriggers(gameState: GameState): EncounterTrigger | null {
+    const eligibleTriggers = this.triggers.filter(t =>
+      !t.hasTriggered &&
+      t.conditions.every(c => c.check()) &&
+      Math.random() < t.probability
+    );
+
+    if (eligibleTriggers.length > 0) {
+      // Return highest priority trigger
+      return eligibleTriggers[0];
+    }
+
+    return null;
+  }
+
+  // Generate encounter from trigger
+  async generateEncounter(
+    trigger: EncounterTrigger,
+    gameState: GameState
+  ): Promise<Encounter> {
+    // Call AI to generate the encounter
+    const encounterData = await generateEncounterFromTrigger(trigger, gameState);
+
+    this.activeEncounter = {
+      id: generateId(),
+      type: trigger.type,
+      npc: encounterData.npc,
+      situation: encounterData.situation,
+      possibleActions: encounterData.actions,
+      isActive: true
+    };
+
+    return this.activeEncounter;
+  }
+
+  // Process player action during encounter
+  async processAction(
+    action: string,
+    gameState: GameState
+  ): Promise<EncounterOutcome> {
+    if (!this.activeEncounter) return;
+
+    // AI decides what happens based on action
+    const outcome = await getStrangerResponse(
+      action,
+      this.activeEncounter,
+      gameState
+    );
+
+    // Update encounter state
+    if (outcome.encounterEnds) {
+      this.activeEncounter.isActive = false;
+      this.activeEncounter = null;
+    }
+
+    return outcome;
+  }
+}
+
+// Usage in game loop
+const encounterEngine = new EncounterEngine();
+
+// Register all possible encounters (modular!)
+encounterEngine.registerTrigger(strangerKnockTrigger);
+encounterEngine.registerTrigger(strangerStreetTrigger);
+encounterEngine.registerTrigger(strangerPeekTrigger);
+encounterEngine.registerTrigger(strangerCarStopTrigger);
+
+// Every turn, check if encounter should happen
+function processTurn(command: string) {
+  // Normal command processing...
+
+  // Check for encounters
+  const trigger = encounterEngine.checkTriggers(gameState);
+
+  if (trigger) {
+    const encounter = await encounterEngine.generateEncounter(trigger, gameState);
+    // Present encounter to player
+  }
+}
+```
+
+### Player Behavior Tracking
+
+Track patterns to inform AI decisions:
+
+```typescript
+interface PlayerBehavior {
+  // Movement patterns
+  movementCount: number;
+  isBeingStealthy: boolean;
+  stealthScore: number;  // 0-10, based on actions
+
+  // Interaction history
+  hasAnsweredQuestions: boolean;
+  wasHonest: boolean;
+  wasAggressive: boolean;
+
+  // Visibility
+  ignoredKnock: boolean;
+  hasWeaponVisible: boolean;
+  madeNoise: boolean;
+
+  // Location behavior
+  turnsInLocation: number;
+  locationsVisited: string[];
+
+  // Threat assessment
+  threatenedNPC: boolean;
+  attackedNPC: boolean;
+  killedNPC: boolean;
+}
+
+// Update behavior based on commands
+function updateBehavior(command: string, gameState: GameState) {
+  const lower = command.toLowerCase();
+
+  if (lower.includes('quietly') || lower.includes('sneak')) {
+    gameState.playerBehavior.stealthScore += 1;
+    gameState.playerBehavior.isBeingStealthy = true;
+  }
+
+  if (lower.includes('run') || lower.includes('loud')) {
+    gameState.playerBehavior.stealthScore -= 1;
+    gameState.playerBehavior.isBeingStealthy = false;
+    gameState.playerBehavior.madeNoise = true;
+  }
+
+  if (lower.includes('attack') || lower.includes('kill')) {
+    gameState.playerBehavior.wasAggressive = true;
+  }
+
+  // This data feeds into AI decision making
+}
+```
+
+### Consequences & Memory
+
+The Stranger remembers:
+
+```typescript
+interface StrangerMemory {
+  hasMet: boolean;
+  firstMeetingDay: number;
+  lastInteraction: string;
+
+  // Relationship
+  trustLevel: number;      // 0-100
+  suspicionLevel: number;  // 0-100
+  markedAsHostile: boolean;
+
+  // Facts remembered
+  playerName?: string;
+  playerClaims: string[];  // What you said
+  playerActions: string[];  // What you did
+  contradictions: string[]; // If you lied
+
+  // Emotional state
+  currentMood: 'neutral' | 'suspicious' | 'friendly' | 'hostile';
+
+  // Future flags
+  wantsRevenge: boolean;
+  willWarnGroup: boolean;
+  considersPotentialAlly: boolean;
+}
+
+// AI uses this context in every interaction
+async function generateStrangerDialogue(
+  memory: StrangerMemory,
+  currentSituation: string
+): Promise<string> {
+  const prompt = `
+The Stranger has the following memory of the player:
+${JSON.stringify(memory, null, 2)}
+
+Current situation: ${currentSituation}
+
+Based on his memory, what does he say? Reference past interactions
+if relevant. Be consistent with his personality and past behavior.
+`;
+
+  // AI generates contextually appropriate dialogue
+}
+```
 
 ---
 
