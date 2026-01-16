@@ -82,13 +82,6 @@ export default function LastLightPage() {
 
   return (
     <div className="h-screen flex flex-col bg-gray-950">
-      {/* Title bar */}
-      <div className="bg-gray-900 text-white px-6 py-3">
-        <div className="max-w-3xl mx-auto">
-          <h1 className="text-lg font-semibold">Last Light</h1>
-        </div>
-      </div>
-
       {/* Status bar */}
       <StatusBar gameState={gameState} />
 

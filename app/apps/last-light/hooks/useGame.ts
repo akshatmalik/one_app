@@ -58,8 +58,13 @@ export function useGame(userId: string) {
       try {
         setProcessing(true);
 
-        // Add player input to story
-        addStoryEntry({
+        // Build new story entries
+        const newEntries: StoryEntry[] = [];
+
+        // Add player input
+        newEntries.push({
+          id: uuidv4(),
+          timestamp: new Date().toISOString(),
           type: 'player',
           content: command,
         });
@@ -67,9 +72,22 @@ export function useGame(userId: string) {
         // Validate command
         const validation = validateCommand(command);
         if (!validation.isValid) {
-          addStoryEntry({
+          newEntries.push({
+            id: uuidv4(),
+            timestamp: new Date().toISOString(),
             type: 'system',
             content: validation.reason || 'Invalid command.',
+          });
+
+          // Update state with validation error
+          setGameState((prev) => {
+            if (!prev) return null;
+            const updated = {
+              ...prev,
+              storyLog: [...prev.storyLog, ...newEntries],
+            };
+            gameRepository.updateGame(prev.id, { storyLog: updated.storyLog });
+            return updated;
           });
           return;
         }
@@ -103,7 +121,9 @@ export function useGame(userId: string) {
 
         // Add narration to story
         if (response.narration) {
-          addStoryEntry({
+          newEntries.push({
+            id: uuidv4(),
+            timestamp: new Date().toISOString(),
             type: 'narration',
             content: response.narration,
           });
@@ -111,25 +131,25 @@ export function useGame(userId: string) {
 
         // Add NPC dialogue if present
         if (response.npcDialogue) {
-          addStoryEntry({
+          newEntries.push({
+            id: uuidv4(),
+            timestamp: new Date().toISOString(),
             type: 'npc',
             content: response.npcDialogue,
             speaker: 'Stranger',
           });
         }
 
-        // Update game state
+        // Update game state with all changes
         const updates: Partial<GameState> = {
+          storyLog: [...gameState.storyLog, ...newEntries],
           ...response.stateChanges,
           playerBehavior: updatedBehavior,
         };
 
         // Apply hunger/energy changes
         if (!response.stateChanges.hunger && !response.stateChanges.energy) {
-          updates.hunger = Math.min(
-            100,
-            (gameState.hunger || 0) + 2
-          );
+          updates.hunger = Math.min(100, (gameState.hunger || 0) + 2);
           updates.energy = Math.max(0, (gameState.energy || 100) - 5);
         }
 
@@ -141,15 +161,24 @@ export function useGame(userId: string) {
         setGameState(updatedGame);
       } catch (error) {
         console.error('Failed to process command:', error);
-        addStoryEntry({
-          type: 'system',
-          content: 'Something went wrong. Try again.',
+        setGameState((prev) => {
+          if (!prev) return null;
+          const errorEntry: StoryEntry = {
+            id: uuidv4(),
+            timestamp: new Date().toISOString(),
+            type: 'system',
+            content: 'Something went wrong. Try again.',
+          };
+          return {
+            ...prev,
+            storyLog: [...prev.storyLog, errorEntry],
+          };
         });
       } finally {
         setProcessing(false);
       }
     },
-    [gameState, processing, addStoryEntry]
+    [gameState, processing]
   );
 
   return {
