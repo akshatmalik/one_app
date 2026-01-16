@@ -55,6 +55,7 @@ export function useVoiceRecognition(): VoiceRecognitionState & VoiceRecognitionC
     console.log('[VoiceRecognition] Starting recognition...');
     SpeechRecognition.startListening({
       continuous: true,
+      interimResults: true,
       language: 'en-US',
     });
   }, [isSupported, listening]);
