@@ -51,10 +51,10 @@ export default function LastLightPage() {
 
   if (loading || !gameState) {
     return (
-      <div className="h-screen flex items-center justify-center bg-gray-50">
+      <div className="h-screen flex items-center justify-center bg-gray-950">
         <div className="text-center">
           <div className="text-2xl mb-2">🧟</div>
-          <p className="text-sm text-gray-600">Loading...</p>
+          <p className="text-sm text-gray-400">Loading...</p>
         </div>
       </div>
     );
@@ -62,11 +62,11 @@ export default function LastLightPage() {
 
   if (gameState.status === 'game-over') {
     return (
-      <div className="h-screen flex items-center justify-center bg-gray-50">
+      <div className="h-screen flex items-center justify-center bg-gray-950">
         <div className="text-center max-w-md p-8">
           <div className="text-4xl mb-4">💀</div>
-          <h2 className="text-xl font-semibold mb-2">Game Over</h2>
-          <p className="text-gray-600 mb-6">
+          <h2 className="text-xl font-semibold text-gray-200 mb-2">Game Over</h2>
+          <p className="text-gray-400 mb-6">
             {gameState.deathReason || 'You died.'}
           </p>
           <button
@@ -81,7 +81,7 @@ export default function LastLightPage() {
   }
 
   return (
-    <div className="h-screen flex flex-col bg-gray-50">
+    <div className="h-screen flex flex-col bg-gray-950">
       {/* Title bar */}
       <div className="bg-gray-900 text-white px-6 py-3">
         <div className="max-w-3xl mx-auto">

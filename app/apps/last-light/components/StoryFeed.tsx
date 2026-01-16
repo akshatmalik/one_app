@@ -32,7 +32,7 @@ function StoryMessage({ entry }: { entry: StoryEntry }) {
   if (entry.type === 'narration') {
     return (
       <div className="py-2">
-        <p className="text-gray-700 leading-relaxed text-sm">
+        <p className="text-gray-300 leading-relaxed text-sm">
           {entry.content}
         </p>
       </div>
@@ -43,8 +43,8 @@ function StoryMessage({ entry }: { entry: StoryEntry }) {
   if (entry.type === 'player') {
     return (
       <div className="py-2 pl-8">
-        <p className="text-blue-600 text-sm font-mono">
-          <span className="text-blue-400 mr-2">&gt;</span>
+        <p className="text-blue-400 text-sm font-mono">
+          <span className="text-blue-500 mr-2">&gt;</span>
           {entry.content}
         </p>
       </div>
@@ -54,14 +54,14 @@ function StoryMessage({ entry }: { entry: StoryEntry }) {
   // NPC dialogue
   if (entry.type === 'npc') {
     return (
-      <div className="py-3 px-4 bg-amber-50 border-l-2 border-amber-400 rounded-r">
+      <div className="py-3 px-4 bg-amber-900/20 border-l-2 border-amber-500 rounded-r">
         <div className="flex items-start gap-2">
           <span className="text-lg">👤</span>
           <div>
-            <p className="text-xs font-semibold text-amber-900 mb-1">
+            <p className="text-xs font-semibold text-amber-400 mb-1">
               {entry.speaker || 'Unknown'}
             </p>
-            <p className="text-gray-700 text-sm leading-relaxed">
+            <p className="text-gray-300 text-sm leading-relaxed">
               {entry.content}
             </p>
           </div>
@@ -74,7 +74,7 @@ function StoryMessage({ entry }: { entry: StoryEntry }) {
   if (entry.type === 'system') {
     return (
       <div className="py-2">
-        <p className="text-green-600 text-xs italic">{entry.content}</p>
+        <p className="text-green-400 text-xs italic">{entry.content}</p>
       </div>
     );
   }
