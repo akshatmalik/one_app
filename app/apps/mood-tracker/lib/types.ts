@@ -87,3 +87,26 @@ export interface DayData {
   diaryContent: string;
   hasEntry: boolean;
 }
+
+// Voice Journal types
+export interface InterpretedData {
+  targetDate: string;           // ISO date string
+  dayNumber: number;            // Calculated day number
+  mood: number | null;          // 1-5 or null if not mentioned
+  existingTagIds: string[];     // Matched to existing tags
+  suggestedNewTags: Array<{     // New tags to create
+    name: string;
+    emoji: string;
+    categoryId: string;
+  }>;
+  diaryContent: string;         // Full transcript
+  timestamp: string;            // Time of recording (HH:MM AM/PM)
+  confidence: 'high' | 'medium' | 'low';
+  ambiguities: string[];        // Things AI wasn't sure about
+}
+
+export interface VoiceJournalEntry {
+  timestamp: string;            // "2:30 PM"
+  content: string;              // Transcript
+  addedVia: 'voice';           // Marker for voice entries
+}
