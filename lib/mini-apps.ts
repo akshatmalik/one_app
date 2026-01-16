@@ -41,6 +41,16 @@ export const MINI_APPS: MiniApp[] = [
     tags: ['wellness', 'journaling'],
     isNew: true,
   },
+  {
+    id: 'last-light',
+    name: 'Last Light',
+    description: 'AI-powered text adventure survival game with dynamic storytelling',
+    icon: '🧟',
+    path: '/apps/last-light',
+    color: '#1F2937',
+    tags: ['game', 'story', 'ai'],
+    isNew: true,
+  },
 ];
 
 export function getMiniAppById(id: string): MiniApp | undefined {
