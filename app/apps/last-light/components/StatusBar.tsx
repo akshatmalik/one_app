@@ -8,10 +8,10 @@ interface StatusBarProps {
 
 export function StatusBar({ gameState }: StatusBarProps) {
   return (
-    <div className="border-b border-gray-700 bg-gray-800 px-6 py-3">
-      <div className="max-w-3xl mx-auto flex items-center justify-between text-xs text-gray-300">
-        <div className="flex items-center gap-6">
-          <div>
+    <div className="border-b border-gray-700 bg-gray-800 px-4 py-2">
+      <div className="flex items-center justify-between text-xs text-gray-300">
+        <div className="flex items-center gap-3 md:gap-6">
+          <div className="hidden sm:block">
             <span className="font-medium text-gray-200">{gameState.currentLocation}</span>
           </div>
           <div className="flex items-center gap-1">
@@ -27,8 +27,8 @@ export function StatusBar({ gameState }: StatusBarProps) {
             <span>{gameState.energy}</span>
           </div>
         </div>
-        <div className="text-gray-500">
-          Day {gameState.day} • {gameState.timeOfDay}
+        <div className="text-gray-500 text-xs">
+          D{gameState.day}
         </div>
       </div>
     </div>

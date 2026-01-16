@@ -29,16 +29,16 @@ export function InputArea({ onCommand, disabled }: InputAreaProps) {
   };
 
   return (
-    <div className="border-t border-gray-700 bg-gray-800 px-6 py-4">
-      <div className="max-w-3xl mx-auto space-y-3">
+    <div className="border-t border-gray-700 bg-gray-800 px-3 py-2 md:px-6 md:py-4">
+      <div className="max-w-3xl mx-auto space-y-2 md:space-y-3">
         {/* Quick actions */}
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-1.5 md:gap-2">
           {QUICK_ACTIONS.map((action) => (
             <button
               key={action}
               onClick={() => handleQuickAction(action)}
               disabled={disabled}
-              className="px-3 py-1 text-xs text-gray-300 border border-gray-600 rounded hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="px-2 py-1 md:px-3 text-xs text-gray-300 border border-gray-600 rounded hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               {action}
             </button>
@@ -54,12 +54,12 @@ export function InputArea({ onCommand, disabled }: InputAreaProps) {
             onKeyDown={handleKeyDown}
             disabled={disabled}
             placeholder="What do you do?"
-            className="flex-1 px-4 py-2 text-sm bg-gray-900 text-gray-200 placeholder-gray-500 border border-gray-700 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-800"
+            className="flex-1 px-3 py-2 md:px-4 text-sm bg-gray-900 text-gray-200 placeholder-gray-500 border border-gray-700 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-800"
           />
           <button
             onClick={handleSubmit}
             disabled={disabled || !input.trim()}
-            className="px-6 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-700 disabled:text-gray-500 disabled:cursor-not-allowed transition-colors"
+            className="px-4 py-2 md:px-6 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-700 disabled:text-gray-500 disabled:cursor-not-allowed transition-colors"
           >
             Enter
           </button>

@@ -81,7 +81,7 @@ export default function LastLightPage() {
   }
 
   return (
-    <div className="h-screen flex flex-col bg-gray-950">
+    <div className="fixed inset-0 flex flex-col bg-gray-950">
       {/* Status bar */}
       <StatusBar gameState={gameState} />
 

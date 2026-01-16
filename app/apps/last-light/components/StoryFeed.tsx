@@ -16,8 +16,8 @@ export function StoryFeed({ entries }: StoryFeedProps) {
   }, [entries]);
 
   return (
-    <div className="flex-1 overflow-y-auto px-6 py-8">
-      <div className="max-w-3xl mx-auto space-y-6">
+    <div className="flex-1 overflow-y-auto px-4 py-4 md:px-6 md:py-8">
+      <div className="max-w-3xl mx-auto space-y-4 md:space-y-6">
         {entries.map((entry) => (
           <StoryMessage key={entry.id} entry={entry} />
         ))}
