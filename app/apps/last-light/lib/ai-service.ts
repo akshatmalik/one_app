@@ -1,273 +1,161 @@
+'use client';
+
+import { getAI, getGenerativeModel, GoogleAIBackend } from 'firebase/ai';
+import { initializeApp, getApps } from 'firebase/app';
 import { GameState, GameResponse } from './types';
 
-// More flexible AI service - responds to a wider variety of commands
+const firebaseConfig = {
+  apiKey: "AIzaSyBS3IVvszDrm_zjjXu8TATgs1H-FlegHtM",
+  authDomain: "oneapp-943e3.firebaseapp.com",
+  projectId: "oneapp-943e3",
+  storageBucket: "oneapp-943e3.firebasestorage.app",
+  messagingSenderId: "1052736128978",
+  appId: "1:1052736128978:web:9d42b47c6a343eac35aa0b",
+};
+
+// Initialize AI service
+function getAIModel() {
+  const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
+  const ai = getAI(app, { backend: new GoogleAIBackend() });
+  return getGenerativeModel(ai, { model: "gemini-2.5-flash" });
+}
+
+// AI-powered game response - interprets ANY command naturally
 export async function generateGameResponse(
   command: string,
   gameState: GameState
 ): Promise<GameResponse> {
-  const lower = command.toLowerCase();
+  const model = getAIModel();
 
-  // Look around / examine
-  if (
-    lower.includes('look') ||
-    lower.includes('around') ||
-    lower.includes('examine')
-  ) {
+  // Build comprehensive prompt with game state context
+  const prompt = buildGamePrompt(command, gameState);
+
+  try {
+    const result = await model.generateContent(prompt);
+    const text = result.response.text();
+
+    // Parse AI response as JSON
+    const response = parseAIResponse(text);
+    return response;
+  } catch (error) {
+    console.error('AI generation error:', error);
+
+    // Fallback to simple response if AI fails
     return {
-      narration:
-        "You're in the living room. Dust covers everything. A couch sits against the wall. Through an open doorway, you can see the kitchen. There's a staircase leading up.",
+      narration: "You pause for a moment, considering your next move. The silence is heavy around you.",
       stateChanges: {},
     };
   }
-
-  // Search commands
-  if (lower.includes('search') || lower.includes('check')) {
-    if (lower.includes('kitchen') || lower.includes('pantry')) {
-      return {
-        narration:
-          'You search the kitchen carefully. Most cabinets are empty. But the pantry in the corner might have something...',
-        stateChanges: {},
-      };
-    }
-    return {
-      narration:
-        'You search the area. Most things have been picked over, but you might find something if you look in specific places.',
-      stateChanges: {},
-    };
-  }
-
-  // Movement commands
-  if (
-    lower.includes('go') ||
-    lower.includes('move') ||
-    lower.includes('enter') ||
-    lower.includes('walk')
-  ) {
-    if (lower.includes('kitchen')) {
-      return {
-        narration:
-          'You walk into the kitchen. Cabinets hang open. The fridge is empty and smells terrible. A pantry door is visible in the corner.',
-        stateChanges: {
-          currentLocation: 'Kitchen',
-        },
-      };
-    }
-    if (lower.includes('upstairs') || lower.includes('up')) {
-      return {
-        narration:
-          'You climb the creaking stairs. At the top, there are two bedrooms and a bathroom. Everything is covered in dust.',
-        stateChanges: {
-          currentLocation: 'Upstairs',
-        },
-      };
-    }
-    if (lower.includes('outside') || lower.includes('out')) {
-      return {
-        narration:
-          'You step outside carefully. The street is eerily quiet. Houses line both sides, their windows dark and empty. You could explore the neighboring houses, or stay here.',
-        stateChanges: {
-          currentLocation: 'Outside',
-        },
-      };
-    }
-    return {
-      narration:
-        'Where do you want to go? Try being more specific. (kitchen, upstairs, outside, etc.)',
-      stateChanges: {},
-    };
-  }
-
-  // Inventory
-  if (lower.includes('inventory') || lower.includes('items')) {
-    const items =
-      gameState.inventory.length > 0
-        ? gameState.inventory.map((i) => i.name).join(', ')
-        : 'nothing';
-    return {
-      narration: `You check your pockets. You have: ${items}`,
-      stateChanges: {},
-    };
-  }
-
-  // Listen
-  if (lower.includes('listen') || lower.includes('hear')) {
-    return {
-      narration:
-        'You stop and listen carefully. Silence. No wind, no birds, no distant cars. Just... nothing. The quiet is unsettling.',
-      stateChanges: {},
-    };
-  }
-
-  // Wait / rest
-  if (
-    lower.includes('wait') ||
-    lower.includes('rest') ||
-    lower.includes('sit')
-  ) {
-    return {
-      narration:
-        'You take a moment to rest. Your breathing steadies. The house remains quiet around you.',
-      stateChanges: {
-        energy: Math.min(100, (gameState.energy || 100) + 10),
-      },
-    };
-  }
-
-  // Hide
-  if (lower.includes('hide')) {
-    return {
-      narration:
-        'You crouch behind the couch, staying as still and quiet as possible. Your heart pounds in your chest.',
-      stateChanges: {},
-    };
-  }
-
-  // Actions with items - smoking, eating, drinking
-  if (lower.includes('smoke') || lower.includes('cigarette')) {
-    if (gameState.inventory.some((i) => i.name.toLowerCase().includes('cigarette'))) {
-      return {
-        narration:
-          'You light a cigarette with shaking hands. The familiar ritual is calming, even now. Smoke curls up toward the ceiling.',
-        stateChanges: {
-          energy: Math.min(100, (gameState.energy || 100) + 5),
-        },
-      };
-    }
-    return {
-      narration:
-        "You pat your pockets looking for cigarettes, but you don't have any. Probably for the best - the smoke could attract attention.",
-      stateChanges: {},
-    };
-  }
-
-  // Eat / drink
-  if (lower.includes('eat') || lower.includes('drink')) {
-    const hasFood = gameState.inventory.some(
-      (i) => i.type === 'food' || i.type === 'water'
-    );
-    if (hasFood) {
-      return {
-        narration:
-          "You eat some of your supplies. It's not much, but it helps.",
-        stateChanges: {
-          hunger: Math.max(0, (gameState.hunger || 50) - 20),
-        },
-      };
-    }
-    return {
-      narration:
-        "You don't have any food or water. You need to find supplies soon.",
-      stateChanges: {},
-    };
-  }
-
-  // Break / smash / force
-  if (
-    lower.includes('break') ||
-    lower.includes('smash') ||
-    lower.includes('force')
-  ) {
-    return {
-      narration:
-        "You could try, but making loud noises might not be a good idea. You don't know what's out there.",
-      stateChanges: {},
-    };
-  }
-
-  // Call out / shout / yell
-  if (
-    lower.includes('shout') ||
-    lower.includes('yell') ||
-    lower.includes('call') ||
-    lower.includes('hello')
-  ) {
-    return {
-      narration:
-        'You call out tentatively. Your voice sounds too loud in the silence. No response. Part of you is relieved.',
-      stateChanges: {},
-    };
-  }
-
-  // Open / close doors/windows
-  if (lower.includes('open') || lower.includes('close')) {
-    return {
-      narration:
-        'You could try opening or closing specific things. What are you trying to open or close?',
-      stateChanges: {},
-    };
-  }
-
-  // Take / grab / pick up
-  if (
-    lower.includes('take') ||
-    lower.includes('grab') ||
-    lower.includes('pick')
-  ) {
-    return {
-      narration:
-        'What are you trying to take? Try searching specific places first.',
-      stateChanges: {},
-    };
-  }
-
-  // Think / remember / recall
-  if (
-    lower.includes('think') ||
-    lower.includes('remember') ||
-    lower.includes('recall')
-  ) {
-    return {
-      narration:
-        'You try to remember how you got here... but it\'s all fuzzy. You remember waking up on the floor. Before that? Nothing. What happened to the world?',
-      stateChanges: {},
-    };
-  }
-
-  // Default - acknowledge the attempt but guide the player
-  return {
-    narration:
-      'You consider that action. Maybe try something more specific, or try a different approach. You can look around, search, move to different rooms, or interact with your surroundings.',
-    stateChanges: {},
-  };
 }
 
-// Validate command against guardrails
+// Build the AI prompt with game master instructions and context
+function buildGamePrompt(command: string, gameState: GameState): string {
+  const inventoryList = gameState.inventory.length > 0
+    ? gameState.inventory.map(i => `${i.name} (${i.type})`).join(', ')
+    : 'nothing';
+
+  const visitedLocations = gameState.visitedLocations.join(', ') || 'none yet';
+
+  return `You are the Game Master for "Last Light", a text-based zombie apocalypse survival game.
+
+WORLD SETTING:
+- Post-apocalyptic world overrun by zombies
+- Realistic, grounded survival horror (The Walking Dead style)
+- No magic, sci-fi technology, or supernatural powers
+- Player is a lone survivor with only human abilities
+
+CURRENT GAME STATE:
+- Location: ${gameState.currentLocation}
+- Health: ${gameState.health}/100
+- Hunger: ${gameState.hunger}/100 (higher = more hungry)
+- Energy: ${gameState.energy}/100
+- Inventory: ${inventoryList}
+- Day: ${gameState.day}, ${gameState.timeOfDay}
+- Visited locations: ${visitedLocations}
+
+PLAYER COMMAND: "${command}"
+
+YOUR TASK:
+1. Interpret the player's command naturally - accept ANY reasonable action
+2. Generate atmospheric, immersive narration (2-4 sentences)
+3. Update game state if needed (health, hunger, energy, location, inventory)
+4. Keep tone dark, tense, and realistic
+
+RULES & GUARDRAILS:
+- NO magic, spells, or supernatural abilities
+- NO sci-fi tech (lasers, robots, aliens, spaceships)
+- NO superhuman actions (flying, teleportation, super strength)
+- NO self-harm or suicide commands
+- Actions consume energy (moving, searching, fighting = -5 to -15 energy)
+- Passage of time increases hunger (+5 to +10 per action)
+- Resting restores energy (+10 to +20)
+- Eating restores hunger (-20 to -40)
+- Finding items requires searching specific locations
+- Moving changes currentLocation
+- Keep narration focused on atmosphere and survival tension
+
+RESPONSE FORMAT (JSON):
+{
+  "narration": "The story text describing what happens",
+  "stateChanges": {
+    "health": 95,
+    "hunger": 55,
+    "energy": 85,
+    "currentLocation": "Kitchen",
+    "inventory": [{"id": "item1", "name": "Canned Beans", "type": "food", "description": "A can of beans"}]
+  }
+}
+
+IMPORTANT:
+- Only include fields in stateChanges that actually change
+- If nothing changes, use empty object: "stateChanges": {}
+- Inventory changes should ADD to existing items, not replace
+- Be creative and atmospheric with narration
+- Accept creative player actions (smoking, hiding, listening, thinking, etc.)
+
+Generate the JSON response now:`;
+}
+
+// Parse AI response text into GameResponse object
+function parseAIResponse(text: string): GameResponse {
+  try {
+    // Try to extract JSON from markdown code blocks if present
+    const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/) ||
+                     text.match(/```\s*([\s\S]*?)\s*```/) ||
+                     [null, text];
+
+    const jsonText = jsonMatch[1] || text;
+    const parsed = JSON.parse(jsonText.trim());
+
+    return {
+      narration: parsed.narration || "You pause, uncertain of what to do next.",
+      stateChanges: parsed.stateChanges || {},
+    };
+  } catch (error) {
+    console.error('Failed to parse AI response:', error);
+    console.error('Raw response:', text);
+
+    // Fallback: treat entire response as narration
+    return {
+      narration: text.trim() || "Something went wrong. The world feels unstable.",
+      stateChanges: {},
+    };
+  }
+}
+
+// Simple validation - let AI handle most interpretation
 export function validateCommand(command: string): {
   isValid: boolean;
   reason?: string;
 } {
-  const lower = command.toLowerCase();
-
-  // Block self-harm
-  if (
-    lower.includes('kill myself') ||
-    lower.includes('suicide') ||
-    lower.includes('end my life')
-  ) {
+  // Only block empty commands
+  if (!command.trim()) {
     return {
       isValid: false,
-      reason: "You can't do that. If you want to end the game, use the menu.",
+      reason: "What do you want to do?",
     };
   }
 
-  // Block genre-breaking
-  const fantasyKeywords = ['magic', 'spell', 'wizard', 'dragon'];
-  const scifiKeywords = ['alien', 'spaceship', 'laser', 'robot'];
-
-  if ([...fantasyKeywords, ...scifiKeywords].some((kw) => lower.includes(kw))) {
-    return {
-      isValid: false,
-      reason: "That doesn't exist in this world...",
-    };
-  }
-
-  // Block superhuman actions
-  if (lower.includes('fly') || lower.includes('teleport')) {
-    return {
-      isValid: false,
-      reason: "You can't do that - you're only human.",
-    };
-  }
-
+  // Let AI handle the rest - it has guardrails built into the prompt
   return { isValid: true };
 }
