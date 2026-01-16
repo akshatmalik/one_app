@@ -79,7 +79,7 @@ export function useVoiceJournal({
   /**
    * Start voice recording
    */
-  const startRecording = useCallback(() => {
+  const startRecording = useCallback(async () => {
     console.log('[VoiceJournal] Starting recording, clearing previous errors');
 
     // Detect browser
@@ -97,7 +97,7 @@ export function useVoiceJournal({
       `[${new Date().toLocaleTimeString()}] 🎤 Voice recording requested`,
       `[${new Date().toLocaleTimeString()}] 📱 Browser: ${browserName}`,
       `[${new Date().toLocaleTimeString()}] 🔒 Secure context (HTTPS): ${isSecure ? '✅ YES' : '❌ NO'}`,
-      `[${new Date().toLocaleTimeString()}] 🔊 Microphone permission: checking...`,
+      `[${new Date().toLocaleTimeString()}] 🔊 Requesting microphone permission...`,
     ];
 
     // Add Safari-specific warning
@@ -110,7 +110,15 @@ export function useVoiceJournal({
     setError(null);
     setInterpretation(null);
     setIsProcessing(false);
-    voiceRecognition.startListening();
+
+    try {
+      await voiceRecognition.startListening();
+      setAiLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ✅ Microphone permission granted, recording started`]);
+    } catch (err) {
+      const errorMsg = (err as Error).message || 'Failed to start recording';
+      setError(errorMsg);
+      setAiLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ❌ ${errorMsg}`]);
+    }
   }, [voiceRecognition]);
 
   /**
