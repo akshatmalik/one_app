@@ -11,6 +11,7 @@ import { CategoryFilter } from './components/CategoryFilter';
 import { TagManager } from './components/TagManager';
 import { ErrorDisplay } from './components/ErrorDisplay';
 import { VoiceJournalModal } from './components/VoiceJournalModal';
+import { ChatDiaryTab } from './components/ChatDiaryTab';
 import { createDummyData } from './data/dummy-data';
 
 export default function MoodTrackerPage() {
@@ -39,6 +40,7 @@ export default function MoodTrackerPage() {
   const [showTagManager, setShowTagManager] = useState(false);
   const [showVoiceJournal, setShowVoiceJournal] = useState(false);
   const [generatingDummyData, setGeneratingDummyData] = useState(false);
+  const [activeTab, setActiveTab] = useState<'calendar' | 'chat'>('calendar');
 
   // Create a map for quick day data lookup
   const dayDataMap = useMemo(() => {
@@ -254,36 +256,62 @@ export default function MoodTrackerPage() {
 
           <ErrorDisplay error={error} />
 
-          {/* Controls */}
-          <div className="flex flex-wrap items-center gap-4">
-            <ViewModeToggle mode={viewMode} onChange={setViewMode} />
-
-            {viewMode === 'tags' && (
-              <CategoryFilter
-                categories={categories}
-                selectedCategoryId={selectedCategoryId}
-                onSelectCategory={setSelectedCategoryId}
-              />
-            )}
-
-            <div className="ml-auto flex items-center gap-2">
-              <button
-                onClick={() => setSelectedYear((y) => y - 1)}
-                className="px-3 py-2 bg-white/[0.02] border border-white/10 rounded-lg hover:bg-white/[0.04] transition-colors text-white/70"
-              >
-                ←
-              </button>
-              <span className="px-4 py-2 font-medium text-white">
-                {selectedYear}
-              </span>
-              <button
-                onClick={() => setSelectedYear((y) => y + 1)}
-                className="px-3 py-2 bg-white/[0.02] border border-white/10 rounded-lg hover:bg-white/[0.04] transition-colors text-white/70"
-              >
-                →
-              </button>
-            </div>
+          {/* Main Tabs */}
+          <div className="flex gap-2 mb-4">
+            <button
+              onClick={() => setActiveTab('calendar')}
+              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                activeTab === 'calendar'
+                  ? 'bg-purple-600 text-white'
+                  : 'bg-white/[0.02] border border-white/10 text-white/70 hover:bg-white/[0.04]'
+              }`}
+            >
+              📅 Calendar View
+            </button>
+            <button
+              onClick={() => setActiveTab('chat')}
+              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                activeTab === 'chat'
+                  ? 'bg-purple-600 text-white'
+                  : 'bg-white/[0.02] border border-white/10 text-white/70 hover:bg-white/[0.04]'
+              }`}
+            >
+              💬 Chat Diary
+            </button>
           </div>
+
+          {/* Controls - Only show for calendar view */}
+          {activeTab === 'calendar' && (
+            <div className="flex flex-wrap items-center gap-4">
+              <ViewModeToggle mode={viewMode} onChange={setViewMode} />
+
+              {viewMode === 'tags' && (
+                <CategoryFilter
+                  categories={categories}
+                  selectedCategoryId={selectedCategoryId}
+                  onSelectCategory={setSelectedCategoryId}
+                />
+              )}
+
+              <div className="ml-auto flex items-center gap-2">
+                <button
+                  onClick={() => setSelectedYear((y) => y - 1)}
+                  className="px-3 py-2 bg-white/[0.02] border border-white/10 rounded-lg hover:bg-white/[0.04] transition-colors text-white/70"
+                >
+                  ←
+                </button>
+                <span className="px-4 py-2 font-medium text-white">
+                  {selectedYear}
+                </span>
+                <button
+                  onClick={() => setSelectedYear((y) => y + 1)}
+                  className="px-3 py-2 bg-white/[0.02] border border-white/10 rounded-lg hover:bg-white/[0.04] transition-colors text-white/70"
+                >
+                  →
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Dev Tools */}
           {(entries.length === 0 || categories.length === 0) && (
@@ -305,9 +333,12 @@ export default function MoodTrackerPage() {
           )}
         </div>
 
-        {/* Year Grid */}
-        <div className="bg-white/[0.02] border border-white/5 rounded-lg p-6">
-          <YearGrid
+        {/* Content - conditional based on active tab */}
+        {activeTab === 'calendar' ? (
+          <>
+            {/* Year Grid */}
+            <div className="bg-white/[0.02] border border-white/5 rounded-lg p-6">
+              <YearGrid
             year={selectedYear}
             startDate={settings.startDate}
             dayDataMap={dayDataMap}
@@ -319,27 +350,61 @@ export default function MoodTrackerPage() {
           />
         </div>
 
-        {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-white/[0.02] border border-white/5 rounded-lg p-6">
-            <div className="text-sm font-medium text-white/40">Total Entries</div>
-            <div className="text-3xl font-bold text-white mt-1">
-              {entries.length}
+            {/* Stats */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="bg-white/[0.02] border border-white/5 rounded-lg p-6">
+                <div className="text-sm font-medium text-white/40">Total Entries</div>
+                <div className="text-3xl font-bold text-white mt-1">
+                  {entries.length}
+                </div>
+              </div>
+              <div className="bg-white/[0.02] border border-white/5 rounded-lg p-6">
+                <div className="text-sm font-medium text-white/40">Tags</div>
+                <div className="text-3xl font-bold text-white mt-1">
+                  {tags.length}
+                </div>
+              </div>
+              <div className="bg-white/[0.02] border border-white/5 rounded-lg p-6">
+                <div className="text-sm font-medium text-white/40">Categories</div>
+                <div className="text-3xl font-bold text-white mt-1">
+                  {categories.length}
+                </div>
+              </div>
             </div>
-          </div>
-          <div className="bg-white/[0.02] border border-white/5 rounded-lg p-6">
-            <div className="text-sm font-medium text-white/40">Tags</div>
-            <div className="text-3xl font-bold text-white mt-1">
-              {tags.length}
-            </div>
-          </div>
-          <div className="bg-white/[0.02] border border-white/5 rounded-lg p-6">
-            <div className="text-sm font-medium text-white/40">Categories</div>
-            <div className="text-3xl font-bold text-white mt-1">
-              {categories.length}
-            </div>
-          </div>
-        </div>
+          </>
+        ) : (
+          /* Chat Diary Tab */
+          <ChatDiaryTab
+            currentDate={getTodayDate()}
+            dayNumber={(() => {
+              const start = new Date(settings.startDate);
+              const current = new Date(getTodayDate());
+              const diffTime = current.getTime() - start.getTime();
+              return Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1;
+            })()}
+            availableTags={tags}
+            availableCategories={categories}
+            existingEntry={(() => {
+              const todayEntry = entries.find(e => e.date === getTodayDate());
+              return todayEntry || null;
+            })()}
+            onSave={async (mood, tagIds, diaryContent) => {
+              const today = getTodayDate();
+              const todayEntry = entries.find(e => e.date === today);
+              const start = new Date(settings.startDate);
+              const current = new Date(today);
+              const diffTime = current.getTime() - start.getTime();
+              const dayNumber = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1;
+
+              if (todayEntry) {
+                await updateEntry(todayEntry.id, { mood, tagIds, diaryContent });
+              } else {
+                await createEntry({ dayNumber, date: today, mood, tagIds, diaryContent });
+              }
+              await refreshAll();
+            }}
+          />
+        )}
       </div>
 
       {/* Day Detail Modal */}
