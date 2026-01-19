@@ -11,7 +11,7 @@ import {
 import { Tag, Category, DayEntry } from '../lib/types';
 import { getCurrentTimestamp } from '../lib/voice-utils';
 
-const BATCH_DELAY_MS = 2 * 60 * 1000; // 2 minutes
+const BATCH_DELAY_MS = 5 * 60 * 1000; // 5 minutes - increased to reduce save frequency
 
 export interface ChatSession {
   sessionId: string;
@@ -76,7 +76,7 @@ export function useChatDiary({
       const greeting: ChatMessage = {
         time: getCurrentTimestamp(),
         sender: 'ai',
-        text: "Hey! How's your day going? Tell me what you've been up to 😊",
+        text: "Hey! How's your day going?",
       };
       setMessages([greeting]);
       sessionStartTimeRef.current = greeting.time;
