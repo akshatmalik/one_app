@@ -122,64 +122,93 @@ export function useChatDiary({
    * Send user message and get AI response
    */
   const sendMessage = useCallback(async (text: string) => {
+    console.log('[useChatDiary] ===== SEND MESSAGE CALLED =====');
+    console.log('[useChatDiary] User text:', text);
+
     const userMessage: ChatMessage = {
       time: getCurrentTimestamp(),
       sender: 'user',
       text: text.trim(),
     };
 
-    setMessages(prev => [...prev, userMessage]);
+    // Add user message
+    console.log('[useChatDiary] Adding user message to state');
+    setMessages(prev => {
+      console.log('[useChatDiary] Current messages before adding user:', prev.length);
+      return [...prev, userMessage];
+    });
+
     setLastMessageTime(Date.now());
     setHasUnsavedMessages(true);
     setIsAIThinking(true);
     setError(null);
 
     try {
-      // Get AI response
-      console.log('[useChatDiary] Calling getChatResponse with', messages.length, 'messages in history');
-      console.log('[useChatDiary] User message being sent:', text);
+      // Get current messages for context using a ref to avoid stale closure
+      let chatHistory: ChatMessage[] = [];
+      setMessages(prev => {
+        chatHistory = prev;
+        return prev; // Don't modify, just read
+      });
 
-      const result = await getChatResponse(text, messages, {
+      console.log('[useChatDiary] Chat history length:', chatHistory.length);
+      console.log('[useChatDiary] Calling AI with history of', chatHistory.length, 'messages');
+
+      const result = await getChatResponse(text, chatHistory, {
         currentDate,
         dayNumber,
         availableTags,
         currentMood: existingEntry?.mood || null,
       });
 
-      console.log('[useChatDiary] getChatResponse returned, hasData:', !!result.data, 'hasError:', !!result.error);
+      console.log('[useChatDiary] ===== AI RESPONSE RECEIVED =====');
+      console.log('[useChatDiary] Has data:', !!result.data);
+      console.log('[useChatDiary] Has error:', !!result.error);
+      console.log('[useChatDiary] Response text:', result.data?.substring(0, 100));
 
       setLogs(result.logs);
 
       if (result.error) {
+        console.log('[useChatDiary] Setting error:', result.error);
         setError(result.error);
       }
 
-      console.log('[useChatDiary] Got AI result:', { hasData: !!result.data, isMounted: isMountedRef.current, data: result.data?.substring(0, 50) });
-
-      if (result.data && isMountedRef.current) {
+      if (result.data) {
+        console.log('[useChatDiary] ===== ADDING AI MESSAGE =====');
         const aiMessage: ChatMessage = {
           time: getCurrentTimestamp(),
           sender: 'ai',
           text: result.data,
         };
-        console.log('[useChatDiary] Adding AI message:', aiMessage);
+
+        console.log('[useChatDiary] AI message object:', { time: aiMessage.time, sender: aiMessage.sender, textLength: aiMessage.text.length });
+
         setMessages(prev => {
-          console.log('[useChatDiary] Previous messages count:', prev.length);
+          console.log('[useChatDiary] Messages BEFORE adding AI:', prev.length);
+          console.log('[useChatDiary] Last 2 messages:', prev.slice(-2).map(m => ({ sender: m.sender, text: m.text.substring(0, 20) })));
+
           const updated = [...prev, aiMessage];
-          console.log('[useChatDiary] Updated messages count:', updated.length);
+
+          console.log('[useChatDiary] Messages AFTER adding AI:', updated.length);
+          console.log('[useChatDiary] Last 2 messages now:', updated.slice(-2).map(m => ({ sender: m.sender, text: m.text.substring(0, 20) })));
+
           return updated;
         });
-        console.log('[useChatDiary] AI message added successfully');
+
+        console.log('[useChatDiary] ===== AI MESSAGE ADDED TO STATE =====');
       } else {
-        console.log('[useChatDiary] NOT adding AI message - hasData:', !!result.data, 'isMounted:', isMountedRef.current);
+        console.log('[useChatDiary] ===== NOT ADDING AI MESSAGE =====');
+        console.log('[useChatDiary] Reason: result.data is', result.data);
       }
     } catch (err) {
-      console.error('[ChatDiary] Error sending message:', err);
+      console.error('[useChatDiary] ===== ERROR IN SEND MESSAGE =====');
+      console.error('[ChatDiary] Error:', err);
       setError(`Failed to get AI response: ${(err as Error).message}`);
     } finally {
+      console.log('[useChatDiary] ===== SEND MESSAGE COMPLETE =====');
       setIsAIThinking(false);
     }
-  }, [messages, currentDate, dayNumber, availableTags, existingEntry]);
+  }, [currentDate, dayNumber, availableTags, existingEntry]); // Removed 'messages' from deps!
 
   /**
    * Batch save all messages
