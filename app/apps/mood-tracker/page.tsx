@@ -12,8 +12,10 @@ import { TagManager } from './components/TagManager';
 import { ErrorDisplay } from './components/ErrorDisplay';
 import { VoiceJournalModal } from './components/VoiceJournalModal';
 import { createDummyData } from './data/dummy-data';
+import { useRouter } from 'next/navigation';
 
 export default function MoodTrackerPage() {
+  const router = useRouter();
   const {
     entries,
     tags,
@@ -284,6 +286,18 @@ export default function MoodTrackerPage() {
               </button>
             </div>
           </div>
+
+          {/* Chat Diary Button - Opens full screen chat */}
+          <button
+            onClick={() => router.push('/apps/mood-tracker/chat')}
+            className="w-full px-6 py-4 bg-gradient-to-r from-purple-600 to-purple-700 text-white font-medium rounded-lg hover:from-purple-700 hover:to-purple-800 transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-3"
+          >
+            <span className="text-2xl">💬</span>
+            <div className="text-left">
+              <div className="font-bold">Chat Diary</div>
+              <div className="text-xs text-purple-200">Talk about your day with AI</div>
+            </div>
+          </button>
 
           {/* Dev Tools */}
           {(entries.length === 0 || categories.length === 0) && (

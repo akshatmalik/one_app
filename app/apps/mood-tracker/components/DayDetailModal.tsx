@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { DayData, Tag, Category } from '../lib/types';
 import { formatDate } from '../lib/utils';
 import { MoodRatingSelector } from './MoodRatingSelector';
 import { TagSelector } from './TagSelector';
 import { DiaryEditor } from './DiaryEditor';
+import { ChatSession } from '../hooks/useChatDiary';
 import clsx from 'clsx';
 
 interface DayDetailModalProps {
@@ -30,6 +31,22 @@ export function DayDetailModal({
   const [diaryContent, setDiaryContent] = useState<string>(dayData.diaryContent);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'summary' | 'edit'>('summary');
+
+  // Parse chat sessions if diary content is in chat format
+  const chatSessions = useMemo<ChatSession[] | null>(() => {
+    if (!dayData.diaryContent) return null;
+
+    try {
+      const parsed = JSON.parse(dayData.diaryContent);
+      if (parsed.version === 'chat-v1' && Array.isArray(parsed.sessions)) {
+        return parsed.sessions;
+      }
+    } catch (e) {
+      // Not chat format, that's fine
+    }
+    return null;
+  }, [dayData.diaryContent]);
 
   // Reset state when dayData changes
   useEffect(() => {
@@ -105,7 +122,45 @@ export function DayDetailModal({
             onToggleTag={handleToggleTag}
           />
 
-          <DiaryEditor content={diaryContent} onChange={setDiaryContent} />
+          {/* Diary Section */}
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-medium text-white/70">Diary</h3>
+              {chatSessions && chatSessions.length > 0 && (
+                <button
+                  onClick={() => setViewMode(prev => prev === 'summary' ? 'edit' : 'summary')}
+                  className="text-xs px-3 py-1 bg-white/[0.02] border border-white/10 text-white/70 rounded hover:bg-white/[0.04] transition-colors"
+                >
+                  {viewMode === 'summary' ? '✏️ Edit Raw' : '📝 View Summaries'}
+                </button>
+              )}
+            </div>
+
+            {chatSessions && viewMode === 'summary' ? (
+              /* Show chat summaries */
+              <div className="space-y-4">
+                {chatSessions.map((session, idx) => (
+                  <div
+                    key={session.sessionId}
+                    className="bg-white/[0.02] border border-white/10 rounded-lg p-4"
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs text-white/40">
+                        {session.startTime} - {session.endTime}
+                      </span>
+                      <span className="text-xs text-white/40">Session {idx + 1}</span>
+                    </div>
+                    <p className="text-white/90 leading-relaxed whitespace-pre-wrap">
+                      {session.summary}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              /* Show editor for manual editing */
+              <DiaryEditor content={diaryContent} onChange={setDiaryContent} />
+            )}
+          </div>
         </div>
 
         {/* Footer */}
