@@ -69,6 +69,8 @@ export function useChatDiary({
   const batchTimerRef = useRef<NodeJS.Timeout | null>(null);
   const isMountedRef = useRef(true);
   const sessionStartTimeRef = useRef<string | null>(null);
+  const batchSaveRef = useRef<(() => Promise<void>) | null>(null);
+  const hasUnsavedRef = useRef(false);
 
   // Initialize with greeting
   useEffect(() => {
@@ -92,10 +94,10 @@ export function useChatDiary({
       clearTimeout(batchTimerRef.current);
     }
 
-    // Set new timer for 2 minutes
+    // Set new timer for 5 minutes
     batchTimerRef.current = setTimeout(() => {
       if (hasUnsavedMessages) {
-        console.log('[ChatDiary] 2 minutes passed, triggering batch save');
+        console.log('[ChatDiary] 5 minutes passed, triggering batch save');
         batchSave();
       }
     }, BATCH_DELAY_MS);
@@ -107,16 +109,24 @@ export function useChatDiary({
     };
   }, [lastMessageTime, hasUnsavedMessages]);
 
+  // Keep refs up to date
+  useEffect(() => {
+    hasUnsavedRef.current = hasUnsavedMessages;
+  }, [hasUnsavedMessages]);
+
   // Save on unmount if there are unsaved messages
   useEffect(() => {
     return () => {
       isMountedRef.current = false;
-      if (hasUnsavedMessages && messages.length > 1) {
+      // Use refs to get current values without triggering re-runs
+      if (hasUnsavedRef.current && messages.length > 1 && batchSaveRef.current) {
         console.log('[ChatDiary] Component unmounting, saving unsaved messages');
-        batchSave();
+        batchSaveRef.current();
       }
     };
-  }, [hasUnsavedMessages, messages]);
+    // Empty deps - cleanup only runs on actual unmount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /**
    * Send user message and get AI response
@@ -293,6 +303,11 @@ export function useChatDiary({
       setIsSaving(false);
     }
   }, [messages, currentDate, dayNumber, availableTags, availableCategories, existingEntry, onSave, isSaving]);
+
+  // Update ref when batchSave changes
+  useEffect(() => {
+    batchSaveRef.current = batchSave;
+  }, [batchSave]);
 
   /**
    * Force save (manual trigger)
