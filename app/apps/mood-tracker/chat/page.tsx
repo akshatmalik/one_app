@@ -87,7 +87,7 @@ export default function ChatDiaryPage() {
   };
 
   return (
-    <div className="fixed inset-0 top-0 bg-[#0a0a0a] flex flex-col" style={{ height: '100dvh', paddingTop: 0 }}>
+    <div className="fixed inset-0 bg-[#0a0a0a] flex flex-col" style={{ height: '100dvh', zIndex: 9999 }}>
       <style jsx>{`
         @keyframes fadeIn {
           from {
@@ -104,7 +104,7 @@ export default function ChatDiaryPage() {
         }
       `}</style>
       {/* Top Bar - WhatsApp style */}
-      <div className="bg-[#1a1a1a] border-b border-white/10 px-4 py-2 flex items-center justify-between flex-shrink-0 z-10">
+      <div className="bg-[#1a1a1a] border-b border-white/10 px-4 py-3 flex items-center justify-between flex-shrink-0 z-10">
         <div className="flex items-center gap-3">
           <button
             onClick={() => router.push('/apps/mood-tracker')}

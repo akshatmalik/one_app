@@ -282,14 +282,9 @@ export function useChatDiary({
       console.log('[ChatDiary] Batch saved successfully');
       setHasUnsavedMessages(false);
 
-      // Clear messages and reset for new session
-      const newGreeting: ChatMessage = {
-        time: getCurrentTimestamp(),
-        sender: 'ai',
-        text: "Saved! 😊 Anything else you want to add?",
-      };
-      setMessages([newGreeting]);
-      sessionStartTimeRef.current = newGreeting.time;
+      // DON'T clear messages - keep the conversation going!
+      // Just mark as saved via the UI (hasUnsavedMessages = false)
+      console.log('[ChatDiary] Messages preserved, marked as saved');
 
     } catch (err) {
       console.error('[ChatDiary] Error batch saving:', err);
