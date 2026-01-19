@@ -17,7 +17,6 @@ export default function ChatDiaryPage() {
   const { entries, tags, categories, updateEntry, createEntry, refreshAll } = useMoodTracker();
   const { settings } = useAppSettings();
   const [inputValue, setInputValue] = useState('');
-  const [showInfo, setShowInfo] = useState(false);
   const [showDebug, setShowDebug] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -119,31 +118,40 @@ export default function ChatDiaryPage() {
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Save Button - Small */}
-          {chatDiary.hasUnsavedMessages && !chatDiary.isSaving && (
+          {/* Manual Save Button - Always visible when there are messages */}
+          {chatDiary.messages.length > 1 && (
             <button
               onClick={chatDiary.forceSave}
-              className="px-2.5 py-1 bg-purple-600 text-white text-[11px] font-medium rounded hover:bg-purple-700 transition-colors"
+              disabled={chatDiary.isSaving}
+              className={clsx(
+                "px-3 py-1.5 text-xs font-medium rounded transition-colors flex items-center gap-1",
+                chatDiary.isSaving
+                  ? "bg-blue-600/50 text-white cursor-not-allowed"
+                  : chatDiary.hasUnsavedMessages
+                  ? "bg-purple-600 text-white hover:bg-purple-700"
+                  : "bg-green-600/20 text-green-300"
+              )}
             >
-              💾
+              {chatDiary.isSaving ? (
+                <>
+                  <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
+                  <span>Saving...</span>
+                </>
+              ) : chatDiary.hasUnsavedMessages ? (
+                <>
+                  💾 <span>Save</span>
+                </>
+              ) : (
+                <>
+                  ✓ <span>Saved</span>
+                </>
+              )}
             </button>
           )}
 
-          {/* Saving Indicator */}
-          {chatDiary.isSaving && (
-            <div className="flex items-center gap-1 text-blue-300 text-[11px]">
-              <div className="animate-spin rounded-full h-2.5 w-2.5 border-b-2 border-blue-300"></div>
-            </div>
-          )}
-
-          {/* Saved Indicator */}
-          {!chatDiary.hasUnsavedMessages && !chatDiary.isSaving && chatDiary.messages.length > 1 && (
-            <div className="text-green-300 text-sm">✓</div>
-          )}
-
-          {/* Info Button */}
+          {/* Info/Debug Button - Opens debug console */}
           <button
-            onClick={() => setShowInfo(true)}
+            onClick={() => setShowDebug(true)}
             className="w-7 h-7 rounded-full bg-white/10 text-white/70 hover:bg-white/20 transition-colors flex items-center justify-center text-sm"
           >
             ℹ️
@@ -157,7 +165,7 @@ export default function ChatDiaryPage() {
           <div className="flex items-center justify-between gap-2">
             <p className="text-red-300 text-xs flex-1">⚠️ {chatDiary.error.split('\n')[0]}</p>
             <button
-              onClick={() => setShowInfo(true)}
+              onClick={() => setShowDebug(true)}
               className="text-red-300 text-xs underline"
             >
               Details
@@ -257,17 +265,6 @@ export default function ChatDiaryPage() {
           </button>
         </div>
       </div>
-
-      {/* Floating Debug Button - Always visible */}
-      <button
-        onClick={() => setShowDebug(true)}
-        className={clsx(
-          'fixed bottom-20 right-4 w-12 h-12 rounded-full shadow-lg flex items-center justify-center text-xl z-40 transition-all',
-          chatDiary.error ? 'bg-red-500 animate-pulse' : 'bg-gray-700/80'
-        )}
-      >
-        🐛
-      </button>
 
       {/* Debug Modal - Live Errors & Logs */}
       {showDebug && (
@@ -376,101 +373,6 @@ export default function ChatDiaryPage() {
                   )}
                 </div>
               </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Info Modal */}
-      {showInfo && (
-        <div
-          className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4"
-          onClick={() => setShowInfo(false)}
-        >
-          <div
-            className="bg-[#1a1a1a] border border-white/10 rounded-lg max-w-lg w-full max-h-[80vh] overflow-y-auto"
-            onClick={e => e.stopPropagation()}
-          >
-            {/* Header */}
-            <div className="sticky top-0 bg-[#1a1a1a] border-b border-white/10 px-4 py-3 flex items-center justify-between">
-              <h2 className="text-white font-medium">Chat Info</h2>
-              <button
-                onClick={() => setShowInfo(false)}
-                className="text-white/40 hover:text-white/60 text-2xl leading-none"
-              >
-                ×
-              </button>
-            </div>
-
-            {/* Content */}
-            <div className="p-4 space-y-4">
-              {/* Status */}
-              <div>
-                <h3 className="text-white/70 text-sm font-medium mb-2">Status</h3>
-                <div className="bg-white/5 rounded p-3 space-y-1 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-white/60">Messages</span>
-                    <span className="text-white">{chatDiary.messages.length}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-white/60">Unsaved</span>
-                    <span className="text-white">{chatDiary.hasUnsavedMessages ? 'Yes' : 'No'}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-white/60">Auto-save</span>
-                    <span className="text-white">2 min after last message</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Tips */}
-              <div>
-                <h3 className="text-white/70 text-sm font-medium mb-2">💡 Tips</h3>
-                <ul className="bg-white/5 rounded p-3 space-y-1 text-xs text-white/60">
-                  <li>• Chat naturally about your day</li>
-                  <li>• Mention mood (1-5) when you feel like it</li>
-                  <li>• AI will tag activities automatically</li>
-                  <li>• Your words are preserved exactly</li>
-                  <li>• Auto-saves after 2 min of inactivity</li>
-                </ul>
-              </div>
-
-              {/* Error Details */}
-              {chatDiary.error && (
-                <div>
-                  <h3 className="text-red-300 text-sm font-medium mb-2">⚠️ Error Details</h3>
-                  <div className="bg-red-500/10 border border-red-500/30 rounded p-3">
-                    <pre className="text-red-300 text-xs font-mono whitespace-pre-wrap break-all">
-                      {chatDiary.error}
-                    </pre>
-                  </div>
-                </div>
-              )}
-
-              {/* Debug Logs */}
-              {chatDiary.logs.length > 0 && (
-                <div>
-                  <h3 className="text-blue-300 text-sm font-medium mb-2">🔍 Debug Logs</h3>
-                  <div className="bg-black/50 rounded p-3 max-h-64 overflow-y-auto">
-                    <div className="text-xs font-mono space-y-1">
-                      {chatDiary.logs.map((log, idx) => (
-                        <div
-                          key={idx}
-                          className={clsx(
-                            'leading-relaxed',
-                            log.includes('❌') ? 'text-red-300 font-bold' :
-                            log.includes('✅') ? 'text-green-300' :
-                            log.includes('📊') || log.includes('💾') ? 'text-yellow-300' :
-                            'text-blue-200'
-                          )}
-                        >
-                          {log}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
           </div>
         </div>
