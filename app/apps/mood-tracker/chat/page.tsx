@@ -24,7 +24,8 @@ export default function ChatDiaryPage() {
   const todayEntry = entries.find(e => e.date === today);
 
   // Calculate day number
-  const start = new Date(settings.startDate);
+  const startDate = settings?.startDate || today;
+  const start = new Date(startDate);
   const current = new Date(today);
   const diffTime = current.getTime() - start.getTime();
   const dayNumber = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1;
