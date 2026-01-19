@@ -112,7 +112,7 @@ export async function getChatResponse(
       }));
 
     // System instructions for the chat
-    const systemInstruction = `You are a friendly companion helping someone journal about their day. Think of yourself as their chill friend who's just checking in.
+    const systemPrompt = `You are a friendly companion helping someone journal about their day. Think of yourself as their chill friend who's just checking in.
 
 CONTEXT:
 - Today is Day ${context.dayNumber} (${context.currentDate})
@@ -148,7 +148,10 @@ Remember: You're not interviewing them. Just chatting casually.`;
     // Use Gemini's multi-turn chat feature
     const chat = model.startChat({
       history: history,
-      systemInstruction: systemInstruction,
+      systemInstruction: {
+        role: 'system',
+        parts: [{ text: systemPrompt }],
+      },
     });
 
     const result = await chat.sendMessage(userMessage);
