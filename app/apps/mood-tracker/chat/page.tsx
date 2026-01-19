@@ -73,8 +73,10 @@ export default function ChatDiaryPage() {
     setInputValue('');
 
     console.log('[ChatPage] Sending message:', messageText);
+    console.log('[ChatPage] Messages before send:', chatDiary.messages.length);
     await chatDiary.sendMessage(messageText);
     console.log('[ChatPage] After sendMessage, messages:', chatDiary.messages.length);
+    console.log('[ChatPage] All messages:', chatDiary.messages.map(m => ({ sender: m.sender, text: m.text.substring(0, 20) })));
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -85,7 +87,7 @@ export default function ChatDiaryPage() {
   };
 
   return (
-    <div className="fixed inset-0 bg-[#0a0a0a] flex flex-col" style={{ height: '100dvh' }}>
+    <div className="fixed inset-0 top-0 bg-[#0a0a0a] flex flex-col" style={{ height: '100dvh', paddingTop: 0 }}>
       <style jsx>{`
         @keyframes fadeIn {
           from {
@@ -102,7 +104,7 @@ export default function ChatDiaryPage() {
         }
       `}</style>
       {/* Top Bar - WhatsApp style */}
-      <div className="bg-[#1a1a1a] border-b border-white/10 px-4 py-2.5 flex items-center justify-between flex-shrink-0">
+      <div className="bg-[#1a1a1a] border-b border-white/10 px-4 py-2 flex items-center justify-between flex-shrink-0 z-10">
         <div className="flex items-center gap-3">
           <button
             onClick={() => router.push('/apps/mood-tracker')}
@@ -121,29 +123,28 @@ export default function ChatDiaryPage() {
           {chatDiary.hasUnsavedMessages && !chatDiary.isSaving && (
             <button
               onClick={chatDiary.forceSave}
-              className="px-3 py-1.5 bg-purple-600 text-white text-xs font-medium rounded hover:bg-purple-700 transition-colors"
+              className="px-2.5 py-1 bg-purple-600 text-white text-[11px] font-medium rounded hover:bg-purple-700 transition-colors"
             >
-              💾 Save
+              💾
             </button>
           )}
 
           {/* Saving Indicator */}
           {chatDiary.isSaving && (
-            <div className="flex items-center gap-2 text-blue-300 text-xs">
-              <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-300"></div>
-              Saving
+            <div className="flex items-center gap-1 text-blue-300 text-[11px]">
+              <div className="animate-spin rounded-full h-2.5 w-2.5 border-b-2 border-blue-300"></div>
             </div>
           )}
 
           {/* Saved Indicator */}
           {!chatDiary.hasUnsavedMessages && !chatDiary.isSaving && chatDiary.messages.length > 1 && (
-            <div className="text-green-300 text-xs">✓</div>
+            <div className="text-green-300 text-sm">✓</div>
           )}
 
           {/* Info Button */}
           <button
             onClick={() => setShowInfo(true)}
-            className="w-8 h-8 rounded-full bg-white/10 text-white/70 hover:bg-white/20 transition-colors flex items-center justify-center"
+            className="w-7 h-7 rounded-full bg-white/10 text-white/70 hover:bg-white/20 transition-colors flex items-center justify-center text-sm"
           >
             ℹ️
           </button>
@@ -172,7 +173,14 @@ export default function ChatDiaryPage() {
       )}
 
       {/* Messages Area - WhatsApp style */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-3 space-y-3" style={{ overscrollBehavior: 'contain' }}>
+      <div
+        className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-3 space-y-3"
+        style={{
+          overscrollBehavior: 'contain',
+          minHeight: 0, // Important for flex child scrolling
+          WebkitOverflowScrolling: 'touch'
+        }}
+      >
         {chatDiary.messages.map((msg, idx) => {
           console.log(`[ChatPage] Rendering message ${idx}:`, msg.sender, msg.text.substring(0, 30));
           return (

@@ -136,6 +136,9 @@ export function useChatDiary({
 
     try {
       // Get AI response
+      console.log('[useChatDiary] Calling getChatResponse with', messages.length, 'messages in history');
+      console.log('[useChatDiary] User message being sent:', text);
+
       const result = await getChatResponse(text, messages, {
         currentDate,
         dayNumber,
@@ -143,11 +146,15 @@ export function useChatDiary({
         currentMood: existingEntry?.mood || null,
       });
 
+      console.log('[useChatDiary] getChatResponse returned, hasData:', !!result.data, 'hasError:', !!result.error);
+
       setLogs(result.logs);
 
       if (result.error) {
         setError(result.error);
       }
+
+      console.log('[useChatDiary] Got AI result:', { hasData: !!result.data, isMounted: isMountedRef.current, data: result.data?.substring(0, 50) });
 
       if (result.data && isMountedRef.current) {
         const aiMessage: ChatMessage = {
@@ -155,7 +162,16 @@ export function useChatDiary({
           sender: 'ai',
           text: result.data,
         };
-        setMessages(prev => [...prev, aiMessage]);
+        console.log('[useChatDiary] Adding AI message:', aiMessage);
+        setMessages(prev => {
+          console.log('[useChatDiary] Previous messages count:', prev.length);
+          const updated = [...prev, aiMessage];
+          console.log('[useChatDiary] Updated messages count:', updated.length);
+          return updated;
+        });
+        console.log('[useChatDiary] AI message added successfully');
+      } else {
+        console.log('[useChatDiary] NOT adding AI message - hasData:', !!result.data, 'isMounted:', isMountedRef.current);
       }
     } catch (err) {
       console.error('[ChatDiary] Error sending message:', err);
