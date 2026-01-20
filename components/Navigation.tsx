@@ -1,11 +1,18 @@
 'use client';
 
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { LogIn, LogOut } from 'lucide-react';
 import { useAuthContext } from '@/lib/AuthContext';
 
 export function Navigation() {
   const { user, loading, signIn, signOut } = useAuthContext();
+  const pathname = usePathname();
+
+  // Hide navigation for Last Light game (full immersion)
+  if (pathname === '/apps/last-light') {
+    return null;
+  }
 
   return (
     <nav className="h-[60px] border-b border-white/5 bg-[#0a0a0f]/80 backdrop-blur-xl sticky top-0 z-50">
