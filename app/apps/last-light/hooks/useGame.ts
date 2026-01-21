@@ -17,10 +17,17 @@ export function useGame(userId: string) {
       try {
         setLoading(true);
 
-        // For now, always create a new game
-        // Later: check if there's a saved game and offer to continue
-        const newGame = await gameRepository.createGame(userId);
-        setGameState(newGame);
+        // Try to load existing saved game
+        const savedGame = await (gameRepository as any).getCurrentGame(userId);
+
+        if (savedGame) {
+          // Load saved game - chat history persists!
+          setGameState(savedGame);
+        } else {
+          // Create new game if none exists
+          const newGame = await gameRepository.createGame(userId);
+          setGameState(newGame);
+        }
       } catch (error) {
         console.error('Failed to initialize game:', error);
       } finally {
@@ -29,6 +36,22 @@ export function useGame(userId: string) {
     };
 
     initGame();
+  }, [userId]);
+
+  // Reset game (create fresh game)
+  const resetGame = useCallback(async () => {
+    try {
+      setLoading(true);
+      // Delete current game
+      await (gameRepository as any).deleteCurrentGame(userId);
+      // Create new game
+      const newGame = await gameRepository.createGame(userId);
+      setGameState(newGame);
+    } catch (error) {
+      console.error('Failed to reset game:', error);
+    } finally {
+      setLoading(false);
+    }
   }, [userId]);
 
   // Add story entry
@@ -140,11 +163,20 @@ export function useGame(userId: string) {
           });
         }
 
+        // Increment turn counters
+        const newTurnCount = gameState.turnCount + 1;
+        const newArcTurns = gameState.currentArc.turnsInArc + 1;
+
         // Update game state with all changes
         const updates: Partial<GameState> = {
           storyLog: [...gameState.storyLog, ...newEntries],
           ...response.stateChanges,
           playerBehavior: updatedBehavior,
+          turnCount: newTurnCount,
+          currentArc: {
+            ...gameState.currentArc,
+            turnsInArc: newArcTurns,
+          },
         };
 
         // Apply hunger/energy changes
@@ -186,5 +218,6 @@ export function useGame(userId: string) {
     loading,
     processing,
     processCommand,
+    resetGame,
   };
 }

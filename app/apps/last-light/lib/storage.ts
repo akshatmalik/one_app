@@ -5,9 +5,21 @@ import {
   STORAGE_KEY,
   STARTING_LOCATION,
   OPENING_NARRATION,
+  STORY_ARC_1,
 } from './constants';
 
 class LocalStorageGameRepository implements GameRepository {
+  // Get current game for user (newest)
+  async getCurrentGame(userId: string): Promise<GameState | null> {
+    if (typeof window === 'undefined') return null;
+
+    const key = `${STORAGE_KEY}-current-${userId}`;
+    const data = localStorage.getItem(key);
+    if (!data) return null;
+
+    return JSON.parse(data);
+  }
+
   async getGame(id: string): Promise<GameState | null> {
     if (typeof window === 'undefined') return null;
 
@@ -83,6 +95,22 @@ class LocalStorageGameRepository implements GameRepository {
         recentActions: [],
       },
 
+      // Story Arc System
+      currentArc: {
+        arcNumber: 1,
+        arcName: STORY_ARC_1.arcName,
+        description: STORY_ARC_1.description,
+        turnsInArc: 0,
+        objectivesCompleted: [],
+      },
+      turnCount: 0,
+      arcProgress: {
+        hasMetStranger: false,
+        strangerFirstKnockTriggered: false,
+        strangerInterrogationComplete: false,
+        strangerJudgmentMade: false,
+      },
+
       // Meta
       day: 1,
       timeOfDay: 'morning',
@@ -95,6 +123,11 @@ class LocalStorageGameRepository implements GameRepository {
     if (typeof window !== 'undefined') {
       localStorage.setItem(
         `${STORAGE_KEY}-${gameId}`,
+        JSON.stringify(initialGame)
+      );
+      // Also save as current game
+      localStorage.setItem(
+        `${STORAGE_KEY}-current-${userId}`,
         JSON.stringify(initialGame)
       );
     }
@@ -119,6 +152,11 @@ class LocalStorageGameRepository implements GameRepository {
 
     if (typeof window !== 'undefined') {
       localStorage.setItem(`${STORAGE_KEY}-${id}`, JSON.stringify(updated));
+      // Also update current game
+      localStorage.setItem(
+        `${STORAGE_KEY}-current-${updated.userId}`,
+        JSON.stringify(updated)
+      );
     }
 
     return updated;
@@ -127,6 +165,12 @@ class LocalStorageGameRepository implements GameRepository {
   async deleteGame(id: string): Promise<void> {
     if (typeof window !== 'undefined') {
       localStorage.removeItem(`${STORAGE_KEY}-${id}`);
+    }
+  }
+
+  async deleteCurrentGame(userId: string): Promise<void> {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem(`${STORAGE_KEY}-current-${userId}`);
     }
   }
 }

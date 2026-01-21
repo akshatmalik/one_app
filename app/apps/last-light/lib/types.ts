@@ -24,6 +24,11 @@ export interface GameState {
   // Player behavior tracking
   playerBehavior: PlayerBehavior;
 
+  // Story Arc System
+  currentArc: StoryArc;
+  turnCount: number; // Total turns taken
+  arcProgress: ArcProgress;
+
   // Meta
   day: number;
   timeOfDay: 'morning' | 'afternoon' | 'evening' | 'night';
@@ -32,6 +37,23 @@ export interface GameState {
 
   createdAt: string;
   updatedAt: string;
+}
+
+// Story Arc Tracking
+export interface StoryArc {
+  arcNumber: number;
+  arcName: string;
+  description: string;
+  turnsInArc: number;
+  objectivesCompleted: string[];
+}
+
+export interface ArcProgress {
+  hasMetStranger: boolean;
+  strangerFirstKnockTriggered: boolean;
+  strangerInterrogationComplete: boolean;
+  strangerJudgmentMade: boolean;
+  strangerOutcome?: 'high_trust' | 'neutral' | 'low_trust' | 'hostile';
 }
 
 // Dynamic world tracking
@@ -209,8 +231,10 @@ export interface TriggerCondition {
 
 // Repository interface
 export interface GameRepository {
+  getCurrentGame(userId: string): Promise<GameState | null>;
   getGame(id: string): Promise<GameState | null>;
   createGame(userId: string): Promise<GameState>;
   updateGame(id: string, updates: Partial<GameState>): Promise<GameState>;
   deleteGame(id: string): Promise<void>;
+  deleteCurrentGame(userId: string): Promise<void>;
 }
