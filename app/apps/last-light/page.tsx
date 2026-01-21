@@ -13,7 +13,7 @@ export default function LastLightPage() {
 
   // For now, use a placeholder user ID
   // Later: get from auth context
-  const { gameState, loading, processing, processCommand } = useGame(
+  const { gameState, loading, processing, processCommand, resetGame } = useGame(
     'local-user'
   );
 
@@ -83,7 +83,7 @@ export default function LastLightPage() {
   return (
     <div className="fixed inset-0 flex flex-col bg-gray-950">
       {/* Status bar */}
-      <StatusBar gameState={gameState} />
+      <StatusBar gameState={gameState} onReset={resetGame} />
 
       {/* Story feed */}
       <StoryFeed entries={gameState.storyLog} />

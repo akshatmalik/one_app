@@ -117,3 +117,21 @@ export const QUICK_ACTIONS = [
   'Check inventory',
   'Listen',
 ];
+
+// Story Arc 1: "First Contact" - The Stranger encounter
+export const STORY_ARC_1 = {
+  arcNumber: 1,
+  arcName: 'First Contact',
+  description: 'Survive your first encounter with The Stranger and prove you\'re not a threat',
+  objectives: [
+    'Explore the starting house',
+    'Meet The Stranger',
+    'Answer his questions',
+    'Receive his judgment',
+  ],
+  forcedEvents: {
+    THE_KNOCK_TURN: 7, // The Stranger MUST arrive by turn 7
+    INTERROGATION_MAX_TURNS: 5, // Max 5 questions
+    JUDGMENT_TURN: 16, // Must reach judgment by turn 16-18
+  },
+};
