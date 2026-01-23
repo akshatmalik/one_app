@@ -1476,7 +1476,7 @@ export function StatsView({ games, summary, budgets = [], onSetBudget }: StatsVi
 
         {/* ROI Rankings */}
         {roiRankings.length > 0 && (
-          <ChartCard title="Best ROI (Rating × Hours / Price)" icon={<Trophy size={16} />}>
+          <ChartCard title="Best ROI (Quality-Weighted Value Score)" icon={<Trophy size={16} />}>
             <ResponsiveContainer width="100%" height={250}>
               <BarChart data={roiRankings} layout="vertical">
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
