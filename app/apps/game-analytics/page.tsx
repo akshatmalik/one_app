@@ -497,7 +497,7 @@ export default function GameAnalyticsPage() {
                               <div className="text-[10px] text-white/30">
                                 {(() => {
                                   const rating = getROIRating(game.metrics.roi);
-                                  const multiplier = Math.floor(game.metrics.roi / 5);
+                                  const multiplier = Math.floor(game.metrics.roi / 10);
                                   if (rating === 'Excellent' && multiplier >= 2) {
                                     return `${multiplier}x Excellent`;
                                   }

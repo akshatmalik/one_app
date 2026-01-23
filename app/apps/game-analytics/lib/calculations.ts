@@ -28,9 +28,49 @@ export function getValueRating(costPerHour: number): 'Excellent' | 'Good' | 'Fai
   return 'Poor';
 }
 
+/**
+ * Get exponential rating weight for ROI calculation
+ * 10 → 20.0 (double of 9)
+ * 9 → 10.0 (1.5x of 8)
+ * 8 → 6.7
+ * Lower ratings receive progressively less weight
+ */
+function getRatingWeight(rating: number): number {
+  const weights: { [key: number]: number } = {
+    10: 20.0,
+    9: 10.0,
+    8: 6.7,
+    7: 4.8,
+    6: 3.4,
+    5: 2.4,
+    4: 1.7,
+    3: 1.2,
+    2: 0.8,
+    1: 0.6,
+    0: 0.3,
+  };
+
+  // Round to nearest integer for lookup
+  const roundedRating = Math.round(rating);
+  return weights[roundedRating] || weights[5]; // Default to 5 if not found
+}
+
+/**
+ * Calculate ROI (Return on Investment) with exponential rating weight
+ * Formula calibrated so: $70, 15h, 9/10 = ROI of 10
+ * High ratings are weighted exponentially to reflect their true value
+ *
+ * Examples:
+ * - $70, 15h, 9/10 = 10.0 (Excellent baseline)
+ * - $70, 15h, 10/10 = 20.0 (Perfect game)
+ * - $70, 50h, 6/10 = 11.3 (Long but mediocre)
+ * - $70, 10h, 9/10 = 6.7 (Good but short)
+ */
 export function calculateROI(rating: number, hours: number, price: number): number {
-  if (price === 0) return rating * hours;
-  return (rating * hours) / price;
+  if (price === 0) return getRatingWeight(rating) * hours; // Free games get massive ROI
+  const weight = getRatingWeight(rating);
+  const roi = (weight * hours * 4.67) / price;
+  return Math.round(roi * 10) / 10; // Round to 1 decimal place
 }
 
 export function calculateDaysToComplete(startDate?: string, endDate?: string): number | null {
@@ -620,14 +660,21 @@ export function getDiscountEffectiveness(games: Game[]): { avgSavings: number; b
   };
 }
 
-// Get ROI rating label based on ROI value
-// ROI = (rating * hours) / price
-// Examples: $60 game, 30h, 8/10 = 4.0 | $70 game, 20h, 9/10 = 2.57 | $20 game, 50h, 9/10 = 22.5
+/**
+ * Get ROI rating category based on exponential rating weight formula
+ * New formula heavily weights rating quality: (ratingWeight × hours × 4.67) / price
+ *
+ * Calibrated thresholds:
+ * - Excellent: ≥10 (e.g., $70, 15h, 9/10 = 10.0 or $70, 10h, 10/10 = 13.3)
+ * - Good: 5-9.9 (e.g., $70, 15h, 8/10 = 6.7 or $70, 10h, 9/10 = 6.7)
+ * - Fair: 2-4.9 (e.g., $70, 15h, 6/10 = 3.4 or $70, 15h, 7/10 = 4.8)
+ * - Poor: <2 (e.g., very short playtime or low ratings)
+ */
 export function getROIRating(roi: number): 'Excellent' | 'Good' | 'Fair' | 'Poor' {
-  if (roi >= 5) return 'Excellent';   // Amazing value! (e.g., $70 game, 100h, 9 rating)
-  if (roi >= 1.5) return 'Good';      // Solid value (e.g., $70 game, 15h, 8 rating)
-  if (roi >= 0.5) return 'Fair';      // Decent value (e.g., $60 game, 5h, 6 rating)
-  return 'Poor';                      // Low value (short playtime vs price)
+  if (roi >= 10) return 'Excellent';  // High-quality games with solid playtime
+  if (roi >= 5) return 'Good';        // Good value overall
+  if (roi >= 2) return 'Fair';        // Decent but could be better
+  return 'Poor';                      // Low value
 }
 
 // Get longest gaming streak ever

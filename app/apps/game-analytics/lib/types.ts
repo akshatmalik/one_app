@@ -43,7 +43,7 @@ export interface GameMetrics {
   blendScore: number;
   normalizedCost: number;
   valueRating: 'Excellent' | 'Good' | 'Fair' | 'Poor';
-  roi: number; // (rating * hours) / price
+  roi: number; // (ratingWeight * hours * 4.67) / price - Exponential rating weight favoring quality
   daysToComplete: number | null; // endDate - startDate
 }
 
