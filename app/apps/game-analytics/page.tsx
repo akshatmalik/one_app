@@ -296,13 +296,34 @@ export default function GameAnalyticsPage() {
         <div className="max-w-6xl mx-auto">
           {/* Tab Navigation */}
           <div className="space-y-4 mb-6">
-            {/* Tabs Row */}
-            <div className="overflow-x-auto -mx-6 px-6 sm:mx-0 sm:px-0">
-              <div className="flex items-center gap-1 bg-white/[0.02] rounded-lg p-1 w-fit min-w-min">
+            {/* Tabs - Two Rows */}
+            <div className="space-y-2">
+              {/* First Row: Games, Timeline, Stats */}
+              <div className="flex items-center gap-2">
                 {([
                   { id: 'games', label: 'Games', icon: <List size={14} /> },
                   { id: 'timeline', label: 'Timeline', icon: <Calendar size={14} /> },
                   { id: 'stats', label: 'Stats', icon: <BarChart3 size={14} /> },
+                ] as const).map((tab) => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setTabMode(tab.id)}
+                    className={clsx(
+                      'flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all',
+                      tabMode === tab.id
+                        ? 'bg-white/10 text-white'
+                        : 'bg-white/[0.02] text-white/40 hover:text-white/60'
+                    )}
+                  >
+                    {tab.icon}
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Second Row: AI Coach, Up Next */}
+              <div className="flex items-center gap-2">
+                {([
                   { id: 'ai-coach', label: 'AI Coach', icon: <MessageCircle size={14} /> },
                   { id: 'up-next', label: 'Up Next', icon: <ListOrdered size={14} /> },
                 ] as const).map((tab) => (
@@ -310,10 +331,10 @@ export default function GameAnalyticsPage() {
                     key={tab.id}
                     onClick={() => setTabMode(tab.id)}
                     className={clsx(
-                      'flex items-center gap-2 px-4 py-1.5 rounded-md text-sm font-medium transition-all whitespace-nowrap',
+                      'flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all',
                       tabMode === tab.id
                         ? 'bg-white/10 text-white'
-                        : 'text-white/40 hover:text-white/60'
+                        : 'bg-white/[0.02] text-white/40 hover:text-white/60'
                     )}
                   >
                     {tab.icon}
