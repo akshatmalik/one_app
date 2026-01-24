@@ -1,16 +1,18 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, List, MessageCircle } from 'lucide-react';
+import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, List, MessageCircle, ListOrdered, ListPlus, Check } from 'lucide-react';
 import { useGames } from './hooks/useGames';
 import { useAnalytics, GameWithMetrics } from './hooks/useAnalytics';
 import { useBudget } from './hooks/useBudget';
 import { useGameThumbnails } from './hooks/useGameThumbnails';
+import { useGameQueue } from './hooks/useGameQueue';
 import { GameForm } from './components/GameForm';
 import { PlayLogModal } from './components/PlayLogModal';
 import { TimelineView } from './components/TimelineView';
 import { StatsView } from './components/StatsView';
 import { AIChatTab } from './components/AIChatTab';
+import { UpNextTab } from './components/UpNextTab';
 import { Game, GameStatus, PlayLog } from './lib/types';
 import { gameRepository } from './lib/storage';
 import { BASELINE_GAMES_2025 } from './data/baseline-games';
@@ -20,7 +22,7 @@ import { getROIRating, getWeekStatsForOffset, getGamesPlayedInTimeRange } from '
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist';
-type TabMode = 'games' | 'timeline' | 'stats' | 'ai-coach';
+type TabMode = 'games' | 'timeline' | 'stats' | 'ai-coach' | 'up-next';
 
 export default function GameAnalyticsPage() {
   const { user, loading: authLoading } = useAuthContext();
@@ -29,6 +31,16 @@ export default function GameAnalyticsPage() {
   const { gamesWithMetrics, summary } = useAnalytics(games);
   const { budgets, setBudget } = useBudget(user?.uid ?? null);
   const { loading: thumbnailsLoading, fetchedCount } = useGameThumbnails(games, updateGame);
+  const {
+    queuedGames,
+    availableGames,
+    hideFinished,
+    setHideFinished,
+    addToQueue,
+    removeFromQueue,
+    reorderQueue,
+    isInQueue,
+  } = useGameQueue(games, updateGame);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingGame, setEditingGame] = useState<GameWithMetrics | null>(null);
   const [playLogGame, setPlayLogGame] = useState<GameWithMetrics | null>(null);
@@ -100,12 +112,30 @@ export default function GameAnalyticsPage() {
 
   const handleSavePlayLogs = async (playLogs: PlayLog[]) => {
     if (!playLogGame) return;
-    // Only update playLogs - hours field remains as baseline
-    await updateGame(playLogGame.id, {
+
+    // Check if this is the first play session for a backlog game
+    const isFirstSession = playLogGame.status === 'Not Started' &&
+                          (!playLogGame.playLogs || playLogGame.playLogs.length === 0) &&
+                          playLogs.length > 0;
+
+    const updates: Partial<Game> = {
       playLogs,
-    });
+    };
+
+    // Auto-start game on first play session
+    if (isFirstSession) {
+      // Find the earliest date from the new logs
+      const earliestLog = playLogs.reduce((earliest, log) => {
+        return new Date(log.date) < new Date(earliest.date) ? log : earliest;
+      });
+
+      updates.status = 'In Progress';
+      updates.startDate = earliestLog.date;
+    }
+
+    await updateGame(playLogGame.id, updates);
     setPlayLogGame(null);
-    showToast('Play sessions saved', 'success');
+    showToast(isFirstSession ? 'Game started! Sessions saved' : 'Play sessions saved', 'success');
   };
 
   const handleSeedData = async () => {
@@ -266,28 +296,52 @@ export default function GameAnalyticsPage() {
         <div className="max-w-6xl mx-auto">
           {/* Tab Navigation */}
           <div className="space-y-4 mb-6">
-            {/* Tabs Row */}
-            <div className="flex items-center gap-1 bg-white/[0.02] rounded-lg p-1 w-fit">
-              {([
-                { id: 'games', label: 'Games', icon: <List size={14} /> },
-                { id: 'timeline', label: 'Timeline', icon: <Calendar size={14} /> },
-                { id: 'stats', label: 'Stats', icon: <BarChart3 size={14} /> },
-                { id: 'ai-coach', label: 'AI Coach', icon: <MessageCircle size={14} /> },
-              ] as const).map((tab) => (
-                <button
-                  key={tab.id}
-                  onClick={() => setTabMode(tab.id)}
-                  className={clsx(
-                    'flex items-center gap-2 px-4 py-1.5 rounded-md text-sm font-medium transition-all',
-                    tabMode === tab.id
-                      ? 'bg-white/10 text-white'
-                      : 'text-white/40 hover:text-white/60'
-                  )}
-                >
-                  {tab.icon}
-                  {tab.label}
-                </button>
-              ))}
+            {/* Tabs - Two Rows */}
+            <div className="space-y-2">
+              {/* First Row: Games, Timeline, Stats */}
+              <div className="flex items-center gap-2">
+                {([
+                  { id: 'games', label: 'Games', icon: <List size={14} /> },
+                  { id: 'timeline', label: 'Timeline', icon: <Calendar size={14} /> },
+                  { id: 'stats', label: 'Stats', icon: <BarChart3 size={14} /> },
+                ] as const).map((tab) => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setTabMode(tab.id)}
+                    className={clsx(
+                      'flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all',
+                      tabMode === tab.id
+                        ? 'bg-white/10 text-white'
+                        : 'bg-white/[0.02] text-white/40 hover:text-white/60'
+                    )}
+                  >
+                    {tab.icon}
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Second Row: AI Coach, Up Next */}
+              <div className="flex items-center gap-2">
+                {([
+                  { id: 'ai-coach', label: 'AI Coach', icon: <MessageCircle size={14} /> },
+                  { id: 'up-next', label: 'Up Next', icon: <ListOrdered size={14} /> },
+                ] as const).map((tab) => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setTabMode(tab.id)}
+                    className={clsx(
+                      'flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all',
+                      tabMode === tab.id
+                        ? 'bg-white/10 text-white'
+                        : 'bg-white/[0.02] text-white/40 hover:text-white/60'
+                    )}
+                  >
+                    {tab.icon}
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
             </div>
 
             {/* View Mode Filter & Sort (only for games tab) */}
@@ -423,6 +477,35 @@ export default function GameAnalyticsPage() {
                             title="Log Play Session"
                           >
                             <Clock size={14} />
+                          </button>
+                          <button
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              if (isInQueue(game.id)) {
+                                try {
+                                  await removeFromQueue(game.id);
+                                  showToast('Removed from queue', 'success');
+                                } catch (err) {
+                                  showToast('Failed to remove from queue', 'error');
+                                }
+                              } else {
+                                try {
+                                  await addToQueue(game.id);
+                                  showToast('Added to queue', 'success');
+                                } catch (err) {
+                                  showToast('Failed to add to queue', 'error');
+                                }
+                              }
+                            }}
+                            className={clsx(
+                              'p-2 rounded-lg transition-all',
+                              isInQueue(game.id)
+                                ? 'text-purple-400 bg-purple-500/10 hover:text-purple-300 hover:bg-purple-500/20'
+                                : 'text-white/30 hover:text-purple-400 hover:bg-purple-500/10'
+                            )}
+                            title={isInQueue(game.id) ? 'Remove from Up Next' : 'Add to Up Next'}
+                          >
+                            {isInQueue(game.id) ? <Check size={14} /> : <ListPlus size={14} />}
                           </button>
                           <button
                             onClick={(e) => {
@@ -593,6 +676,41 @@ export default function GameAnalyticsPage() {
               monthGames={monthGames}
               allGames={games}
               onBack={() => setTabMode('games')}
+            />
+          )}
+
+          {tabMode === 'up-next' && (
+            <UpNextTab
+              queuedGames={queuedGames.map(game => {
+                const gameWithMetrics = gamesWithMetrics.find(g => g.id === game.id);
+                return gameWithMetrics || game as GameWithMetrics;
+              })}
+              availableGames={availableGames}
+              hideFinished={hideFinished}
+              onToggleHideFinished={() => setHideFinished(!hideFinished)}
+              onAddToQueue={async (gameId) => {
+                try {
+                  await addToQueue(gameId);
+                  showToast('Game added to queue', 'success');
+                } catch (e) {
+                  showToast(`Failed to add game: ${(e as Error).message}`, 'error');
+                }
+              }}
+              onRemoveFromQueue={async (gameId) => {
+                try {
+                  await removeFromQueue(gameId);
+                  showToast('Game removed from queue', 'success');
+                } catch (e) {
+                  showToast(`Failed to remove game: ${(e as Error).message}`, 'error');
+                }
+              }}
+              onReorderQueue={async (gameId, newPosition) => {
+                try {
+                  await reorderQueue(gameId, newPosition);
+                } catch (e) {
+                  showToast(`Failed to reorder queue: ${(e as Error).message}`, 'error');
+                }
+              }}
             />
           )}
         </div>

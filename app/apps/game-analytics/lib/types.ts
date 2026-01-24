@@ -34,6 +34,7 @@ export interface Game {
   endDate?: string; // When you finished/stopped
   playLogs?: PlayLog[]; // Individual play sessions
   thumbnail?: string; // Game thumbnail URL from RAWG API
+  queuePosition?: number; // Position in "Up Next" queue (1 = next to play, 2 = after that, etc.)
   createdAt: string;
   updatedAt: string;
 }

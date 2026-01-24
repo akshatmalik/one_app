@@ -117,7 +117,7 @@ export function PlayLogModal({ game, onSave, onClose }: PlayLogModalProps) {
                 className="w-full px-2 py-2 bg-white/[0.03] border border-white/5 text-white rounded-lg text-xs focus:outline-none focus:bg-white/[0.05] focus:border-white/10 transition-all"
               />
             </div>
-            <div className="w-20">
+            <div className="w-24">
               <label className="block text-[10px] text-white/30 mb-1">Hours</label>
               <input
                 type="number"
@@ -128,6 +128,16 @@ export function PlayLogModal({ game, onSave, onClose }: PlayLogModalProps) {
                 className="w-full px-2 py-2 bg-white/[0.03] border border-white/5 text-white rounded-lg text-xs focus:outline-none focus:bg-white/[0.05] focus:border-white/10 transition-all"
                 placeholder="1.0"
               />
+              <button
+                type="button"
+                onClick={() => {
+                  const current = parseFloat(newLog.hours) || 0;
+                  setNewLog({ ...newLog, hours: (current + 0.5).toString() });
+                }}
+                className="w-full mt-1 px-2 py-1 bg-purple-600/20 hover:bg-purple-600/30 text-purple-400 rounded-lg text-[10px] font-medium transition-all"
+              >
+                +0.5
+              </button>
             </div>
             <div className="flex-1">
               <label className="block text-[10px] text-white/30 mb-1">Notes (optional)</label>
