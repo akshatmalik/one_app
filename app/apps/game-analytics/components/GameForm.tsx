@@ -198,15 +198,27 @@ export function GameForm({ onSubmit, onClose, initialGame, existingFranchises = 
           {/* Hours */}
           <div>
             <label className="block text-xs font-medium text-white/50 mb-1.5">Total Hours</label>
-            <input
-              type="number"
-              step="0.5"
-              min="0"
-              value={formData.hours}
-              onChange={e => setFormData({ ...formData, hours: e.target.value })}
-              className="w-full px-3 py-2.5 bg-white/[0.03] border border-white/5 text-white rounded-lg text-sm focus:outline-none focus:bg-white/[0.05] focus:border-white/10 transition-all"
-              placeholder="0.0"
-            />
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                step="0.5"
+                min="0"
+                value={formData.hours}
+                onChange={e => setFormData({ ...formData, hours: e.target.value })}
+                className="flex-1 px-3 py-2.5 bg-white/[0.03] border border-white/5 text-white rounded-lg text-sm focus:outline-none focus:bg-white/[0.05] focus:border-white/10 transition-all"
+                placeholder="0.0"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  const current = parseFloat(formData.hours) || 0;
+                  setFormData({ ...formData, hours: (current + 0.5).toString() });
+                }}
+                className="px-3 py-2.5 bg-purple-600/20 hover:bg-purple-600/30 text-purple-400 rounded-lg text-sm font-medium transition-all whitespace-nowrap"
+              >
+                +0.5
+              </button>
+            </div>
           </div>
 
           {/* Cost Per Hour Display */}
@@ -217,27 +229,29 @@ export function GameForm({ onSubmit, onClose, initialGame, existingFranchises = 
             </div>
           )}
 
-          {/* Rating */}
-          <div>
-            <label className="block text-xs font-medium text-white/50 mb-1.5">
-              Rating <span className="text-white/70 font-semibold">{formData.rating}/10</span>
-            </label>
-            <input
-              type="range"
-              min="1"
-              max="10"
-              value={formData.rating}
-              onChange={e => setFormData({ ...formData, rating: parseInt(e.target.value) })}
-              className="w-full"
-            />
-            <div className="flex justify-between text-[10px] text-white/30 mt-1">
-              <span>Awful</span>
-              <span>Meh</span>
-              <span>Good</span>
-              <span>Great</span>
-              <span>Masterpiece</span>
+          {/* Rating - only show for games that have been played */}
+          {formData.status !== 'Not Started' && formData.status !== 'Wishlist' && (
+            <div>
+              <label className="block text-xs font-medium text-white/50 mb-1.5">
+                Rating <span className="text-white/70 font-semibold">{formData.rating}/10</span>
+              </label>
+              <input
+                type="range"
+                min="1"
+                max="10"
+                value={formData.rating}
+                onChange={e => setFormData({ ...formData, rating: parseInt(e.target.value) })}
+                className="w-full"
+              />
+              <div className="flex justify-between text-[10px] text-white/30 mt-1">
+                <span>Awful</span>
+                <span>Meh</span>
+                <span>Good</span>
+                <span>Great</span>
+                <span>Masterpiece</span>
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Platform, Genre, Source Row */}
           <div className="grid grid-cols-3 gap-3">

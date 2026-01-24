@@ -117,17 +117,29 @@ export function PlayLogModal({ game, onSave, onClose }: PlayLogModalProps) {
                 className="w-full px-2 py-2 bg-white/[0.03] border border-white/5 text-white rounded-lg text-xs focus:outline-none focus:bg-white/[0.05] focus:border-white/10 transition-all"
               />
             </div>
-            <div className="w-20">
-              <label className="block text-[10px] text-white/30 mb-1">Hours</label>
-              <input
-                type="number"
-                step="0.1"
-                min="0.1"
-                value={newLog.hours}
-                onChange={e => setNewLog({ ...newLog, hours: e.target.value })}
-                className="w-full px-2 py-2 bg-white/[0.03] border border-white/5 text-white rounded-lg text-xs focus:outline-none focus:bg-white/[0.05] focus:border-white/10 transition-all"
-                placeholder="1.0"
-              />
+            <div className="flex items-end gap-1">
+              <div className="w-20">
+                <label className="block text-[10px] text-white/30 mb-1">Hours</label>
+                <input
+                  type="number"
+                  step="0.1"
+                  min="0.1"
+                  value={newLog.hours}
+                  onChange={e => setNewLog({ ...newLog, hours: e.target.value })}
+                  className="w-full px-2 py-2 bg-white/[0.03] border border-white/5 text-white rounded-lg text-xs focus:outline-none focus:bg-white/[0.05] focus:border-white/10 transition-all"
+                  placeholder="1.0"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const current = parseFloat(newLog.hours) || 0;
+                  setNewLog({ ...newLog, hours: (current + 0.5).toString() });
+                }}
+                className="px-2 py-2 bg-purple-600/20 hover:bg-purple-600/30 text-purple-400 rounded-lg text-xs font-medium transition-all whitespace-nowrap"
+              >
+                +0.5
+              </button>
             </div>
             <div className="flex-1">
               <label className="block text-[10px] text-white/30 mb-1">Notes (optional)</label>
