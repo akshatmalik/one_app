@@ -72,30 +72,30 @@ export function QueueGameCard({ game, position, onRemove }: QueueGameCardProps) 
     switch (game.status) {
       case 'Completed':
         return (
-          <div className="flex items-center gap-1">
-            <CheckCircle2 size={12} className="text-emerald-400" />
-            <span className="text-[10px] text-emerald-400 font-medium">Completed</span>
+          <div className="flex items-center gap-1.5">
+            <CheckCircle2 size={14} className="text-emerald-400" />
+            <span className="text-xs text-emerald-400 font-medium">Completed</span>
           </div>
         );
       case 'In Progress':
         return (
-          <div className="flex items-center gap-1">
-            <PlayCircle size={12} className="text-blue-400" />
-            <span className="text-[10px] text-blue-400 font-medium">In Progress</span>
+          <div className="flex items-center gap-1.5">
+            <PlayCircle size={14} className="text-blue-400" />
+            <span className="text-xs text-blue-400 font-medium">In Progress</span>
           </div>
         );
       case 'Abandoned':
         return (
-          <div className="flex items-center gap-1">
-            <XCircle size={12} className="text-red-400" />
-            <span className="text-[10px] text-red-400 font-medium">Abandoned</span>
+          <div className="flex items-center gap-1.5">
+            <XCircle size={14} className="text-red-400" />
+            <span className="text-xs text-red-400 font-medium">Abandoned</span>
           </div>
         );
       default:
         return (
-          <div className="flex items-center gap-1">
-            <Calendar size={12} className="text-white/30" />
-            <span className="text-[10px] text-white/30 font-medium">Upcoming</span>
+          <div className="flex items-center gap-1.5">
+            <Calendar size={14} className="text-white/30" />
+            <span className="text-xs text-white/30 font-medium">Upcoming</span>
           </div>
         );
     }
@@ -137,7 +137,7 @@ export function QueueGameCard({ game, position, onRemove }: QueueGameCardProps) 
       ref={setNodeRef}
       style={style}
       className={clsx(
-        'group flex items-center gap-2 p-2.5 bg-white/[0.02] border border-white/5 rounded-xl transition-all',
+        'group flex items-center gap-3 p-3 bg-white/[0.02] border border-white/5 rounded-xl transition-all',
         isDragging && 'opacity-50 ring-2 ring-purple-500/50'
       )}
     >
@@ -145,13 +145,13 @@ export function QueueGameCard({ game, position, onRemove }: QueueGameCardProps) 
       <button
         {...attributes}
         {...listeners}
-        className="touch-manipulation cursor-grab active:cursor-grabbing p-2 -m-1 text-white/30 hover:text-white/60 transition-colors shrink-0"
+        className="touch-manipulation cursor-grab active:cursor-grabbing p-2 -m-2 text-white/30 hover:text-white/60 transition-colors shrink-0"
         aria-label="Drag to reorder"
       >
-        <GripVertical size={18} />
+        <GripVertical size={20} />
       </button>
 
-      {/* Position Badge - smaller and more compact */}
+      {/* Position Badge - smaller number but same overall detail */}
       <div className="flex items-center justify-center w-6 h-6 rounded-full bg-purple-500/20 text-purple-400 text-xs font-semibold shrink-0">
         {position}
       </div>
@@ -162,7 +162,7 @@ export function QueueGameCard({ game, position, onRemove }: QueueGameCardProps) 
           <img
             src={game.thumbnail}
             alt={game.name}
-            className="w-12 h-12 object-cover rounded-lg"
+            className="w-14 h-14 object-cover rounded-lg"
             loading="lazy"
           />
         </div>
@@ -170,11 +170,11 @@ export function QueueGameCard({ game, position, onRemove }: QueueGameCardProps) 
 
       {/* Game Info */}
       <div className="flex-1 min-w-0">
-        <h3 className="text-xs font-medium text-white/90 truncate mb-0.5">
+        <h3 className="text-sm font-medium text-white/90 truncate mb-1">
           {game.name}
         </h3>
         {getStatusBadge()}
-        <p className="text-[10px] text-white/40 mt-0.5">
+        <p className="text-xs text-white/40 mt-1">
           {getStatsLine()}
         </p>
       </div>
@@ -185,10 +185,10 @@ export function QueueGameCard({ game, position, onRemove }: QueueGameCardProps) 
           e.stopPropagation();
           onRemove();
         }}
-        className="touch-manipulation p-2 -m-1 text-white/30 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all shrink-0"
+        className="touch-manipulation p-2 -m-2 text-white/30 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all shrink-0"
         aria-label="Remove from queue"
       >
-        <X size={16} />
+        <X size={18} />
       </button>
     </div>
   );

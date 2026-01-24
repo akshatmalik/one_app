@@ -44,16 +44,24 @@ export function useGameQueue(
 
     const removedPosition = game.queuePosition;
 
-    // Remove this game from queue
-    await updateGame(gameId, { queuePosition: undefined });
+    // Collect all updates to batch them
+    const updates: Array<{ id: string; position: number | null }> = [];
+
+    // Remove this game from queue (use null instead of undefined for proper deletion)
+    updates.push({ id: gameId, position: null });
 
     // Shift down all games after this position
-    const gamesToUpdate = games.filter(
-      g => g.queuePosition !== undefined && g.queuePosition > removedPosition
+    const gamesToShift = games.filter(
+      g => g.id !== gameId && g.queuePosition !== undefined && g.queuePosition > removedPosition
     );
 
-    for (const g of gamesToUpdate) {
-      await updateGame(g.id, { queuePosition: (g.queuePosition || 0) - 1 });
+    for (const g of gamesToShift) {
+      updates.push({ id: g.id, position: (g.queuePosition || 0) - 1 });
+    }
+
+    // Execute all updates
+    for (const update of updates) {
+      await updateGame(update.id, { queuePosition: update.position === null ? undefined : update.position });
     }
   };
 
@@ -65,34 +73,44 @@ export function useGameQueue(
     const oldPosition = game.queuePosition;
     if (oldPosition === newPosition) return;
 
+    // Collect all updates
+    const updates: Array<{ id: string; position: number }> = [];
+
     // Update the dragged game
-    await updateGame(gameId, { queuePosition: newPosition });
+    updates.push({ id: gameId, position: newPosition });
 
     // Shift other games
     if (newPosition < oldPosition) {
       // Moving up - shift down games between new and old position
-      const gamesToUpdate = games.filter(
+      const gamesToShift = games.filter(
         g => g.id !== gameId &&
              g.queuePosition !== undefined &&
              g.queuePosition >= newPosition &&
              g.queuePosition < oldPosition
       );
 
-      for (const g of gamesToUpdate) {
-        await updateGame(g.id, { queuePosition: (g.queuePosition || 0) + 1 });
+      for (const g of gamesToShift) {
+        updates.push({ id: g.id, position: (g.queuePosition || 0) + 1 });
       }
     } else {
       // Moving down - shift up games between old and new position
-      const gamesToUpdate = games.filter(
+      const gamesToShift = games.filter(
         g => g.id !== gameId &&
              g.queuePosition !== undefined &&
              g.queuePosition > oldPosition &&
              g.queuePosition <= newPosition
       );
 
-      for (const g of gamesToUpdate) {
-        await updateGame(g.id, { queuePosition: (g.queuePosition || 0) - 1 });
+      for (const g of gamesToShift) {
+        updates.push({ id: g.id, position: (g.queuePosition || 0) - 1 });
       }
+    }
+
+    // Execute all updates in sequence
+    // Note: Each update will trigger a re-render, but this is unavoidable
+    // without batching support in the parent component
+    for (const update of updates) {
+      await updateGame(update.id, { queuePosition: update.position });
     }
   };
 
