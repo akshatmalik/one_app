@@ -18,7 +18,10 @@ import { gameRepository } from './lib/storage';
 import { BASELINE_GAMES_2025 } from './data/baseline-games';
 import { useAuthContext } from '@/lib/AuthContext';
 import { useToast } from '@/components/Toast';
-import { getROIRating, getWeekStatsForOffset, getGamesPlayedInTimeRange } from './lib/calculations';
+import { getROIRating, getWeekStatsForOffset, getGamesPlayedInTimeRange, getCompletionProbability } from './lib/calculations';
+import { OnThisDayCard } from './components/OnThisDayCard';
+import { ActivityPulse } from './components/ActivityPulse';
+import { RandomPicker } from './components/RandomPicker';
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist';
@@ -47,6 +50,7 @@ export default function GameAnalyticsPage() {
   const [viewMode, setViewMode] = useState<ViewMode>('all');
   const [tabMode, setTabMode] = useState<TabMode>('games');
   const [sortBy, setSortBy] = useState<'name' | 'price' | 'hours' | 'rating' | 'costPerHour' | 'dateAdded' | 'recentlyPlayed'>('recentlyPlayed');
+  const [showRandomPicker, setShowRandomPicker] = useState(false);
 
   // Calculate week and month data for AI chat
   const weekData = useMemo(() => {
@@ -224,7 +228,10 @@ export default function GameAnalyticsPage() {
           <div className="flex items-center justify-between mb-6">
             <div>
               <h1 className="text-3xl font-bold text-white tracking-tight">Games</h1>
-              <p className="text-white/40 text-sm mt-1">Track your library and analyze value</p>
+              <div className="flex items-center gap-3 mt-1">
+                <p className="text-white/40 text-sm">Track your library and analyze value</p>
+                {games.length > 0 && <ActivityPulse games={games} />}
+              </div>
             </div>
             <div className="flex items-center gap-2">
               {games.length === 0 && (
@@ -234,6 +241,15 @@ export default function GameAnalyticsPage() {
                 >
                   <Sparkles size={14} />
                   Load Samples
+                </button>
+              )}
+              {games.filter(g => g.status !== 'Wishlist' && g.status !== 'Completed' && g.status !== 'Abandoned').length > 0 && (
+                <button
+                  onClick={() => setShowRandomPicker(true)}
+                  className="flex items-center gap-2 px-3 py-2 bg-white/5 text-white/60 hover:text-purple-400 hover:bg-purple-500/10 rounded-lg transition-all text-sm font-medium"
+                  title="What should I play?"
+                >
+                  <Sparkles size={16} />
                 </button>
               )}
               <button
@@ -294,6 +310,9 @@ export default function GameAnalyticsPage() {
       {/* Main Content */}
       <div className="flex-1 px-6 py-6">
         <div className="max-w-6xl mx-auto">
+          {/* On This Day */}
+          {games.length > 0 && <OnThisDayCard games={games} />}
+
           {/* Tab Navigation */}
           <div className="space-y-4 mb-6">
             {/* Tabs - Two Rows */}
@@ -449,6 +468,21 @@ export default function GameAnalyticsPage() {
                                 {game.metrics.valueRating}
                               </span>
                             )}
+
+                            {/* Completion Probability Badge */}
+                            {(game.status === 'In Progress' || game.status === 'Not Started') && (() => {
+                              const prob = getCompletionProbability(game, games);
+                              return (
+                                <span className={clsx(
+                                  'text-[10px] px-2 py-0.5 rounded font-medium',
+                                  prob.probability >= 70 && 'bg-emerald-500/20 text-emerald-400',
+                                  prob.probability >= 40 && prob.probability < 70 && 'bg-yellow-500/20 text-yellow-400',
+                                  prob.probability < 40 && 'bg-red-500/20 text-red-400',
+                                )} title={prob.verdict}>
+                                  {prob.probability}% finish
+                                </span>
+                              );
+                            })()}
 
                             {/* Discount Badge */}
                             {game.originalPrice && game.originalPrice > game.price && (
@@ -732,6 +766,14 @@ export default function GameAnalyticsPage() {
           game={playLogGame}
           onSave={handleSavePlayLogs}
           onClose={() => setPlayLogGame(null)}
+        />
+      )}
+
+      {/* Random Game Picker */}
+      {showRandomPicker && (
+        <RandomPicker
+          games={games}
+          onClose={() => setShowRandomPicker(false)}
         />
       )}
     </div>

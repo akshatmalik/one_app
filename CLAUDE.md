@@ -1212,213 +1212,172 @@ This section provides comprehensive documentation of the Game Analytics mini-app
 
 ---
 
-## Game Analytics Enhancement Plan
+## Game Analytics Enhancement Plan (Approved)
 
-### Phase 1: High Impact, Lower Effort
+24 features approved, organized into 5 implementation phases. User feedback incorporated.
 
-#### 1. Random Game Picker ("Spin the Wheel")
-**What**: Can't decide what to play? Animated randomizer picks from your backlog.
-**Details**:
-- Filter by genre, platform, estimated length, mood (quick session vs. deep dive)
-- Animated wheel/slot-machine spin for delight
-- "Lock in" or "spin again" buttons
-- Only picks from owned, unfinished games
-**Files to modify**: New component `components/RandomPicker.tsx`, add to `page.tsx` tabs or as modal
-**New calculations**: None needed (just filters existing games)
+### Phase 1: Stats & Insights (Pure calculations + display panels)
 
-#### 2. Gaming Goals & Challenges
-**What**: Set personal goals and track progress with visual progress bars.
-**Examples**: "Complete 12 games this year", "Spend under $500", "Try 3 new genres", "Clear 5 backlog games this month"
-**Details**:
-- Goal types: completion count, spending limit, genre variety, backlog clearance, hours target
-- Progress bars with percentage, visual milestones
-- Goal history: see past goals and whether you met them
-**Files to modify**: New `lib/goals-storage.ts`, new `hooks/useGoals.ts`, new `components/GoalsPanel.tsx`, update `lib/types.ts` with Goal interface
-**New types**: `Goal { id, userId, type, target, period, startDate, endDate, createdAt, updatedAt }`
+#### 1. Guilt-Free Gaming Calculator
+Compare your gaming cost-per-hour against other entertainment: Movies (~$12/hr), Concerts (~$25/hr), Dining Out (~$15/hr), Streaming (~$2/hr), Gym (~$3/hr), Books (~$5/hr). Bar chart with your gaming highlighted. Headline: "Your gaming costs $1.80/hr — 6.7x cheaper than movies. You've saved $2,340 vs equivalent movie hours." Show both your average AND your best game's cost-per-hour.
+**Files**: `components/ValueComparison.tsx`, `getEntertainmentComparison()` in calculations.ts, embed in StatsView.
 
-#### 3. Completion Probability Predictor
-**What**: Based on your history, predict how likely you are to finish a game.
-**Details**:
-- Analyze: genre completion rates, hours-to-abandon ratio, session frequency decay, days since last session
-- Per-game probability displayed on game cards: "73% likely to complete based on your RPG history"
-- Factors: genre match, current momentum (recent sessions), historical pattern for similar games
-**Files to modify**: Add to `lib/calculations.ts`, display in `page.tsx` game cards
-**New calculations**: `getCompletionProbability(game, allGames)` → number (0-100)
+#### 2. Backlog Doomsday Clock
+Enhance existing `getPredictedBacklogClearance()` with visual component. Dramatic countdown with ticking clock aesthetic. Track whether doomsday is getting closer or further: "You added 3 games and completed 1 — doomsday moved 47 days further." Humor tiers: "Heat Death of Universe" (never), "Retirement Project" (10+ yrs), "Long Haul" (3-10), "Getting There" (1-3), "Almost Free" (<1yr), "Backlog Zero" (cleared!).
+**Files**: `components/BacklogDoomsday.tsx`, enhance calculation with trend data, add to FunStatsPanel.
 
-#### 4. Spending Forecast
-**What**: Project annual spend based on monthly purchase patterns.
-**Details**:
-- "At your current pace, you'll spend ~$840 this year"
-- Trend line chart showing actual vs. projected vs. budget
-- Warning when on track to exceed budget
-**Files to modify**: Add to `lib/calculations.ts`, display in `StatsView.tsx`
-**New calculations**: `getSpendingForecast(games, year)` → { projected, monthlyAvg, onTrack }
+#### 3. Spending Forecast
+Project annual spend from monthly patterns. "At your current pace, you'll spend ~$840 this year." Line chart: actual (solid) vs projected (dashed) vs budget (red). Traffic light: green (under), yellow (within 10%), red (over). Monthly progress showing where you are vs where you should be.
+**Files**: `getSpendingForecast(games, year)` in calculations.ts, chart section in StatsView budget area.
 
-#### 5. Genre Satisfaction Matrix
-**What**: Scatter plot showing genre vs. average rating and average hours.
-**Details**:
-- X-axis: average hours per genre, Y-axis: average rating per genre
-- Bubble size: number of games in genre
-- Quadrants labeled: "Love & Play" (high-high), "Love but Skip" (high rating, low hours), "Guilty Pleasure" (low rating, high hours), "Why Do You Buy These?" (low-low)
-**Files to modify**: New chart in `AdvancedCharts.tsx` or new `components/GenreMatrix.tsx`
-**New calculations**: `getGenreSatisfactionMatrix(games)` → Array<{ genre, avgRating, avgHours, count }>
+#### 4. "On This Day" Retrospective
+Subtle card above tab bar when historical events match today's date. "1 year ago you started Elden Ring" / "6 months ago you completed Astro Bot." Match month+day across years from all date fields. Support shorter durations too — show 1-month, 3-month, 6-month, 1-year lookbacks. Carousel if multiple events. Game thumbnail + event + time ago.
+**Files**: `getOnThisDay(games)` in calculations.ts, `components/OnThisDayCard.tsx`, embed at top of page.tsx.
+**User note**: Include shorter durations (1mo, 3mo, 6mo), not just yearly anniversaries.
 
-#### 6. Guilt-Free Gaming Calculator
-**What**: Compare gaming cost-per-hour to other entertainment to show gaming's value.
-**Details**:
-- Bar chart: Gaming ($1.80/hr) vs Movies ($12/hr) vs Concerts ($25/hr) vs Dining ($15/hr) vs Streaming ($2/hr)
-- "Your gaming is 6.7x cheaper than going to the movies"
-- Uses your actual average cost-per-hour
-**Files to modify**: New component `components/ValueComparison.tsx`, add to StatsView
-**New calculations**: `getEntertainmentComparison(avgCostPerHour)` → comparison data
+#### 5. Price Sweet Spot + Discount Effectiveness
+Group games by price bracket ($0-15, $15-30, $30-50, $50-70, $70+). Per bracket: avg rating, avg hours, avg cost-per-hour, completion rate, count. "Your best value games are $15-30." **Plus discount analysis**: avg savings on discounted games, best deal ever, completion rate of discounted vs full-price games, "Discounted games give you 2x more hours on average."
+**Files**: `getPriceBracketAnalysis(games)` and `getDiscountInsights(games)` in calculations.ts, new section in StatsView.
+**User note**: Include discount-specific insights alongside price brackets.
 
-#### 7. Backlog Doomsday Clock
-**What**: Humorous countdown showing when your backlog will be cleared.
-**Details**:
-- "At your average completion rate of 1.3 games/month, your backlog will be cleared on March 15, 2028"
-- Visual clock/countdown animation
-- Updates dynamically as you complete games or add new ones
-- "You added games faster than you finished them last month — doomsday moved 2 months further!"
-**Files to modify**: Already partially exists as `getPredictedBacklogClearance()` in calculations.ts. New visual component `components/BacklogDoomsday.tsx`, add to StatsView or FunStatsPanel
-**Enhancement**: Add trend direction (getting better or worse) and humorous messaging
+#### 6. Cost-Per-Completion
+Total spent / games completed = your cost to finish a game. Show both "clean" (just completed) and "true" (including abandoned waste). Trend over time. "It costs you $125 on average to complete a game. If you stopped buying abandoned-genre games, it'd be $85."
+**Files**: `getCostPerCompletion(games)` in calculations.ts, display in ExpandedStatsPanel.
 
-### Phase 2: High Impact, Medium Effort
+#### 7. Activity Pulse
+Real-time indicator in page header showing current gaming state. Based on recent play frequency: "On Fire" (daily this week), "Cruising" (3-5 days), "Casual" (1-2 days), "Cooling Off" (nothing this week), "Hibernating" (2+ weeks). Pulsing glow animation — faster when more active. Makes the app feel alive.
+**Files**: `getActivityPulse(games)` in calculations.ts, visual component in page.tsx header, CSS pulse animation.
 
-#### 8. Game Detail View
-**What**: Dedicated full-page view for each game instead of cramming into cards/modals.
-**Details**:
-- Play history graph (hours over time from play logs)
-- Value trajectory chart (cost-per-hour dropping over time as you play more)
-- Session timeline with notes
-- All metadata cleanly laid out
-- Quick actions: log time, edit, change status
-- Related games in same franchise
-**Files to modify**: New route `app/apps/game-analytics/game/[id]/page.tsx` or modal-based detail view
-**Impact**: Major UX uplift — the single biggest structural improvement
+#### 8. Rating Distribution & Bias Analysis
+Histogram of 1-10 ratings. Are you generous (mostly 7-10) or tough? Show average, median, mode. "You're a generous rater — 70% of games are 7+." Detect rating inflation over time (newer games rated higher?). Compare to balanced distribution.
+**Files**: `getRatingDistribution(games)` in calculations.ts, chart in StatsView.
 
-#### 9. Advanced Filtering & Search
-**What**: Real filter bar with multi-criteria search.
-**Details**:
-- Text search by name
-- Multi-select: genre, platform, status, purchase source
-- Range sliders: price, rating, hours played
-- Saved filter presets
-- Active filter indicator with clear button
-**Files to modify**: New `components/FilterBar.tsx`, update `page.tsx` filtering logic
+### Phase 2: Analytics (Complex calculations + visualizations)
 
-#### 10. Value Over Time Chart (per-game)
-**What**: Chart showing how a game's cost-per-hour drops as you accumulate play hours.
-**Details**:
-- X-axis: cumulative hours (from play logs), Y-axis: cost-per-hour at that point
-- Horizontal lines at value thresholds (Excellent/Good/Fair/Poor)
-- Shows the inflection point where a game becomes "worth it"
-- "After 12 more hours, this game reaches Excellent value"
-**Files to modify**: Add to game detail view, new calculation `getValueOverTime(game)` → Array<{ hours, costPerHour }>
+#### 9. Completion Probability Predictor
+Per-game prediction: likelihood you'll finish based on your history. Factors: genre completion rate, session frequency decay, days since last session, hours invested vs typical for genre. Badge on game cards: "73% likely to complete." Factor breakdown in detail view.
+**Files**: `getCompletionProbability(game, allGames)` in calculations.ts, badge display in page.tsx game cards.
 
-#### 11. Price Sweet Spot Analysis
-**What**: Which price brackets give you the best value and satisfaction?
-**Details**:
-- Group games by price range ($0-15, $15-30, $30-50, $50-70, $70+)
-- Show: avg rating, avg hours, avg cost-per-hour, completion rate per bracket
-- "Your best value games are in the $15-30 range"
-**Files to modify**: Add to `lib/calculations.ts` and `StatsView.tsx`
-**New calculations**: `getPriceBracketAnalysis(games)` → Array<{ bracket, avgRating, avgHours, avgCostPerHour, completionRate, count }>
+#### 10. Genre Satisfaction Matrix
+Bubble chart. X: avg hours per genre, Y: avg rating per genre, bubble size: game count. Four quadrants: "Love & Play" (high-high), "Love but Skip" (high rating, low hours), "Guilty Pleasure" (low rating, high hours), "Why Buy These?" (low-low). Actionable insight text.
+**Files**: `getGenreSatisfactionMatrix(games)` in calculations.ts, `components/GenreMatrix.tsx` or embed in AdvancedCharts.
 
-#### 12. Shareable Stats Cards (Gaming Wrapped)
-**What**: Export beautiful stat summary cards as images, like Spotify Wrapped.
-**Details**:
-- Top 5 games, total hours, personality type, favorite genre
-- Designed for sharing (social-media-friendly aspect ratios)
-- Seasonal/yearly/monthly variants
-- Uses html2canvas or similar for image export
-**Files to modify**: New `components/ShareableCard.tsx`, export logic
-**Dependency**: May need `html2canvas` package
+#### 11. Day-of-Week & Seasonal Patterns
+Two charts from play log date analysis. (1) Day-of-week bar: hours Mon-Sun. "Weekend warrior — 68% Sat/Sun." (2) Monthly heatmap across years. "You game 3x more in Dec than June." Identify most productive day and least active month.
+**Files**: `getDayOfWeekPattern(games)` and `getSeasonalPattern(games)` in calculations.ts, charts in StatsView.
 
-### Phase 3: Fun & Engagement Features
+#### 12. Abandonment Autopsy
+For abandoned games, pattern analysis. Genre correlation (abandon certain genres more?), price bracket correlation, session decay pattern before abandonment, competing games (started something new right before?). "You've abandoned 4/6 open-world games after 8-12 hours. Do you enjoy open-world or just the idea of it?"
+**Files**: `getAbandonmentAnalysis(games)` in calculations.ts, panel in FunStatsPanel.
 
-#### 13. Milestone Celebrations
-**What**: Pop-up celebrations for gaming milestones.
-**Examples**: 100th hour logged, 10th game completed, first 10/10 rating, sub-$0.50/hr cost-per-hour achieved, 7-day streak
-**Details**:
-- Toast/modal notification with confetti animation
-- Milestone history log
-- Track which milestones have been shown
-**Files to modify**: New `hooks/useMilestones.ts`, milestone tracking in localStorage, integrate with `page.tsx`
+### Phase 3: Engagement (Interactive features + gamification)
 
-#### 14. "On This Day" Retrospective
-**What**: Nostalgia triggers from your gaming history.
-**Examples**: "One year ago today you started Elden Ring", "6 months ago you completed Astro Bot"
-**Details**:
-- Show on main page as a subtle card when relevant events exist
-- Pull from playLogs, datePurchased, startDate, endDate
-**Files to modify**: New calculation `getOnThisDay(games)`, display component
+#### 13. Random Game Picker ("Spin the Wheel")
+Modal with filters: genre, platform, mood (quick session / deep dive / anything). Slot-machine reel animation spinning through game thumbnails. Only owned, unfinished games. "Lock in" (changes status to In Progress) or "Spin again." Shows picked game's stats.
+**Files**: `components/RandomPicker.tsx`, floating action button or modal trigger on Games tab.
 
-#### 15. Game of the Month/Year Awards
-**What**: Auto-generated awards at period end.
-**Categories**: Most Played, Best Value, Biggest Surprise, Most Regretted, Fastest Completion, Best ROI
-**Details**:
-- Auto-selects winners from data
-- Presentation card with "award" styling
-- Year-end summary collecting all monthly winners
-**Files to modify**: New `calculations` functions + `components/AwardsPanel.tsx`
+#### 14. Milestone Celebrations
+Track + celebrate gaming milestones. Expanded list: 50th/100th/500th/1000th hour, 5th/10th/25th/50th game completed, first 10/10 rating, first sub-$0.50/hr game, 7-day/30-day streak, first game in new genre, library hits 25/50/100 games, backlog cleared 50%, budget under target full quarter, first franchise with 3+ entries. Toast with confetti on trigger. Milestones section showing earned + upcoming with progress bars. localStorage tracking of shown milestones.
+**Files**: `hooks/useMilestones.ts`, `components/MilestoneCelebration.tsx`, milestone definitions in calculations or `lib/milestones.ts`, integrate with page.tsx.
+**User note**: "More" milestones — expanded list beyond basics.
 
-#### 16. Personality Evolution Timeline
-**What**: Track how your gaming personality changes over time.
-**Details**:
-- Calculate personality per month/quarter
-- Timeline showing personality shifts
-- "You started as a Backlog Hoarder but evolved into a Completionist over 6 months"
-**Files to modify**: New calculation using `getGamingPersonality()` per time window, new visualization
+#### 15. Collection Trophies
+Visual trophy shelf — NOT just time-based. Trophy categories:
+- **Time**: Century Club (50/100/200hrs on one game), Marathon Master (8hr+ session), Night Owl (late sessions)
+- **Money**: Bargain Hunter (avg discount >40%), Thrift King (5+ games under $10), Big Spender (spent $1000+)
+- **Completion**: Finisher (10/25/50 completed), Speedrunner (completed in <7 days), Perfectionist (80%+ completion rate)
+- **Variety**: Genre Explorer (5/10/15 genres), Platform Hopper (4+ platforms), Franchise Devotee (3+ games in one franchise)
+- **Behavior**: Consistent (30-day streak), Impulse Buyer (bought+played same day 5x), Patient Gamer (avg 30+ days before first play)
+- **Rating**: Tough Critic (avg rating <6), Enthusiast (avg rating >8), Balanced (std dev <1.5)
+Bronze/silver/gold tiers. Progress bars for locked. Trophy count in header.
+**Files**: `lib/trophies.ts` or extend `getGamingAchievements()`, `components/TrophyCase.tsx`.
+**User note**: Not purely time-based — trophies for genre, behavior, spending, rating patterns.
 
-#### 17. Collection Trophies
-**What**: Visual trophy case for gaming achievements.
-**Examples**: "Century Club" (100+ hrs), "Bargain Hunter" (avg discount >40%), "Genre Explorer" (10+ genres), "Completionist Elite" (80%+ completion), "Marathon Master" (single 8+ hr session)
-**Details**:
-- Trophy shelf UI with earned/locked states
-- Bronze/silver/gold tiers per trophy
-- Progress bars for locked trophies
-**Files to modify**: Extend `getGamingAchievements()`, new `components/TrophyCase.tsx`
+#### 16. Game of the Month/Year Awards
+Auto-generated award nominees + **user picks the winner**. Categories: Most Played, Best Value, Biggest Surprise, Most Regretted, Fastest Completion, Best ROI. Show top 3 nominees per category (auto-selected from data), user taps to pick their winner. Year-end summary collecting all monthly winners. Award ribbon/badge styling.
+**Files**: `getAwardNominees(games, month, year)` in calculations.ts, `components/AwardsPanel.tsx`, localStorage for user picks.
+**User note**: User ability to choose winners, not purely auto-generated.
 
-#### 18. "What Should I Play Next?" Recommender
-**What**: Smart recommendation from your backlog based on your preferences.
-**Details**:
-- Factors: genre preference (rating correlation), current mood (quick vs. deep), recent genres (avoid fatigue), time available, queue position
-- "Based on your love of RPGs and your 2-hour window, try Persona 5"
-- Multiple suggestions ranked by match score
-**Files to modify**: New `getRecommendation(games, preferences)` in calculations, new component
+### Phase 4: Structure (New views + storage layers)
 
-#### 19. Day-of-Week & Seasonal Patterns
-**What**: When do you game most?
-**Details**:
-- Day-of-week chart from play log dates
-- Monthly/seasonal trends
-- "You're a weekend warrior — 68% of sessions on Sat/Sun"
-- "You game 3x more in December than June"
-**Files to modify**: New calculations from play log date analysis, charts in StatsView
+#### 17. "What If" Simulator
+Interactive toggles showing alternate realities:
+- "What if you bought all games at full price?" → total savings
+- "What if you never bought games played <2 hours?" → wasted spend
+- "What if you only bought games rated 7+?" → hypothetical library
+- "What if you completed every started game?" → potential hours
+Each toggle recalculates summary showing delta. Eye-opening for future purchase decisions.
+**Files**: `components/WhatIfSimulator.tsx`, pure calculation functions.
 
-#### 20. Franchise Deep Dive
-**What**: Dedicated franchise analytics page/panel.
-**Details**:
-- Total investment across all entries
-- Rating trajectory (are sequels getting better or worse?)
-- Hours per entry
-- Cost-per-hour across franchise
-- Average time between entries
-**Files to modify**: New `components/FranchiseAnalytics.tsx`, calculations using existing franchise data
+#### 18. Value Over Time Chart (per-game)
+For games with play logs: line chart of cost-per-hour dropping over cumulative hours. Horizontal reference lines at $1/$3/$5 thresholds. Predictive line: "12 more hours to reach Excellent value." Integrate into Game Detail View.
+**Files**: `getValueOverTime(game)` in calculations.ts, chart component for detail view.
 
-### Implementation Priority
+#### 19. Game Detail View (Additive — Keep Compact Cards)
+Expandable detail panel or slide-over — NOT replacing current compact card view. Shows: large thumbnail + hero metadata, play history graph (hours over time), value trajectory (#18), session timeline with notes, quick actions (log time, edit, status change), franchise context, completion probability (#9). Click card to expand into detail.
+**Files**: `components/GameDetailPanel.tsx` or `components/GameDetailView.tsx`, integrate with page.tsx.
+**User note**: "I like the compact view, don't change that, just add this."
 
-**Recommended order** (value vs. effort):
-1. Random Game Picker (#1) — fun, lightweight, immediate delight
-2. Guilt-Free Calculator (#6) — fun conversation piece, easy to build
-3. Backlog Doomsday Clock (#7) — builds on existing calculation, humorous
-4. Spending Forecast (#4) — practical, builds on existing budget feature
-5. Completion Probability (#3) — genuinely novel insight
-6. Genre Satisfaction Matrix (#5) — powerful visualization
-7. Gaming Goals (#2) — drives engagement, needs storage layer
-8. Game Detail View (#8) — biggest UX uplift, most effort
-9. Advanced Filtering (#9) — power user essential
-10. Everything in Phase 3 — fun additions after core improvements
+#### 20. Gaming Goals & Challenges
+Personal goals with progress tracking. Types: completion count, spending limit, hours target, genre variety, backlog clearance, custom. Progress bars. Goal history (past goals + whether hit). Needs own storage layer (HybridRepository). Firestore rules update needed.
+**Files**: Goal interface in `lib/types.ts`, `lib/goals-storage.ts`, `hooks/useGoals.ts`, `components/GoalsPanel.tsx`.
+
+#### 21. Personality Evolution Timeline
+Calculate personality per quarter using `getGamingPersonality()` on time-windowed subsets. Horizontal timeline: "Q1: Backlog Hoarder → Q2: Sampler → Q3: Deep Diver → Q4: Completionist." Insight: "Your Completionist score rose 40% in 6 months."
+**Files**: `getPersonalityEvolution(games, quarters)` in calculations.ts, visualization in ExpandedStatsPanel.
+
+#### 22. Weekly Digest / Gaming Journal
+Auto-generated weekly narrative. "This week: 3 games, 14.5 hours. Great progress on Zelda (8hrs). Velocity up 20%. Cost-per-hour improved to $1.50. Milestone: 100 hours on Elden Ring!" Combine `getWeekStatsForOffset()` with narrative templates. Archivable past digests.
+**Files**: `components/WeeklyDigest.tsx`, narrative template logic, integrate with Week in Review.
+
+#### 23. Franchise Deep Dive
+Franchise analytics panel for series with 2+ games. Total investment, rating trajectory (line chart — sequels better or worse?), hours per entry, cost-per-hour across franchise, time between entries. "Your Final Fantasy journey: 4 games, 280hrs, $180, ratings trending up."
+**Files**: `components/FranchiseAnalytics.tsx`, calculations using existing franchise data.
+
+#### 24. "What Should I Play Next?" Recommender
+Smart backlog recommendation. Factors: genre preference (weighted by rating), mood (quick/deep/anything), recent genres (avoid fatigue), time available (slider), queue position. Top 3 with match score + reasoning. "Based on your love of RPGs and 2-hour window: try Persona 5."
+**Files**: `getRecommendations(games, preferences)` in calculations.ts, `components/GameRecommender.tsx`.
+
+### Phase 5: Week in Review Integration
+
+Bring the best new stats into the Week in Review story mode screens:
+- Activity Pulse indicator (#7)
+- Guilt-Free comparison stat (from #1)
+- Completion probability for active games (#9)
+- Milestone celebrations triggered during recap (#14)
+- Doomsday clock update (#2)
+- Rating bias insight (#8)
+- Award nominees for the month (#16)
+
+### Implementation Order
+
+| # | Feature | Phase | Effort |
+|---|---------|-------|--------|
+| 1 | Guilt-Free Gaming Calculator | 1 | Low |
+| 2 | Backlog Doomsday Clock | 1 | Low |
+| 3 | Spending Forecast | 1 | Low |
+| 4 | "On This Day" Retrospective | 1 | Low |
+| 5 | Price Sweet Spot + Discounts | 1 | Low |
+| 6 | Cost-Per-Completion | 1 | Low |
+| 7 | Activity Pulse | 1 | Low |
+| 8 | Rating Distribution & Bias | 1 | Low |
+| 9 | Completion Probability | 2 | Medium |
+| 10 | Genre Satisfaction Matrix | 2 | Medium |
+| 11 | Day-of-Week & Seasonal | 2 | Medium |
+| 12 | Abandonment Autopsy | 2 | Medium |
+| 13 | Random Game Picker | 3 | Medium |
+| 14 | Milestone Celebrations | 3 | Medium |
+| 15 | Collection Trophies | 3 | Medium |
+| 16 | Game of Month/Year Awards | 3 | Medium |
+| 17 | "What If" Simulator | 4 | Medium |
+| 18 | Value Over Time Chart | 4 | Medium |
+| 19 | Game Detail View | 4 | High |
+| 20 | Gaming Goals | 4 | High |
+| 21 | Personality Evolution | 4 | Medium |
+| 22 | Weekly Digest | 4 | Medium |
+| 23 | Franchise Deep Dive | 4 | Medium |
+| 24 | Play Next Recommender | 4 | Medium |
+| -- | Week in Review integration | 5 | Medium |
 
 ---
 
@@ -1434,12 +1393,17 @@ This section provides comprehensive documentation of the Game Analytics mini-app
 
 ## Changelog
 
-### 2025-02-06
+### 2025-02-06 (v2.1.0)
+- Refined Enhancement Plan: 24 approved features across 5 phases with user feedback
+- Added new features: Activity Pulse, Rating Bias, Cost-Per-Completion, What If Simulator, Abandonment Autopsy, Discount Insights
+- Incorporated user preferences: shorter "On This Day" durations, genre-based trophies, user-selectable awards, keep compact cards
+
+### 2025-02-06 (v2.0.0)
 - Added comprehensive Game Analytics Deep Dive section (~400 lines)
 - Documented all 70+ calculation functions, 20+ components, 5 hooks
 - Added full data model documentation with all types
 - Added UI architecture diagram and component hierarchy
-- Added Game Analytics Enhancement Plan with 20 features across 3 phases
+- Added initial Enhancement Plan with 20 features across 3 phases
 - Updated directory structure to reflect actual file inventory
 - Updated Game type example to match current 20+ field model
 
@@ -1451,5 +1415,5 @@ This section provides comprehensive documentation of the Game Analytics mini-app
 ---
 
 **Last Updated**: 2025-02-06
-**Version**: 2.0.0
+**Version**: 2.1.0
 **Maintained by**: AI assistants and contributors

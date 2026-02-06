@@ -57,6 +57,10 @@ import { FunStatsPanel } from './FunStatsPanel';
 import { AdvancedCharts } from './AdvancedCharts';
 import { GamingHeatmap } from './GamingHeatmap';
 import { ExpandedStatsPanel } from './ExpandedStatsPanel';
+import { InsightsPanel } from './InsightsPanel';
+import { AnalyticsPanel } from './AnalyticsPanel';
+import { TrophyRoom } from './TrophyRoom';
+import { DiscoverPanel } from './DiscoverPanel';
 import clsx from 'clsx';
 
 interface StatsViewProps {
@@ -997,6 +1001,23 @@ export function StatsView({ games, summary, budgets = [], onSetBudget }: StatsVi
 
       {/* Fun Stats Panel */}
       <FunStatsPanel games={games} />
+
+      {/* Deep Insights Panel (Phase 1 Enhancements) */}
+      <InsightsPanel
+        games={games}
+        totalHours={summary.totalHours}
+        avgCostPerHour={summary.averageCostPerHour}
+        budgets={budgets}
+      />
+
+      {/* Advanced Analytics Panel (Phase 2) */}
+      <AnalyticsPanel games={games} />
+
+      {/* Trophy Room (Phase 3) */}
+      <TrophyRoom games={games} />
+
+      {/* Discover & Recommend (Phase 4) */}
+      <DiscoverPanel games={games} />
 
       {/* Expanded Deep Insights Panel */}
       <ExpandedStatsPanel games={games} />
