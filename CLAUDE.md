@@ -187,23 +187,56 @@ service cloud.firestore {
 one_app/
 ├── app/                           # Next.js App Router
 │   ├── apps/                      # Mini-apps directory
-│   │   └── game-analytics/        # Example mini-app
-│   │       ├── components/        # App-specific components
-│   │       │   ├── BlendScoreChart.tsx
-│   │       │   ├── GameForm.tsx
-│   │       │   ├── GameTable.tsx
-│   │       │   └── StatsPanel.tsx
+│   │   └── game-analytics/        # Flagship mini-app (see Deep Dive section below)
+│   │       ├── components/        # App-specific components (~20 files)
+│   │       │   ├── AIChatModal.tsx       # Chat interface for AI analysis
+│   │       │   ├── AIChatTab.tsx         # AI coach tab with context-aware analysis
+│   │       │   ├── AdvancedCharts.tsx    # Multi-chart visualizations
+│   │       │   ├── DailyActivityChart.tsx # Day-by-day activity chart
+│   │       │   ├── ExpandedStatsPanel.tsx # Detailed stat breakdowns
+│   │       │   ├── FunStatsPanel.tsx     # Fun/personality stats, achievements, gems, regrets
+│   │       │   ├── GameBreakdownChart.tsx # Genre/platform spending breakdown
+│   │       │   ├── GameCharts.tsx        # Multi-chart view of metrics
+│   │       │   ├── GameForm.tsx          # Add/edit game modal (all fields)
+│   │       │   ├── GameListModal.tsx     # Select games from list
+│   │       │   ├── GamingHeatmap.tsx     # Visual gaming pattern heatmap
+│   │       │   ├── PeriodStatsPanel.tsx  # Period-based stats (7d, 30d, etc.)
+│   │       │   ├── PlayLogModal.tsx      # Log individual play sessions
+│   │       │   ├── QueueGameCard.tsx     # Game card for Up Next queue
+│   │       │   ├── QuickAddTimeModal.tsx # Quick play session entry
+│   │       │   ├── StatsView.tsx         # Comprehensive stats dashboard
+│   │       │   ├── TimelinePeriodCards.tsx # Timeline period summary cards
+│   │       │   ├── TimelineView.tsx      # Monthly timeline of gaming events
+│   │       │   ├── UpNextTab.tsx         # Drag-and-drop queue management
+│   │       │   ├── WeekInReview.tsx      # Weekly stats visualization
+│   │       │   ├── WeekStoryMode.tsx     # Narrative-style week summary
+│   │       │   └── story-screens/        # Individual story mode screens (~18 files)
+│   │       │       ├── OpeningScreen.tsx, TopGameScreen.tsx, Top3GamesScreen.tsx,
+│   │       │       ├── TotalHoursScreen.tsx, DailyBreakdownScreen.tsx,
+│   │       │       ├── SessionTypesScreen.tsx, BestValueScreen.tsx,
+│   │       │       ├── GamingPersonalityScreen.tsx, GenreUniverseScreen.tsx,
+│   │       │       ├── GamingHeatmapScreen.tsx, ValueUtilizedScreen.tsx,
+│   │       │       ├── MoneyComparisonScreen.tsx, AchievementsScreen.tsx,
+│   │       │       ├── ComparisonScreen.tsx, FunFactsScreen.tsx,
+│   │       │       ├── WeekVibeScreen.tsx, TimeTravelScreen.tsx,
+│   │       │       ├── AIBlurbScreen.tsx, ClosingScreen.tsx
 │   │       ├── hooks/             # Custom React hooks
-│   │       │   ├── useAnalytics.ts
-│   │       │   └── useGames.ts
+│   │       │   ├── useAnalytics.ts      # Metrics calculation & memoization
+│   │       │   ├── useBudget.ts         # Yearly budget tracking
+│   │       │   ├── useGameQueue.ts      # "Up Next" queue management
+│   │       │   ├── useGameThumbnails.ts # Auto-fetch RAWG thumbnails
+│   │       │   └── useGames.ts          # Core game CRUD operations
 │   │       ├── lib/               # Business logic & utilities
-│   │       │   ├── calculations.ts  # Pure functions
-│   │       │   ├── storage.ts       # Repository implementation
-│   │       │   └── types.ts         # TypeScript interfaces
+│   │       │   ├── ai-service.ts        # AI analysis service
+│   │       │   ├── budget-storage.ts    # Budget repository (Hybrid)
+│   │       │   ├── calculations.ts      # 70+ pure functions (~2300 lines)
+│   │       │   ├── rawg-api.ts          # RAWG API integration for thumbnails
+│   │       │   ├── storage.ts           # Game repository (Hybrid)
+│   │       │   └── types.ts             # TypeScript interfaces
 │   │       ├── data/              # Static/seed data
-│   │       │   └── baseline-games.ts
-│   │       ├── layout.tsx         # App layout (optional)
-│   │       └── page.tsx           # Main entry point
+│   │       │   └── baseline-games.ts    # Sample games for demo/onboarding
+│   │       ├── layout.tsx         # App layout
+│   │       └── page.tsx           # Main entry point (tab-based: Games, Timeline, Stats, AI Coach, Up Next)
 │   ├── layout.tsx                 # Root layout with Navigation
 │   ├── page.tsx                   # Hub home page
 │   └── globals.css                # Global styles
@@ -332,21 +365,37 @@ export function useItems() {
 
 **All data must be typed**:
 ```typescript
-// lib/types.ts
+// lib/types.ts - Game Analytics example (see Deep Dive for full types)
+export type GameStatus = 'Not Started' | 'In Progress' | 'Completed' | 'Wishlist' | 'Abandoned';
+export type PurchaseSource = 'Steam' | 'PlayStation' | 'Xbox' | 'Nintendo' | 'Epic' | 'GOG' | 'Physical' | 'Other';
+export type SubscriptionSource = 'PS Plus' | 'Game Pass' | 'Epic Free' | 'Prime Gaming' | 'Humble Choice' | 'Other';
+
 export interface Game {
   id: string;
+  userId: string;
   name: string;
   price: number;
-  hours: number;
-  rating: number;
+  hours: number;           // Baseline hours (manual entry)
+  rating: number;          // 1-10
   status: GameStatus;
-  notes?: string;          // Optional fields with ?
+  platform?: string;
+  genre?: string;
+  franchise?: string;      // Game series (e.g., "Final Fantasy")
+  purchaseSource?: PurchaseSource;
+  acquiredFree?: boolean;  // Free/subscription game tracking
+  originalPrice?: number;  // For calculating savings
+  subscriptionSource?: SubscriptionSource;
+  notes?: string;
+  review?: string;         // Personal review/thoughts
   datePurchased?: string;
+  startDate?: string;      // When started playing
+  endDate?: string;        // When finished/stopped
+  playLogs?: PlayLog[];    // Individual play sessions
+  thumbnail?: string;      // Auto-fetched from RAWG API
+  queuePosition?: number;  // Position in "Up Next" queue
   createdAt: string;       // ISO date strings
   updatedAt: string;
 }
-
-export type GameStatus = 'Not Started' | 'In Progress' | 'Completed';
 ```
 
 **Type conventions**:
@@ -971,6 +1020,408 @@ export interface MyRepository {
 
 ---
 
+## Game Analytics Deep Dive
+
+This section provides comprehensive documentation of the Game Analytics mini-app — the flagship app in the hub. It is the most complex mini-app with ~11,400 lines of code across 50+ files. **Read this section before modifying any game-analytics code.**
+
+### File Inventory (~11,400 LOC)
+
+| File | Purpose | LOC (approx) |
+|------|---------|---------------|
+| `page.tsx` | Main entry: tab nav (Games/Timeline/Stats/AI Coach/Up Next), header stats, game cards, sort/filter | ~600 |
+| `lib/types.ts` | All interfaces: Game, PlayLog, GameMetrics, AnalyticsSummary, BudgetSettings, GameRepository | ~123 |
+| `lib/calculations.ts` | 70+ pure functions for metrics, analytics, personality, achievements | ~2,300 |
+| `lib/storage.ts` | HybridRepository: LocalStorage + Firebase game CRUD | ~200 |
+| `lib/budget-storage.ts` | HybridRepository for yearly budget settings | ~200 |
+| `lib/rawg-api.ts` | RAWG API integration: search, batch fetch, 7-day localStorage cache | ~150 |
+| `lib/ai-service.ts` | AI analysis service for gaming coach | ~100 |
+| `hooks/useGames.ts` | Core CRUD: games, loading, error, addGame, updateGame, deleteGame, refresh | ~80 |
+| `hooks/useAnalytics.ts` | Memoized: gamesWithMetrics (enriched games), summary (aggregate stats) | ~50 |
+| `hooks/useBudget.ts` | Budget CRUD: budgets, setBudget, deleteBudget, getBudgetForYear | ~60 |
+| `hooks/useGameQueue.ts` | Queue: queuedGames, availableGames, addToQueue, removeFromQueue, reorderQueue | ~80 |
+| `hooks/useGameThumbnails.ts` | Auto-fetch RAWG thumbnails with rate limiting + localStorage cache | ~60 |
+| `components/StatsView.tsx` | Dashboard: charts, breakdowns by genre/platform/source, budget tracking | ~800 |
+| `components/FunStatsPanel.tsx` | Fun stats: personality, achievements, hidden gems, regret purchases, streaks | ~600 |
+| `components/TimelineView.tsx` | Monthly timeline of all gaming events (purchases, starts, completions, logs) | ~500 |
+| `components/WeekStoryMode.tsx` | Instagram-story-style weekly wrap with 18 animated screens | ~300 |
+| `components/WeekInReview.tsx` | Weekly stats visualization | ~200 |
+| `components/UpNextTab.tsx` | Drag-and-drop queue management with search | ~250 |
+| `components/GameForm.tsx` | Full game add/edit modal with all fields | ~400 |
+| `components/PlayLogModal.tsx` | Add play sessions with date, hours, notes | ~200 |
+| `components/AIChatTab.tsx` | AI coach tab with week/month context | ~150 |
+| `components/AdvancedCharts.tsx` | Scatter, radar, area charts | ~300 |
+| `components/GamingHeatmap.tsx` | Visual gaming pattern heatmap | ~200 |
+| `data/baseline-games.ts` | Sample games for demo/onboarding | ~500 |
+| `story-screens/*.tsx` | 18 individual story mode screens | ~1,500 total |
+
+### Data Model
+
+**Core Types** (in `lib/types.ts`):
+- `Game` — 20+ fields: id, userId, name, price, hours, rating, status, platform, genre, franchise, purchaseSource, acquiredFree, originalPrice, subscriptionSource, notes, review, datePurchased, startDate, endDate, playLogs[], thumbnail, queuePosition, createdAt, updatedAt
+- `PlayLog` — id, date, hours, notes (individual play sessions)
+- `GameStatus` — 'Not Started' | 'In Progress' | 'Completed' | 'Wishlist' | 'Abandoned'
+- `PurchaseSource` — Steam, PlayStation, Xbox, Nintendo, Epic, GOG, Physical, Other
+- `SubscriptionSource` — PS Plus, Game Pass, Epic Free, Prime Gaming, Humble Choice, Other
+- `GameMetrics` — costPerHour, blendScore, normalizedCost, valueRating, roi, daysToComplete
+- `AnalyticsSummary` — 30+ aggregate fields: counts, financial, time, completion, highlights, breakdowns by genre/platform/source/year/franchise, subscription stats
+- `BudgetSettings` — id, userId, year, yearlyBudget, createdAt, updatedAt
+- `GameRepository` — setUserId, getAll, getById, create, update, delete
+
+### Calculations Engine (~70 exported functions)
+
+**Core Metrics:**
+- `getTotalHours(game)` — baseline hours + sum of playLog hours
+- `calculateCostPerHour(price, hours)` — price / hours
+- `calculateBlendScore(rating, costPerHour)` — combines rating (0-10) and cost efficiency against $3.50/hr baseline
+- `getValueRating(costPerHour)` — Excellent (<=1), Good (<=3), Fair (<=5), Poor (>5)
+- `calculateROI(rating, hours, price)` — exponential rating weight formula (calibrated: $70, 15h, 9/10 = ROI of 10)
+- `calculateDaysToComplete(startDate, endDate)` — days between dates
+- `calculateMetrics(game)` — returns full GameMetrics object
+- `calculateSummary(games)` — returns full AnalyticsSummary with all breakdowns
+
+**Time-Based Analytics:**
+- `getAllPlayLogs(games)` — all play sessions across all games, sorted by date
+- `getHoursByMonth(games)` — hours aggregated by month
+- `getSpendingByMonth(games)` — spending aggregated by month
+- `getCumulativeSpending(games)` — monthly cumulative spend chart data
+- `getPeriodStats(games, days)` / `getPeriodStatsForRange(games, start, end)` — gamesPlayed, totalHours, totalSessions, mostPlayedGame, avgSessionLength for any period
+- `getLastWeekStats(games)` / `getLastMonthStats(games)` — convenience wrappers
+- `getWeekStatsForOffset(games, offset)` — comprehensive WeekInReviewData (~500 lines of logic): daily breakdown, achievements, personality, session analysis, comparisons to previous week, fun facts, money stats, genre/platform charts
+- `getLastCompletedWeekStats(games)` — auto-finds last week with activity
+- `getAvailableWeeksCount(games)` — how many weeks back have data
+- `getGamesPlayedInTimeRange(games, start, end)` — filter games by date range
+
+**Discovery & Insights:**
+- `findHiddenGems(games)` — low price, high hours, high rating
+- `findRegretPurchases(games)` — expensive, low playtime with regretScore
+- `findShelfWarmers(games)` — unstarted games sitting 30+ days
+- `getHiddenGems(games)` — alternate: games with high hours + high rating + low cost
+- `getValueChampion(games)` — lowest cost-per-hour paid game
+
+**Personality & Behavior:**
+- `getGamingPersonality(games)` — 7 types with scores: Completionist, Deep Diver, Sampler, Backlog Hoarder, Balanced Gamer, Speedrunner, Explorer
+- `getSessionAnalysis(games)` — 5 styles: Marathon Runner (3+hrs), Snack Gamer (<=1hr), Weekend Warrior, Consistent Player, Binge & Rest
+- `getRotationStats(games)` — active games (last 14 days), cooling off (30-60+ days), rotation health: Obsessed/Focused/Healthy/Juggling/Overwhelmed
+
+**Streaks & Velocity:**
+- `getCurrentGamingStreak(games)` / `getLongestGamingStreak(games)` — consecutive days with play logs
+- `getGamingVelocity(games, days)` — hours per day over period
+- `getBestGamingMonth(games)` — highest hour month
+- `getCompletionVelocity(games)` — games completed per month
+
+**Fun/Creative Stats:**
+- `getImpulseBuyerStat(games)` — avg days between purchase and first play
+- `getBacklogInDays(games)` — estimated days to clear backlog (20h/game)
+- `getGenreDiversity(games)` — unique genres as % of total
+- `getCommitmentScore(games)` — % of library with 10+ hours
+- `getFastestCompletion(games)` / `getSlowestCompletion(games)` — completion speed records
+- `getLongestSession(games)` — longest single play session
+- `getCenturyClubGames(games)` — games with 100+ hours
+- `getQuickFixGames(games)` — games under 5 hours total
+- `getPatientGamerStats(games)` — games bought on discount: count, avgDiscount, totalSaved
+- `getCompletionistRate(games)` — various completion metrics
+- `getMostInvestedFranchise(games)` — franchise with most spending/hours
+- `getAverageDiscount(games)` — average discount % across discounted games
+- `getNightOwlScore(games)` — placeholder for time-of-day analysis
+
+**Advanced Analytics:**
+- `getDiscountEffectiveness(games)` — avgSavings per discounted game, bestDeal
+- `getPlatformPreference(games)` — hours and score by platform
+- `getMoneyStats(games)` — comprehensive money analysis for story mode
+- `getGamingAchievements(games)` — 20+ fun achievements with name, description, earned status
+- `getYearInReview(games, year)` — comprehensive yearly stats
+- `getLifetimeStats(games)` — lifetime totals across all data
+- `getPredictedBacklogClearance(games)` — when backlog will be finished
+- `getGenreRutAnalysis(games)` — detect if stuck in one genre
+- `getMonthlyTrends(games, monthCount)` — trends over months for forecasting
+- `getROIRating(roi)` — Excellent/Good/Fair/Poor for ROI values
+
+### UI Architecture
+
+**Main Page Layout** (`page.tsx`):
+```
+┌─────────────────────────────────────────────────────┐
+│ Header: 6 stat cards (games, hours, spent, avg      │
+│         rating, cost/hr, completion rate)            │
+│ Highlights: best value, most played game             │
+├─────────────────────────────────────────────────────┤
+│ Tab Bar: [Games] [Timeline] [Stats] [AI Coach] [Up Next] │
+├─────────────────────────────────────────────────────┤
+│ Games Tab:                                           │
+│   Filter: All | Owned | Wishlist                     │
+│   Sort: Recently Played | Date Added | Name |        │
+│         Price | Hours | Rating | Value                │
+│   Game Cards: thumbnail, status, tags, value rating, │
+│              stats grid, review, play log summary,    │
+│              action buttons (log time, queue, delete) │
+│   + Add Game button / Load Samples (empty state)     │
+├─────────────────────────────────────────────────────┤
+│ Timeline Tab: monthly groups of events               │
+│ Stats Tab: charts, breakdowns, budget, fun stats     │
+│ AI Coach Tab: AI-powered gaming analysis             │
+│ Up Next Tab: drag-and-drop priority queue            │
+└─────────────────────────────────────────────────────┘
+```
+
+**Component Hierarchy**:
+- `page.tsx` → orchestrates all hooks, manages state, renders tabs
+  - `GameForm` → modal for add/edit with all game fields
+  - `PlayLogModal` → modal for logging play sessions
+  - `TimelineView` → monthly event timeline with `TimelinePeriodCards`
+  - `StatsView` → dashboard with sub-panels:
+    - `PeriodStatsPanel` — last 7d / 30d stats
+    - `FunStatsPanel` — personality, achievements, gems, regrets, streaks
+    - `AdvancedCharts` — scatter, radar, area charts
+    - `GamingHeatmap` — visual gaming patterns
+    - `ExpandedStatsPanel` — detailed breakdowns
+  - `AIChatTab` → AI coach with `AIChatModal`
+  - `UpNextTab` → queue with `QueueGameCard`
+  - `WeekInReview` → weekly stats with `WeekStoryMode` → 18 `story-screens/*`
+
+### Storage Layer
+
+**Pattern**: HybridRepository (same pattern for games and budgets)
+- **Not logged in** → `LocalStorageGameRepository` (key: `game-analytics-games-{userId}`)
+- **Logged in** → `FirebaseGameRepository` (Firestore collection: `games`, filtered by userId)
+- `HybridRepository` switches based on `setUserId()` + `isFirebaseConfigured()`
+- Budget uses same pattern: `LocalStorageBudgetRepository` / `FirebaseBudgetRepository` / `HybridBudgetRepository`
+
+**External Integrations:**
+- **RAWG API** (`lib/rawg-api.ts`): auto-fetches game thumbnails, 7-day localStorage cache, 300ms rate limiting, cleans game names for better search accuracy
+
+### Current Features Summary
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Game CRUD (add/edit/delete) | Done | Full form with 20+ fields |
+| Play session logging | Done | Individual sessions with date, hours, notes |
+| Auto-start on first play | Done | Changes status from 'Not Started' to 'In Progress' |
+| Sort by 7 criteria | Done | Recently played, date added, name, price, hours, rating, value |
+| Filter owned/wishlist | Done | Tab-style filter |
+| 50+ calculated metrics | Done | Personality, achievements, streaks, velocity, etc. |
+| Weekly story mode | Done | Instagram-story-style 18-screen weekly wrap |
+| Budget tracking | Done | Yearly budgets with spend tracking |
+| Up Next queue | Done | Drag-and-drop priority queue |
+| Timeline view | Done | Monthly event groupings |
+| RAWG thumbnails | Done | Auto-fetched with caching |
+| AI Coach | Done | Context-aware gaming analysis |
+| Charts (bar, pie, line, scatter, radar, area) | Done | Recharts library |
+| Gaming heatmap | Done | Visual play patterns |
+| Sample data loading | Done | Baseline games for new users |
+| Firebase cloud sync | Done | HybridRepository pattern |
+
+---
+
+## Game Analytics Enhancement Plan
+
+### Phase 1: High Impact, Lower Effort
+
+#### 1. Random Game Picker ("Spin the Wheel")
+**What**: Can't decide what to play? Animated randomizer picks from your backlog.
+**Details**:
+- Filter by genre, platform, estimated length, mood (quick session vs. deep dive)
+- Animated wheel/slot-machine spin for delight
+- "Lock in" or "spin again" buttons
+- Only picks from owned, unfinished games
+**Files to modify**: New component `components/RandomPicker.tsx`, add to `page.tsx` tabs or as modal
+**New calculations**: None needed (just filters existing games)
+
+#### 2. Gaming Goals & Challenges
+**What**: Set personal goals and track progress with visual progress bars.
+**Examples**: "Complete 12 games this year", "Spend under $500", "Try 3 new genres", "Clear 5 backlog games this month"
+**Details**:
+- Goal types: completion count, spending limit, genre variety, backlog clearance, hours target
+- Progress bars with percentage, visual milestones
+- Goal history: see past goals and whether you met them
+**Files to modify**: New `lib/goals-storage.ts`, new `hooks/useGoals.ts`, new `components/GoalsPanel.tsx`, update `lib/types.ts` with Goal interface
+**New types**: `Goal { id, userId, type, target, period, startDate, endDate, createdAt, updatedAt }`
+
+#### 3. Completion Probability Predictor
+**What**: Based on your history, predict how likely you are to finish a game.
+**Details**:
+- Analyze: genre completion rates, hours-to-abandon ratio, session frequency decay, days since last session
+- Per-game probability displayed on game cards: "73% likely to complete based on your RPG history"
+- Factors: genre match, current momentum (recent sessions), historical pattern for similar games
+**Files to modify**: Add to `lib/calculations.ts`, display in `page.tsx` game cards
+**New calculations**: `getCompletionProbability(game, allGames)` → number (0-100)
+
+#### 4. Spending Forecast
+**What**: Project annual spend based on monthly purchase patterns.
+**Details**:
+- "At your current pace, you'll spend ~$840 this year"
+- Trend line chart showing actual vs. projected vs. budget
+- Warning when on track to exceed budget
+**Files to modify**: Add to `lib/calculations.ts`, display in `StatsView.tsx`
+**New calculations**: `getSpendingForecast(games, year)` → { projected, monthlyAvg, onTrack }
+
+#### 5. Genre Satisfaction Matrix
+**What**: Scatter plot showing genre vs. average rating and average hours.
+**Details**:
+- X-axis: average hours per genre, Y-axis: average rating per genre
+- Bubble size: number of games in genre
+- Quadrants labeled: "Love & Play" (high-high), "Love but Skip" (high rating, low hours), "Guilty Pleasure" (low rating, high hours), "Why Do You Buy These?" (low-low)
+**Files to modify**: New chart in `AdvancedCharts.tsx` or new `components/GenreMatrix.tsx`
+**New calculations**: `getGenreSatisfactionMatrix(games)` → Array<{ genre, avgRating, avgHours, count }>
+
+#### 6. Guilt-Free Gaming Calculator
+**What**: Compare gaming cost-per-hour to other entertainment to show gaming's value.
+**Details**:
+- Bar chart: Gaming ($1.80/hr) vs Movies ($12/hr) vs Concerts ($25/hr) vs Dining ($15/hr) vs Streaming ($2/hr)
+- "Your gaming is 6.7x cheaper than going to the movies"
+- Uses your actual average cost-per-hour
+**Files to modify**: New component `components/ValueComparison.tsx`, add to StatsView
+**New calculations**: `getEntertainmentComparison(avgCostPerHour)` → comparison data
+
+#### 7. Backlog Doomsday Clock
+**What**: Humorous countdown showing when your backlog will be cleared.
+**Details**:
+- "At your average completion rate of 1.3 games/month, your backlog will be cleared on March 15, 2028"
+- Visual clock/countdown animation
+- Updates dynamically as you complete games or add new ones
+- "You added games faster than you finished them last month — doomsday moved 2 months further!"
+**Files to modify**: Already partially exists as `getPredictedBacklogClearance()` in calculations.ts. New visual component `components/BacklogDoomsday.tsx`, add to StatsView or FunStatsPanel
+**Enhancement**: Add trend direction (getting better or worse) and humorous messaging
+
+### Phase 2: High Impact, Medium Effort
+
+#### 8. Game Detail View
+**What**: Dedicated full-page view for each game instead of cramming into cards/modals.
+**Details**:
+- Play history graph (hours over time from play logs)
+- Value trajectory chart (cost-per-hour dropping over time as you play more)
+- Session timeline with notes
+- All metadata cleanly laid out
+- Quick actions: log time, edit, change status
+- Related games in same franchise
+**Files to modify**: New route `app/apps/game-analytics/game/[id]/page.tsx` or modal-based detail view
+**Impact**: Major UX uplift — the single biggest structural improvement
+
+#### 9. Advanced Filtering & Search
+**What**: Real filter bar with multi-criteria search.
+**Details**:
+- Text search by name
+- Multi-select: genre, platform, status, purchase source
+- Range sliders: price, rating, hours played
+- Saved filter presets
+- Active filter indicator with clear button
+**Files to modify**: New `components/FilterBar.tsx`, update `page.tsx` filtering logic
+
+#### 10. Value Over Time Chart (per-game)
+**What**: Chart showing how a game's cost-per-hour drops as you accumulate play hours.
+**Details**:
+- X-axis: cumulative hours (from play logs), Y-axis: cost-per-hour at that point
+- Horizontal lines at value thresholds (Excellent/Good/Fair/Poor)
+- Shows the inflection point where a game becomes "worth it"
+- "After 12 more hours, this game reaches Excellent value"
+**Files to modify**: Add to game detail view, new calculation `getValueOverTime(game)` → Array<{ hours, costPerHour }>
+
+#### 11. Price Sweet Spot Analysis
+**What**: Which price brackets give you the best value and satisfaction?
+**Details**:
+- Group games by price range ($0-15, $15-30, $30-50, $50-70, $70+)
+- Show: avg rating, avg hours, avg cost-per-hour, completion rate per bracket
+- "Your best value games are in the $15-30 range"
+**Files to modify**: Add to `lib/calculations.ts` and `StatsView.tsx`
+**New calculations**: `getPriceBracketAnalysis(games)` → Array<{ bracket, avgRating, avgHours, avgCostPerHour, completionRate, count }>
+
+#### 12. Shareable Stats Cards (Gaming Wrapped)
+**What**: Export beautiful stat summary cards as images, like Spotify Wrapped.
+**Details**:
+- Top 5 games, total hours, personality type, favorite genre
+- Designed for sharing (social-media-friendly aspect ratios)
+- Seasonal/yearly/monthly variants
+- Uses html2canvas or similar for image export
+**Files to modify**: New `components/ShareableCard.tsx`, export logic
+**Dependency**: May need `html2canvas` package
+
+### Phase 3: Fun & Engagement Features
+
+#### 13. Milestone Celebrations
+**What**: Pop-up celebrations for gaming milestones.
+**Examples**: 100th hour logged, 10th game completed, first 10/10 rating, sub-$0.50/hr cost-per-hour achieved, 7-day streak
+**Details**:
+- Toast/modal notification with confetti animation
+- Milestone history log
+- Track which milestones have been shown
+**Files to modify**: New `hooks/useMilestones.ts`, milestone tracking in localStorage, integrate with `page.tsx`
+
+#### 14. "On This Day" Retrospective
+**What**: Nostalgia triggers from your gaming history.
+**Examples**: "One year ago today you started Elden Ring", "6 months ago you completed Astro Bot"
+**Details**:
+- Show on main page as a subtle card when relevant events exist
+- Pull from playLogs, datePurchased, startDate, endDate
+**Files to modify**: New calculation `getOnThisDay(games)`, display component
+
+#### 15. Game of the Month/Year Awards
+**What**: Auto-generated awards at period end.
+**Categories**: Most Played, Best Value, Biggest Surprise, Most Regretted, Fastest Completion, Best ROI
+**Details**:
+- Auto-selects winners from data
+- Presentation card with "award" styling
+- Year-end summary collecting all monthly winners
+**Files to modify**: New `calculations` functions + `components/AwardsPanel.tsx`
+
+#### 16. Personality Evolution Timeline
+**What**: Track how your gaming personality changes over time.
+**Details**:
+- Calculate personality per month/quarter
+- Timeline showing personality shifts
+- "You started as a Backlog Hoarder but evolved into a Completionist over 6 months"
+**Files to modify**: New calculation using `getGamingPersonality()` per time window, new visualization
+
+#### 17. Collection Trophies
+**What**: Visual trophy case for gaming achievements.
+**Examples**: "Century Club" (100+ hrs), "Bargain Hunter" (avg discount >40%), "Genre Explorer" (10+ genres), "Completionist Elite" (80%+ completion), "Marathon Master" (single 8+ hr session)
+**Details**:
+- Trophy shelf UI with earned/locked states
+- Bronze/silver/gold tiers per trophy
+- Progress bars for locked trophies
+**Files to modify**: Extend `getGamingAchievements()`, new `components/TrophyCase.tsx`
+
+#### 18. "What Should I Play Next?" Recommender
+**What**: Smart recommendation from your backlog based on your preferences.
+**Details**:
+- Factors: genre preference (rating correlation), current mood (quick vs. deep), recent genres (avoid fatigue), time available, queue position
+- "Based on your love of RPGs and your 2-hour window, try Persona 5"
+- Multiple suggestions ranked by match score
+**Files to modify**: New `getRecommendation(games, preferences)` in calculations, new component
+
+#### 19. Day-of-Week & Seasonal Patterns
+**What**: When do you game most?
+**Details**:
+- Day-of-week chart from play log dates
+- Monthly/seasonal trends
+- "You're a weekend warrior — 68% of sessions on Sat/Sun"
+- "You game 3x more in December than June"
+**Files to modify**: New calculations from play log date analysis, charts in StatsView
+
+#### 20. Franchise Deep Dive
+**What**: Dedicated franchise analytics page/panel.
+**Details**:
+- Total investment across all entries
+- Rating trajectory (are sequels getting better or worse?)
+- Hours per entry
+- Cost-per-hour across franchise
+- Average time between entries
+**Files to modify**: New `components/FranchiseAnalytics.tsx`, calculations using existing franchise data
+
+### Implementation Priority
+
+**Recommended order** (value vs. effort):
+1. Random Game Picker (#1) — fun, lightweight, immediate delight
+2. Guilt-Free Calculator (#6) — fun conversation piece, easy to build
+3. Backlog Doomsday Clock (#7) — builds on existing calculation, humorous
+4. Spending Forecast (#4) — practical, builds on existing budget feature
+5. Completion Probability (#3) — genuinely novel insight
+6. Genre Satisfaction Matrix (#5) — powerful visualization
+7. Gaming Goals (#2) — drives engagement, needs storage layer
+8. Game Detail View (#8) — biggest UX uplift, most effort
+9. Advanced Filtering (#9) — power user essential
+10. Everything in Phase 3 — fun additions after core improvements
+
+---
+
 ## Resources
 
 - **Next.js Docs**: https://nextjs.org/docs
@@ -983,6 +1434,15 @@ export interface MyRepository {
 
 ## Changelog
 
+### 2025-02-06
+- Added comprehensive Game Analytics Deep Dive section (~400 lines)
+- Documented all 70+ calculation functions, 20+ components, 5 hooks
+- Added full data model documentation with all types
+- Added UI architecture diagram and component hierarchy
+- Added Game Analytics Enhancement Plan with 20 features across 3 phases
+- Updated directory structure to reflect actual file inventory
+- Updated Game type example to match current 20+ field model
+
 ### 2024-12-24
 - Initial CLAUDE.md creation
 - Documented architecture, patterns, and conventions
@@ -990,6 +1450,6 @@ export interface MyRepository {
 
 ---
 
-**Last Updated**: 2024-12-24
-**Version**: 1.0.0
+**Last Updated**: 2025-02-06
+**Version**: 2.0.0
 **Maintained by**: AI assistants and contributors
