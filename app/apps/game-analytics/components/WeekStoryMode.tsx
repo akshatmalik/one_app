@@ -23,6 +23,9 @@ import { GamingHeatmapScreen } from './story-screens/GamingHeatmapScreen';
 import { BestValueScreen } from './story-screens/BestValueScreen';
 import { AIBlurbScreen } from './story-screens/AIBlurbScreen';
 import { MoneyComparisonScreen } from './story-screens/MoneyComparisonScreen';
+import { ActivityPulseScreen } from './story-screens/ActivityPulseScreen';
+import { CompletionOddsScreen } from './story-screens/CompletionOddsScreen';
+import { BacklogUpdateScreen } from './story-screens/BacklogUpdateScreen';
 import { generateMultipleBlurbs, AIBlurbType, AIBlurbResult } from '../lib/ai-service';
 
 interface WeekStoryModeProps {
@@ -187,6 +190,7 @@ export function WeekStoryMode({ data, onClose, prefetchedBlurbs, isLoadingPrefet
       />
     ) : null,
     <TimeTravelScreen key="time-travel" data={data} />,
+    <ActivityPulseScreen key="activity-pulse" data={data} />,
     data.totalValueUtilized > 0 ? <ValueUtilizedScreen key="value" data={data} /> : null,
     data.gamesPlayed.filter(g => g.game.price > 0).length > 0 ? <BestValueScreen key="best-value" data={data} /> : null,
     // AI: Value wisdom
@@ -200,6 +204,8 @@ export function WeekStoryMode({ data, onClose, prefetchedBlurbs, isLoadingPrefet
         isFallback={aiBlurbs['value-wisdom']?.isFallback}
       />
     ) : null,
+    data.weekCompletionProbabilities.length > 0 ? <CompletionOddsScreen key="completion-odds" data={data} /> : null,
+    data.backlogStatus.backlogCount > 0 ? <BacklogUpdateScreen key="backlog-update" data={data} /> : null,
     <ComparisonScreen key="comparison" data={data} />,
     <FunFactsScreen key="fun-facts" data={data} />,
     <MoneyComparisonScreen key="money-comparison" data={data} />,
