@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useRef, useCallback, useMemo } from 'react';
-import { X, Plus, Trash2, Search, Loader2, Heart, Compass, TrendingUp, Calendar, Sparkles, Star } from 'lucide-react';
+import { X, Plus, Trash2, Search, Loader2, Heart, Compass, TrendingUp, Calendar, Sparkles, Star, Tag, ExternalLink } from 'lucide-react';
 import { Game, PurchaseSource } from '../lib/types';
 import { searchRAWGGame, searchRAWGGames, browseRAWGGames, getRAWGGenreSlugs, getRAWGPlatformIds, RAWGGameData } from '../lib/rawg-api';
+import { fetchDeals, getDealLink, CheapSharkDeal } from '../lib/cheapshark-api';
 import clsx from 'clsx';
 
 interface BulkWishlistModalProps {
@@ -21,10 +22,15 @@ interface PendingGame {
   loading?: boolean;
   released?: string;
   metacritic?: number | null;
+  salePrice?: number;
+  normalPrice?: number;
+  storeName?: string;
+  dealID?: string;
 }
 
-type TabMode = 'quick-add' | 'discover' | 'search';
+type TabMode = 'quick-add' | 'discover' | 'search' | 'deals';
 type DiscoverCategory = 'for-you' | 'upcoming' | 'top-rated' | 'new-releases' | 'hidden-gems';
+type DealCategory = 'free' | 'under5' | 'under15' | 'best-deals' | 'top-rated-sale';
 
 const PLATFORMS = ['PC', 'PS5', 'PS4', 'Xbox Series', 'Xbox One', 'Switch', 'Mobile', 'Other'];
 
@@ -57,6 +63,12 @@ export function BulkWishlistModal({ onAddGames, onClose, existingGameNames, exis
   const [discovering, setDiscovering] = useState(false);
   const [discoverPlatformFilter, setDiscoverPlatformFilter] = useState('');
   const [loadedCategory, setLoadedCategory] = useState<string>('');
+
+  // Deals tab state
+  const [dealCategory, setDealCategory] = useState<DealCategory>('best-deals');
+  const [dealResults, setDealResults] = useState<CheapSharkDeal[]>([]);
+  const [loadingDeals, setLoadingDeals] = useState(false);
+  const [loadedDealCategory, setLoadedDealCategory] = useState<string>('');
 
   const inputRef = useRef<HTMLInputElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -260,6 +272,66 @@ export function BulkWishlistModal({ onAddGames, onClose, existingGameNames, exis
     }
   };
 
+  const handleLoadDeals = async (category?: DealCategory) => {
+    const cat = category || dealCategory;
+    if (loadingDeals) return;
+    if (loadedDealCategory === cat && dealResults.length > 0) return;
+
+    setLoadingDeals(true);
+    setDealResults([]);
+
+    try {
+      let deals: CheapSharkDeal[] = [];
+
+      switch (cat) {
+        case 'free':
+          deals = await fetchDeals({ upperPrice: 0, sortBy: 'Metacritic', metacritic: 0, pageSize: 25 });
+          break;
+        case 'under5':
+          deals = await fetchDeals({ upperPrice: 5, lowerPrice: 0, sortBy: 'Deal Rating', metacritic: 60, pageSize: 25 });
+          break;
+        case 'under15':
+          deals = await fetchDeals({ upperPrice: 15, lowerPrice: 0, sortBy: 'Deal Rating', metacritic: 70, pageSize: 25 });
+          break;
+        case 'best-deals':
+          deals = await fetchDeals({ sortBy: 'Savings', metacritic: 70, pageSize: 25 });
+          break;
+        case 'top-rated-sale':
+          deals = await fetchDeals({ sortBy: 'Metacritic', metacritic: 80, pageSize: 25 });
+          break;
+      }
+
+      setDealResults(deals);
+      setLoadedDealCategory(cat);
+    } finally {
+      setLoadingDeals(false);
+    }
+  };
+
+  const handleAddDeal = (deal: CheapSharkDeal) => {
+    const salePrice = parseFloat(deal.salePrice);
+    const normalPrice = parseFloat(deal.normalPrice);
+
+    // Add to pending with price info from CheapShark
+    const trimmed = deal.title.trim();
+    const titleCased = toTitleCase(trimmed);
+    if (isAlreadyAdded(titleCased)) return;
+
+    const newGame: PendingGame = {
+      name: titleCased,
+      thumbnail: deal.thumb || undefined,
+      platform: 'PC',
+      loading: false,
+      metacritic: deal.metacriticScore ? parseInt(deal.metacriticScore) : null,
+      salePrice: salePrice,
+      normalPrice: normalPrice,
+      storeName: deal.storeName,
+      dealID: deal.dealID,
+    };
+
+    setPendingGames(prev => [...prev, newGame]);
+  };
+
   const handleAddFromResults = (result: RAWGGameData) => {
     addPendingGame(result.name, result.backgroundImage, result.released, result.metacritic);
   };
@@ -271,19 +343,19 @@ export function BulkWishlistModal({ onAddGames, onClose, existingGameNames, exis
     try {
       const gamesToAdd = pendingGames.map(g => ({
         name: g.name,
-        price: 0,
+        price: g.salePrice ?? 0,
         hours: 0,
         rating: 8,
         status: 'Wishlist' as const,
         platform: g.platform || defaultPlatform || undefined,
         thumbnail: g.thumbnail || undefined,
-        notes: undefined,
+        notes: g.storeName ? `Deal from ${g.storeName}` : undefined,
         review: undefined,
         genre: undefined,
         franchise: undefined,
-        purchaseSource: undefined as PurchaseSource | undefined,
-        acquiredFree: undefined,
-        originalPrice: undefined,
+        purchaseSource: (g.platform === 'PC' ? 'Steam' : undefined) as PurchaseSource | undefined,
+        acquiredFree: g.salePrice === 0 ? true : undefined,
+        originalPrice: g.normalPrice || undefined,
         subscriptionSource: undefined,
         datePurchased: undefined,
         startDate: undefined,
@@ -392,6 +464,7 @@ export function BulkWishlistModal({ onAddGames, onClose, existingGameNames, exis
         <div className="flex items-center gap-1 p-3 border-b border-white/5 shrink-0">
           {([
             { id: 'discover' as TabMode, label: 'Discover', icon: <Compass size={14} /> },
+            { id: 'deals' as TabMode, label: 'Deals', icon: <Tag size={14} /> },
             { id: 'search' as TabMode, label: 'Search', icon: <Search size={14} /> },
             { id: 'quick-add' as TabMode, label: 'Quick Add', icon: <Plus size={14} /> },
           ]).map(tab => (
@@ -500,6 +573,167 @@ export function BulkWishlistModal({ onAddGames, onClose, existingGameNames, exis
 
               {discoverResults.length === 0 && !discovering && loadedCategory && (
                 <p className="text-xs text-white/30 text-center py-4">No games found for this filter. Try a different platform or category.</p>
+              )}
+            </>
+          )}
+
+          {/* Deals Tab */}
+          {tabMode === 'deals' && (
+            <>
+              {/* Deal Category Chips */}
+              <div className="flex flex-wrap gap-1.5">
+                {([
+                  { id: 'free' as DealCategory, label: 'Free Games', desc: 'Currently free on PC stores' },
+                  { id: 'under5' as DealCategory, label: 'Under $5', desc: 'Metacritic 60+, under $5' },
+                  { id: 'under15' as DealCategory, label: 'Under $15', desc: 'Metacritic 70+, under $15' },
+                  { id: 'best-deals' as DealCategory, label: 'Best Deals', desc: 'Biggest discounts on Metacritic 70+ games' },
+                  { id: 'top-rated-sale' as DealCategory, label: 'Top Rated', desc: 'Metacritic 80+ games on sale' },
+                ]).map(cat => (
+                  <button
+                    key={cat.id}
+                    onClick={() => {
+                      setDealCategory(cat.id);
+                      setTimeout(() => {
+                        if (loadedDealCategory !== cat.id) {
+                          handleLoadDeals(cat.id);
+                        }
+                      }, 0);
+                    }}
+                    className={clsx(
+                      'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all',
+                      dealCategory === cat.id
+                        ? 'bg-emerald-500/20 text-emerald-400 ring-1 ring-emerald-500/30'
+                        : 'bg-white/[0.03] text-white/40 hover:text-white/60 hover:bg-white/[0.06]'
+                    )}
+                  >
+                    {cat.id === 'free' && <Tag size={12} />}
+                    {cat.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex items-center justify-between">
+                <p className="text-[10px] text-white/30">
+                  Live deals from Steam, GOG, Humble, Epic & more via CheapShark
+                </p>
+                <button
+                  onClick={() => handleLoadDeals()}
+                  disabled={loadingDeals}
+                  className="px-3 py-1.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-500 transition-all text-xs font-medium disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  {loadingDeals ? (
+                    <>
+                      <Loader2 size={12} className="animate-spin" />
+                      Loading...
+                    </>
+                  ) : (
+                    <>
+                      <Tag size={12} />
+                      {loadedDealCategory === dealCategory ? 'Refresh' : 'Load Deals'}
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {/* Deal Results */}
+              {dealResults.length > 0 && (
+                <div className="space-y-1.5">
+                  <p className="text-xs text-white/40">{dealResults.length} deals found</p>
+                  {dealResults.map(deal => {
+                    const added = isAlreadyAdded(deal.title);
+                    const salePrice = parseFloat(deal.salePrice);
+                    const normalPrice = parseFloat(deal.normalPrice);
+                    const savings = parseFloat(deal.savings);
+                    const metacritic = parseInt(deal.metacriticScore);
+
+                    return (
+                      <div
+                        key={deal.dealID}
+                        className={clsx(
+                          'flex items-center gap-3 p-2.5 rounded-lg transition-all',
+                          added
+                            ? 'bg-white/[0.02] opacity-50'
+                            : 'bg-white/[0.02] hover:bg-white/[0.05] cursor-pointer'
+                        )}
+                        onClick={() => !added && handleAddDeal(deal)}
+                      >
+                        {deal.thumb ? (
+                          <img
+                            src={deal.thumb}
+                            alt={deal.title}
+                            className="w-16 h-10 object-cover rounded shrink-0"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <div className="w-16 h-10 bg-white/5 rounded shrink-0" />
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-white/90 font-medium truncate">{deal.title}</p>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            {salePrice === 0 ? (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded font-bold bg-emerald-500/20 text-emerald-400">FREE</span>
+                            ) : (
+                              <>
+                                <span className="text-[10px] text-emerald-400 font-bold">${salePrice.toFixed(2)}</span>
+                                <span className="text-[10px] text-white/30 line-through">${normalPrice.toFixed(2)}</span>
+                              </>
+                            )}
+                            {savings > 0 && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-emerald-500/10 text-emerald-400">
+                                -{Math.round(savings)}%
+                              </span>
+                            )}
+                            {metacritic > 0 && (
+                              <span className={clsx(
+                                'text-[10px] px-1.5 py-0.5 rounded font-medium',
+                                metacritic >= 75 ? 'bg-emerald-500/20 text-emerald-400' :
+                                metacritic >= 50 ? 'bg-yellow-500/20 text-yellow-400' :
+                                'bg-red-500/20 text-red-400'
+                              )}>
+                                {metacritic}
+                              </span>
+                            )}
+                            {deal.storeName && (
+                              <span className="text-[10px] text-white/25">{deal.storeName}</span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          {!added && (
+                            <a
+                              href={getDealLink(deal.dealID)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="p-2 text-white/20 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg transition-all"
+                              title="View deal"
+                            >
+                              <ExternalLink size={12} />
+                            </a>
+                          )}
+                          {added ? (
+                            <span className="text-[10px] text-purple-400 font-medium px-2 py-1 bg-purple-500/10 rounded-lg">Added</span>
+                          ) : (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleAddDeal(deal);
+                              }}
+                              className="p-2 text-white/30 hover:text-purple-400 hover:bg-purple-500/10 rounded-lg transition-all"
+                              title="Add to wishlist"
+                            >
+                              <Heart size={14} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {dealResults.length === 0 && !loadingDeals && loadedDealCategory && (
+                <p className="text-xs text-white/30 text-center py-4">No deals found for this category.</p>
               )}
             </>
           )}
@@ -627,6 +861,15 @@ export function BulkWishlistModal({ onAddGames, onClose, existingGameNames, exis
                       )}
                       {game.released && (
                         <span className="text-[10px] text-white/30">{game.released}</span>
+                      )}
+                      {game.salePrice !== undefined && game.salePrice === 0 && (
+                        <span className="text-[10px] px-1 py-0.5 bg-emerald-500/20 text-emerald-400 rounded font-medium">FREE</span>
+                      )}
+                      {game.salePrice !== undefined && game.salePrice > 0 && (
+                        <span className="text-[10px] text-emerald-400">${game.salePrice.toFixed(2)}</span>
+                      )}
+                      {game.storeName && (
+                        <span className="text-[10px] text-white/25">{game.storeName}</span>
                       )}
                     </div>
                   </div>
