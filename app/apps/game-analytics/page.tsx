@@ -805,6 +805,7 @@ export default function GameAnalyticsPage() {
           onAddGames={handleBulkWishlist}
           onClose={() => setShowBulkWishlist(false)}
           existingGameNames={games.map(g => g.name)}
+          existingGames={games}
         />
       )}
     </div>

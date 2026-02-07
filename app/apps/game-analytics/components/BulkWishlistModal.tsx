@@ -1,15 +1,16 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
-import { X, Plus, Trash2, Search, Loader2, Heart, Globe } from 'lucide-react';
+import { useState, useRef, useCallback, useMemo } from 'react';
+import { X, Plus, Trash2, Search, Loader2, Heart, Compass, TrendingUp, Calendar, Sparkles, Star } from 'lucide-react';
 import { Game, PurchaseSource } from '../lib/types';
-import { searchRAWGGame, searchRAWGGames, RAWGGameData } from '../lib/rawg-api';
+import { searchRAWGGame, searchRAWGGames, browseRAWGGames, getRAWGGenreSlugs, getRAWGPlatformIds, RAWGGameData } from '../lib/rawg-api';
 import clsx from 'clsx';
 
 interface BulkWishlistModalProps {
   onAddGames: (games: Omit<Game, 'id' | 'userId' | 'createdAt' | 'updatedAt'>[]) => Promise<void>;
   onClose: () => void;
   existingGameNames: string[];
+  existingGames: Game[];
 }
 
 interface PendingGame {
@@ -22,7 +23,8 @@ interface PendingGame {
   metacritic?: number | null;
 }
 
-type TabMode = 'quick-add' | 'browse';
+type TabMode = 'quick-add' | 'discover' | 'search';
+type DiscoverCategory = 'for-you' | 'upcoming' | 'top-rated' | 'new-releases' | 'hidden-gems';
 
 const PLATFORMS = ['PC', 'PS5', 'PS4', 'Xbox Series', 'Xbox One', 'Switch', 'Mobile', 'Other'];
 
@@ -33,23 +35,68 @@ function toTitleCase(str: string): string {
     .join(' ');
 }
 
-export function BulkWishlistModal({ onAddGames, onClose, existingGameNames }: BulkWishlistModalProps) {
-  const [tabMode, setTabMode] = useState<TabMode>('quick-add');
+function getCurrentYear(): number {
+  return new Date().getFullYear();
+}
+
+export function BulkWishlistModal({ onAddGames, onClose, existingGameNames, existingGames }: BulkWishlistModalProps) {
+  const [tabMode, setTabMode] = useState<TabMode>('discover');
   const [pendingGames, setPendingGames] = useState<PendingGame[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [saving, setSaving] = useState(false);
   const [defaultPlatform, setDefaultPlatform] = useState('');
 
-  // Browse tab state
+  // Search tab state
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<RAWGGameData[]>([]);
   const [searching, setSearching] = useState(false);
 
+  // Discover tab state
+  const [discoverCategory, setDiscoverCategory] = useState<DiscoverCategory>('for-you');
+  const [discoverResults, setDiscoverResults] = useState<RAWGGameData[]>([]);
+  const [discovering, setDiscovering] = useState(false);
+  const [discoverPlatformFilter, setDiscoverPlatformFilter] = useState('');
+  const [loadedCategory, setLoadedCategory] = useState<string>('');
+
   const inputRef = useRef<HTMLInputElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  const existingNamesSet = new Set(existingGameNames.map(n => n.toLowerCase()));
-  const pendingNamesSet = new Set(pendingGames.map(g => g.name.toLowerCase()));
+  const existingNamesSet = useMemo(() => new Set(existingGameNames.map(n => n.toLowerCase())), [existingGameNames]);
+  const pendingNamesSet = useMemo(() => new Set(pendingGames.map(g => g.name.toLowerCase())), [pendingGames]);
+
+  // Analyze user's library for recommendations
+  const userPreferences = useMemo(() => {
+    const owned = existingGames.filter(g => g.status !== 'Wishlist');
+    const genreCounts: Record<string, { count: number; totalRating: number }> = {};
+    const platformCounts: Record<string, number> = {};
+
+    for (const game of owned) {
+      if (game.genre) {
+        if (!genreCounts[game.genre]) genreCounts[game.genre] = { count: 0, totalRating: 0 };
+        genreCounts[game.genre].count++;
+        genreCounts[game.genre].totalRating += game.rating;
+      }
+      if (game.platform) {
+        platformCounts[game.platform] = (platformCounts[game.platform] || 0) + 1;
+      }
+    }
+
+    // Sort genres by weighted score (count * avg rating)
+    const topGenres = Object.entries(genreCounts)
+      .map(([genre, data]) => ({
+        genre,
+        score: data.count * (data.totalRating / data.count),
+        avgRating: data.totalRating / data.count,
+        count: data.count,
+      }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 3);
+
+    const topPlatform = Object.entries(platformCounts)
+      .sort(([, a], [, b]) => b - a)[0]?.[0] || '';
+
+    return { topGenres, topPlatform };
+  }, [existingGames]);
 
   const isAlreadyAdded = useCallback((name: string) => {
     const lower = name.toLowerCase();
@@ -111,14 +158,109 @@ export function BulkWishlistModal({ onAddGames, onClose, existingGameNames }: Bu
 
     setSearching(true);
     try {
-      const results = await searchRAWGGames(searchQuery, 12);
+      const results = await searchRAWGGames(searchQuery, 15);
       setSearchResults(results);
     } finally {
       setSearching(false);
     }
   };
 
-  const handleAddFromSearch = (result: RAWGGameData) => {
+  const handleDiscover = async (category?: DiscoverCategory) => {
+    const cat = category || discoverCategory;
+    if (discovering) return;
+
+    const cacheKey = `${cat}-${discoverPlatformFilter}`;
+    if (loadedCategory === cacheKey && discoverResults.length > 0) return;
+
+    setDiscovering(true);
+    setDiscoverResults([]);
+
+    try {
+      const year = getCurrentYear();
+      const today = new Date().toISOString().split('T')[0];
+      const platformId = discoverPlatformFilter ? getRAWGPlatformIds(discoverPlatformFilter) : '';
+
+      let results: RAWGGameData[] = [];
+
+      switch (cat) {
+        case 'for-you': {
+          // Get top genres from user's library and find highly-rated games
+          const genreSlugs = getRAWGGenreSlugs(userPreferences.topGenres.map(g => g.genre));
+          if (genreSlugs) {
+            results = await browseRAWGGames({
+              genres: genreSlugs,
+              ordering: '-metacritic',
+              metacritic: '70,100',
+              dates: `${year - 2}-01-01,${today}`,
+              platforms: platformId || undefined,
+              pageSize: 20,
+            });
+          } else {
+            // No genre data - fall back to top rated recent
+            results = await browseRAWGGames({
+              ordering: '-metacritic',
+              metacritic: '80,100',
+              dates: `${year - 1}-01-01,${today}`,
+              platforms: platformId || undefined,
+              pageSize: 20,
+            });
+          }
+          break;
+        }
+        case 'upcoming': {
+          const sixMonthsOut = new Date();
+          sixMonthsOut.setMonth(sixMonthsOut.getMonth() + 6);
+          const futureDate = sixMonthsOut.toISOString().split('T')[0];
+          results = await browseRAWGGames({
+            dates: `${today},${futureDate}`,
+            ordering: '-added',
+            platforms: platformId || undefined,
+            pageSize: 20,
+          });
+          break;
+        }
+        case 'top-rated': {
+          results = await browseRAWGGames({
+            ordering: '-metacritic',
+            metacritic: '85,100',
+            dates: `${year - 1}-01-01,${today}`,
+            platforms: platformId || undefined,
+            pageSize: 20,
+          });
+          break;
+        }
+        case 'new-releases': {
+          const threeMonthsAgo = new Date();
+          threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+          const pastDate = threeMonthsAgo.toISOString().split('T')[0];
+          results = await browseRAWGGames({
+            dates: `${pastDate},${today}`,
+            ordering: '-released',
+            platforms: platformId || undefined,
+            pageSize: 20,
+          });
+          break;
+        }
+        case 'hidden-gems': {
+          results = await browseRAWGGames({
+            ordering: '-rating',
+            metacritic: '70,85',
+            dates: `${year - 2}-01-01,${today}`,
+            platforms: platformId || undefined,
+            pageSize: 20,
+          });
+          break;
+        }
+      }
+
+      setDiscoverResults(results);
+      setLoadedCategory(cacheKey);
+    } finally {
+      setDiscovering(false);
+    }
+  };
+
+  const handleAddFromResults = (result: RAWGGameData) => {
     addPendingGame(result.name, result.backgroundImage, result.released, result.metacritic);
   };
 
@@ -155,6 +297,80 @@ export function BulkWishlistModal({ onAddGames, onClose, existingGameNames }: Bu
     }
   };
 
+  const renderGameRow = (result: RAWGGameData) => {
+    const added = isAlreadyAdded(result.name);
+    return (
+      <div
+        key={result.id}
+        className={clsx(
+          'flex items-center gap-3 p-2.5 rounded-lg transition-all',
+          added
+            ? 'bg-white/[0.02] opacity-50'
+            : 'bg-white/[0.02] hover:bg-white/[0.05] cursor-pointer'
+        )}
+        onClick={() => !added && handleAddFromResults(result)}
+      >
+        {result.backgroundImage ? (
+          <img
+            src={result.backgroundImage}
+            alt={result.name}
+            className="w-12 h-12 object-cover rounded-lg shrink-0"
+            loading="lazy"
+          />
+        ) : (
+          <div className="w-12 h-12 bg-white/5 rounded-lg shrink-0 flex items-center justify-center">
+            <Sparkles size={14} className="text-white/10" />
+          </div>
+        )}
+        <div className="flex-1 min-w-0">
+          <p className="text-sm text-white/90 font-medium truncate">{result.name}</p>
+          <div className="flex items-center gap-2 mt-0.5">
+            {result.released && (
+              <span className="text-[10px] text-white/40">
+                {result.released}
+              </span>
+            )}
+            {result.metacritic && (
+              <span className={clsx(
+                'text-[10px] px-1.5 py-0.5 rounded font-medium',
+                result.metacritic >= 75 ? 'bg-emerald-500/20 text-emerald-400' :
+                result.metacritic >= 50 ? 'bg-yellow-500/20 text-yellow-400' :
+                'bg-red-500/20 text-red-400'
+              )}>
+                {result.metacritic}
+              </span>
+            )}
+            {result.rating > 0 && (
+              <span className="text-[10px] text-white/30">{result.rating.toFixed(1)}/5</span>
+            )}
+          </div>
+        </div>
+        {added ? (
+          <span className="text-[10px] text-purple-400 font-medium px-2 py-1 bg-purple-500/10 rounded-lg shrink-0">Added</span>
+        ) : (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              handleAddFromResults(result);
+            }}
+            className="p-2 text-white/30 hover:text-purple-400 hover:bg-purple-500/10 rounded-lg transition-all shrink-0"
+            title="Add to wishlist"
+          >
+            <Heart size={14} />
+          </button>
+        )}
+      </div>
+    );
+  };
+
+  const DISCOVER_CATEGORIES: { id: DiscoverCategory; label: string; icon: React.ReactNode; desc: string }[] = [
+    { id: 'for-you', label: 'For You', icon: <Sparkles size={12} />, desc: userPreferences.topGenres.length > 0 ? `Based on your love of ${userPreferences.topGenres.map(g => g.genre).join(', ')}` : 'Top rated recent games' },
+    { id: 'upcoming', label: 'Upcoming', icon: <Calendar size={12} />, desc: 'Coming in the next 6 months' },
+    { id: 'top-rated', label: 'Top Rated', icon: <Star size={12} />, desc: 'Metacritic 85+ from the past year' },
+    { id: 'new-releases', label: 'New Releases', icon: <TrendingUp size={12} />, desc: 'Released in the last 3 months' },
+    { id: 'hidden-gems', label: 'Hidden Gems', icon: <Compass size={12} />, desc: 'High rating, moderate Metacritic' },
+  ];
+
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-[#12121a] border border-white/5 rounded-2xl w-full max-w-xl max-h-[85vh] flex flex-col">
@@ -162,7 +378,7 @@ export function BulkWishlistModal({ onAddGames, onClose, existingGameNames }: Bu
         <div className="flex items-center justify-between p-4 border-b border-white/5 shrink-0">
           <div>
             <h2 className="text-lg font-semibold text-white">Quick Wishlist</h2>
-            <p className="text-xs text-white/40 mt-0.5">Add multiple games at once</p>
+            <p className="text-xs text-white/40 mt-0.5">Discover and add games</p>
           </div>
           <button
             onClick={onClose}
@@ -174,37 +390,161 @@ export function BulkWishlistModal({ onAddGames, onClose, existingGameNames }: Bu
 
         {/* Tabs */}
         <div className="flex items-center gap-1 p-3 border-b border-white/5 shrink-0">
-          <button
-            onClick={() => setTabMode('quick-add')}
-            className={clsx(
-              'flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all',
-              tabMode === 'quick-add'
-                ? 'bg-purple-500/20 text-purple-400'
-                : 'text-white/40 hover:text-white/60 hover:bg-white/5'
-            )}
-          >
-            <Plus size={14} />
-            Quick Add
-          </button>
-          <button
-            onClick={() => {
-              setTabMode('browse');
-              setTimeout(() => searchInputRef.current?.focus(), 100);
-            }}
-            className={clsx(
-              'flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all',
-              tabMode === 'browse'
-                ? 'bg-purple-500/20 text-purple-400'
-                : 'text-white/40 hover:text-white/60 hover:bg-white/5'
-            )}
-          >
-            <Globe size={14} />
-            Browse RAWG
-          </button>
+          {([
+            { id: 'discover' as TabMode, label: 'Discover', icon: <Compass size={14} /> },
+            { id: 'search' as TabMode, label: 'Search', icon: <Search size={14} /> },
+            { id: 'quick-add' as TabMode, label: 'Quick Add', icon: <Plus size={14} /> },
+          ]).map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => {
+                setTabMode(tab.id);
+                if (tab.id === 'search') setTimeout(() => searchInputRef.current?.focus(), 100);
+                if (tab.id === 'quick-add') setTimeout(() => inputRef.current?.focus(), 100);
+              }}
+              className={clsx(
+                'flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all',
+                tabMode === tab.id
+                  ? 'bg-purple-500/20 text-purple-400'
+                  : 'text-white/40 hover:text-white/60 hover:bg-white/5'
+              )}
+            >
+              {tab.icon}
+              {tab.label}
+            </button>
+          ))}
         </div>
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          {/* Discover Tab */}
+          {tabMode === 'discover' && (
+            <>
+              {/* Platform Filter */}
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-white/40 shrink-0">Platform:</span>
+                <select
+                  value={discoverPlatformFilter}
+                  onChange={e => {
+                    setDiscoverPlatformFilter(e.target.value);
+                    setLoadedCategory(''); // Force reload
+                  }}
+                  className="px-2 py-1 bg-white/[0.03] border border-white/5 text-white text-xs rounded-lg focus:outline-none"
+                >
+                  <option value="">All platforms</option>
+                  {PLATFORMS.filter(p => p !== 'Mobile' && p !== 'Other').map(p => (
+                    <option key={p} value={p}>{p}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Category Chips */}
+              <div className="flex flex-wrap gap-1.5">
+                {DISCOVER_CATEGORIES.map(cat => (
+                  <button
+                    key={cat.id}
+                    onClick={() => {
+                      setDiscoverCategory(cat.id);
+                      // Auto-load when switching categories
+                      setTimeout(() => {
+                        const cacheKey = `${cat.id}-${discoverPlatformFilter}`;
+                        if (loadedCategory !== cacheKey) {
+                          handleDiscover(cat.id);
+                        }
+                      }, 0);
+                    }}
+                    className={clsx(
+                      'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all',
+                      discoverCategory === cat.id
+                        ? 'bg-purple-500/20 text-purple-400 ring-1 ring-purple-500/30'
+                        : 'bg-white/[0.03] text-white/40 hover:text-white/60 hover:bg-white/[0.06]'
+                    )}
+                  >
+                    {cat.icon}
+                    {cat.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Category Description + Load Button */}
+              <div className="flex items-center justify-between">
+                <p className="text-[10px] text-white/30">
+                  {DISCOVER_CATEGORIES.find(c => c.id === discoverCategory)?.desc}
+                </p>
+                <button
+                  onClick={() => handleDiscover()}
+                  disabled={discovering}
+                  className="px-3 py-1.5 bg-purple-600 text-white rounded-lg hover:bg-purple-500 transition-all text-xs font-medium disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  {discovering ? (
+                    <>
+                      <Loader2 size={12} className="animate-spin" />
+                      Loading...
+                    </>
+                  ) : (
+                    <>
+                      <Compass size={12} />
+                      {loadedCategory === `${discoverCategory}-${discoverPlatformFilter}` ? 'Refresh' : 'Load'}
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {/* Discovery Results */}
+              {discoverResults.length > 0 && (
+                <div className="space-y-1.5">
+                  <p className="text-xs text-white/40">{discoverResults.length} games found</p>
+                  {discoverResults.map(renderGameRow)}
+                </div>
+              )}
+
+              {discoverResults.length === 0 && !discovering && loadedCategory && (
+                <p className="text-xs text-white/30 text-center py-4">No games found for this filter. Try a different platform or category.</p>
+              )}
+            </>
+          )}
+
+          {/* Search Tab */}
+          {tabMode === 'search' && (
+            <>
+              <form onSubmit={handleSearch} className="flex gap-2">
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  className="flex-1 px-3 py-2.5 bg-white/[0.03] border border-white/5 text-white rounded-lg text-sm focus:outline-none focus:bg-white/[0.05] focus:border-purple-500/30 transition-all placeholder:text-white/30"
+                  placeholder="Search for any game..."
+                />
+                <button
+                  type="submit"
+                  disabled={!searchQuery.trim() || searching}
+                  className="px-3 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-500 transition-all disabled:opacity-30"
+                >
+                  {searching ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
+                </button>
+              </form>
+
+              {/* Search Results */}
+              {searchResults.length > 0 && (
+                <div className="space-y-1.5">
+                  <p className="text-xs text-white/40">{searchResults.length} results</p>
+                  {searchResults.map(renderGameRow)}
+                </div>
+              )}
+
+              {searchResults.length === 0 && !searching && searchQuery && (
+                <p className="text-xs text-white/30 text-center py-4">No results. Try a different search term.</p>
+              )}
+
+              {!searchQuery && (
+                <p className="text-[10px] text-white/30 text-center py-2">
+                  Search the RAWG database for any game.
+                </p>
+              )}
+            </>
+          )}
+
           {/* Quick Add Tab */}
           {tabMode === 'quick-add' && (
             <>
@@ -246,109 +586,6 @@ export function BulkWishlistModal({ onAddGames, onClose, existingGameNames }: Bu
               <p className="text-[10px] text-white/30">
                 Tip: Type a name and press Enter. Thumbnails auto-fetch from RAWG.
               </p>
-            </>
-          )}
-
-          {/* Browse Tab */}
-          {tabMode === 'browse' && (
-            <>
-              <form onSubmit={handleSearch} className="flex gap-2">
-                <input
-                  ref={searchInputRef}
-                  type="text"
-                  value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
-                  className="flex-1 px-3 py-2.5 bg-white/[0.03] border border-white/5 text-white rounded-lg text-sm focus:outline-none focus:bg-white/[0.05] focus:border-purple-500/30 transition-all placeholder:text-white/30"
-                  placeholder="Search for games..."
-                />
-                <button
-                  type="submit"
-                  disabled={!searchQuery.trim() || searching}
-                  className="px-3 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-500 transition-all disabled:opacity-30"
-                >
-                  {searching ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
-                </button>
-              </form>
-
-              {/* Search Results */}
-              {searchResults.length > 0 && (
-                <div className="space-y-1.5">
-                  <p className="text-xs text-white/40">{searchResults.length} results</p>
-                  {searchResults.map(result => {
-                    const added = isAlreadyAdded(result.name);
-                    return (
-                      <div
-                        key={result.id}
-                        className={clsx(
-                          'flex items-center gap-3 p-2.5 rounded-lg transition-all',
-                          added
-                            ? 'bg-white/[0.02] opacity-50'
-                            : 'bg-white/[0.02] hover:bg-white/[0.05] cursor-pointer'
-                        )}
-                        onClick={() => !added && handleAddFromSearch(result)}
-                      >
-                        {result.backgroundImage ? (
-                          <img
-                            src={result.backgroundImage}
-                            alt={result.name}
-                            className="w-12 h-12 object-cover rounded-lg shrink-0"
-                            loading="lazy"
-                          />
-                        ) : (
-                          <div className="w-12 h-12 bg-white/5 rounded-lg shrink-0" />
-                        )}
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm text-white/90 font-medium truncate">{result.name}</p>
-                          <div className="flex items-center gap-2 mt-0.5">
-                            {result.released && (
-                              <span className="text-[10px] text-white/40">
-                                {new Date(result.released).getFullYear()}
-                              </span>
-                            )}
-                            {result.metacritic && (
-                              <span className={clsx(
-                                'text-[10px] px-1.5 py-0.5 rounded font-medium',
-                                result.metacritic >= 75 ? 'bg-emerald-500/20 text-emerald-400' :
-                                result.metacritic >= 50 ? 'bg-yellow-500/20 text-yellow-400' :
-                                'bg-red-500/20 text-red-400'
-                              )}>
-                                {result.metacritic}
-                              </span>
-                            )}
-                            {result.rating > 0 && (
-                              <span className="text-[10px] text-white/30">{result.rating.toFixed(1)}/5</span>
-                            )}
-                          </div>
-                        </div>
-                        {added ? (
-                          <span className="text-[10px] text-purple-400 font-medium px-2 py-1 bg-purple-500/10 rounded-lg shrink-0">Added</span>
-                        ) : (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleAddFromSearch(result);
-                            }}
-                            className="p-2 text-white/30 hover:text-purple-400 hover:bg-purple-500/10 rounded-lg transition-all shrink-0"
-                            title="Add to wishlist"
-                          >
-                            <Heart size={14} />
-                          </button>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-
-              {searchResults.length === 0 && !searching && searchQuery && (
-                <p className="text-xs text-white/30 text-center py-4">No results. Try a different search term.</p>
-              )}
-
-              {!searchQuery && (
-                <p className="text-[10px] text-white/30 text-center py-2">
-                  Search RAWG database for games to add to your wishlist.
-                </p>
-              )}
             </>
           )}
 
