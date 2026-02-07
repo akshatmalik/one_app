@@ -213,6 +213,35 @@ export function getGameThumbnail(gameData: RAWGGameData | null): string | null {
 }
 
 /**
+ * Search RAWG and return multiple results for browsing
+ */
+export async function searchRAWGGames(query: string, pageSize: number = 10): Promise<RAWGGameData[]> {
+  try {
+    const cleanName = query
+      .replace(/\s*\(.*?\)\s*/g, '')
+      .replace(/[™®©]/g, '')
+      .replace(/:/g, '')
+      .trim();
+
+    const url = `${RAWG_API_BASE}/games?key=${RAWG_API_KEY}&search=${encodeURIComponent(cleanName)}&page_size=${pageSize}`;
+    const response = await fetch(url);
+    if (!response.ok) return [];
+
+    const data: RAWGSearchResponse = await response.json();
+    return data.results.map(r => ({
+      id: r.id,
+      name: r.name,
+      backgroundImage: r.background_image,
+      rating: r.rating,
+      released: r.released,
+      metacritic: r.metacritic,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+/**
  * Clear all RAWG caches (useful for debugging or forcing refresh)
  */
 export function clearAllRAWGCaches(): void {
