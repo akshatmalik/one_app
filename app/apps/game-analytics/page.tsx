@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, List, MessageCircle, ListOrdered, ListPlus, Check } from 'lucide-react';
+import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, List, MessageCircle, ListOrdered, ListPlus, Check, Heart } from 'lucide-react';
 import { useGames } from './hooks/useGames';
 import { useAnalytics, GameWithMetrics } from './hooks/useAnalytics';
 import { useBudget } from './hooks/useBudget';
@@ -22,6 +22,7 @@ import { getROIRating, getWeekStatsForOffset, getGamesPlayedInTimeRange, getComp
 import { OnThisDayCard } from './components/OnThisDayCard';
 import { ActivityPulse } from './components/ActivityPulse';
 import { RandomPicker } from './components/RandomPicker';
+import { BulkWishlistModal } from './components/BulkWishlistModal';
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist';
@@ -51,6 +52,7 @@ export default function GameAnalyticsPage() {
   const [tabMode, setTabMode] = useState<TabMode>('games');
   const [sortBy, setSortBy] = useState<'name' | 'price' | 'hours' | 'rating' | 'costPerHour' | 'dateAdded' | 'recentlyPlayed'>('recentlyPlayed');
   const [showRandomPicker, setShowRandomPicker] = useState(false);
+  const [showBulkWishlist, setShowBulkWishlist] = useState(false);
 
   // Calculate week and month data for AI chat
   const weekData = useMemo(() => {
@@ -155,6 +157,18 @@ export default function GameAnalyticsPage() {
     }
   };
 
+  const handleBulkWishlist = async (gamesToAdd: Omit<Game, 'id' | 'userId' | 'createdAt' | 'updatedAt'>[]) => {
+    try {
+      for (const gameData of gamesToAdd) {
+        await addGame(gameData);
+      }
+      showToast(`${gamesToAdd.length} game${gamesToAdd.length !== 1 ? 's' : ''} added to wishlist`, 'success');
+      setShowBulkWishlist(false);
+    } catch (e) {
+      showToast(`Failed to add games: ${(e as Error).message}`, 'error');
+    }
+  };
+
   if (authLoading || loading) {
     return (
       <div className="min-h-[calc(100vh-60px)] flex items-center justify-center">
@@ -252,6 +266,14 @@ export default function GameAnalyticsPage() {
                   <Sparkles size={16} />
                 </button>
               )}
+              <button
+                onClick={() => setShowBulkWishlist(true)}
+                className="flex items-center gap-2 px-3 py-2 bg-white/5 text-white/60 hover:text-purple-400 hover:bg-purple-500/10 rounded-lg transition-all text-sm font-medium"
+                title="Bulk add to wishlist"
+              >
+                <Heart size={16} />
+                <span className="hidden sm:inline">Wishlist</span>
+              </button>
               <button
                 onClick={() => setIsFormOpen(true)}
                 className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-500 transition-all text-sm font-medium"
@@ -774,6 +796,16 @@ export default function GameAnalyticsPage() {
         <RandomPicker
           games={games}
           onClose={() => setShowRandomPicker(false)}
+        />
+      )}
+
+      {/* Bulk Wishlist Modal */}
+      {showBulkWishlist && (
+        <BulkWishlistModal
+          onAddGames={handleBulkWishlist}
+          onClose={() => setShowBulkWishlist(false)}
+          existingGameNames={games.map(g => g.name)}
+          existingGames={games}
         />
       )}
     </div>

@@ -213,6 +213,126 @@ export function getGameThumbnail(gameData: RAWGGameData | null): string | null {
 }
 
 /**
+ * Search RAWG and return multiple results for browsing
+ */
+export async function searchRAWGGames(query: string, pageSize: number = 10): Promise<RAWGGameData[]> {
+  try {
+    const cleanName = query
+      .replace(/\s*\(.*?\)\s*/g, '')
+      .replace(/[™®©]/g, '')
+      .replace(/:/g, '')
+      .trim();
+
+    const url = `${RAWG_API_BASE}/games?key=${RAWG_API_KEY}&search=${encodeURIComponent(cleanName)}&page_size=${pageSize}`;
+    const response = await fetch(url);
+    if (!response.ok) return [];
+
+    const data: RAWGSearchResponse = await response.json();
+    return data.results.map(r => ({
+      id: r.id,
+      name: r.name,
+      backgroundImage: r.background_image,
+      rating: r.rating,
+      released: r.released,
+      metacritic: r.metacritic,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+// Map app genre names to RAWG genre slugs
+const GENRE_TO_RAWG_SLUG: Record<string, string> = {
+  'Action': 'action',
+  'Action-Adventure': 'action,adventure',
+  'RPG': 'role-playing-games-rpg',
+  'JRPG': 'role-playing-games-rpg',
+  'Horror': 'action',
+  'Platformer': 'platformer',
+  'Strategy': 'strategy',
+  'Simulation': 'simulation',
+  'Sports': 'sports',
+  'Racing': 'racing',
+  'Puzzle': 'puzzle',
+  'Metroidvania': 'platformer',
+  'Roguelike': 'indie',
+  'Souls-like': 'role-playing-games-rpg',
+  'FPS': 'shooter',
+  'TPS': 'shooter',
+  'MMO': 'massively-multiplayer',
+  'Indie': 'indie',
+  'Adventure': 'adventure',
+};
+
+// Map app platform names to RAWG platform IDs
+const PLATFORM_TO_RAWG_ID: Record<string, string> = {
+  'PC': '4',
+  'PS5': '187',
+  'PS4': '18',
+  'Xbox Series': '186',
+  'Xbox One': '1',
+  'Switch': '7',
+};
+
+export function getRAWGGenreSlugs(appGenres: string[]): string {
+  const slugs = new Set<string>();
+  for (const genre of appGenres) {
+    const slug = GENRE_TO_RAWG_SLUG[genre];
+    if (slug) {
+      slug.split(',').forEach(s => slugs.add(s));
+    }
+  }
+  return Array.from(slugs).join(',');
+}
+
+export function getRAWGPlatformIds(appPlatform: string): string {
+  return PLATFORM_TO_RAWG_ID[appPlatform] || '';
+}
+
+export interface BrowseOptions {
+  genres?: string;        // RAWG genre slugs comma-separated
+  platforms?: string;     // RAWG platform IDs comma-separated
+  dates?: string;         // Date range e.g. "2026-01-01,2026-12-31"
+  ordering?: string;      // e.g. "-metacritic", "-rating", "-released"
+  metacritic?: string;    // e.g. "75,100"
+  pageSize?: number;
+}
+
+/**
+ * Browse RAWG games with filters (for discovery)
+ */
+export async function browseRAWGGames(options: BrowseOptions): Promise<RAWGGameData[]> {
+  try {
+    const params = new URLSearchParams({
+      key: RAWG_API_KEY,
+      page_size: (options.pageSize || 15).toString(),
+    });
+
+    if (options.genres) params.set('genres', options.genres);
+    if (options.platforms) params.set('platforms', options.platforms);
+    if (options.dates) params.set('dates', options.dates);
+    if (options.ordering) params.set('ordering', options.ordering);
+    if (options.metacritic) params.set('metacritic', options.metacritic);
+
+    const url = `${RAWG_API_BASE}/games?${params.toString()}`;
+    const response = await fetch(url);
+    if (!response.ok) return [];
+
+    const data: RAWGSearchResponse = await response.json();
+    return data.results.map(r => ({
+      id: r.id,
+      name: r.name,
+      backgroundImage: r.background_image,
+      rating: r.rating,
+      released: r.released,
+      metacritic: r.metacritic,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+/**
  * Clear all RAWG caches (useful for debugging or forcing refresh)
  */
 export function clearAllRAWGCaches(): void {
