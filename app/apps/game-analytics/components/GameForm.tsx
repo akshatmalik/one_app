@@ -128,7 +128,21 @@ export function GameForm({ onSubmit, onClose, initialGame, existingFranchises = 
                 <button
                   key={status}
                   type="button"
-                  onClick={() => setFormData({ ...formData, status })}
+                  onClick={() => {
+                    const today = new Date().toISOString().split('T')[0];
+                    const updates: Partial<typeof formData> = { status };
+                    // Auto-fill dates on status change
+                    if (status === 'Completed' && !formData.endDate) {
+                      updates.endDate = today;
+                    }
+                    if (status === 'In Progress' && !formData.startDate) {
+                      updates.startDate = today;
+                    }
+                    if (status === 'Abandoned' && !formData.endDate) {
+                      updates.endDate = today;
+                    }
+                    setFormData({ ...formData, ...updates });
+                  }}
                   className={clsx(
                     'px-2 py-1.5 rounded-lg text-[10px] font-medium transition-all',
                     formData.status === status
