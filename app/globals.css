@@ -105,3 +105,81 @@ input[type="range"]::-moz-range-thumb {
 .transition-smooth {
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
+
+/* Journey path connector */
+.journey-path {
+  position: relative;
+}
+
+.journey-path::before {
+  content: '';
+  position: absolute;
+  left: 23px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: linear-gradient(180deg, rgba(139, 92, 246, 0.3) 0%, rgba(139, 92, 246, 0.05) 100%);
+  pointer-events: none;
+}
+
+/* Now Playing glow animation */
+@keyframes nowPlayingGlow {
+  0%, 100% { box-shadow: 0 0 12px rgba(59, 130, 246, 0.15), inset 0 0 12px rgba(59, 130, 246, 0.03); }
+  50% { box-shadow: 0 0 24px rgba(59, 130, 246, 0.3), inset 0 0 24px rgba(59, 130, 246, 0.06); }
+}
+
+.now-playing-glow {
+  animation: nowPlayingGlow 3s ease-in-out infinite;
+}
+
+/* Chirp entrance animation */
+@keyframes chirpSlideIn {
+  from { opacity: 0; transform: translateX(-8px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.chirp-enter {
+  animation: chirpSlideIn 0.4s ease-out;
+}
+
+/* Journey node pulse */
+@keyframes nodePulse {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4); }
+  50% { transform: scale(1.15); box-shadow: 0 0 0 6px rgba(59, 130, 246, 0); }
+}
+
+.node-pulse {
+  animation: nodePulse 2.5s ease-in-out infinite;
+}
+
+/* Rivalry VS animation */
+@keyframes vsFlash {
+  0%, 100% { opacity: 0.8; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.1); }
+}
+
+.vs-flash {
+  animation: vsFlash 2s ease-in-out infinite;
+}
+
+/* AI shimmer loading */
+@keyframes aiShimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.ai-shimmer {
+  background: linear-gradient(90deg, transparent 0%, rgba(139, 92, 246, 0.08) 50%, transparent 100%);
+  background-size: 200% 100%;
+  animation: aiShimmer 2s ease-in-out infinite;
+}
+
+/* Shelf dust animation */
+@keyframes dustFloat {
+  0%, 100% { opacity: 0.5; transform: translateY(0); }
+  50% { opacity: 0.8; transform: translateY(-2px); }
+}
+
+.dust-float {
+  animation: dustFloat 3s ease-in-out infinite;
+}

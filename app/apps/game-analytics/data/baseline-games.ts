@@ -133,6 +133,7 @@ export const BASELINE_GAMES_2025: Omit<Game, 'id' | 'userId' | 'createdAt' | 'up
     notes: 'Beautiful open world, samurai vibes',
     datePurchased: '2025-02-10',
     startDate: '2025-02-12',
+    queuePosition: 1,
     playLogs: [
       { id: 'goy-1', date: '2025-02-12', hours: 4, notes: 'First impressions - stunning!' },
       { id: 'goy-2', date: '2025-02-14', hours: 5, notes: 'Combat feels amazing' },
@@ -154,6 +155,7 @@ export const BASELINE_GAMES_2025: Omit<Game, 'id' | 'userId' | 'createdAt' | 'up
     notes: 'Medieval immersion simulator - Henry has come to see us again',
     datePurchased: '2025-01-05',
     startDate: '2025-01-08',
+    queuePosition: 2,
     playLogs: [
       { id: 'kcd2-1', date: '2025-01-08', hours: 3, notes: 'Henry is back!' },
       { id: 'kcd2-2', date: '2025-01-10', hours: 4, notes: 'Learning new combat' },
@@ -175,6 +177,7 @@ export const BASELINE_GAMES_2025: Omit<Game, 'id' | 'userId' | 'createdAt' | 'up
     notes: 'Best Monster Hunter yet. Hunting with friends!',
     datePurchased: '2025-02-28',
     startDate: '2025-02-28',
+    queuePosition: 3,
     playLogs: [
       { id: 'mhw-1', date: '2025-02-28', hours: 8, notes: 'Launch day marathon!' },
       { id: 'mhw-2', date: '2025-03-01', hours: 10, notes: 'Great Jagras down' },
@@ -195,6 +198,7 @@ export const BASELINE_GAMES_2025: Omit<Game, 'id' | 'userId' | 'createdAt' | 'up
     purchaseSource: 'PlayStation',
     notes: 'Backlog - heard great things about the art style',
     datePurchased: '2025-01-05',
+    queuePosition: 5,
   },
   {
     name: 'Final Fantasy VII Rebirth',
@@ -207,6 +211,7 @@ export const BASELINE_GAMES_2025: Omit<Game, 'id' | 'userId' | 'createdAt' | 'up
     purchaseSource: 'PlayStation',
     notes: 'Waiting for the right time to dive in',
     datePurchased: '2024-11-20',
+    queuePosition: 4,
   },
   {
     name: 'Like a Dragon: Infinite Wealth',
@@ -219,6 +224,7 @@ export const BASELINE_GAMES_2025: Omit<Game, 'id' | 'userId' | 'createdAt' | 'up
     purchaseSource: 'PlayStation',
     notes: 'Ichiban in Hawaii! In the backlog',
     datePurchased: '2024-10-15',
+    queuePosition: 6,
   },
   {
     name: 'Metaphor: ReFantazio',
@@ -231,6 +237,7 @@ export const BASELINE_GAMES_2025: Omit<Game, 'id' | 'userId' | 'createdAt' | 'up
     purchaseSource: 'PlayStation',
     notes: 'Atlus RPG - will be massive',
     datePurchased: '2024-12-01',
+    queuePosition: 7,
   },
 
   // Wishlist

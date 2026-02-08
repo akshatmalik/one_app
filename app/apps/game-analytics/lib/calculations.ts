@@ -4178,3 +4178,411 @@ export function getPlayNextRecommendations(games: Game[], maxResults: number = 5
     .sort((a, b) => b.score - a.score)
     .slice(0, maxResults);
 }
+
+// ========================================================================
+// UP NEXT QUEUE: Calculations for chirps, shelf life, rivalry, projections
+// ========================================================================
+
+/**
+ * Shelf Life - How long a game has been sitting in the queue / backlog
+ */
+export type ShelfLifeLevel = 'fresh' | 'settling' | 'dusty' | 'cobwebs' | 'fossilized';
+
+export interface ShelfLifeData {
+  level: ShelfLifeLevel;
+  daysInQueue: number;
+  daysSincePurchase: number;
+  label: string;
+  color: string;
+}
+
+export function getShelfLife(game: Game): ShelfLifeData {
+  const now = Date.now();
+  const daysSincePurchase = game.datePurchased
+    ? Math.floor((now - new Date(game.datePurchased).getTime()) / (24 * 60 * 60 * 1000))
+    : 0;
+
+  // For "In Progress" games, measure days since last play session
+  let daysInQueue = daysSincePurchase;
+  if (game.playLogs && game.playLogs.length > 0) {
+    const sorted = [...game.playLogs].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    const daysSinceLastPlay = Math.floor((now - new Date(sorted[0].date).getTime()) / (24 * 60 * 60 * 1000));
+    // For in-progress games, "freshness" is about recent activity
+    if (game.status === 'In Progress') {
+      daysInQueue = daysSinceLastPlay;
+    }
+  }
+
+  // For Not Started games, use days since purchase
+  const days = game.status === 'Not Started' ? daysSincePurchase : daysInQueue;
+
+  let level: ShelfLifeLevel;
+  let label: string;
+  let color: string;
+
+  if (days <= 14) {
+    level = 'fresh';
+    label = '';
+    color = '';
+  } else if (days <= 30) {
+    level = 'settling';
+    label = 'Gathering dust';
+    color = '#9ca3af';
+  } else if (days <= 90) {
+    level = 'dusty';
+    label = 'Cobwebs forming';
+    color = '#f59e0b';
+  } else if (days <= 365) {
+    level = 'cobwebs';
+    label = 'Filed a missing person report';
+    color = '#ef4444';
+  } else {
+    level = 'fossilized';
+    label = 'Certified fossil';
+    color = '#dc2626';
+  }
+
+  return { level, daysInQueue: days, daysSincePurchase, label, color };
+}
+
+/**
+ * Smart Chirps - Context-aware messages based on queue data
+ */
+export interface SmartChirp {
+  type: 'now-playing' | 'on-deck' | 'genre-shift' | 'deep-backlog' | 'rivalry' | 'stats' | 'velocity' | 'completed';
+  text: string;
+  subtext?: string;
+  icon?: string;
+  color?: string;
+}
+
+export function getQueueSmartChirps(queuedGames: Game[], allGames: Game[]): SmartChirp[] {
+  const chirps: SmartChirp[] = [];
+  if (queuedGames.length === 0) return chirps;
+
+  const now = new Date();
+  const dayOfWeek = now.getDay(); // 0=Sun, 6=Sat
+  const month = now.getMonth(); // 0=Jan, 11=Dec
+  const isWeekend = dayOfWeek === 0 || dayOfWeek === 5 || dayOfWeek === 6;
+
+  // Total queue stats
+  const totalQueueHours = queuedGames.reduce((sum, g) => {
+    // Estimate: Not Started games get ~30h estimate, In Progress keep their hours
+    if (g.status === 'Not Started') return sum + 30;
+    return sum + getTotalHours(g);
+  }, 0);
+  const totalQueueCost = queuedGames.reduce((sum, g) => sum + g.price, 0);
+  const genres = [...new Set(queuedGames.map(g => g.genre).filter(Boolean))];
+
+  // Queue stats chirp
+  chirps.push({
+    type: 'stats',
+    text: `${queuedGames.length} games queued`,
+    subtext: `~${Math.round(totalQueueHours)}h of gaming ahead · $${totalQueueCost} invested`,
+    color: '#8b5cf6',
+  });
+
+  // Now Playing chirp for #1
+  const nowPlaying = queuedGames[0];
+  if (nowPlaying && nowPlaying.status === 'In Progress') {
+    const totalHours = getTotalHours(nowPlaying);
+    const daysSinceStart = nowPlaying.startDate
+      ? Math.floor((now.getTime() - new Date(nowPlaying.startDate).getTime()) / (24 * 60 * 60 * 1000))
+      : 0;
+
+    let lastSessionNote = '';
+    if (nowPlaying.playLogs && nowPlaying.playLogs.length > 0) {
+      const sorted = [...nowPlaying.playLogs].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      const daysSinceLastPlay = Math.floor((now.getTime() - new Date(sorted[0].date).getTime()) / (24 * 60 * 60 * 1000));
+      if (sorted[0].notes) {
+        lastSessionNote = `Last session: "${sorted[0].notes}" · ${daysSinceLastPlay === 0 ? 'today' : daysSinceLastPlay === 1 ? 'yesterday' : `${daysSinceLastPlay}d ago`}`;
+      } else {
+        lastSessionNote = `Last played ${daysSinceLastPlay === 0 ? 'today' : daysSinceLastPlay === 1 ? 'yesterday' : `${daysSinceLastPlay} days ago`}`;
+      }
+    }
+
+    chirps.push({
+      type: 'now-playing',
+      text: `${totalHours}h deep · Day ${daysSinceStart}`,
+      subtext: lastSessionNote,
+      color: '#3b82f6',
+    });
+  }
+
+  // On Deck chirp between #1 and #2
+  if (queuedGames.length >= 2) {
+    const current = queuedGames[0];
+    const next = queuedGames[1];
+
+    const currentGenre = current.genre || 'Unknown';
+    const nextGenre = next.genre || 'Unknown';
+
+    let genreText = '';
+    if (currentGenre !== nextGenre) {
+      genreText = `${currentGenre} → ${nextGenre} — nice palate cleanser`;
+    } else {
+      genreText = `Staying in ${currentGenre} mode`;
+    }
+
+    chirps.push({
+      type: 'on-deck',
+      text: `${next.name} is on deck`,
+      subtext: genreText,
+      color: '#f59e0b',
+    });
+  }
+
+  // Genre shift detection
+  const genreCounts: Record<string, number> = {};
+  queuedGames.forEach(g => {
+    if (g.genre) genreCounts[g.genre] = (genreCounts[g.genre] || 0) + 1;
+  });
+  const topGenre = Object.entries(genreCounts).sort((a, b) => b[1] - a[1])[0];
+  if (topGenre && topGenre[1] >= 3) {
+    chirps.push({
+      type: 'genre-shift',
+      text: `${topGenre[1]} ${topGenre[0]} games in a row`,
+      subtext: `You're in a ${topGenre[0]} tunnel`,
+      color: '#a855f7',
+    });
+  }
+
+  // Velocity / day-of-week chirp
+  const velocity = getGamingVelocity(allGames, 7);
+  if (isWeekend) {
+    if (velocity > 2) {
+      chirps.push({
+        type: 'velocity',
+        text: `It's the weekend and you've been averaging ${velocity.toFixed(1)}h/day`,
+        subtext: 'Perfect time for a marathon session',
+        color: '#10b981',
+      });
+    } else {
+      chirps.push({
+        type: 'velocity',
+        text: 'Weekend gaming time',
+        subtext: `Your queue has ${queuedGames.length} games waiting`,
+        color: '#10b981',
+      });
+    }
+  } else if (velocity === 0) {
+    const allLogs = getAllPlayLogs(allGames);
+    if (allLogs.length > 0) {
+      const lastPlayed = new Date(allLogs[0].log.date);
+      const daysAgo = Math.floor((now.getTime() - lastPlayed.getTime()) / (24 * 60 * 60 * 1000));
+      if (daysAgo > 7) {
+        chirps.push({
+          type: 'velocity',
+          text: `${daysAgo} days since your last session`,
+          subtext: 'Your queue misses you',
+          color: '#6b7280',
+        });
+      }
+    }
+  }
+
+  // Seasonal chirp
+  if (month === 11 || month === 0 || month === 1) {
+    chirps.push({
+      type: 'velocity',
+      text: 'Winter gaming season',
+      subtext: 'Long evenings, perfect for deep queue runs',
+      color: '#60a5fa',
+    });
+  } else if (month >= 5 && month <= 7) {
+    chirps.push({
+      type: 'velocity',
+      text: 'Summer gaming drought?',
+      subtext: genres.length > 2 ? `${genres.length} genres to keep you busy indoors` : 'Your queue says otherwise',
+      color: '#fbbf24',
+    });
+  }
+
+  return chirps;
+}
+
+/**
+ * Rivalry Data - Compare two In Progress games
+ */
+export interface RivalryData {
+  game1: {
+    name: string;
+    hours: number;
+    daysSinceLastPlay: number;
+    sessions: number;
+    thumbnail?: string;
+  };
+  game2: {
+    name: string;
+    hours: number;
+    daysSinceLastPlay: number;
+    sessions: number;
+    thumbnail?: string;
+  };
+  winnerName: string;
+  insight: string;
+}
+
+export function getQueueRivalry(queuedGames: Game[]): RivalryData | null {
+  const inProgress = queuedGames.filter(g => g.status === 'In Progress');
+  if (inProgress.length < 2) return null;
+
+  const now = Date.now();
+  const [g1, g2] = inProgress.slice(0, 2);
+
+  const getGameStats = (g: Game) => {
+    const sortedLogs = g.playLogs ? [...g.playLogs].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()) : [];
+    const daysSinceLastPlay = sortedLogs.length > 0
+      ? Math.floor((now - new Date(sortedLogs[0].date).getTime()) / (24 * 60 * 60 * 1000))
+      : 999;
+    return {
+      name: g.name,
+      hours: getTotalHours(g),
+      daysSinceLastPlay,
+      sessions: g.playLogs?.length || 0,
+      thumbnail: g.thumbnail,
+    };
+  };
+
+  const stats1 = getGameStats(g1);
+  const stats2 = getGameStats(g2);
+
+  // Winner is the one played most recently
+  const winnerName = stats1.daysSinceLastPlay <= stats2.daysSinceLastPlay ? stats1.name : stats2.name;
+  const loserName = winnerName === stats1.name ? stats2.name : stats1.name;
+
+  let insight: string;
+  const hourDiff = Math.abs(stats1.hours - stats2.hours);
+  if (hourDiff > 20) {
+    const more = stats1.hours > stats2.hours ? stats1.name : stats2.name;
+    insight = `${more} has ${hourDiff.toFixed(0)}h more attention`;
+  } else if (stats1.daysSinceLastPlay > 7 || stats2.daysSinceLastPlay > 7) {
+    insight = `${loserName} is losing your attention`;
+  } else {
+    insight = `Neck and neck — both getting love`;
+  }
+
+  return { game1: stats1, game2: stats2, winnerName, insight };
+}
+
+/**
+ * "If You Play 1 Hour Today" - Micro-projection
+ */
+export interface OneHourProjection {
+  gameName: string;
+  currentHours: number;
+  newHours: number;
+  currentCostPerHour: number;
+  newCostPerHour: number;
+  costImprovement: number;
+  newValueRating: 'Excellent' | 'Good' | 'Fair' | 'Poor';
+}
+
+export function getOneHourProjection(game: Game): OneHourProjection | null {
+  const currentHours = getTotalHours(game);
+  if (game.price === 0) return null; // Free games don't need this
+
+  const newHours = currentHours + 1;
+  const currentCostPerHour = currentHours > 0 ? game.price / currentHours : game.price;
+  const newCostPerHour = game.price / newHours;
+  const costImprovement = currentCostPerHour - newCostPerHour;
+
+  return {
+    gameName: game.name,
+    currentHours,
+    newHours,
+    currentCostPerHour,
+    newCostPerHour,
+    costImprovement,
+    newValueRating: getValueRating(newCostPerHour),
+  };
+}
+
+/**
+ * Estimated hours to reach a game in the queue
+ * Sum up estimated remaining hours for all games above it
+ */
+export function getEstimatedHoursToReach(queuedGames: Game[], index: number): number {
+  let hours = 0;
+  for (let i = 0; i < index; i++) {
+    const g = queuedGames[i];
+    const played = getTotalHours(g);
+    if (g.status === 'Completed' || g.status === 'Abandoned') continue;
+    // Estimate total game time: if in progress, assume 30h avg total for the game
+    const estimatedTotal = played > 0 ? Math.max(played * 1.5, 25) : 30;
+    const remaining = Math.max(estimatedTotal - played, 0);
+    hours += remaining;
+  }
+  return Math.round(hours);
+}
+
+/**
+ * Queue context for AI service
+ */
+export interface QueueAIContext {
+  queuedGames: Array<{
+    name: string;
+    genre: string;
+    platform: string;
+    status: string;
+    hours: number;
+    price: number;
+    daysSincePurchase: number;
+    daysSinceLastPlay: number;
+    sessions: number;
+    rating: number;
+    lastSessionNote: string;
+    queuePosition: number;
+  }>;
+  totalQueueHours: number;
+  totalQueueCost: number;
+  genres: string[];
+  activityLevel: string;
+  streak: number;
+  velocity: number;
+  personalityType: string;
+  completionRate: number;
+  dayOfWeek: string;
+}
+
+export function buildQueueAIContext(queuedGames: Game[], allGames: Game[]): QueueAIContext {
+  const now = new Date();
+  const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+  const owned = allGames.filter(g => g.status !== 'Wishlist');
+  const completed = owned.filter(g => g.status === 'Completed');
+
+  const personality = getGamingPersonality(allGames);
+  const pulse = getActivityPulse(allGames);
+  const streak = getCurrentGamingStreak(allGames);
+  const velocity = getGamingVelocity(allGames, 7);
+
+  return {
+    queuedGames: queuedGames.map((g, i) => {
+      const sortedLogs = g.playLogs ? [...g.playLogs].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()) : [];
+      return {
+        name: g.name,
+        genre: g.genre || 'Unknown',
+        platform: g.platform || 'Unknown',
+        status: g.status,
+        hours: getTotalHours(g),
+        price: g.price,
+        daysSincePurchase: g.datePurchased ? Math.floor((now.getTime() - new Date(g.datePurchased).getTime()) / (24 * 60 * 60 * 1000)) : 0,
+        daysSinceLastPlay: sortedLogs.length > 0 ? Math.floor((now.getTime() - new Date(sortedLogs[0].date).getTime()) / (24 * 60 * 60 * 1000)) : -1,
+        sessions: g.playLogs?.length || 0,
+        rating: g.rating,
+        lastSessionNote: sortedLogs.length > 0 ? (sortedLogs[0].notes || '') : '',
+        queuePosition: i + 1,
+      };
+    }),
+    totalQueueHours: queuedGames.reduce((sum, g) => sum + (g.status === 'Not Started' ? 30 : getTotalHours(g)), 0),
+    totalQueueCost: queuedGames.reduce((sum, g) => sum + g.price, 0),
+    genres: [...new Set(queuedGames.map(g => g.genre).filter(Boolean) as string[])],
+    activityLevel: pulse.level,
+    streak,
+    velocity,
+    personalityType: personality.type,
+    completionRate: owned.length > 0 ? Math.round((completed.length / owned.length) * 100) : 0,
+    dayOfWeek: days[now.getDay()],
+  };
+}

@@ -742,6 +742,7 @@ export default function GameAnalyticsPage() {
                 return gameWithMetrics || game as GameWithMetrics;
               })}
               availableGames={availableGames}
+              allGames={games}
               hideFinished={hideFinished}
               onToggleHideFinished={() => setHideFinished(!hideFinished)}
               onAddToQueue={async (gameId) => {
@@ -765,6 +766,12 @@ export default function GameAnalyticsPage() {
                   await reorderQueue(gameId, newPosition);
                 } catch (e) {
                   showToast(`Failed to reorder queue: ${(e as Error).message}`, 'error');
+                }
+              }}
+              onLogTime={(game) => {
+                const gameWithMetrics = gamesWithMetrics.find(g => g.id === game.id);
+                if (gameWithMetrics) {
+                  handleOpenPlayLog(gameWithMetrics);
                 }
               }}
             />
