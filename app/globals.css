@@ -105,3 +105,167 @@ input[type="range"]::-moz-range-thumb {
 .transition-smooth {
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
+
+
+/* Now Playing glow animation */
+@keyframes nowPlayingGlow {
+  0%, 100% { box-shadow: 0 0 12px rgba(59, 130, 246, 0.15), inset 0 0 12px rgba(59, 130, 246, 0.03); }
+  50% { box-shadow: 0 0 24px rgba(59, 130, 246, 0.3), inset 0 0 24px rgba(59, 130, 246, 0.06); }
+}
+
+.now-playing-glow {
+  animation: nowPlayingGlow 3s ease-in-out infinite;
+}
+
+/* Chirp entrance animation */
+@keyframes chirpSlideIn {
+  from { opacity: 0; transform: translateX(-8px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.chirp-enter {
+  animation: chirpSlideIn 0.4s ease-out;
+}
+
+/* Journey node pulse */
+@keyframes nodePulse {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4); }
+  50% { transform: scale(1.15); box-shadow: 0 0 0 6px rgba(59, 130, 246, 0); }
+}
+
+.node-pulse {
+  animation: nodePulse 2.5s ease-in-out infinite;
+}
+
+/* Rivalry VS animation */
+@keyframes vsFlash {
+  0%, 100% { opacity: 0.8; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.1); }
+}
+
+.vs-flash {
+  animation: vsFlash 2s ease-in-out infinite;
+}
+
+/* AI shimmer loading */
+@keyframes aiShimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.ai-shimmer {
+  background: linear-gradient(90deg, transparent 0%, rgba(139, 92, 246, 0.08) 50%, transparent 100%);
+  background-size: 200% 100%;
+  animation: aiShimmer 2s ease-in-out infinite;
+}
+
+/* Shelf dust animation */
+@keyframes dustFloat {
+  0%, 100% { opacity: 0.5; transform: translateY(0); }
+  50% { opacity: 0.8; transform: translateY(-2px); }
+}
+
+.dust-float {
+  animation: dustFloat 3s ease-in-out infinite;
+}
+
+/* Health dot pulse - game card activity indicator */
+@keyframes healthPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(1.3); }
+}
+
+.health-pulse-fast {
+  animation: healthPulse 1.5s ease-in-out infinite;
+}
+
+.health-pulse-medium {
+  animation: healthPulse 2.5s ease-in-out infinite;
+}
+
+.health-pulse-slow {
+  animation: healthPulse 4s ease-in-out infinite;
+}
+
+/* In Progress game card glow */
+@keyframes inProgressGlow {
+  0%, 100% { box-shadow: 0 0 8px rgba(59, 130, 246, 0.08), inset 0 0 8px rgba(59, 130, 246, 0.02); }
+  50% { box-shadow: 0 0 16px rgba(59, 130, 246, 0.15), inset 0 0 16px rgba(59, 130, 246, 0.04); }
+}
+
+.in-progress-glow {
+  animation: inProgressGlow 4s ease-in-out infinite;
+  border-color: rgba(59, 130, 246, 0.15) !important;
+}
+
+/* Completed game card shimmer */
+@keyframes completedShimmer {
+  0%, 100% { border-color: rgba(16, 185, 129, 0.1); }
+  50% { border-color: rgba(16, 185, 129, 0.25); }
+}
+
+.completed-shimmer {
+  animation: completedShimmer 5s ease-in-out infinite;
+}
+
+/* Milestone star animation */
+@keyframes milestoneStar {
+  0%, 100% { transform: scale(1) rotate(0deg); }
+  25% { transform: scale(1.1) rotate(5deg); }
+  75% { transform: scale(1.1) rotate(-5deg); }
+}
+
+.milestone-star {
+  animation: milestoneStar 3s ease-in-out infinite;
+}
+
+/* Timeline streak glow */
+@keyframes streakGlow {
+  0%, 100% { background: rgba(245, 158, 11, 0.05); }
+  50% { background: rgba(245, 158, 11, 0.12); }
+}
+
+.streak-glow {
+  animation: streakGlow 3s ease-in-out infinite;
+  border-radius: 8px;
+}
+
+/* Progress ring animation */
+@keyframes progressRingFill {
+  from { stroke-dashoffset: 157; }
+}
+
+.progress-ring-animate {
+  animation: progressRingFill 1s ease-out forwards;
+}
+
+/* Card entrance animation */
+@keyframes cardSlideUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.card-enter {
+  animation: cardSlideUp 0.3s ease-out;
+}
+
+/* Monthly vibe tag pulse */
+@keyframes vibePulse {
+  0%, 100% { opacity: 0.8; }
+  50% { opacity: 1; }
+}
+
+.vibe-pulse {
+  animation: vibePulse 4s ease-in-out infinite;
+}
+
+/* Sparkline bar grow */
+@keyframes sparkGrow {
+  from { transform: scaleY(0); }
+  to { transform: scaleY(1); }
+}
+
+.spark-grow {
+  animation: sparkGrow 0.5s ease-out forwards;
+  transform-origin: bottom;
+}
