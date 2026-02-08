@@ -4586,3 +4586,747 @@ export function buildQueueAIContext(queuedGames: Game[], allGames: Game[]): Queu
     dayOfWeek: days[now.getDay()],
   };
 }
+
+// ========================================================================
+// GAME CARD ENHANCEMENTS: Health dot, smart one-liners, relative time, etc.
+// ========================================================================
+
+/**
+ * Health Dot - Visual indicator of how "alive" a game is based on recent activity
+ */
+export type HealthLevel = 'active' | 'healthy' | 'cooling' | 'dormant' | 'cold' | 'none';
+
+export interface GameHealthDot {
+  level: HealthLevel;
+  color: string;
+  label: string;
+  daysSinceLastPlay: number;
+}
+
+export function getGameHealthDot(game: Game): GameHealthDot {
+  if (game.status === 'Wishlist') {
+    return { level: 'none', color: '#a855f7', label: 'Wishlist', daysSinceLastPlay: -1 };
+  }
+  if (game.status === 'Completed') {
+    return { level: 'none', color: '#10b981', label: 'Completed', daysSinceLastPlay: -1 };
+  }
+  if (game.status === 'Abandoned') {
+    return { level: 'cold', color: '#ef4444', label: 'Abandoned', daysSinceLastPlay: -1 };
+  }
+
+  const logs = game.playLogs || [];
+  if (logs.length === 0 && game.status === 'Not Started') {
+    return { level: 'dormant', color: '#6b7280', label: 'Untouched', daysSinceLastPlay: -1 };
+  }
+
+  if (logs.length === 0) {
+    return { level: 'dormant', color: '#6b7280', label: 'No sessions', daysSinceLastPlay: -1 };
+  }
+
+  const sorted = [...logs].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  const daysSince = Math.floor((Date.now() - new Date(sorted[0].date).getTime()) / (24 * 60 * 60 * 1000));
+
+  if (daysSince <= 3) return { level: 'active', color: '#10b981', label: 'Active', daysSinceLastPlay: daysSince };
+  if (daysSince <= 7) return { level: 'healthy', color: '#3b82f6', label: 'Healthy', daysSinceLastPlay: daysSince };
+  if (daysSince <= 14) return { level: 'cooling', color: '#f59e0b', label: 'Cooling off', daysSinceLastPlay: daysSince };
+  if (daysSince <= 30) return { level: 'dormant', color: '#f97316', label: 'Dormant', daysSinceLastPlay: daysSince };
+  return { level: 'cold', color: '#ef4444', label: 'Cold', daysSinceLastPlay: daysSince };
+}
+
+/**
+ * Relative time formatting - "2 days ago", "3 weeks ago", etc.
+ */
+export function getRelativeTime(dateStr: string): string {
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffDays = Math.floor(diffMs / (24 * 60 * 60 * 1000));
+
+  if (diffDays === 0) return 'today';
+  if (diffDays === 1) return 'yesterday';
+  if (diffDays < 7) return `${diffDays}d ago`;
+  if (diffDays < 30) return `${Math.floor(diffDays / 7)}w ago`;
+  if (diffDays < 365) return `${Math.floor(diffDays / 30)}mo ago`;
+  return `${Math.floor(diffDays / 365)}y ago`;
+}
+
+/**
+ * Days context - contextual string about how long you've been with a game
+ */
+export function getDaysContext(game: Game): string {
+  const now = Date.now();
+  
+  if (game.status === 'Wishlist') {
+    if (game.createdAt) {
+      const days = Math.floor((now - new Date(game.createdAt).getTime()) / (24 * 60 * 60 * 1000));
+      if (days === 0) return 'Added today';
+      if (days === 1) return 'On wishlist since yesterday';
+      return `On wishlist for ${days} days`;
+    }
+    return 'On wishlist';
+  }
+
+  if (game.status === 'Completed') {
+    if (game.startDate && game.endDate) {
+      const days = Math.floor((new Date(game.endDate).getTime() - new Date(game.startDate).getTime()) / (24 * 60 * 60 * 1000));
+      if (days === 0) return 'Completed in 1 day';
+      return `Completed in ${days} days`;
+    }
+    return 'Completed';
+  }
+
+  if (game.status === 'Abandoned') {
+    if (game.startDate && game.endDate) {
+      const days = Math.floor((new Date(game.endDate).getTime() - new Date(game.startDate).getTime()) / (24 * 60 * 60 * 1000));
+      return `Abandoned after ${days} days`;
+    }
+    return 'Abandoned';
+  }
+
+  if (game.status === 'In Progress') {
+    if (game.startDate) {
+      const days = Math.floor((now - new Date(game.startDate).getTime()) / (24 * 60 * 60 * 1000));
+      if (days === 0) return 'Started today';
+      if (days === 1) return 'Playing for 1 day';
+      return `Playing for ${days} days`;
+    }
+    return 'In Progress';
+  }
+
+  if (game.status === 'Not Started') {
+    if (game.datePurchased) {
+      const days = Math.floor((now - new Date(game.datePurchased).getTime()) / (24 * 60 * 60 * 1000));
+      if (days === 0) return 'Bought today';
+      if (days === 1) return 'Owned since yesterday, untouched';
+      if (days < 30) return `Owned ${days} days, untouched`;
+      return `Owned ${days} days, still sealed`;
+    }
+    return 'Not Started';
+  }
+
+  return '';
+}
+
+/**
+ * Session Momentum - last N sessions' hours for sparkline
+ */
+export function getSessionMomentum(game: Game, count: number = 5): number[] {
+  const logs = game.playLogs || [];
+  if (logs.length === 0) return [];
+  
+  const sorted = [...logs].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  return sorted.slice(-count).map(l => l.hours);
+}
+
+/**
+ * Value Trajectory - is the game's value improving, stable, or stagnant?
+ */
+export type ValueTrajectory = 'improving' | 'stable' | 'stagnant';
+
+export interface ValueTrajectoryData {
+  direction: ValueTrajectory;
+  icon: string; // arrow character
+  color: string;
+  label: string;
+}
+
+export function getValueTrajectory(game: Game): ValueTrajectoryData {
+  const totalHours = getTotalHours(game);
+  if (totalHours === 0 || game.price === 0) {
+    return { direction: 'stable', icon: '—', color: '#6b7280', label: 'No data' };
+  }
+
+  const logs = game.playLogs || [];
+  if (logs.length === 0) {
+    return { direction: 'stagnant', icon: '→', color: '#f59e0b', label: 'No recent play' };
+  }
+
+  const sorted = [...logs].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  const daysSinceLast = Math.floor((Date.now() - new Date(sorted[0].date).getTime()) / (24 * 60 * 60 * 1000));
+
+  const costPerHour = game.price / totalHours;
+
+  if (daysSinceLast <= 7) {
+    return { direction: 'improving', icon: '↑', color: '#10b981', label: 'Value improving' };
+  }
+  if (costPerHour <= 1) {
+    return { direction: 'stable', icon: '→', color: '#3b82f6', label: 'Excellent value locked in' };
+  }
+  return { direction: 'stagnant', icon: '↓', color: '#f59e0b', label: 'Value stagnant' };
+}
+
+/**
+ * Smart One-Liner - contextual sentence unique to each game
+ */
+export function getGameSmartOneLiner(game: Game, allGames: Game[]): string {
+  const totalHours = getTotalHours(game);
+  const owned = allGames.filter(g => g.status !== 'Wishlist');
+  const played = owned.filter(g => getTotalHours(g) > 0);
+
+  // Check for most played game
+  if (played.length > 0) {
+    const mostPlayed = played.reduce((max, g) => getTotalHours(g) > getTotalHours(max) ? g : max);
+    if (mostPlayed.id === game.id && totalHours > 0) {
+      return `Your most played game — ${totalHours}h and counting`;
+    }
+  }
+
+  // Century Club
+  if (totalHours >= 100) {
+    return `Century Club member — ${totalHours}h invested`;
+  }
+
+  // Best value game
+  if (played.length > 0 && game.price > 0 && totalHours > 0) {
+    const paidPlayed = played.filter(g => g.price > 0);
+    if (paidPlayed.length > 0) {
+      const bestValue = paidPlayed.reduce((best, g) => {
+        const gCph = g.price / getTotalHours(g);
+        const bCph = best.price / getTotalHours(best);
+        return gCph < bCph ? g : best;
+      });
+      if (bestValue.id === game.id) {
+        return `Your best bang-for-buck — $${(game.price / totalHours).toFixed(2)}/hr`;
+      }
+    }
+  }
+
+  // Highest rated
+  if (owned.length > 0) {
+    const highestRated = owned.reduce((max, g) => g.rating > max.rating ? g : max);
+    if (highestRated.id === game.id && game.rating >= 9) {
+      return `Your highest rated — a ${game.rating}/10 masterpiece`;
+    }
+  }
+
+  // Completed fast
+  if (game.status === 'Completed' && game.startDate && game.endDate) {
+    const days = Math.floor((new Date(game.endDate).getTime() - new Date(game.startDate).getTime()) / (24 * 60 * 60 * 1000));
+    if (days <= 3 && totalHours >= 5) {
+      return `Speed-ran in ${days} day${days === 1 ? '' : 's'} — couldn't put it down`;
+    }
+  }
+
+  // Free game with lots of hours
+  if (game.acquiredFree && totalHours >= 20) {
+    return `Free game, ${totalHours}h of joy — infinite value`;
+  }
+
+  // Bargain find
+  if (game.price > 0 && game.price <= 10 && totalHours >= 30) {
+    return `$${game.price} for ${totalHours}h — absolute steal`;
+  }
+
+  // Close to excellent value
+  if (game.price > 0 && totalHours > 0) {
+    const cph = game.price / totalHours;
+    if (cph > 1 && cph <= 3) {
+      const hoursNeeded = Math.ceil(game.price / 1) - totalHours;
+      if (hoursNeeded > 0 && hoursNeeded <= 15) {
+        return `${hoursNeeded} more hours to hit Excellent value`;
+      }
+    }
+  }
+
+  // Same-day impulse buy
+  if (game.datePurchased && game.startDate && game.datePurchased === game.startDate && totalHours > 0) {
+    return 'Bought and started same day — couldn\'t wait';
+  }
+
+  // Long untouched backlog
+  if (game.status === 'Not Started' && game.datePurchased) {
+    const days = Math.floor((Date.now() - new Date(game.datePurchased).getTime()) / (24 * 60 * 60 * 1000));
+    if (days > 90) {
+      return `$${game.price} collecting dust for ${days} days`;
+    }
+    if (days > 30) {
+      return `Sitting in the backlog for ${days} days`;
+    }
+  }
+
+  // Abandoned with high price
+  if (game.status === 'Abandoned' && game.price >= 50) {
+    return `$${game.price} and ${totalHours}h before walking away`;
+  }
+
+  // Many sessions
+  if (game.playLogs && game.playLogs.length >= 10) {
+    return `${game.playLogs.length} sessions logged — dedicated player`;
+  }
+
+  // Wishlist for a while
+  if (game.status === 'Wishlist' && game.createdAt) {
+    const days = Math.floor((Date.now() - new Date(game.createdAt).getTime()) / (24 * 60 * 60 * 1000));
+    if (days > 60) {
+      return `Been eyeing this for ${days} days`;
+    }
+  }
+
+  // Good discount
+  if (game.originalPrice && game.originalPrice > game.price) {
+    const discount = Math.round(((game.originalPrice - game.price) / game.originalPrice) * 100);
+    if (discount >= 50) {
+      return `Snagged at ${discount}% off — smart buy`;
+    }
+  }
+
+  // Default based on status
+  if (game.status === 'In Progress' && totalHours > 0) {
+    return `${totalHours}h in — keep going`;
+  }
+  if (game.status === 'Completed') {
+    return `Another one complete — ${totalHours}h well spent`;
+  }
+  if (game.status === 'Not Started') {
+    return 'Waiting patiently in the backlog';
+  }
+
+  return '';
+}
+
+/**
+ * Franchise Info - game's position within its franchise
+ */
+export interface FranchiseInfo {
+  franchiseName: string;
+  gamesInFranchise: number;
+  position: number; // which one in the franchise by purchase date
+  totalFranchiseHours: number;
+  totalFranchiseSpent: number;
+}
+
+export function getFranchiseInfo(game: Game, allGames: Game[]): FranchiseInfo | null {
+  if (!game.franchise) return null;
+
+  const franchiseGames = allGames
+    .filter(g => g.franchise === game.franchise)
+    .sort((a, b) => {
+      const aDate = a.datePurchased || a.createdAt;
+      const bDate = b.datePurchased || b.createdAt;
+      return new Date(aDate).getTime() - new Date(bDate).getTime();
+    });
+
+  if (franchiseGames.length < 2) return null;
+
+  const position = franchiseGames.findIndex(g => g.id === game.id) + 1;
+  const totalHours = franchiseGames.reduce((sum, g) => sum + getTotalHours(g), 0);
+  const totalSpent = franchiseGames.reduce((sum, g) => sum + g.price, 0);
+
+  return {
+    franchiseName: game.franchise,
+    gamesInFranchise: franchiseGames.length,
+    position,
+    totalFranchiseHours: totalHours,
+    totalFranchiseSpent: totalSpent,
+  };
+}
+
+/**
+ * Progress Ring - percentage of estimated game completion based on genre averages
+ */
+export function getProgressPercent(game: Game): number {
+  const totalHours = getTotalHours(game);
+  if (totalHours === 0) return 0;
+  if (game.status === 'Completed') return 100;
+
+  // Genre-based average completion times (rough estimates)
+  const genreAverages: Record<string, number> = {
+    'RPG': 60, 'JRPG': 70, 'Action-Adventure': 30, 'Action': 25,
+    'Souls-like': 60, 'Horror': 15, 'Platformer': 15, 'Roguelike': 40,
+    'Metroidvania': 20, 'Puzzle': 10, 'Strategy': 40, 'Racing': 20,
+    'Sports': 30, 'Simulation': 40, 'Shooter': 15, 'Fighting': 20,
+    'Survival': 35, 'Indie': 15,
+  };
+
+  const estimatedTotal = genreAverages[game.genre || ''] || 25;
+  return Math.min(100, Math.round((totalHours / estimatedTotal) * 100));
+}
+
+// ========================================================================
+// TIMELINE ENHANCEMENTS: Monthly vibes, milestones, streaks, comparisons
+// ========================================================================
+
+/**
+ * Monthly Vibe Tag - auto-generated personality tag for each month
+ */
+export interface MonthlyVibe {
+  tag: string;
+  emoji: string;
+  color: string;
+}
+
+export function getMonthlyVibe(
+  monthEvents: Array<{ type: string; game: Game; hours?: number }>,
+  monthKey: string
+): MonthlyVibe {
+  const playEvents = monthEvents.filter(e => e.type === 'play');
+  const purchaseEvents = monthEvents.filter(e => e.type === 'purchase');
+  const completeEvents = monthEvents.filter(e => e.type === 'complete');
+  const totalHours = playEvents.reduce((sum, e) => sum + (e.hours || 0), 0);
+  const uniqueGames = new Set(playEvents.map(e => e.game.id));
+  const genres = [...new Set(monthEvents.map(e => e.game.genre).filter(Boolean))];
+
+  // Check month for seasonal tags
+  const month = parseInt(monthKey.split('-')[1]);
+
+  // Completion-heavy month
+  if (completeEvents.length >= 3) {
+    return { tag: 'The Finisher', emoji: '🏆', color: '#10b981' };
+  }
+  if (completeEvents.length >= 2) {
+    return { tag: 'Completion Streak', emoji: '✅', color: '#10b981' };
+  }
+
+  // Shopping-heavy month
+  if (purchaseEvents.length >= 4) {
+    return { tag: 'Shopping Spree', emoji: '🛒', color: '#f59e0b' };
+  }
+
+  // Marathon month
+  if (totalHours >= 80) {
+    return { tag: 'Marathon Month', emoji: '🔥', color: '#ef4444' };
+  }
+
+  // Single-game obsession
+  if (uniqueGames.size === 1 && totalHours >= 15) {
+    const gameName = playEvents[0]?.game.name || 'Unknown';
+    return { tag: `${gameName} Month`, emoji: '🎯', color: '#3b82f6' };
+  }
+
+  // Variety month
+  if (uniqueGames.size >= 5) {
+    return { tag: 'Variety Pack', emoji: '🎲', color: '#a855f7' };
+  }
+
+  // Genre-specific month
+  if (genres.length === 1 && playEvents.length >= 3) {
+    return { tag: `${genres[0]} Season`, emoji: '🎮', color: '#6366f1' };
+  }
+
+  // High hours month
+  if (totalHours >= 40) {
+    return { tag: 'Deep Dive', emoji: '🌊', color: '#3b82f6' };
+  }
+
+  // Low activity
+  if (totalHours < 5 && monthEvents.length <= 3) {
+    return { tag: 'The Dry Spell', emoji: '🏜️', color: '#6b7280' };
+  }
+
+  // New starts
+  const startEvents = monthEvents.filter(e => e.type === 'start');
+  if (startEvents.length >= 3) {
+    return { tag: 'New Beginnings', emoji: '🌱', color: '#22c55e' };
+  }
+
+  // Seasonal defaults
+  if (month === 12) return { tag: 'Holiday Gaming', emoji: '🎄', color: '#ef4444' };
+  if (month >= 6 && month <= 8) return { tag: 'Summer Sessions', emoji: '☀️', color: '#f59e0b' };
+
+  // Default
+  return { tag: 'Steady Progress', emoji: '📈', color: '#8b5cf6' };
+}
+
+/**
+ * Timeline Milestones - special events to inject into timeline
+ */
+export interface TimelineMilestone {
+  id: string;
+  date: string;
+  type: 'milestone';
+  title: string;
+  description: string;
+  icon: string;
+  color: string;
+}
+
+export function getTimelineMilestones(games: Game[]): TimelineMilestone[] {
+  const milestones: TimelineMilestone[] = [];
+  const allLogs = getAllPlayLogs(games);
+
+  // Track cumulative hours over time
+  let cumulativeHours = 0;
+  const hourMilestones = [50, 100, 200, 500, 1000];
+  const hitHourMilestones = new Set<number>();
+  const logsByDate = [...allLogs].sort((a, b) => new Date(a.log.date).getTime() - new Date(b.log.date).getTime());
+
+  for (const { log } of logsByDate) {
+    cumulativeHours += log.hours;
+    for (const milestone of hourMilestones) {
+      if (cumulativeHours >= milestone && !hitHourMilestones.has(milestone)) {
+        hitHourMilestones.add(milestone);
+        milestones.push({
+          id: `milestone-hours-${milestone}`,
+          date: log.date,
+          type: 'milestone',
+          title: `${milestone} Hours Played!`,
+          description: `You've now played ${milestone} total hours across all games`,
+          icon: '⏱️',
+          color: '#f59e0b',
+        });
+      }
+    }
+  }
+
+  // Track game completions
+  const completedGames = games
+    .filter(g => g.status === 'Completed' && g.endDate)
+    .sort((a, b) => new Date(a.endDate!).getTime() - new Date(b.endDate!).getTime());
+
+  const completionMilestones = [1, 5, 10, 25, 50];
+  completedGames.forEach((game, idx) => {
+    const count = idx + 1;
+    if (completionMilestones.includes(count)) {
+      milestones.push({
+        id: `milestone-completed-${count}`,
+        date: game.endDate!,
+        type: 'milestone',
+        title: count === 1 ? 'First Game Completed!' : `${count} Games Completed!`,
+        description: `${game.name} was your ${count}${count === 1 ? 'st' : count === 2 ? 'nd' : count === 3 ? 'rd' : 'th'} completion`,
+        icon: '🏆',
+        color: '#10b981',
+      });
+    }
+  });
+
+  // Per-game hour milestones (50h, 100h on a single game)
+  games.forEach(game => {
+    const totalH = getTotalHours(game);
+    if (totalH >= 100 && game.playLogs && game.playLogs.length > 0) {
+      // Find the log where they crossed 100h
+      const sorted = [...game.playLogs].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      let accum = game.hours; // baseline
+      for (const log of sorted) {
+        accum += log.hours;
+        if (accum >= 100) {
+          milestones.push({
+            id: `milestone-century-${game.id}`,
+            date: log.date,
+            type: 'milestone',
+            title: `Century Club: ${game.name}`,
+            description: `100+ hours on a single game. That's dedication.`,
+            icon: '💯',
+            color: '#8b5cf6',
+          });
+          break;
+        }
+      }
+    }
+  });
+
+  // First 10/10 rating
+  const perfectGames = games
+    .filter(g => g.rating === 10 && g.status !== 'Wishlist')
+    .sort((a, b) => {
+      const aDate = a.datePurchased || a.createdAt;
+      const bDate = b.datePurchased || b.createdAt;
+      return new Date(aDate).getTime() - new Date(bDate).getTime();
+    });
+  if (perfectGames.length > 0) {
+    const first = perfectGames[0];
+    milestones.push({
+      id: 'milestone-first-perfect',
+      date: first.datePurchased || first.createdAt,
+      type: 'milestone',
+      title: 'First Perfect 10!',
+      description: `${first.name} earned your first 10/10 rating`,
+      icon: '⭐',
+      color: '#f59e0b',
+    });
+  }
+
+  // Best value breakthrough (first game under $1/hr)
+  const excellentValues = games
+    .filter(g => {
+      const h = getTotalHours(g);
+      return g.price > 0 && h > 0 && (g.price / h) <= 1;
+    })
+    .sort((a, b) => {
+      const aDate = a.startDate || a.datePurchased || a.createdAt;
+      const bDate = b.startDate || b.datePurchased || b.createdAt;
+      return new Date(aDate).getTime() - new Date(bDate).getTime();
+    });
+  if (excellentValues.length > 0) {
+    const first = excellentValues[0];
+    const date = first.endDate || first.startDate || first.datePurchased || first.createdAt;
+    milestones.push({
+      id: 'milestone-first-excellent-value',
+      date,
+      type: 'milestone',
+      title: 'Excellent Value Unlocked!',
+      description: `${first.name} broke the $1/hr barrier`,
+      icon: '💎',
+      color: '#10b981',
+    });
+  }
+
+  return milestones.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+}
+
+/**
+ * Monthly Comparison - delta stats vs previous month
+ */
+export interface MonthlyComparison {
+  hoursDelta: number;
+  sessionsDelta: number;
+  gamesDelta: number;
+  purchasesDelta: number;
+  completionsDelta: number;
+  hoursDirection: 'up' | 'down' | 'same';
+}
+
+export function getMonthlyComparison(
+  currentMonthEvents: Array<{ type: string; hours?: number; game: Game }>,
+  previousMonthEvents: Array<{ type: string; hours?: number; game: Game }>
+): MonthlyComparison {
+  const getStats = (events: Array<{ type: string; hours?: number; game: Game }>) => {
+    const plays = events.filter(e => e.type === 'play');
+    return {
+      hours: plays.reduce((s, e) => s + (e.hours || 0), 0),
+      sessions: plays.length,
+      games: new Set(plays.map(e => e.game.id)).size,
+      purchases: events.filter(e => e.type === 'purchase').length,
+      completions: events.filter(e => e.type === 'complete').length,
+    };
+  };
+
+  const current = getStats(currentMonthEvents);
+  const previous = getStats(previousMonthEvents);
+
+  const hoursDelta = current.hours - previous.hours;
+
+  return {
+    hoursDelta: Math.round(hoursDelta * 10) / 10,
+    sessionsDelta: current.sessions - previous.sessions,
+    gamesDelta: current.games - previous.games,
+    purchasesDelta: current.purchases - previous.purchases,
+    completionsDelta: current.completions - previous.completions,
+    hoursDirection: hoursDelta > 1 ? 'up' : hoursDelta < -1 ? 'down' : 'same',
+  };
+}
+
+/**
+ * Streak Segments - find consecutive day play streaks in a month's events
+ */
+export interface StreakSegment {
+  startDate: string;
+  endDate: string;
+  days: number;
+  totalHours: number;
+}
+
+export function getStreakSegments(playEvents: Array<{ date: string; hours?: number }>): StreakSegment[] {
+  if (playEvents.length === 0) return [];
+
+  const uniqueDays = [...new Set(playEvents.map(e => e.date))].sort();
+  if (uniqueDays.length < 2) return [];
+
+  const segments: StreakSegment[] = [];
+  let streakStart = uniqueDays[0];
+  let prevDate = new Date(uniqueDays[0]);
+
+  for (let i = 1; i < uniqueDays.length; i++) {
+    const currDate = new Date(uniqueDays[i]);
+    const diffDays = Math.round((currDate.getTime() - prevDate.getTime()) / (24 * 60 * 60 * 1000));
+
+    if (diffDays > 1) {
+      // Streak broken - save if it was 3+ days
+      const streakDays = Math.round((prevDate.getTime() - new Date(streakStart).getTime()) / (24 * 60 * 60 * 1000)) + 1;
+      if (streakDays >= 3) {
+        const streakHours = playEvents
+          .filter(e => e.date >= streakStart && e.date <= uniqueDays[i - 1])
+          .reduce((s, e) => s + (e.hours || 0), 0);
+        segments.push({
+          startDate: streakStart,
+          endDate: uniqueDays[i - 1],
+          days: streakDays,
+          totalHours: streakHours,
+        });
+      }
+      streakStart = uniqueDays[i];
+    }
+    prevDate = currDate;
+  }
+
+  // Check last streak
+  const lastStreakDays = Math.round((prevDate.getTime() - new Date(streakStart).getTime()) / (24 * 60 * 60 * 1000)) + 1;
+  if (lastStreakDays >= 3) {
+    const streakHours = playEvents
+      .filter(e => e.date >= streakStart && e.date <= uniqueDays[uniqueDays.length - 1])
+      .reduce((s, e) => s + (e.hours || 0), 0);
+    segments.push({
+      startDate: streakStart,
+      endDate: uniqueDays[uniqueDays.length - 1],
+      days: lastStreakDays,
+      totalHours: streakHours,
+    });
+  }
+
+  return segments;
+}
+
+/**
+ * Game Journey Arc - the full lifecycle of a game for timeline display
+ */
+export interface GameJourneyArc {
+  game: Game;
+  events: Array<{
+    type: 'purchase' | 'start' | 'play' | 'complete' | 'abandon';
+    date: string;
+    label: string;
+    hours?: number;
+  }>;
+  totalDays: number;
+  totalHours: number;
+}
+
+export function getGameJourneyArc(game: Game): GameJourneyArc | null {
+  // Only show arcs for games with at least purchase + start/complete
+  if (!game.datePurchased && !game.startDate) return null;
+  if (game.status === 'Wishlist' || game.status === 'Not Started') return null;
+
+  const events: GameJourneyArc['events'] = [];
+
+  if (game.datePurchased) {
+    events.push({ type: 'purchase', date: game.datePurchased, label: `Purchased for $${game.price}` });
+  }
+  if (game.startDate) {
+    events.push({ type: 'start', date: game.startDate, label: 'Started playing' });
+  }
+  if (game.endDate) {
+    events.push({
+      type: game.status === 'Abandoned' ? 'abandon' : 'complete',
+      date: game.endDate,
+      label: game.status === 'Abandoned' ? 'Abandoned' : 'Completed',
+    });
+  }
+
+  if (events.length < 2) return null;
+
+  const firstDate = new Date(events[0].date);
+  const lastDate = new Date(events[events.length - 1].date);
+  const totalDays = Math.floor((lastDate.getTime() - firstDate.getTime()) / (24 * 60 * 60 * 1000));
+
+  return {
+    game,
+    events,
+    totalDays,
+    totalHours: getTotalHours(game),
+  };
+}
+
+/**
+ * Cumulative hours for a game at a specific event date
+ */
+export function getCumulativeHoursAtDate(game: Game, eventDate: string): number {
+  let hours = game.hours; // baseline
+  if (!game.playLogs) return hours;
+
+  const sorted = [...game.playLogs].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  for (const log of sorted) {
+    if (new Date(log.date) <= new Date(eventDate)) {
+      hours += log.hours;
+    }
+  }
+  return hours;
+}

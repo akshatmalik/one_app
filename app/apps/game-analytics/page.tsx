@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, List, MessageCircle, ListOrdered, ListPlus, Check, Heart } from 'lucide-react';
 import { useGames } from './hooks/useGames';
 import { useAnalytics, GameWithMetrics } from './hooks/useAnalytics';
@@ -18,7 +18,7 @@ import { gameRepository } from './lib/storage';
 import { BASELINE_GAMES_2025 } from './data/baseline-games';
 import { useAuthContext } from '@/lib/AuthContext';
 import { useToast } from '@/components/Toast';
-import { getROIRating, getWeekStatsForOffset, getGamesPlayedInTimeRange, getCompletionProbability } from './lib/calculations';
+import { getROIRating, getWeekStatsForOffset, getGamesPlayedInTimeRange, getCompletionProbability, getGameHealthDot, getRelativeTime, getDaysContext, getSessionMomentum, getValueTrajectory, getGameSmartOneLiner, getFranchiseInfo, getProgressPercent, getShelfLife } from './lib/calculations';
 import { OnThisDayCard } from './components/OnThisDayCard';
 import { ActivityPulse } from './components/ActivityPulse';
 import { RandomPicker } from './components/RandomPicker';
@@ -439,46 +439,131 @@ export default function GameAnalyticsPage() {
                 </div>
               ) : (
                 <div className="grid gap-3">
-                  {filteredGames.map((game) => (
+                  {filteredGames.map((game, idx) => {
+                    const healthDot = getGameHealthDot(game);
+                    const daysCtx = getDaysContext(game);
+                    const shelfLifeData = getShelfLife(game);
+                    const valTraj = getValueTrajectory(game);
+                    const momentum = getSessionMomentum(game, 5);
+                    const maxMom = momentum.length > 0 ? Math.max(...momentum) : 0;
+                    const smartLine = getGameSmartOneLiner(game, games);
+                    const franchise = getFranchiseInfo(game, games);
+                    const progressPct = getProgressPercent(game);
+                    const lastPlayedStr = game.playLogs && game.playLogs.length > 0
+                      ? (() => {
+                          const sorted = [...game.playLogs].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+                          return getRelativeTime(sorted[0].date);
+                        })()
+                      : null;
+                    const avgSession = game.playLogs && game.playLogs.length > 0
+                      ? Math.round(game.playLogs.reduce((s, l) => s + l.hours, 0) / game.playLogs.length)
+                      : 2;
+
+                    return (
                     <div
                       key={game.id}
                       onClick={() => handleEdit(game)}
-                      className="group p-4 bg-white/[0.02] hover:bg-white/[0.04] border border-white/5 hover:border-white/10 rounded-xl cursor-pointer transition-all"
+                      className={clsx(
+                        'group p-4 bg-white/[0.02] hover:bg-white/[0.04] border border-white/5 hover:border-white/10 rounded-xl cursor-pointer transition-all card-enter',
+                        game.status === 'In Progress' && 'in-progress-glow',
+                        game.status === 'Completed' && 'completed-shimmer',
+                      )}
+                      style={{ animationDelay: `${idx * 50}ms` }}
                     >
-                      {/* Row 1: Image + Name + Badges + Actions */}
+                      {/* Row 1: Thumbnail + Info + Actions */}
                       <div className="flex items-start gap-3 mb-3">
-                        {/* Thumbnail */}
-                        {game.thumbnail && (
-                          <div className="shrink-0">
-                            <img
-                              src={game.thumbnail}
-                              alt={game.name}
-                              className="w-16 h-16 object-cover rounded-lg"
-                              loading="lazy"
-                            />
-                          </div>
-                        )}
+                        {/* Thumbnail with Health Dot + Progress Ring */}
+                        <div className="shrink-0 relative">
+                          {game.thumbnail ? (
+                            <div className="relative w-16 h-16">
+                              <img
+                                src={game.thumbnail}
+                                alt={game.name}
+                                className="w-16 h-16 object-cover rounded-lg"
+                                loading="lazy"
+                              />
+                              {/* Progress ring overlay */}
+                              {progressPct > 0 && progressPct < 100 && (
+                                <svg className="absolute inset-0 w-16 h-16 -rotate-90 pointer-events-none" viewBox="0 0 64 64">
+                                  <circle cx="32" cy="32" r="30" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="2.5" />
+                                  <circle
+                                    cx="32" cy="32" r="30" fill="none"
+                                    stroke={game.status === 'In Progress' ? '#3b82f6' : '#8b5cf6'}
+                                    strokeWidth="2.5"
+                                    strokeDasharray={`${(progressPct / 100) * 188.5} 188.5`}
+                                    strokeLinecap="round"
+                                    className="progress-ring-animate"
+                                  />
+                                </svg>
+                              )}
+                              {/* Health dot */}
+                              {healthDot.level !== 'none' && (
+                                <div
+                                  className={clsx(
+                                    'absolute -top-1 -right-1 w-3 h-3 rounded-full border-2 border-[#0a0a0f]',
+                                    healthDot.level === 'active' && 'health-pulse-fast',
+                                    healthDot.level === 'healthy' && 'health-pulse-medium',
+                                    healthDot.level === 'cooling' && 'health-pulse-slow',
+                                  )}
+                                  style={{ backgroundColor: healthDot.color }}
+                                  title={healthDot.label}
+                                />
+                              )}
+                            </div>
+                          ) : (
+                            <div className="relative w-16 h-16 bg-white/5 rounded-lg flex items-center justify-center">
+                              <Gamepad2 size={24} className="text-white/20" />
+                              {healthDot.level !== 'none' && (
+                                <div
+                                  className={clsx(
+                                    'absolute -top-1 -right-1 w-3 h-3 rounded-full border-2 border-[#0a0a0f]',
+                                    healthDot.level === 'active' && 'health-pulse-fast',
+                                  )}
+                                  style={{ backgroundColor: healthDot.color }}
+                                  title={healthDot.label}
+                                />
+                              )}
+                            </div>
+                          )}
+                        </div>
 
-                        {/* Name + Badges */}
+                        {/* Name + Badges + Days Context */}
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-1.5 flex-wrap mb-1">
-                            {/* Game Name */}
+                          <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
                             <h3 className="text-white/90 font-medium text-base">{game.name}</h3>
-
-                            {/* Status Badge */}
                             <span className={clsx('text-[10px] px-2 py-0.5 rounded-full font-medium shrink-0', getStatusColor(game.status))}>
                               {game.status}
                             </span>
+                            {shelfLifeData.level !== 'fresh' && shelfLifeData.label && (
+                              <span className="text-[10px] px-2 py-0.5 rounded font-medium dust-float" style={{ color: shelfLifeData.color, backgroundColor: `${shelfLifeData.color}15` }}>
+                                {shelfLifeData.label}
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Days context + last played */}
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-[11px] text-white/35">{daysCtx}</span>
+                            {lastPlayedStr && (
+                              <>
+                                <span className="text-white/10 text-[10px]">·</span>
+                                <span className="text-[11px] text-white/30">Last played {lastPlayedStr}</span>
+                              </>
+                            )}
                           </div>
 
                           {/* Tags Row */}
                           <div className="flex items-center gap-1.5 flex-wrap">
-                            {/* Platform/Genre/Source Tags */}
                             {game.platform && <span className="text-[10px] px-2 py-0.5 bg-white/5 rounded text-white/40">{game.platform}</span>}
                             {game.genre && <span className="text-[10px] px-2 py-0.5 bg-white/5 rounded text-white/40">{game.genre}</span>}
                             {game.purchaseSource && <span className="text-[10px] px-2 py-0.5 bg-white/5 rounded text-white/40">{game.purchaseSource}</span>}
 
-                            {/* Value Badge */}
+                            {franchise && (
+                              <span className="text-[10px] px-2 py-0.5 bg-purple-500/10 text-purple-400 rounded font-medium">
+                                {franchise.franchiseName} #{franchise.position}/{franchise.gamesInFranchise}
+                              </span>
+                            )}
+
                             {game.totalHours > 0 && (
                               <span className={clsx(
                                 'text-[10px] px-2 py-0.5 rounded font-medium',
@@ -491,7 +576,6 @@ export default function GameAnalyticsPage() {
                               </span>
                             )}
 
-                            {/* Completion Probability Badge */}
                             {(game.status === 'In Progress' || game.status === 'Not Started') && (() => {
                               const prob = getCompletionProbability(game, games);
                               return (
@@ -506,14 +590,12 @@ export default function GameAnalyticsPage() {
                               );
                             })()}
 
-                            {/* Discount Badge */}
                             {game.originalPrice && game.originalPrice > game.price && (
                               <span className="text-[10px] px-2 py-0.5 bg-green-500/20 text-green-400 rounded font-medium">
                                 {(((game.originalPrice - game.price) / game.originalPrice) * 100).toFixed(0)}% off
                               </span>
                             )}
 
-                            {/* Free Badge */}
                             {game.acquiredFree && (
                               <span className="text-[10px] px-2 py-0.5 bg-emerald-500/20 text-emerald-400 rounded font-medium">
                                 FREE
@@ -529,10 +611,11 @@ export default function GameAnalyticsPage() {
                               e.stopPropagation();
                               handleOpenPlayLog(game);
                             }}
-                            className="p-2 text-white/30 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg transition-all"
+                            className="flex items-center gap-1 px-2 py-1.5 text-white/30 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg transition-all text-xs"
                             title="Log Play Session"
                           >
-                            <Clock size={14} />
+                            <Clock size={12} />
+                            <span className="hidden sm:inline">+{avgSession}h</span>
                           </button>
                           <button
                             onClick={async (e) => {
@@ -578,9 +661,8 @@ export default function GameAnalyticsPage() {
                         </div>
                       </div>
 
-                      {/* Row 2: Full-width Stats Grid */}
+                      {/* Row 2: Stats Grid */}
                       <div className="grid grid-cols-5 gap-2 text-center">
-                        {/* Price */}
                         <div className="p-2 bg-white/[0.02] rounded-lg">
                           <div className="flex flex-col items-center gap-0.5">
                             {game.originalPrice && game.originalPrice > game.price ? (
@@ -592,29 +674,30 @@ export default function GameAnalyticsPage() {
                               <div className="text-white/80 font-medium text-sm">${game.price}</div>
                             )}
                           </div>
-                          <div className="text-[10px] text-white/30">
-                            {game.acquiredFree ? 'free' : 'price'}
-                          </div>
+                          <div className="text-[10px] text-white/30">{game.acquiredFree ? 'free' : 'price'}</div>
                         </div>
 
-                        {/* Hours */}
                         <div className="p-2 bg-white/[0.02] rounded-lg">
                           <div className="text-white/80 font-medium text-sm">{game.totalHours}h</div>
                           <div className="text-[10px] text-white/30">played</div>
                         </div>
 
-                        {/* Rating */}
                         <div className="p-2 bg-white/[0.02] rounded-lg">
                           <div className="text-white/80 font-medium text-sm">{game.rating}/10</div>
                           <div className="text-[10px] text-white/30">rating</div>
                         </div>
 
-                        {/* Cost per Hour */}
+                        {/* Cost/hr with value trajectory arrow */}
                         <div className="p-2 bg-white/[0.02] rounded-lg">
                           {game.totalHours > 0 ? (
                             <>
-                              <div className={clsx('font-medium text-sm', getValueColor(game.metrics.valueRating))}>
-                                ${game.metrics.costPerHour.toFixed(2)}
+                              <div className="flex items-center justify-center gap-1">
+                                <span className={clsx('font-medium text-sm', getValueColor(game.metrics.valueRating))}>
+                                  ${game.metrics.costPerHour.toFixed(2)}
+                                </span>
+                                <span className="text-[10px]" style={{ color: valTraj.color }} title={valTraj.label}>
+                                  {valTraj.icon}
+                                </span>
                               </div>
                               <div className="text-[10px] text-white/30">per hr</div>
                             </>
@@ -626,7 +709,6 @@ export default function GameAnalyticsPage() {
                           )}
                         </div>
 
-                        {/* ROI */}
                         <div className="p-2 bg-white/[0.02] rounded-lg">
                           {game.totalHours > 0 ? (
                             <>
@@ -635,12 +717,9 @@ export default function GameAnalyticsPage() {
                               </div>
                               <div className="text-[10px] text-white/30">
                                 {(() => {
-                                  const rating = getROIRating(game.metrics.roi);
-                                  const multiplier = Math.floor(game.metrics.roi / 10);
-                                  if (rating === 'Excellent' && multiplier >= 2) {
-                                    return `${multiplier}x Excellent`;
-                                  }
-                                  return `${rating} ROI`;
+                                  const r = getROIRating(game.metrics.roi);
+                                  const m = Math.floor(game.metrics.roi / 10);
+                                  return r === 'Excellent' && m >= 2 ? `${m}x Excellent` : `${r} ROI`;
                                 })()}
                               </div>
                             </>
@@ -653,6 +732,30 @@ export default function GameAnalyticsPage() {
                         </div>
                       </div>
 
+                      {/* Row 3: Smart one-liner + Momentum sparkline */}
+                      {(smartLine || momentum.length >= 3) && (
+                        <div className="mt-3 pt-3 border-t border-white/5 flex items-center justify-between gap-3">
+                          {smartLine && (
+                            <p className="text-[11px] text-white/30 italic flex-1">{smartLine}</p>
+                          )}
+                          {momentum.length >= 3 && (
+                            <div className="flex items-end gap-px h-4 shrink-0" title={`Last ${momentum.length} sessions: ${momentum.map(h => h + 'h').join(', ')}`}>
+                              {momentum.map((hours, i) => (
+                                <div
+                                  key={i}
+                                  className="w-1.5 rounded-sm spark-grow"
+                                  style={{
+                                    height: `${maxMom > 0 ? Math.max(20, (hours / maxMom) * 100) : 20}%`,
+                                    backgroundColor: i === momentum.length - 1 ? '#3b82f6' : 'rgba(255,255,255,0.15)',
+                                    animationDelay: `${i * 100}ms`,
+                                  }}
+                                />
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
                       {/* Review Preview */}
                       {game.review && (
                         <div className="mt-3 pt-3 border-t border-white/5">
@@ -660,19 +763,33 @@ export default function GameAnalyticsPage() {
                         </div>
                       )}
 
-                      {/* Play Logs Summary */}
+                      {/* Play Logs Summary with relative time + last note */}
                       {game.playLogs && game.playLogs.length > 0 && (
-                        <div className={clsx('mt-3 pt-3 border-t border-white/5', !game.review && 'mt-3')}>
+                        <div className="mt-3 pt-3 border-t border-white/5">
                           <div className="flex items-center gap-2 text-xs text-white/30">
                             <Clock size={10} />
-                            <span>{game.playLogs.length} sessions logged</span>
-                            <span className="text-white/10">•</span>
-                            <span>Last: {new Date(game.playLogs[0].date).toLocaleDateString()}</span>
+                            <span>{game.playLogs.length} sessions</span>
+                            {lastPlayedStr && (
+                              <>
+                                <span className="text-white/10">·</span>
+                                <span>Last: {lastPlayedStr}</span>
+                              </>
+                            )}
+                            {(() => {
+                              const sorted = [...game.playLogs].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+                              return sorted[0].notes ? (
+                                <>
+                                  <span className="text-white/10">·</span>
+                                  <span className="text-white/25 italic truncate max-w-[200px]">&ldquo;{sorted[0].notes}&rdquo;</span>
+                                </>
+                              ) : null;
+                            })()}
                           </div>
                         </div>
                       )}
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </>
