@@ -106,21 +106,6 @@ input[type="range"]::-moz-range-thumb {
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* Journey path connector */
-.journey-path {
-  position: relative;
-}
-
-.journey-path::before {
-  content: '';
-  position: absolute;
-  left: 23px;
-  top: 0;
-  bottom: 0;
-  width: 2px;
-  background: linear-gradient(180deg, rgba(139, 92, 246, 0.3) 0%, rgba(139, 92, 246, 0.05) 100%);
-  pointer-events: none;
-}
 
 /* Now Playing glow animation */
 @keyframes nowPlayingGlow {
