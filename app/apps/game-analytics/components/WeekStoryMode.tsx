@@ -37,9 +37,10 @@ interface WeekStoryModeProps {
   onClose: () => void;
   prefetchedBlurbs?: Partial<Record<AIBlurbType, AIBlurbResult>>;
   isLoadingPrefetch?: boolean;
+  weekTitle?: string;
 }
 
-export function WeekStoryMode({ data, allGames, onClose, prefetchedBlurbs, isLoadingPrefetch }: WeekStoryModeProps) {
+export function WeekStoryMode({ data, allGames, onClose, prefetchedBlurbs, isLoadingPrefetch, weekTitle }: WeekStoryModeProps) {
   const [currentScreen, setCurrentScreen] = useState(0);
   const [direction, setDirection] = useState(0);
   const [aiBlurbs, setAiBlurbs] = useState<Partial<Record<AIBlurbType, AIBlurbResult>>>(prefetchedBlurbs || {});
@@ -104,7 +105,7 @@ export function WeekStoryMode({ data, allGames, onClose, prefetchedBlurbs, isLoa
 
   const screens = [
     // ─── ACT 1: HOOK ───
-    <OpeningScreen key="opening" data={data} />,
+    <OpeningScreen key="opening" data={data} weekTitle={weekTitle} />,
     <TotalHoursScreen key="hours" data={data} />,
     <ActivityPulseScreen key="pulse" data={data} />,
 

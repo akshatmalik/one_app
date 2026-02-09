@@ -7,7 +7,7 @@ import { getAllPlayLogs, getWeekStatsForOffset, getAvailableWeeksCount, getTotal
 import { TimelinePeriodCards } from './TimelinePeriodCards';
 import { QuickAddTimeModal } from './QuickAddTimeModal';
 import { WeekInReview } from './WeekInReview';
-import { generateMonthlyRecap, generateYearChapterTitles } from '../lib/ai-game-service';
+import { generateMonthlyRecap, generateYearChapterTitles, generateMonthChapterTitles } from '../lib/ai-game-service';
 import clsx from 'clsx';
 
 interface TimelineViewProps {
@@ -35,6 +35,7 @@ export function TimelineView({ games, onLogTime, onQuickAddTime }: TimelineViewP
   const [weekOffset, setWeekOffset] = useState(0);
   const [aiRecaps, setAiRecaps] = useState<Record<string, string>>({});
   const [chapterTitles, setChapterTitles] = useState<Record<string, string>>({});
+  const [monthChapterTitles, setMonthChapterTitles] = useState<Record<string, string>>({});
   const [expandedJourneys, setExpandedJourneys] = useState<Set<string>>(new Set());
 
   const maxWeeksBack = useMemo(() => {
@@ -214,6 +215,21 @@ export function TimelineView({ games, onLogTime, onQuickAddTime }: TimelineViewP
     };
     if (games.length > 0) loadTitles();
   }, [games.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Load month chapter titles
+  useEffect(() => {
+    const loadMonthTitles = async () => {
+      try {
+        const topMonths = monthKeys.slice(0, 6);
+        if (topMonths.length === 0) return;
+        const titles = await generateMonthChapterTitles(games, topMonths);
+        setMonthChapterTitles(titles);
+      } catch {
+        // ignore
+      }
+    };
+    if (monthKeys.length > 0 && games.length > 0) loadMonthTitles();
+  }, [monthKeys.length, games.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const formatMonth = (monthKey: string) => {
     const [year, month] = monthKey.split('-');
@@ -515,6 +531,15 @@ export function TimelineView({ games, onLogTime, onQuickAddTime }: TimelineViewP
                   <span className="text-sm font-semibold text-purple-400">{chapterTitles[quarter]}</span>
                   <span className="text-[10px] text-white/20">{quarter}</span>
                   <div className="flex-1 h-px bg-purple-500/10" />
+                </div>
+              )}
+
+              {/* Month chapter title */}
+              {monthChapterTitles[monthKey] && (
+                <div className="flex items-center gap-2.5 mb-3 pb-1">
+                  <Sparkles size={12} className="text-cyan-400" />
+                  <span className="text-xs font-semibold text-cyan-400 italic">{monthChapterTitles[monthKey]}</span>
+                  <div className="flex-1 h-px bg-cyan-500/10" />
                 </div>
               )}
 

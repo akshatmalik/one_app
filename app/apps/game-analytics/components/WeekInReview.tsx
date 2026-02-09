@@ -6,6 +6,7 @@ import { WeekInReviewData } from '../lib/calculations';
 import { Game } from '../lib/types';
 import { WeekStoryMode } from './WeekStoryMode';
 import { generateMultipleBlurbs, AIBlurbType, AIBlurbResult } from '../lib/ai-service';
+import { generateWeekTitles } from '../lib/ai-game-service';
 import clsx from 'clsx';
 
 interface WeekInReviewProps {
@@ -21,6 +22,7 @@ export function WeekInReview({ data, allGames, weekOffset, maxWeeksBack, onWeekC
   const [showDropdown, setShowDropdown] = useState(false);
   const [aiBlurbs, setAiBlurbs] = useState<Partial<Record<AIBlurbType, AIBlurbResult>>>({});
   const [isLoadingAI, setIsLoadingAI] = useState(true);
+  const [weekTitle, setWeekTitle] = useState<string>('');
 
   // Prefetch AI blurbs as soon as data is available
   useEffect(() => {
@@ -52,6 +54,37 @@ export function WeekInReview({ data, allGames, weekOffset, maxWeeksBack, onWeekC
     prefetchBlurbs();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [weekOffset, data.weekLabel]); // Re-fetch when week changes or when actual week data changes
+
+  // Generate AI week title
+  useEffect(() => {
+    if (data.totalHours === 0) {
+      setWeekTitle('');
+      return;
+    }
+
+    const loadWeekTitle = async () => {
+      try {
+        const now = new Date();
+        const start = new Date(now);
+        start.setDate(start.getDate() - 7 - (weekOffset * 7));
+        const end = new Date(now);
+        end.setDate(end.getDate() - (weekOffset * 7));
+
+        const titles = await generateWeekTitles(allGames, [{
+          key: `week-recap-${weekOffset}`,
+          label: data.weekLabel,
+          startDate: start.toISOString().substring(0, 10),
+          endDate: end.toISOString().substring(0, 10),
+        }]);
+        setWeekTitle(titles[`week-recap-${weekOffset}`] || '');
+      } catch {
+        // ignore
+      }
+    };
+
+    loadWeekTitle();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [weekOffset, data.weekLabel]);
 
   // Generate week options - including current week
   const weekOptions = [];
@@ -121,6 +154,7 @@ export function WeekInReview({ data, allGames, weekOffset, maxWeeksBack, onWeekC
           onClose={() => setShowStory(false)}
           prefetchedBlurbs={aiBlurbs}
           isLoadingPrefetch={isLoadingAI}
+          weekTitle={weekTitle}
         />
       )}
 
@@ -190,10 +224,18 @@ export function WeekInReview({ data, allGames, weekOffset, maxWeeksBack, onWeekC
               <h2 className="text-2xl font-bold text-white mb-1">
                 {data.weekVibe}
               </h2>
-              <p className="text-sm text-white/50">
-                {data.daysActive} active day{data.daysActive !== 1 ? 's' : ''}
-                {data.topGame && ` • Top: ${data.topGame.game.name}`}
-              </p>
+              <div className="flex items-center gap-2 flex-wrap">
+                <p className="text-sm text-white/50">
+                  {data.daysActive} active day{data.daysActive !== 1 ? 's' : ''}
+                  {data.topGame && ` • Top: ${data.topGame.game.name}`}
+                </p>
+                {weekTitle && (
+                  <span className="inline-flex items-center gap-1 text-xs text-cyan-400/70 italic">
+                    <Sparkles size={10} className="shrink-0" />
+                    {weekTitle}
+                  </span>
+                )}
+              </div>
             </div>
 
             {/* View Week Recap Button */}

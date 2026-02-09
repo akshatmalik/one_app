@@ -23,6 +23,8 @@ function getAIModel() {
 const GAME_ONELINER_CACHE = 'game-oneliners-cache';
 const MONTHLY_RECAP_CACHE = 'monthly-recap-cache';
 const CHAPTER_TITLES_CACHE = 'chapter-titles-cache';
+const MONTH_CHAPTER_TITLES_CACHE = 'month-chapter-titles-cache';
+const WEEK_TITLES_CACHE = 'week-titles-cache';
 const CACHE_TTL = 1000 * 60 * 60 * 4; // 4 hours
 
 interface CacheEntry<T> {
@@ -227,6 +229,159 @@ Return exactly 4 lines in format "Q1: Title Here" — one per quarter. Only quar
 }
 
 /**
+ * Generate AI chapter titles for individual months
+ */
+export async function generateMonthChapterTitles(
+  games: Game[],
+  monthKeys: string[]
+): Promise<Record<string, string>> {
+  const cached = getCache<Record<string, string>>(MONTH_CHAPTER_TITLES_CACHE);
+  const results: Record<string, string> = cached || {};
+
+  // Filter to only months we don't have cached
+  const uncachedMonths = monthKeys.filter(mk => !results[mk]);
+  if (uncachedMonths.length === 0) return results;
+
+  // Build month summaries from game data
+  const monthSummaries: Record<string, { games: string[]; hours: number; completions: string[] }> = {};
+  uncachedMonths.forEach(mk => {
+    monthSummaries[mk] = { games: [], hours: 0, completions: [] };
+  });
+
+  games.forEach(game => {
+    if (game.playLogs) {
+      game.playLogs.forEach(log => {
+        const logMonthKey = log.date.substring(0, 7);
+        if (monthSummaries[logMonthKey]) {
+          if (!monthSummaries[logMonthKey].games.includes(game.name)) {
+            monthSummaries[logMonthKey].games.push(game.name);
+          }
+          monthSummaries[logMonthKey].hours += log.hours;
+        }
+      });
+    }
+    if (game.status === 'Completed' && game.endDate) {
+      const endMonthKey = game.endDate.substring(0, 7);
+      if (monthSummaries[endMonthKey]) {
+        monthSummaries[endMonthKey].completions.push(game.name);
+      }
+    }
+  });
+
+  const summaryText = uncachedMonths.map(mk => {
+    const [year, month] = mk.split('-');
+    const monthName = new Date(parseInt(year), parseInt(month) - 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    const data = monthSummaries[mk];
+    return `${monthName}: ${data.hours.toFixed(0)}h, games: ${data.games.join(', ') || 'none'}, completed: ${data.completions.join(', ') || 'none'}`;
+  }).join('\n');
+
+  const prompt = `Name each month of this gamer's timeline like a TV episode title. Be creative, specific to the games they played, and fun. 3-5 words each.
+
+${summaryText}
+
+Return one line per month in format "Month Year: Title Here" (e.g., "January 2025: The RPG Renaissance"). Months with no activity get "The Quiet Month".`;
+
+  try {
+    const model = getAIModel();
+    const result = await model.generateContent(prompt);
+    const text = result.response.text().trim();
+
+    text.split('\n').forEach(line => {
+      // Match "Month Year: Title" or "YYYY-MM: Title"
+      const match = line.match(/(?:(\w+)\s+(\d{4})|(\d{4}-\d{2})):\s*(.+)/);
+      if (match) {
+        let monthKey: string;
+        if (match[3]) {
+          monthKey = match[3];
+        } else {
+          const monthNames: Record<string, string> = {
+            January: '01', February: '02', March: '03', April: '04', May: '05', June: '06',
+            July: '07', August: '08', September: '09', October: '10', November: '11', December: '12'
+          };
+          monthKey = `${match[2]}-${monthNames[match[1]] || '01'}`;
+        }
+        if (uncachedMonths.includes(monthKey)) {
+          results[monthKey] = match[4].trim();
+        }
+      }
+    });
+
+    setCache(MONTH_CHAPTER_TITLES_CACHE, results);
+    return results;
+  } catch (error) {
+    console.error('AI month chapter titles error:', error);
+    return results;
+  }
+}
+
+/**
+ * Generate AI title for a week period based on activity
+ */
+export async function generateWeekTitles(
+  games: Game[],
+  periods: Array<{ key: string; label: string; startDate: string; endDate: string }>
+): Promise<Record<string, string>> {
+  const cached = getCache<Record<string, string>>(WEEK_TITLES_CACHE);
+  const results: Record<string, string> = cached || {};
+
+  const uncachedPeriods = periods.filter(p => !results[p.key]);
+  if (uncachedPeriods.length === 0) return results;
+
+  // Build period summaries
+  const summaryText = uncachedPeriods.map(period => {
+    const start = new Date(period.startDate);
+    const end = new Date(period.endDate);
+    const gamesPlayed: Record<string, number> = {};
+
+    games.forEach(game => {
+      if (game.playLogs) {
+        game.playLogs.forEach(log => {
+          const logDate = new Date(log.date);
+          if (logDate >= start && logDate <= end) {
+            gamesPlayed[game.name] = (gamesPlayed[game.name] || 0) + log.hours;
+          }
+        });
+      }
+    });
+
+    const gamesList = Object.entries(gamesPlayed)
+      .sort((a, b) => b[1] - a[1])
+      .map(([name, hours]) => `${name} (${hours.toFixed(1)}h)`)
+      .join(', ');
+    const totalHours = Object.values(gamesPlayed).reduce((s, h) => s + h, 0);
+
+    return `${period.label}: ${totalHours.toFixed(1)}h total, games: ${gamesList || 'none'}`;
+  }).join('\n');
+
+  const prompt = `Name each time period of this gamer's timeline like a TV episode title. Be creative, specific to the games they played, and fun. 3-5 words each.
+
+${summaryText}
+
+Return one line per period in format "Period Label: Title Here". Periods with no activity get "The Quiet Days".`;
+
+  try {
+    const model = getAIModel();
+    const result = await model.generateContent(prompt);
+    const text = result.response.text().trim();
+
+    text.split('\n').forEach((line, i) => {
+      if (i < uncachedPeriods.length) {
+        const colonIdx = line.indexOf(':');
+        if (colonIdx > -1) {
+          results[uncachedPeriods[i].key] = line.substring(colonIdx + 1).trim();
+        }
+      }
+    });
+
+    setCache(WEEK_TITLES_CACHE, results);
+    return results;
+  } catch (error) {
+    console.error('AI week titles error:', error);
+    return results;
+  }
+}
+
+/**
  * Clear all game AI caches
  */
 export function clearGameAICache(): void {
@@ -234,4 +389,6 @@ export function clearGameAICache(): void {
   localStorage.removeItem(GAME_ONELINER_CACHE);
   localStorage.removeItem(MONTHLY_RECAP_CACHE);
   localStorage.removeItem(CHAPTER_TITLES_CACHE);
+  localStorage.removeItem(MONTH_CHAPTER_TITLES_CACHE);
+  localStorage.removeItem(WEEK_TITLES_CACHE);
 }
