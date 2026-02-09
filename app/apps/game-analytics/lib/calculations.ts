@@ -5858,3 +5858,514 @@ export function getRatingParadox(data: WeekInReviewData, allGames: Game[]): Rati
 
   return { hasParadox, playedButLowRated, lovedButIgnored, topPlayedGenre, topRatedGenre, summary };
 }
+
+// ── MONTH IN REVIEW ──────────────────────────────────────────────
+
+export interface MonthInReviewData {
+  // Time range
+  year: number;
+  month: number;
+  monthLabel: string;
+  monthKey: string;
+
+  // Core stats
+  totalHours: number;
+  totalSessions: number;
+  uniqueGames: number;
+
+  // Game breakdown
+  gamesPlayed: Array<{
+    game: Game;
+    hours: number;
+    sessions: number;
+    percentage: number;
+  }>;
+  topGame: { game: Game; hours: number; sessions: number; percentage: number } | null;
+  top3Games: Array<{ game: Game; hours: number; percentage: number }>;
+
+  // Daily breakdown
+  dailyHours: Array<{ date: string; hours: number; sessions: number }>;
+  biggestDay: { date: string; hours: number; games: string[] } | null;
+  daysActive: number;
+
+  // Weekly breakdown
+  weeklyHours: Array<{ weekNum: number; hours: number; sessions: number }>;
+
+  // Genre
+  genreBreakdown: Array<{ genre: string; hours: number; percentage: number; count: number }>;
+
+  // Spending
+  totalSpent: number;
+  gamesPurchased: Array<{ game: Game; price: number }>;
+  bestDeal: { game: Game; costPerHour: number } | null;
+
+  // Completions
+  completedGames: Game[];
+  newGamesStarted: Game[];
+
+  // Best value
+  bestValueGame: { game: Game; costPerHour: number } | null;
+
+  // vs last month
+  vsLastMonth: {
+    hoursDiff: number;
+    sessionsDiff: number;
+    gamesDiff: number;
+    spendingDiff: number;
+    trend: 'up' | 'down' | 'same';
+  };
+
+  // Personality
+  personality: ReturnType<typeof getGamingPersonality>;
+
+  // Streak
+  longestStreak: number;
+
+  // Longest session
+  longestSession: { date: string; hours: number; gameName: string } | null;
+
+  // Discovery of the month (new game started this month with most play)
+  discoveryGame: { game: Game; hours: number; sessions: number } | null;
+
+  // Unfinished games (played this month, still In Progress)
+  unfinishedGames: Array<{ game: Game; hoursThisMonth: number }>;
+
+  // Average session length
+  avgSessionLength: number;
+}
+
+export function getMonthInReviewData(games: Game[], year: number, month: number): MonthInReviewData {
+  const monthStart = new Date(year, month - 1, 1);
+  const monthEnd = new Date(year, month, 0, 23, 59, 59);
+  const monthLabel = monthStart.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  const monthKey = `${year}-${String(month).padStart(2, '0')}`;
+
+  // Gather play data
+  const gameHours: Record<string, { game: Game; hours: number; sessions: number }> = {};
+  const dailyMap: Record<string, { hours: number; sessions: number; games: Set<string> }> = {};
+
+  games.forEach(game => {
+    if (!game.playLogs) return;
+    game.playLogs.forEach(log => {
+      const logDate = new Date(log.date);
+      if (logDate < monthStart || logDate > monthEnd) return;
+
+      const dateKey = log.date.substring(0, 10);
+      if (!dailyMap[dateKey]) dailyMap[dateKey] = { hours: 0, sessions: 0, games: new Set() };
+      dailyMap[dateKey].hours += log.hours;
+      dailyMap[dateKey].sessions += 1;
+      dailyMap[dateKey].games.add(game.name);
+
+      if (!gameHours[game.id]) gameHours[game.id] = { game, hours: 0, sessions: 0 };
+      gameHours[game.id].hours += log.hours;
+      gameHours[game.id].sessions += 1;
+    });
+  });
+
+  const totalHours = Object.values(gameHours).reduce((s, g) => s + g.hours, 0);
+  const totalSessions = Object.values(gameHours).reduce((s, g) => s + g.sessions, 0);
+
+  const gamesPlayed = Object.values(gameHours)
+    .sort((a, b) => b.hours - a.hours)
+    .map(g => ({
+      game: g.game,
+      hours: g.hours,
+      sessions: g.sessions,
+      percentage: totalHours > 0 ? (g.hours / totalHours) * 100 : 0,
+    }));
+
+  const topGame = gamesPlayed[0] || null;
+  const top3Games = gamesPlayed.slice(0, 3).map(g => ({ game: g.game, hours: g.hours, percentage: g.percentage }));
+
+  // Daily breakdown
+  const dailyHours = Object.entries(dailyMap)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, data]) => ({ date, hours: data.hours, sessions: data.sessions }));
+
+  const biggestDayEntry = Object.entries(dailyMap).sort((a, b) => b[1].hours - a[1].hours)[0];
+  const biggestDay = biggestDayEntry
+    ? { date: biggestDayEntry[0], hours: biggestDayEntry[1].hours, games: [...biggestDayEntry[1].games] }
+    : null;
+
+  const daysActive = Object.keys(dailyMap).length;
+
+  // Weekly breakdown (weeks 1-5 of the month)
+  const weeklyMap: Record<number, { hours: number; sessions: number }> = {};
+  Object.entries(dailyMap).forEach(([date, data]) => {
+    const dayOfMonth = new Date(date).getDate();
+    const weekNum = Math.ceil(dayOfMonth / 7);
+    if (!weeklyMap[weekNum]) weeklyMap[weekNum] = { hours: 0, sessions: 0 };
+    weeklyMap[weekNum].hours += data.hours;
+    weeklyMap[weekNum].sessions += data.sessions;
+  });
+  const weeklyHours = Object.entries(weeklyMap)
+    .sort(([a], [b]) => Number(a) - Number(b))
+    .map(([weekNum, data]) => ({ weekNum: Number(weekNum), hours: data.hours, sessions: data.sessions }));
+
+  // Genre breakdown
+  const genreMap: Record<string, { hours: number; count: number }> = {};
+  gamesPlayed.forEach(g => {
+    const genre = g.game.genre || 'Other';
+    if (!genreMap[genre]) genreMap[genre] = { hours: 0, count: 0 };
+    genreMap[genre].hours += g.hours;
+    genreMap[genre].count += 1;
+  });
+  const genreBreakdown = Object.entries(genreMap)
+    .sort((a, b) => b[1].hours - a[1].hours)
+    .map(([genre, data]) => ({
+      genre,
+      hours: data.hours,
+      percentage: totalHours > 0 ? (data.hours / totalHours) * 100 : 0,
+      count: data.count,
+    }));
+
+  // Spending (games purchased this month)
+  const gamesPurchased = games
+    .filter(g => g.datePurchased && g.datePurchased.substring(0, 7) === monthKey && g.price > 0)
+    .map(g => ({ game: g, price: g.price }));
+  const totalSpent = gamesPurchased.reduce((s, g) => s + g.price, 0);
+
+  // Best deal
+  const paidGamesWithHours = gamesPlayed.filter(g => g.game.price > 0 && g.hours > 0);
+  const bestValueGame = paidGamesWithHours.length > 0
+    ? paidGamesWithHours
+        .map(g => ({ game: g.game, costPerHour: g.game.price / getTotalHours(g.game) }))
+        .sort((a, b) => a.costPerHour - b.costPerHour)[0]
+    : null;
+
+  const bestDeal = gamesPurchased.length > 0
+    ? gamesPurchased
+        .filter(g => getTotalHours(g.game) > 0)
+        .map(g => ({ game: g.game, costPerHour: g.price / getTotalHours(g.game) }))
+        .sort((a, b) => a.costPerHour - b.costPerHour)[0] || null
+    : null;
+
+  // Completions
+  const completedGames = games.filter(g => g.status === 'Completed' && g.endDate && g.endDate.substring(0, 7) === monthKey);
+  const newGamesStarted = games.filter(g => g.startDate && g.startDate.substring(0, 7) === monthKey);
+
+  // vs last month
+  const prevMonthStart = new Date(year, month - 2, 1);
+  const prevMonthEnd = new Date(year, month - 1, 0, 23, 59, 59);
+  let prevHours = 0;
+  let prevSessions = 0;
+  const prevGames = new Set<string>();
+  const prevMonthKey = `${prevMonthStart.getFullYear()}-${String(prevMonthStart.getMonth() + 1).padStart(2, '0')}`;
+
+  games.forEach(game => {
+    if (!game.playLogs) return;
+    game.playLogs.forEach(log => {
+      const logDate = new Date(log.date);
+      if (logDate >= prevMonthStart && logDate <= prevMonthEnd) {
+        prevHours += log.hours;
+        prevSessions += 1;
+        prevGames.add(game.id);
+      }
+    });
+  });
+  const prevSpent = games
+    .filter(g => g.datePurchased && g.datePurchased.substring(0, 7) === prevMonthKey && g.price > 0)
+    .reduce((s, g) => s + g.price, 0);
+
+  const hoursDiff = totalHours - prevHours;
+  const vsLastMonth = {
+    hoursDiff,
+    sessionsDiff: totalSessions - prevSessions,
+    gamesDiff: gamesPlayed.length - prevGames.size,
+    spendingDiff: totalSpent - prevSpent,
+    trend: (hoursDiff > 1 ? 'up' : hoursDiff < -1 ? 'down' : 'same') as 'up' | 'down' | 'same',
+  };
+
+  // Personality for this month's subset
+  const monthGames = gamesPlayed.map(g => g.game);
+  const personality = getGamingPersonality(monthGames);
+
+  // Longest streak - consecutive gaming days in the month
+  const sortedDates = Object.keys(dailyMap).sort();
+  let longestStreak = sortedDates.length > 0 ? 1 : 0;
+  let currentStreak = 1;
+  for (let i = 1; i < sortedDates.length; i++) {
+    const prev = new Date(sortedDates[i - 1]);
+    const curr = new Date(sortedDates[i]);
+    const diffDays = Math.round((curr.getTime() - prev.getTime()) / (1000 * 60 * 60 * 24));
+    if (diffDays === 1) {
+      currentStreak++;
+    } else {
+      longestStreak = Math.max(longestStreak, currentStreak);
+      currentStreak = 1;
+    }
+  }
+  longestStreak = Math.max(longestStreak, currentStreak);
+
+  // Longest single session in the month
+  let longestSession: { date: string; hours: number; gameName: string } | null = null;
+  games.forEach(game => {
+    if (!game.playLogs) return;
+    game.playLogs.forEach(log => {
+      const logDate = new Date(log.date);
+      if (logDate < monthStart || logDate > monthEnd) return;
+      if (!longestSession || log.hours > longestSession.hours) {
+        longestSession = { date: log.date.substring(0, 10), hours: log.hours, gameName: game.name };
+      }
+    });
+  });
+
+  // Discovery game (new game started this month with most hours)
+  const discoveryGame = newGamesStarted
+    .filter(g => gameHours[g.id])
+    .map(g => ({ game: g, hours: gameHours[g.id].hours, sessions: gameHours[g.id].sessions }))
+    .sort((a, b) => b.hours - a.hours)[0] || null;
+
+  // Unfinished games (played this month, still In Progress)
+  const unfinishedGames = gamesPlayed
+    .filter(g => g.game.status === 'In Progress')
+    .map(g => ({ game: g.game, hoursThisMonth: g.hours }));
+
+  // Average session length
+  const avgSessionLength = totalSessions > 0 ? totalHours / totalSessions : 0;
+
+  return {
+    year,
+    month,
+    monthLabel,
+    monthKey,
+    totalHours,
+    totalSessions,
+    uniqueGames: gamesPlayed.length,
+    gamesPlayed,
+    topGame,
+    top3Games,
+    dailyHours,
+    biggestDay,
+    daysActive,
+    weeklyHours,
+    genreBreakdown,
+    totalSpent,
+    gamesPurchased,
+    bestDeal,
+    bestValueGame,
+    completedGames,
+    newGamesStarted,
+    vsLastMonth,
+    personality,
+    longestStreak,
+    longestSession,
+    discoveryGame,
+    unfinishedGames,
+    avgSessionLength,
+  };
+}
+
+// ── MONTH RECAP HELPERS ──────────────────────────────────────────
+
+export interface MonthGrade {
+  overall: string;
+  overallScore: number;
+  subjects: Array<{
+    name: string;
+    grade: string;
+    score: number;
+    emoji: string;
+  }>;
+}
+
+function scoreToGrade(s: number): string {
+  if (s >= 93) return 'A+';
+  if (s >= 85) return 'A';
+  if (s >= 78) return 'B+';
+  if (s >= 70) return 'B';
+  if (s >= 63) return 'C+';
+  if (s >= 55) return 'C';
+  if (s >= 45) return 'D';
+  return 'F';
+}
+
+export function getMonthGrade(data: MonthInReviewData): MonthGrade {
+  const daysInMonth = new Date(data.year, data.month, 0).getDate();
+
+  // Dedication (hours played): 0-40h maps to 0-100
+  const dedicationScore = Math.min(100, data.totalHours * 2.5);
+
+  // Variety (unique games): 1=20, 2=40, 3=60, 4=80, 5+=100
+  const varietyScore = Math.min(100, data.uniqueGames * 20);
+
+  // Consistency (days active / days in month)
+  const consistencyScore = (data.daysActive / daysInMonth) * 100;
+
+  // Achievement (completions + new starts)
+  const achievementScore = Math.min(100, (data.completedGames.length * 30) + (data.newGamesStarted.length * 15));
+
+  // Value (inverse cost-per-hour)
+  const paidPlayed = data.gamesPlayed.filter(g => g.game.price > 0 && g.hours > 0);
+  const avgCPH = paidPlayed.length > 0
+    ? paidPlayed.reduce((sum, g) => sum + (g.game.price / getTotalHours(g.game)), 0) / paidPlayed.length
+    : 0;
+  const valueScore = avgCPH > 0 ? Math.min(100, (5 / avgCPH) * 60) : 50;
+
+  const overallScore = dedicationScore * 0.3 + varietyScore * 0.15 + consistencyScore * 0.25 + achievementScore * 0.15 + valueScore * 0.15;
+
+  return {
+    overall: scoreToGrade(overallScore),
+    overallScore: Math.round(overallScore),
+    subjects: [
+      { name: 'Dedication', grade: scoreToGrade(dedicationScore), score: Math.round(dedicationScore), emoji: '🔥' },
+      { name: 'Variety', grade: scoreToGrade(varietyScore), score: Math.round(varietyScore), emoji: '🎲' },
+      { name: 'Consistency', grade: scoreToGrade(consistencyScore), score: Math.round(consistencyScore), emoji: '📅' },
+      { name: 'Achievement', grade: scoreToGrade(achievementScore), score: Math.round(achievementScore), emoji: '🏆' },
+      { name: 'Value', grade: scoreToGrade(valueScore), score: Math.round(valueScore), emoji: '💰' },
+    ],
+  };
+}
+
+export function getMonthHotTake(data: MonthInReviewData): string | null {
+  if (data.totalHours === 0) return null;
+
+  const takes: string[] = [];
+  const daysInMonth = new Date(data.year, data.month, 0).getDate();
+
+  if (data.topGame && data.topGame.hours > 40) {
+    takes.push(`${data.topGame.hours.toFixed(0)} hours on ${data.topGame.game.name} this month. That's literally a full work week.`);
+  }
+  if (data.totalHours > 100) {
+    takes.push(`${data.totalHours.toFixed(0)} hours of gaming in one month. You averaged ${(data.totalHours / daysInMonth).toFixed(1)} hours every single day.`);
+  } else if (data.totalHours > 60) {
+    takes.push(`${data.totalHours.toFixed(0)} hours this month. Gaming isn't your hobby — it's your second job.`);
+  }
+  if (data.totalSpent > 200) {
+    takes.push(`$${data.totalSpent.toFixed(0)} on games this month. Your wallet is filing for emotional damage.`);
+  }
+  if (data.uniqueGames === 1 && data.topGame) {
+    takes.push(`Only ${data.topGame.game.name}. All month. Nothing else. This is what true love looks like.`);
+  }
+  if (data.uniqueGames >= 10) {
+    takes.push(`${data.uniqueGames} different games in one month. Your attention span said "no thank you."`);
+  }
+  if (data.completedGames.length >= 3) {
+    takes.push(`${data.completedGames.length} games completed in one month. You're not a gamer, you're a game-finishing machine.`);
+  }
+  if (data.daysActive >= daysInMonth - 2) {
+    takes.push(`You gamed ${data.daysActive} out of ${daysInMonth} days. Rest days are a myth.`);
+  }
+  if (data.longestStreak >= 14) {
+    takes.push(`A ${data.longestStreak}-day gaming streak. That's ${data.longestStreak} consecutive days of commitment that puts relationships to shame.`);
+  }
+  if (data.topGame && data.topGame.percentage > 80 && data.uniqueGames > 3) {
+    takes.push(`You played ${data.uniqueGames} games but ${data.topGame.game.name} took ${data.topGame.percentage.toFixed(0)}% of your time. The other ${data.uniqueGames - 1} were just emotional support games.`);
+  }
+  if (data.vsLastMonth.hoursDiff > 20) {
+    takes.push(`${data.vsLastMonth.hoursDiff.toFixed(0)} more hours than last month. Whatever happened in your life, gaming was the answer.`);
+  }
+  if (data.genreBreakdown.length === 1) {
+    takes.push(`Every game this month was ${data.genreBreakdown[0].genre}. You know other genres exist, right?`);
+  }
+  if (data.longestSession && data.longestSession.hours >= 6) {
+    takes.push(`A ${data.longestSession.hours.toFixed(1)}-hour session on ${data.longestSession.gameName}. At that point you're not playing — you're living in it.`);
+  }
+  if (data.avgSessionLength > 3) {
+    takes.push(`Your average session was ${data.avgSessionLength.toFixed(1)} hours. "Just one quick game" is not in your vocabulary.`);
+  }
+  if (data.newGamesStarted.length >= 5) {
+    takes.push(`You started ${data.newGamesStarted.length} new games this month. Commitment issues? In this economy?`);
+  }
+
+  if (takes.length === 0) return null;
+  return takes[Math.floor(Math.random() * takes.length)];
+}
+
+export interface MonthAward {
+  title: string;
+  recipient: string;
+  detail: string;
+  emoji: string;
+}
+
+export function getMonthAwards(data: MonthInReviewData): MonthAward[] {
+  const awards: MonthAward[] = [];
+
+  if (data.topGame) {
+    awards.push({
+      title: 'MVP',
+      recipient: data.topGame.game.name,
+      detail: `${data.topGame.hours.toFixed(1)}h played`,
+      emoji: '🏅',
+    });
+  }
+  if (data.bestValueGame) {
+    awards.push({
+      title: 'Best Bang for Buck',
+      recipient: data.bestValueGame.game.name,
+      detail: `$${data.bestValueGame.costPerHour.toFixed(2)}/hr`,
+      emoji: '💎',
+    });
+  }
+
+  // Surprise Hit (highly rated but not #1)
+  const surpriseHit = data.gamesPlayed
+    .filter(g => g.game.rating >= 8 && g !== data.gamesPlayed[0])
+    .sort((a, b) => b.game.rating - a.game.rating)[0];
+  if (surpriseHit) {
+    awards.push({
+      title: 'Surprise Hit',
+      recipient: surpriseHit.game.name,
+      detail: `Rated ${surpriseHit.game.rating}/10`,
+      emoji: '✨',
+    });
+  }
+
+  // Most Dedicated (most sessions, not #1 by hours)
+  const bySessionCount = [...data.gamesPlayed].sort((a, b) => b.sessions - a.sessions);
+  if (bySessionCount.length > 1 && bySessionCount[0] !== data.gamesPlayed[0]) {
+    awards.push({
+      title: 'Most Dedicated',
+      recipient: bySessionCount[0].game.name,
+      detail: `${bySessionCount[0].sessions} sessions`,
+      emoji: '🎯',
+    });
+  }
+
+  if (data.completedGames.length > 0) {
+    awards.push({
+      title: 'Champion',
+      recipient: data.completedGames[0].name,
+      detail: 'Completed this month',
+      emoji: '🏆',
+    });
+  }
+
+  if (data.discoveryGame) {
+    awards.push({
+      title: 'Best Discovery',
+      recipient: data.discoveryGame.game.name,
+      detail: `${data.discoveryGame.hours.toFixed(1)}h since starting`,
+      emoji: '🔭',
+    });
+  }
+
+  return awards.slice(0, 5);
+}
+
+export interface MoodArcPoint {
+  weekNum: number;
+  intensity: number;
+  label: string;
+  hours: number;
+  sessions: number;
+}
+
+export function getMonthMoodArc(data: MonthInReviewData): MoodArcPoint[] {
+  if (data.weeklyHours.length === 0) return [];
+
+  const maxHours = Math.max(...data.weeklyHours.map(w => w.hours), 1);
+
+  return data.weeklyHours.map(w => {
+    const intensity = Math.round((w.hours / maxHours) * 100);
+    let label: string;
+    if (intensity >= 80) label = 'Intense';
+    else if (intensity >= 60) label = 'Active';
+    else if (intensity >= 40) label = 'Moderate';
+    else if (intensity >= 20) label = 'Light';
+    else label = 'Quiet';
+
+    return { weekNum: w.weekNum, intensity, label, hours: w.hours, sessions: w.sessions };
+  });
+}

@@ -10,7 +10,7 @@ import { TotalHoursScreen } from './story-screens/TotalHoursScreen';
 import { TopGameScreen } from './story-screens/TopGameScreen';
 import { Top3GamesScreen } from './story-screens/Top3GamesScreen';
 import { DailyBreakdownScreen } from './story-screens/DailyBreakdownScreen';
-import { SessionTypesScreen } from './story-screens/SessionTypesScreen';
+
 import { GamingPersonalityScreen } from './story-screens/GamingPersonalityScreen';
 import { AchievementsScreen } from './story-screens/AchievementsScreen';
 import { GenreUniverseScreen } from './story-screens/GenreUniverseScreen';
@@ -29,6 +29,9 @@ import { ThisTimeLastYearScreen } from './story-screens/ThisTimeLastYearScreen';
 import { SessionOfTheWeekScreen } from './story-screens/SessionOfTheWeekScreen';
 import { MomentumReadScreen } from './story-screens/MomentumReadScreen';
 import { RatingParadoxScreen } from './story-screens/RatingParadoxScreen';
+import { HotTakeScreen, getHotTake } from './story-screens/HotTakeScreen';
+import { VibeCheckScreen } from './story-screens/VibeCheckScreen';
+import { WeekVsWeekScreen } from './story-screens/WeekVsWeekScreen';
 import { generateMultipleBlurbs, AIBlurbType, AIBlurbResult } from '../lib/ai-service';
 
 interface WeekStoryModeProps {
@@ -37,9 +40,10 @@ interface WeekStoryModeProps {
   onClose: () => void;
   prefetchedBlurbs?: Partial<Record<AIBlurbType, AIBlurbResult>>;
   isLoadingPrefetch?: boolean;
+  weekTitle?: string;
 }
 
-export function WeekStoryMode({ data, allGames, onClose, prefetchedBlurbs, isLoadingPrefetch }: WeekStoryModeProps) {
+export function WeekStoryMode({ data, allGames, onClose, prefetchedBlurbs, isLoadingPrefetch, weekTitle }: WeekStoryModeProps) {
   const [currentScreen, setCurrentScreen] = useState(0);
   const [direction, setDirection] = useState(0);
   const [aiBlurbs, setAiBlurbs] = useState<Partial<Record<AIBlurbType, AIBlurbResult>>>(prefetchedBlurbs || {});
@@ -53,6 +57,7 @@ export function WeekStoryMode({ data, allGames, onClose, prefetchedBlurbs, isLoa
   const historicalEchoes = useMemo(() => getHistoricalEchoes(data, allGames), [data, allGames]);
   const momentumData = useMemo(() => getMomentumData(allGames, data), [allGames, data]);
   const ratingParadox = useMemo(() => getRatingParadox(data, allGames), [data, allGames]);
+  const hotTake = useMemo(() => getHotTake(data), [data]);
 
   // Use prefetched blurbs if available, otherwise generate them
   useEffect(() => {
@@ -64,11 +69,9 @@ export function WeekStoryMode({ data, allGames, onClose, prefetchedBlurbs, isLoa
 
     const loadAIBlurbs = async () => {
       try {
-        // 4 AI blurb slots in the new flow
+        // 2 AI blurb slots: opening + closing bookends
         const blurbTypes: AIBlurbType[] = [
           'opening-personality',
-          'top-game-deep-dive',
-          'session-patterns',
           'closing-reflection',
         ];
 
@@ -87,28 +90,29 @@ export function WeekStoryMode({ data, allGames, onClose, prefetchedBlurbs, isLoa
 
   // ─── 5-ACT FLOW ────────────────────────────────────────────
   //
-  // Act 1: HOOK (3-4 screens)
-  //   Opening → TotalHours → ActivityPulse
+  // Act 1: HOOK (4-5 screens)
+  //   Opening → TotalHours → ActivityPulse → VibeCheck → AI:Opening
   //
   // Act 2: DEEP DIVE (5-7 screens)
-  //   TopGame/Top3 → AI:TopGame → DailyBreakdown → SessionTypes → SessionOfTheWeek → GenreUniverse
+  //   TopGame/Top3 → DailyBreakdown → WeekVsWeek → SessionOfTheWeek → GenreUniverse
   //
   // Act 3: INSIGHTS (4-6 screens)
-  //   GamingPersonality → AI:Patterns → CompletionOdds → RatingParadox → GuildFree → BestValue
+  //   GamingPersonality → HotTake → CompletionOdds → RatingParadox → GuildFree → BestValue
   //
   // Act 4: CONTEXT (4-6 screens)
   //   Achievements → BacklogUpdate → YouIgnored → FranchiseCheckIn → ThisTimeLastYear → Momentum
   //
-  // Act 5: WRAP-UP (4-5 screens)
+  // Act 5: WRAP-UP (3-4 screens)
   //   WeekAwards → AI:Closing → SharpInsight → Closing
 
   const hasAchievements = data.completedGames.length > 0 || data.newGamesStarted.length > 0 || data.milestonesReached.length > 0;
 
   const screens = [
     // ─── ACT 1: HOOK ───
-    <OpeningScreen key="opening" data={data} />,
+    <OpeningScreen key="opening" data={data} weekTitle={weekTitle} />,
     <TotalHoursScreen key="hours" data={data} />,
     <ActivityPulseScreen key="pulse" data={data} />,
+    <VibeCheckScreen key="vibe-check" data={data} />,
 
     // AI: Opening personality
     <AIBlurbScreen
@@ -124,35 +128,14 @@ export function WeekStoryMode({ data, allGames, onClose, prefetchedBlurbs, isLoa
     data.gamesPlayed.length >= 3 ? <Top3GamesScreen key="top-3" data={data} /> : null,
     data.topGame ? <TopGameScreen key="top-game" data={data} /> : null,
 
-    // AI: Top game deep dive
-    data.topGame ? (
-      <AIBlurbScreen
-        key="ai-top-game"
-        blurb={aiBlurbs['top-game-deep-dive']?.text || null}
-        type="top-game-deep-dive"
-        isLoading={isLoadingAI && !aiBlurbs['top-game-deep-dive']}
-        error={aiBlurbs['top-game-deep-dive']?.error}
-        isFallback={aiBlurbs['top-game-deep-dive']?.isFallback}
-      />
-    ) : null,
-
     <DailyBreakdownScreen key="daily" data={data} />,
-    <SessionTypesScreen key="sessions" data={data} />,
+    <WeekVsWeekScreen key="vs-week" data={data} />,
     data.longestSession ? <SessionOfTheWeekScreen key="session-week" data={data} /> : null,
     data.genresPlayed.length > 0 ? <GenreUniverseScreen key="genres" data={data} /> : null,
 
     // ─── ACT 3: INSIGHTS ───
     <GamingPersonalityScreen key="personality" data={data} />,
-
-    // AI: Session patterns
-    <AIBlurbScreen
-      key="ai-sessions"
-      blurb={aiBlurbs['session-patterns']?.text || null}
-      type="session-patterns"
-      isLoading={isLoadingAI && !aiBlurbs['session-patterns']}
-      error={aiBlurbs['session-patterns']?.error}
-      isFallback={aiBlurbs['session-patterns']?.isFallback}
-    />,
+    hotTake ? <HotTakeScreen key="hot-take" hotTake={hotTake} /> : null,
 
     data.weekCompletionProbabilities.length > 0 ? <CompletionOddsScreen key="odds" data={data} /> : null,
     ratingParadox.hasParadox ? <RatingParadoxScreen key="paradox" paradox={ratingParadox} /> : null,

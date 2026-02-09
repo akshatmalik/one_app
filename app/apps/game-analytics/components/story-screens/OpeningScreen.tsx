@@ -6,9 +6,10 @@ import { WeekInReviewData } from '../../lib/calculations';
 
 interface OpeningScreenProps {
   data: WeekInReviewData;
+  weekTitle?: string;
 }
 
-export function OpeningScreen({ data }: OpeningScreenProps) {
+export function OpeningScreen({ data, weekTitle }: OpeningScreenProps) {
   // Build a sharp summary line
   const summaryParts: string[] = [];
   summaryParts.push(`${data.totalHours.toFixed(1)}h across ${data.uniqueGames} game${data.uniqueGames !== 1 ? 's' : ''}`);
@@ -57,6 +58,21 @@ export function OpeningScreen({ data }: OpeningScreenProps) {
         >
           Week Recap
         </motion.h1>
+
+        {/* AI episode title */}
+        {weekTitle && (
+          <motion.div
+            initial={{ scale: 0, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ delay: 0.7, duration: 0.5, type: 'spring' }}
+            className="mb-4"
+          >
+            <div className="inline-flex items-center gap-2 px-5 py-2 bg-cyan-500/10 backdrop-blur-sm rounded-full border border-cyan-500/20">
+              <Sparkles size={14} className="text-cyan-400" />
+              <span className="text-sm font-semibold text-cyan-300 italic">{weekTitle}</span>
+            </div>
+          </motion.div>
+        )}
 
         {/* Vibe label */}
         <motion.div

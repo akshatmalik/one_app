@@ -2,7 +2,7 @@
 
 import { getAI, getGenerativeModel, GoogleAIBackend } from 'firebase/ai';
 import { initializeApp, getApps } from 'firebase/app';
-import { WeekInReviewData } from './calculations';
+import { WeekInReviewData, MonthInReviewData } from './calculations';
 import { Game } from './types';
 
 const firebaseConfig = {
@@ -231,6 +231,64 @@ export async function generateMultipleBlurbs(
     acc[type] = result;
     return acc;
   }, {} as Record<AIBlurbType, AIBlurbResult>);
+}
+
+// ── MONTH AI BLURBS ──────────────────────────────────────────────
+
+export type MonthAIBlurbType = 'month-opening' | 'month-closing';
+
+export async function generateMonthAIBlurb(
+  data: MonthInReviewData,
+  type: MonthAIBlurbType
+): Promise<AIBlurbResult> {
+  const model = getAIModel();
+  const prompt = buildMonthBlurbPrompt(data, type);
+
+  try {
+    const result = await model.generateContent(prompt);
+    const text = result.response.text();
+    return { text: text.trim(), isFallback: false };
+  } catch (error) {
+    console.error(`Month AI blurb error for "${type}":`, error);
+    return { text: '', error: String(error), isFallback: true };
+  }
+}
+
+function buildMonthBlurbPrompt(data: MonthInReviewData, type: MonthAIBlurbType): string {
+  const baseContext = `Gaming month: ${data.monthLabel}
+- Total hours: ${data.totalHours.toFixed(1)}h across ${data.uniqueGames} games
+- ${data.daysActive} active days, ${data.totalSessions} sessions
+- Top game: ${data.topGame?.game.name || 'N/A'} (${data.topGame?.hours.toFixed(1) || 0}h, ${data.topGame?.percentage.toFixed(0) || 0}% of time)
+- All games: ${data.gamesPlayed.map(g => `${g.game.name} (${g.hours.toFixed(1)}h)`).join(', ')}
+- Genres: ${data.genreBreakdown.map(g => `${g.genre} ${g.percentage.toFixed(0)}%`).join(', ') || 'N/A'}
+- Completed: ${data.completedGames.map(g => g.name).join(', ') || 'none'}
+- New starts: ${data.newGamesStarted.map(g => g.name).join(', ') || 'none'}
+- Spent: $${data.totalSpent.toFixed(0)}
+- Longest streak: ${data.longestStreak} days
+- vs last month: ${data.vsLastMonth.hoursDiff > 0 ? '+' : ''}${data.vsLastMonth.hoursDiff.toFixed(1)}h (${data.vsLastMonth.trend})`;
+
+  if (type === 'month-opening') {
+    return `${baseContext}
+
+You are a witty gaming analyst. Write 2-3 sentences setting the scene for this player's month. Reference specific games by name and specific numbers. Be specific and data-driven. Casual friend tone, not a hype announcer. Don't start with "What a month" or any generic opener.`;
+  } else {
+    return `${baseContext}
+
+Write 2-3 sentences as a closing reflection on this gaming month. Reference the specific highlights, the journey, and one forward-looking thought about what's next. Thoughtful friend tone, specific to the data. Don't start with generic phrases.`;
+  }
+}
+
+export async function generateMonthBlurbs(
+  data: MonthInReviewData
+): Promise<Record<MonthAIBlurbType, AIBlurbResult>> {
+  const types: MonthAIBlurbType[] = ['month-opening', 'month-closing'];
+  const results = await Promise.all(
+    types.map(async (type) => ({ type, result: await generateMonthAIBlurb(data, type) }))
+  );
+  return results.reduce((acc, { type, result }) => {
+    acc[type] = result;
+    return acc;
+  }, {} as Record<MonthAIBlurbType, AIBlurbResult>);
 }
 
 /**

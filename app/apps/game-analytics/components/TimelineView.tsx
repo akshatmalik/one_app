@@ -3,11 +3,12 @@
 import { useMemo, useState, useEffect } from 'react';
 import { Calendar, Clock, Gamepad2, DollarSign, Play, CheckCircle, XCircle, Plus, Flame, TrendingUp, TrendingDown, Sparkles, ChevronDown, ChevronUp } from 'lucide-react';
 import { Game, PlayLog } from '../lib/types';
-import { getAllPlayLogs, getWeekStatsForOffset, getAvailableWeeksCount, getTotalHours, getMonthlyVibe, getTimelineMilestones, getMonthlyComparison, getStreakSegments, getGameJourneyArc, getCumulativeHoursAtDate } from '../lib/calculations';
+import { getAllPlayLogs, getWeekStatsForOffset, getAvailableWeeksCount, getTotalHours, getMonthlyVibe, getTimelineMilestones, getMonthlyComparison, getStreakSegments, getGameJourneyArc, getCumulativeHoursAtDate, getMonthInReviewData } from '../lib/calculations';
 import { TimelinePeriodCards } from './TimelinePeriodCards';
 import { QuickAddTimeModal } from './QuickAddTimeModal';
 import { WeekInReview } from './WeekInReview';
-import { generateMonthlyRecap, generateYearChapterTitles } from '../lib/ai-game-service';
+import { MonthStoryMode } from './MonthStoryMode';
+import { generateMonthlyRecap, generateYearChapterTitles, generateMonthChapterTitles } from '../lib/ai-game-service';
 import clsx from 'clsx';
 
 interface TimelineViewProps {
@@ -35,7 +36,9 @@ export function TimelineView({ games, onLogTime, onQuickAddTime }: TimelineViewP
   const [weekOffset, setWeekOffset] = useState(0);
   const [aiRecaps, setAiRecaps] = useState<Record<string, string>>({});
   const [chapterTitles, setChapterTitles] = useState<Record<string, string>>({});
+  const [monthChapterTitles, setMonthChapterTitles] = useState<Record<string, string>>({});
   const [expandedJourneys, setExpandedJourneys] = useState<Set<string>>(new Set());
+  const [monthRecapKey, setMonthRecapKey] = useState<string | null>(null);
 
   const maxWeeksBack = useMemo(() => {
     return Math.max(1, getAvailableWeeksCount(games));
@@ -214,6 +217,21 @@ export function TimelineView({ games, onLogTime, onQuickAddTime }: TimelineViewP
     };
     if (games.length > 0) loadTitles();
   }, [games.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Load month chapter titles
+  useEffect(() => {
+    const loadMonthTitles = async () => {
+      try {
+        const topMonths = monthKeys.slice(0, 6);
+        if (topMonths.length === 0) return;
+        const titles = await generateMonthChapterTitles(games, topMonths);
+        setMonthChapterTitles(titles);
+      } catch {
+        // ignore
+      }
+    };
+    if (monthKeys.length > 0 && games.length > 0) loadMonthTitles();
+  }, [monthKeys.length, games.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const formatMonth = (monthKey: string) => {
     const [year, month] = monthKey.split('-');
@@ -395,6 +413,13 @@ export function TimelineView({ games, onLogTime, onQuickAddTime }: TimelineViewP
     );
   };
 
+  // Month recap data (must be before any early returns to satisfy hooks rules)
+  const monthRecapData = useMemo(() => {
+    if (!monthRecapKey) return null;
+    const [y, m] = monthRecapKey.split('-');
+    return getMonthInReviewData(games, parseInt(y), parseInt(m));
+  }, [monthRecapKey, games]);
+
   if (events.length === 0) {
     return (
       <div className="space-y-6">
@@ -424,6 +449,16 @@ export function TimelineView({ games, onLogTime, onQuickAddTime }: TimelineViewP
 
   return (
     <div className="space-y-6">
+      {/* Month Recap Modal */}
+      {monthRecapData && monthRecapKey && (
+        <MonthStoryMode
+          data={monthRecapData}
+          allGames={games}
+          onClose={() => setMonthRecapKey(null)}
+          monthTitle={monthChapterTitles[monthRecapKey]}
+        />
+      )}
+
       <WeekInReview data={weekInReviewData} allGames={games} weekOffset={weekOffset} maxWeeksBack={maxWeeksBack} onWeekChange={handleWeekChange} />
       <TimelinePeriodCards games={games} />
 
@@ -518,6 +553,15 @@ export function TimelineView({ games, onLogTime, onQuickAddTime }: TimelineViewP
                 </div>
               )}
 
+              {/* Month chapter title */}
+              {monthChapterTitles[monthKey] && (
+                <div className="flex items-center gap-2.5 mb-3 pb-1">
+                  <Sparkles size={12} className="text-cyan-400" />
+                  <span className="text-xs font-semibold text-cyan-400 italic">{monthChapterTitles[monthKey]}</span>
+                  <div className="flex-1 h-px bg-cyan-500/10" />
+                </div>
+              )}
+
               {/* Month Header */}
               <div className="mb-4">
                 <div className="flex items-center gap-3 mb-2">
@@ -529,6 +573,13 @@ export function TimelineView({ games, onLogTime, onQuickAddTime }: TimelineViewP
                     </span>
                   )}
                   <div className="flex-1 h-px bg-white/5" />
+                  <button
+                    onClick={() => setMonthRecapKey(monthKey)}
+                    className="flex items-center gap-1 px-2.5 py-1 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/20 rounded-lg text-xs text-purple-400 transition-all"
+                  >
+                    <Sparkles size={10} />
+                    <span>Recap</span>
+                  </button>
                   <span className="text-xs text-white/30">{monthEvents.length} events</span>
                 </div>
 
