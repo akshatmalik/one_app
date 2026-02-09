@@ -2,7 +2,7 @@
 
 import { motion, useMotionValue, useTransform, animate } from 'framer-motion';
 import { useEffect } from 'react';
-import { Clock, Zap } from 'lucide-react';
+import { Clock, Zap, TrendingUp, TrendingDown } from 'lucide-react';
 import { WeekInReviewData } from '../../lib/calculations';
 
 interface TotalHoursScreenProps {
@@ -21,6 +21,9 @@ export function TotalHoursScreen({ data }: TotalHoursScreenProps) {
 
     return controls.stop;
   }, [count, data.totalHours]);
+
+  const hoursDiff = data.vsLastWeek.hoursDiff;
+  const avgPercent = data.vsAverage.percentage;
 
   return (
     <div className="w-full max-w-2xl mx-auto text-center">
@@ -80,11 +83,37 @@ export function TotalHoursScreen({ data }: TotalHoursScreenProps) {
         ))}
       </motion.div>
 
+      {/* Inline comparison deltas */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 2.2, duration: 0.6 }}
+        className="mt-8 flex items-center justify-center gap-4 flex-wrap"
+      >
+        <div className="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 rounded-full">
+          {hoursDiff >= 0 ? (
+            <TrendingUp size={14} className="text-emerald-400" />
+          ) : (
+            <TrendingDown size={14} className="text-red-400" />
+          )}
+          <span className={`text-sm font-bold ${hoursDiff >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+            {hoursDiff >= 0 ? '+' : ''}{hoursDiff.toFixed(1)}h
+          </span>
+          <span className="text-xs text-white/30">vs last week</span>
+        </div>
+        <div className="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 rounded-full">
+          <span className={`text-sm font-bold ${avgPercent >= 100 ? 'text-emerald-400' : 'text-white/50'}`}>
+            {avgPercent.toFixed(0)}%
+          </span>
+          <span className="text-xs text-white/30">of 4-week avg</span>
+        </div>
+      </motion.div>
+
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 2.5, duration: 0.6 }}
-        className="mt-12 grid grid-cols-2 gap-6 max-w-md mx-auto"
+        className="mt-6 grid grid-cols-3 gap-4 max-w-md mx-auto"
       >
         <div className="p-4 bg-white/5 rounded-xl border border-white/10">
           <div className="text-3xl font-bold text-purple-400">{data.totalSessions}</div>
@@ -93,6 +122,10 @@ export function TotalHoursScreen({ data }: TotalHoursScreenProps) {
         <div className="p-4 bg-white/5 rounded-xl border border-white/10">
           <div className="text-3xl font-bold text-cyan-400">{data.uniqueGames}</div>
           <div className="text-sm text-white/50 mt-1">Games</div>
+        </div>
+        <div className="p-4 bg-white/5 rounded-xl border border-white/10">
+          <div className="text-3xl font-bold text-blue-400">{data.daysActive}/7</div>
+          <div className="text-sm text-white/50 mt-1">Active Days</div>
         </div>
       </motion.div>
     </div>

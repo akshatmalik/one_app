@@ -3,18 +3,20 @@
 import { useState, useEffect } from 'react';
 import { Calendar, Sparkles, ChevronDown } from 'lucide-react';
 import { WeekInReviewData } from '../lib/calculations';
+import { Game } from '../lib/types';
 import { WeekStoryMode } from './WeekStoryMode';
 import { generateMultipleBlurbs, AIBlurbType, AIBlurbResult } from '../lib/ai-service';
 import clsx from 'clsx';
 
 interface WeekInReviewProps {
   data: WeekInReviewData;
+  allGames: Game[];
   weekOffset: number;
   maxWeeksBack: number;
   onWeekChange: (offset: number) => void;
 }
 
-export function WeekInReview({ data, weekOffset, maxWeeksBack, onWeekChange }: WeekInReviewProps) {
+export function WeekInReview({ data, allGames, weekOffset, maxWeeksBack, onWeekChange }: WeekInReviewProps) {
   const [showStory, setShowStory] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
   const [aiBlurbs, setAiBlurbs] = useState<Partial<Record<AIBlurbType, AIBlurbResult>>>({});
@@ -32,31 +34,13 @@ export function WeekInReview({ data, weekOffset, maxWeeksBack, onWeekChange }: W
       try {
         setIsLoadingAI(true);
 
-        // Determine which blurb types to generate based on available data
+        // 4 AI blurb slots in the streamlined story flow
         const blurbTypes: AIBlurbType[] = [
           'opening-personality',
           'top-game-deep-dive',
           'session-patterns',
-          'gaming-behavior',
+          'closing-reflection',
         ];
-
-        // Add conditional blurb types
-        if (data.gamesPlayed.filter(g => g.daysPlayed > 1).length > 0) {
-          blurbTypes.push('comeback-games');
-        }
-        if (data.marathonSessions > 0 || data.longestSession) {
-          blurbTypes.push('binge-sessions');
-        }
-        if (data.completedGames.length > 0 || data.newGamesStarted.length > 0 || data.milestonesReached.length > 0) {
-          blurbTypes.push('achievement-motivation');
-        }
-        if (data.genresPlayed.length > 0) {
-          blurbTypes.push('genre-insights');
-        }
-        if (data.gamesPlayed.filter(g => g.game.price > 0).length > 0) {
-          blurbTypes.push('value-wisdom');
-        }
-        blurbTypes.push('closing-reflection');
 
         const generatedBlurbs = await generateMultipleBlurbs(data, blurbTypes);
         setAiBlurbs(generatedBlurbs);
@@ -135,6 +119,7 @@ export function WeekInReview({ data, weekOffset, maxWeeksBack, onWeekChange }: W
       {showStory && (
         <WeekStoryMode
           data={data}
+          allGames={allGames}
           onClose={() => setShowStory(false)}
           prefetchedBlurbs={aiBlurbs}
           isLoadingPrefetch={isLoadingAI}

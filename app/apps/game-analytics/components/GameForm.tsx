@@ -47,6 +47,7 @@ export function GameForm({ onSubmit, onClose, initialGame, existingFranchises = 
     startDate: initialGame?.startDate || '',
     endDate: initialGame?.endDate || '',
     playLogs: initialGame?.playLogs || [],
+    isSpecial: initialGame?.isSpecial || false,
   });
 
   const priceNum = parseFloat(formData.price) || 0;
@@ -70,6 +71,7 @@ export function GameForm({ onSubmit, onClose, initialGame, existingFranchises = 
         subscriptionSource: formData.acquiredFree && formData.subscriptionSource ? formData.subscriptionSource : undefined,
         startDate: formData.startDate || undefined,
         endDate: formData.endDate || undefined,
+        isSpecial: formData.isSpecial || undefined,
       });
       onClose();
     } finally {
@@ -442,6 +444,27 @@ export function GameForm({ onSubmit, onClose, initialGame, existingFranchises = 
               rows={4}
               placeholder="Write your detailed review... What did you love? What could be better? Would you recommend it?"
             />
+          </div>
+
+          {/* Special Tag */}
+          <div className="flex items-center justify-between p-3 bg-white/[0.02] rounded-lg">
+            <div>
+              <div className="text-sm text-white/80">Special Game</div>
+              <div className="text-[10px] text-white/40">Mark as an exceptional game you love</div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setFormData({ ...formData, isSpecial: !formData.isSpecial })}
+              className={clsx(
+                'w-11 h-6 rounded-full transition-all relative',
+                formData.isSpecial ? 'bg-amber-500' : 'bg-white/10'
+              )}
+            >
+              <div className={clsx(
+                'w-5 h-5 rounded-full bg-white absolute top-0.5 transition-all',
+                formData.isSpecial ? 'left-5' : 'left-0.5'
+              )} />
+            </button>
           </div>
 
           {/* Actions */}

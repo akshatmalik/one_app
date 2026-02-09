@@ -5330,3 +5330,531 @@ export function getCumulativeHoursAtDate(game: Game, eventDate: string): number 
   }
   return hours;
 }
+
+// ============================================================
+// STORY MODE NEW SCREEN CALCULATIONS
+// ============================================================
+
+/**
+ * Week Awards - Auto-generated award winners for the week
+ */
+export interface WeekAward {
+  title: string;
+  winner: string;
+  stat: string;
+  thumbnail?: string;
+}
+
+export function getWeekAwards(data: WeekInReviewData): WeekAward[] {
+  const awards: WeekAward[] = [];
+
+  if (data.gamesPlayed.length === 0) return awards;
+
+  // MVP - Most hours played
+  const mvp = data.gamesPlayed[0]; // Already sorted by hours
+  awards.push({
+    title: 'MVP',
+    winner: mvp.game.name,
+    stat: `${mvp.hours.toFixed(1)}h played`,
+    thumbnail: mvp.game.thumbnail,
+  });
+
+  // Best Value - Lowest cost-per-hour among paid games played
+  const paidGames = data.gamesPlayed.filter(g => g.game.price > 0);
+  if (paidGames.length > 0) {
+    const bestValue = paidGames.reduce((best, g) => {
+      const cph = g.game.price / g.hours;
+      const bestCph = best.game.price / best.hours;
+      return cph < bestCph ? g : best;
+    }, paidGames[0]);
+    awards.push({
+      title: 'Best Value',
+      winner: bestValue.game.name,
+      stat: `$${(bestValue.game.price / bestValue.hours).toFixed(2)}/hr`,
+      thumbnail: bestValue.game.thumbnail,
+    });
+  }
+
+  // Most Improved - Game whose $/hr improved the most (played a lot relative to price)
+  if (paidGames.length > 0) {
+    const mostImproved = paidGames.reduce((best, g) => {
+      return g.hours > best.hours ? g : best;
+    }, paidGames[0]);
+    if (mostImproved.game.id !== mvp.game.id) {
+      awards.push({
+        title: 'Most Improved',
+        winner: mostImproved.game.name,
+        stat: `+${mostImproved.hours.toFixed(1)}h this week`,
+        thumbnail: mostImproved.game.thumbnail,
+      });
+    }
+  }
+
+  // Biggest Surprise - Game with fewest total hours but significant playtime this week
+  if (data.gamesPlayed.length >= 2) {
+    const surprises = data.gamesPlayed
+      .filter(g => g.game.id !== mvp.game.id)
+      .sort((a, b) => {
+        const aRatio = a.hours / Math.max(getTotalHours(a.game), 1);
+        const bRatio = b.hours / Math.max(getTotalHours(b.game), 1);
+        return bRatio - aRatio;
+      });
+    if (surprises.length > 0) {
+      awards.push({
+        title: 'Biggest Surprise',
+        winner: surprises[0].game.name,
+        stat: `${surprises[0].hours.toFixed(1)}h this week`,
+        thumbnail: surprises[0].game.thumbnail,
+      });
+    }
+  }
+
+  // Speedrun Award - If any completions happened
+  if (data.completedGames.length > 0) {
+    const fastest = data.completedGames.reduce((best, g) => {
+      const gHours = getTotalHours(g);
+      const bestHours = getTotalHours(best);
+      return gHours < bestHours ? g : best;
+    }, data.completedGames[0]);
+    awards.push({
+      title: 'Speedrun Award',
+      winner: fastest.name,
+      stat: `Completed in ${getTotalHours(fastest).toFixed(1)}h`,
+      thumbnail: fastest.thumbnail,
+    });
+  }
+
+  return awards;
+}
+
+/**
+ * Sharp Insight - The single most interesting data-driven observation of the week
+ */
+export function getSharpInsight(data: WeekInReviewData, allGames: Game[]): string | null {
+  // Prioritized list of insights - return the first one that applies
+
+  // 1. Multiple completions
+  if (data.completedGames.length >= 2) {
+    return `You completed ${data.completedGames.length} games this week: ${data.completedGames.map(g => g.name).join(' and ')}.`;
+  }
+
+  // 2. Cost-per-hour milestone
+  if (data.totalCostPerHour > 0 && data.totalCostPerHour < 2) {
+    return `Your cost-per-hour this week was $${data.totalCostPerHour.toFixed(2)} — cheaper than a cup of coffee.`;
+  }
+
+  // 3. Streak highlight
+  if (data.longestStreak === 7) {
+    return `Perfect 7-day streak. You played every single day this week.`;
+  }
+
+  // 4. Massive single session
+  if (data.longestSession && data.longestSession.hours >= 5) {
+    return `${data.longestSession.hours.toFixed(1)}-hour session on ${data.longestSession.game.name}. That's a movie trilogy.`;
+  }
+
+  // 5. Big spending week
+  const weekSpend = data.gamesPlayed.reduce((sum, g) => {
+    const purchased = g.game.datePurchased;
+    if (purchased) {
+      const purchaseDate = new Date(purchased);
+      if (purchaseDate >= data.weekStart && purchaseDate <= data.weekEnd) {
+        return sum + g.game.price;
+      }
+    }
+    return sum;
+  }, 0);
+  if (weekSpend > 100) {
+    return `You spent $${weekSpend.toFixed(0)} on games this week.`;
+  }
+
+  // 6. Single game dominance
+  if (data.topGame && data.topGame.percentage > 80) {
+    return `${data.topGame.game.name} consumed ${data.topGame.percentage.toFixed(0)}% of your week. One game to rule them all.`;
+  }
+
+  // 7. Game completed in one week
+  const quickCompletes = data.completedGames.filter(g => {
+    if (g.startDate) {
+      const start = new Date(g.startDate);
+      return start >= data.weekStart;
+    }
+    return false;
+  });
+  if (quickCompletes.length > 0) {
+    return `${quickCompletes[0].name} went from 'Not Started' to 'Completed' in one week.`;
+  }
+
+  // 8. High average rating
+  if (data.averageEnjoymentRating >= 8.5 && data.gamesPlayed.length >= 3) {
+    return `Average rating this week: ${data.averageEnjoymentRating.toFixed(1)}/10 across ${data.gamesPlayed.length} games. You played what you love.`;
+  }
+
+  // 9. Many games, little time each
+  if (data.uniqueGames >= 5 && data.avgSessionLength < 1) {
+    return `${data.uniqueGames} games but averaging ${data.avgSessionLength.toFixed(1)}h per session. Sampling mode.`;
+  }
+
+  // 10. Comparison to average
+  if (data.vsAverage.percentage > 150) {
+    return `${data.vsAverage.percentage.toFixed(0)}% of your average week. This was a big one.`;
+  }
+
+  if (data.vsAverage.percentage < 50 && data.vsAverage.percentage > 0) {
+    return `Only ${data.vsAverage.percentage.toFixed(0)}% of your average week. A quiet one.`;
+  }
+
+  // 11. Single completion
+  if (data.completedGames.length === 1) {
+    const g = data.completedGames[0];
+    return `Completed ${g.name} after ${getTotalHours(g).toFixed(1)} hours.`;
+  }
+
+  // Default: hours summary with top game
+  if (data.topGame) {
+    return `${data.totalHours.toFixed(1)}h across ${data.uniqueGames} game${data.uniqueGames !== 1 ? 's' : ''}. ${data.topGame.game.name} took ${data.topGame.percentage.toFixed(0)}%.`;
+  }
+
+  return null;
+}
+
+/**
+ * Ignored Games - Games in queue/active that weren't touched this week
+ */
+export interface IgnoredGame {
+  game: Game;
+  daysSinceLastPlay: number;
+  label: string;
+  inQueue: boolean;
+  queuePosition?: number;
+}
+
+export function getIgnoredGames(data: WeekInReviewData, allGames: Game[]): IgnoredGame[] {
+  const playedIds = new Set(data.gamesPlayed.map(g => g.game.id));
+
+  const ignored: IgnoredGame[] = allGames
+    .filter(g => {
+      // Only consider active/queued games that weren't played
+      if (playedIds.has(g.id)) return false;
+      if (g.status === 'Wishlist' || g.status === 'Completed' || g.status === 'Abandoned') return false;
+      // Must have been played at some point or be in queue
+      return (g.playLogs && g.playLogs.length > 0) || (g.queuePosition !== undefined && g.queuePosition > 0);
+    })
+    .map(g => {
+      let daysSinceLastPlay = 999;
+      if (g.playLogs && g.playLogs.length > 0) {
+        const sorted = [...g.playLogs].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        daysSinceLastPlay = Math.floor((Date.now() - new Date(sorted[0].date).getTime()) / (24 * 60 * 60 * 1000));
+      }
+
+      let label: string;
+      if (daysSinceLastPlay > 30) label = 'Gathering dust';
+      else if (daysSinceLastPlay > 14) label = 'Cooling off';
+      else if (daysSinceLastPlay > 7) label = 'On pause';
+      else label = 'Skipped this week';
+
+      return {
+        game: g,
+        daysSinceLastPlay,
+        label,
+        inQueue: g.queuePosition !== undefined && g.queuePosition > 0,
+        queuePosition: g.queuePosition,
+      };
+    })
+    .sort((a, b) => b.daysSinceLastPlay - a.daysSinceLastPlay)
+    .slice(0, 5);
+
+  return ignored;
+}
+
+/**
+ * Franchise Check-in - Franchise stats for games played this week
+ */
+export interface FranchiseCheckIn {
+  franchise: string;
+  games: Array<{
+    game: Game;
+    hours: number;
+    rating: number;
+    status: string;
+    playedThisWeek: boolean;
+  }>;
+  totalHours: number;
+  ratingTrend: string; // "Getting better", "Consistent", "Declining"
+}
+
+export function getFranchiseCheckIns(data: WeekInReviewData, allGames: Game[]): FranchiseCheckIn[] {
+  // Find franchises of games played this week
+  const franchisesThisWeek = new Set<string>();
+  data.gamesPlayed.forEach(g => {
+    if (g.game.franchise) franchisesThisWeek.add(g.game.franchise);
+  });
+
+  const checkIns: FranchiseCheckIn[] = [];
+
+  franchisesThisWeek.forEach(franchise => {
+    const franchiseGames = allGames
+      .filter(g => g.franchise === franchise)
+      .sort((a, b) => {
+        const aDate = a.datePurchased || a.createdAt;
+        const bDate = b.datePurchased || b.createdAt;
+        return new Date(aDate).getTime() - new Date(bDate).getTime();
+      });
+
+    if (franchiseGames.length < 2) return; // Need 2+ games for a franchise check-in
+
+    const playedIds = new Set(data.gamesPlayed.map(g => g.game.id));
+    const games = franchiseGames.map(g => ({
+      game: g,
+      hours: getTotalHours(g),
+      rating: g.rating,
+      status: g.status,
+      playedThisWeek: playedIds.has(g.id),
+    }));
+
+    const ratings = games.filter(g => g.rating > 0).map(g => g.rating);
+    let ratingTrend = 'Consistent';
+    if (ratings.length >= 2) {
+      const firstHalf = ratings.slice(0, Math.ceil(ratings.length / 2));
+      const secondHalf = ratings.slice(Math.ceil(ratings.length / 2));
+      const avgFirst = firstHalf.reduce((a, b) => a + b, 0) / firstHalf.length;
+      const avgSecond = secondHalf.reduce((a, b) => a + b, 0) / secondHalf.length;
+      if (avgSecond > avgFirst + 0.5) ratingTrend = 'Getting better every time';
+      else if (avgSecond < avgFirst - 0.5) ratingTrend = 'Declining';
+    }
+
+    checkIns.push({
+      franchise,
+      games,
+      totalHours: games.reduce((sum, g) => sum + g.hours, 0),
+      ratingTrend,
+    });
+  });
+
+  return checkIns;
+}
+
+/**
+ * Historical Echoes - "This time last year/6 months/3 months"
+ */
+export interface HistoricalEcho {
+  label: string; // "1 year ago", "6 months ago", etc.
+  game: Game;
+  event: string; // "started", "completed", "were playing"
+  hours: number;
+  review?: string;
+}
+
+export function getHistoricalEchoes(data: WeekInReviewData, allGames: Game[]): HistoricalEcho[] {
+  const echoes: HistoricalEcho[] = [];
+  const now = data.weekStart;
+
+  const periods = [
+    { label: '1 year ago', daysBack: 365 },
+    { label: '6 months ago', daysBack: 182 },
+    { label: '3 months ago', daysBack: 91 },
+  ];
+
+  periods.forEach(({ label, daysBack }) => {
+    const targetStart = new Date(now);
+    targetStart.setDate(targetStart.getDate() - daysBack - 3); // +/- 3 day window
+    const targetEnd = new Date(now);
+    targetEnd.setDate(targetEnd.getDate() - daysBack + 3);
+
+    allGames.forEach(game => {
+      // Check for play logs in that period
+      if (game.playLogs) {
+        const logsInPeriod = game.playLogs.filter(log => {
+          const logDate = new Date(log.date);
+          return logDate >= targetStart && logDate <= targetEnd;
+        });
+
+        if (logsInPeriod.length > 0) {
+          const totalHours = logsInPeriod.reduce((sum, l) => sum + l.hours, 0);
+          echoes.push({
+            label,
+            game,
+            event: 'were playing',
+            hours: totalHours,
+            review: game.review,
+          });
+        }
+      }
+
+      // Check for starts
+      if (game.startDate) {
+        const startDate = new Date(game.startDate);
+        if (startDate >= targetStart && startDate <= targetEnd) {
+          if (!echoes.find(e => e.game.id === game.id && e.label === label)) {
+            echoes.push({
+              label,
+              game,
+              event: 'started',
+              hours: getTotalHours(game),
+              review: game.review,
+            });
+          }
+        }
+      }
+
+      // Check for completions
+      if (game.endDate && game.status === 'Completed') {
+        const endDate = new Date(game.endDate);
+        if (endDate >= targetStart && endDate <= targetEnd) {
+          if (!echoes.find(e => e.game.id === game.id && e.label === label)) {
+            echoes.push({
+              label,
+              game,
+              event: 'completed',
+              hours: getTotalHours(game),
+              review: game.review,
+            });
+          }
+        }
+      }
+    });
+  });
+
+  // Deduplicate: one echo per game, preferring the most distant period
+  const seen = new Set<string>();
+  return echoes.filter(e => {
+    if (seen.has(e.game.id)) return false;
+    seen.add(e.game.id);
+    return true;
+  }).slice(0, 3);
+}
+
+/**
+ * Momentum Data - Multi-week trend analysis
+ */
+export interface MomentumData {
+  weeklyHours: Array<{ weekLabel: string; hours: number }>;
+  trend: 'accelerating' | 'decelerating' | 'steady';
+  trendDescription: string;
+  gameMomentum: Array<{
+    game: Game;
+    trend: 'accelerating' | 'decelerating' | 'steady' | 'new';
+    description: string;
+  }>;
+}
+
+export function getMomentumData(games: Game[], currentWeekData: WeekInReviewData): MomentumData {
+  // Get last 6 weeks of hours
+  const weeklyHours: Array<{ weekLabel: string; hours: number }> = [];
+
+  for (let i = 5; i >= 0; i--) {
+    const weekData = getWeekStatsForOffset(games, i);
+    weeklyHours.push({
+      weekLabel: weekData.weekLabel.split(' - ')[0], // Just start date
+      hours: weekData.totalHours,
+    });
+  }
+
+  // Determine trend from last 3 weeks
+  const recent = weeklyHours.slice(-3);
+  let trend: MomentumData['trend'] = 'steady';
+  let trendDescription = '';
+
+  if (recent.length >= 3) {
+    const increasing = recent[2].hours > recent[1].hours && recent[1].hours > recent[0].hours;
+    const decreasing = recent[2].hours < recent[1].hours && recent[1].hours < recent[0].hours;
+    const diff = recent[2].hours - recent[0].hours;
+    const avgHours = recent.reduce((sum, w) => sum + w.hours, 0) / recent.length;
+
+    if (increasing && diff > 2) {
+      trend = 'accelerating';
+      trendDescription = `${recent.length} weeks of increasing hours. You're in a groove.`;
+    } else if (decreasing && Math.abs(diff) > 2) {
+      trend = 'decelerating';
+      const dropPercent = avgHours > 0 ? Math.round((Math.abs(diff) / avgHours) * 100) : 0;
+      trendDescription = `Hours dropped ${dropPercent}% — cooling off.`;
+    } else {
+      trend = 'steady';
+      trendDescription = `Steady at ~${avgHours.toFixed(0)}h/week. Consistent.`;
+    }
+  }
+
+  // Game-level momentum: compare this week vs previous week for each game
+  const prevWeekData = getWeekStatsForOffset(games, 1);
+  const prevGameMap = new Map(prevWeekData.gamesPlayed.map(g => [g.game.id, g.hours]));
+
+  const gameMomentum = currentWeekData.gamesPlayed.slice(0, 5).map(gp => {
+    const prevHours = prevGameMap.get(gp.game.id);
+    if (prevHours === undefined) {
+      return { game: gp.game, trend: 'new' as const, description: 'New this week' };
+    }
+    const diff = gp.hours - prevHours;
+    if (diff > 1) {
+      return { game: gp.game, trend: 'accelerating' as const, description: `+${diff.toFixed(1)}h vs last week` };
+    } else if (diff < -1) {
+      return { game: gp.game, trend: 'decelerating' as const, description: `${diff.toFixed(1)}h vs last week` };
+    }
+    return { game: gp.game, trend: 'steady' as const, description: 'Similar to last week' };
+  });
+
+  return { weeklyHours, trend, trendDescription, gameMomentum };
+}
+
+/**
+ * Rating Paradox - Disconnect between what you rate highly and what you actually play
+ */
+export interface RatingParadox {
+  hasParadox: boolean;
+  playedButLowRated: Array<{ game: Game; hours: number; rating: number }>;
+  lovedButIgnored: Array<{ game: Game; hours: number; rating: number }>;
+  topPlayedGenre: { genre: string; avgRating: number } | null;
+  topRatedGenre: { genre: string; avgRating: number } | null;
+  summary: string;
+}
+
+export function getRatingParadox(data: WeekInReviewData, allGames: Game[]): RatingParadox {
+  const played = data.gamesPlayed.filter(g => g.game.rating > 0);
+
+  // Games played a lot but rated low
+  const playedButLowRated = played
+    .filter(g => g.game.rating <= 6 && g.hours >= 2)
+    .map(g => ({ game: g.game, hours: g.hours, rating: g.game.rating }))
+    .sort((a, b) => b.hours - a.hours)
+    .slice(0, 3);
+
+  // High-rated games in library that got 0 hours this week
+  const playedIds = new Set(data.gamesPlayed.map(g => g.game.id));
+  const lovedButIgnored = allGames
+    .filter(g => g.rating >= 8 && !playedIds.has(g.id) && g.status === 'In Progress')
+    .map(g => ({ game: g, hours: 0, rating: g.rating }))
+    .slice(0, 3);
+
+  // Genre paradox
+  const genreHours: Record<string, { hours: number; totalRating: number; count: number }> = {};
+  played.forEach(g => {
+    const genre = g.game.genre || 'Other';
+    if (!genreHours[genre]) genreHours[genre] = { hours: 0, totalRating: 0, count: 0 };
+    genreHours[genre].hours += g.hours;
+    genreHours[genre].totalRating += g.game.rating;
+    genreHours[genre].count++;
+  });
+
+  const genreEntries = Object.entries(genreHours).filter(([, v]) => v.count > 0);
+  const topPlayedGenre = genreEntries.length > 0
+    ? genreEntries.sort((a, b) => b[1].hours - a[1].hours)
+        .map(([genre, v]) => ({ genre, avgRating: v.totalRating / v.count }))[0]
+    : null;
+  const topRatedGenre = genreEntries.length > 0
+    ? genreEntries.sort((a, b) => (b[1].totalRating / b[1].count) - (a[1].totalRating / a[1].count))
+        .map(([genre, v]) => ({ genre, avgRating: v.totalRating / v.count }))[0]
+    : null;
+
+  const hasParadox = playedButLowRated.length > 0 || lovedButIgnored.length > 0 ||
+    !!(topPlayedGenre && topRatedGenre && topPlayedGenre.genre !== topRatedGenre.genre);
+
+  let summary: string;
+  if (playedButLowRated.length > 0 && lovedButIgnored.length > 0) {
+    summary = `You spent ${playedButLowRated[0].hours.toFixed(1)}h on ${playedButLowRated[0].game.name} (rated ${playedButLowRated[0].rating}/10) while ${lovedButIgnored[0].game.name} (rated ${lovedButIgnored[0].rating}/10) sat untouched.`;
+  } else if (topPlayedGenre && topRatedGenre && topPlayedGenre.genre !== topRatedGenre.genre) {
+    summary = `Most-played genre: ${topPlayedGenre.genre} (avg ${topPlayedGenre.avgRating.toFixed(1)}/10). Highest-rated: ${topRatedGenre.genre} (avg ${topRatedGenre.avgRating.toFixed(1)}/10).`;
+  } else {
+    summary = 'Your playtime matches your taste — you play what you love.';
+  }
+
+  return { hasParadox, playedButLowRated, lovedButIgnored, topPlayedGenre, topRatedGenre, summary };
+}

@@ -9,6 +9,20 @@ interface OpeningScreenProps {
 }
 
 export function OpeningScreen({ data }: OpeningScreenProps) {
+  // Build a sharp summary line
+  const summaryParts: string[] = [];
+  summaryParts.push(`${data.totalHours.toFixed(1)}h across ${data.uniqueGames} game${data.uniqueGames !== 1 ? 's' : ''}`);
+
+  if (data.vsAverage.percentage > 130) {
+    summaryParts.push('Your biggest week in a while.');
+  } else if (data.vsAverage.percentage < 70 && data.vsAverage.percentage > 0) {
+    summaryParts.push('A quieter week than usual.');
+  } else if (data.vsLastWeek.trend === 'up') {
+    summaryParts.push(`Up ${data.vsLastWeek.hoursDiff.toFixed(1)}h from last week.`);
+  } else if (data.vsLastWeek.trend === 'down') {
+    summaryParts.push(`Down ${Math.abs(data.vsLastWeek.hoursDiff).toFixed(1)}h from last week.`);
+  }
+
   return (
     <div className="w-full max-w-2xl mx-auto text-center">
       <motion.div
@@ -39,27 +53,33 @@ export function OpeningScreen({ data }: OpeningScreenProps) {
           initial={{ y: 30, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ delay: 0.6, duration: 0.6 }}
-          className="text-6xl md:text-8xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-cyan-400 to-purple-400 mb-12"
+          className="text-6xl md:text-8xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-cyan-400 to-purple-400 mb-8"
         >
           Week Recap
         </motion.h1>
 
+        {/* Vibe label */}
         <motion.div
-          initial={{ scale: 0, rotate: -180 }}
-          animate={{ scale: 1, rotate: 0 }}
-          transition={{ delay: 0.8, duration: 0.8, type: 'spring' }}
-          className="text-8xl mb-8"
+          initial={{ scale: 0 }}
+          animate={{ scale: 1 }}
+          transition={{ delay: 0.8, duration: 0.5, type: 'spring' }}
+          className="mb-6"
         >
-          🎮
+          <div className="inline-flex items-center gap-2 px-5 py-2.5 bg-white/10 backdrop-blur-sm rounded-full border border-white/20">
+            <span className="text-lg font-black text-transparent bg-clip-text bg-gradient-to-r from-purple-300 to-pink-300 uppercase tracking-wide">
+              {data.weekVibe}
+            </span>
+          </div>
         </motion.div>
 
+        {/* Sharp summary line */}
         <motion.p
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 1.2, duration: 0.6 }}
-          className="text-2xl text-white/60 font-medium"
+          className="text-xl text-white/50 font-medium max-w-md mx-auto"
         >
-          Let&apos;s see what you&apos;ve been playing...
+          {summaryParts.join('. ')}
         </motion.p>
 
         <motion.div

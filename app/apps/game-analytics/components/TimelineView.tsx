@@ -398,7 +398,7 @@ export function TimelineView({ games, onLogTime, onQuickAddTime }: TimelineViewP
   if (events.length === 0) {
     return (
       <div className="space-y-6">
-        <WeekInReview data={weekInReviewData} weekOffset={weekOffset} maxWeeksBack={maxWeeksBack} onWeekChange={handleWeekChange} />
+        <WeekInReview data={weekInReviewData} allGames={games} weekOffset={weekOffset} maxWeeksBack={maxWeeksBack} onWeekChange={handleWeekChange} />
         <TimelinePeriodCards games={games} />
         {onQuickAddTime && (
           <div className="flex justify-end mb-4">
@@ -424,7 +424,7 @@ export function TimelineView({ games, onLogTime, onQuickAddTime }: TimelineViewP
 
   return (
     <div className="space-y-6">
-      <WeekInReview data={weekInReviewData} weekOffset={weekOffset} maxWeeksBack={maxWeeksBack} onWeekChange={handleWeekChange} />
+      <WeekInReview data={weekInReviewData} allGames={games} weekOffset={weekOffset} maxWeeksBack={maxWeeksBack} onWeekChange={handleWeekChange} />
       <TimelinePeriodCards games={games} />
 
       {/* Game Journey Arcs */}

@@ -361,17 +361,31 @@ export function QueueGameCard({ game, position, isHero, estimatedHoursAway, onRe
         </div>
       </div>
 
-      {/* Remove Button */}
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          onRemove();
-        }}
-        className="touch-manipulation p-2 -m-2 text-white/20 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all shrink-0 sm:opacity-0 sm:group-hover:opacity-100"
-        aria-label="Remove from queue"
-      >
-        <X size={18} />
-      </button>
+      {/* Action Buttons */}
+      <div className="flex items-center gap-1 shrink-0">
+        {onLogTime && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onLogTime();
+            }}
+            className="touch-manipulation p-2 -m-1 text-white/20 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg transition-all sm:opacity-0 sm:group-hover:opacity-100"
+            aria-label="Log play session"
+          >
+            <Clock size={18} />
+          </button>
+        )}
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onRemove();
+          }}
+          className="touch-manipulation p-2 -m-1 text-white/20 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all shrink-0 sm:opacity-0 sm:group-hover:opacity-100"
+          aria-label="Remove from queue"
+        >
+          <X size={18} />
+        </button>
+      </div>
     </div>
   );
 }

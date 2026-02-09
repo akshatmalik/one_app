@@ -96,6 +96,11 @@ export function AIBlurbScreen({ blurb, type, isLoading = false, error, isFallbac
   const config = blurbConfig[type];
   const Icon = config.icon;
 
+  // Silent fallback: if blurb is empty and it's a fallback, show nothing
+  if (!isLoading && isFallback && (!blurb || blurb.trim() === '')) {
+    return null;
+  }
+
   return (
     <div className="w-full max-w-2xl mx-auto px-4">
       {/* Header with icon */}
