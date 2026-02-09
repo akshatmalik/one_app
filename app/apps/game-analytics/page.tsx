@@ -23,6 +23,7 @@ import { OnThisDayCard } from './components/OnThisDayCard';
 import { ActivityPulse } from './components/ActivityPulse';
 import { RandomPicker } from './components/RandomPicker';
 import { BulkWishlistModal } from './components/BulkWishlistModal';
+import { GameDetailPanel } from './components/GameDetailPanel';
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist';
@@ -53,6 +54,7 @@ export default function GameAnalyticsPage() {
   const [sortBy, setSortBy] = useState<'name' | 'price' | 'hours' | 'rating' | 'costPerHour' | 'dateAdded' | 'recentlyPlayed'>('recentlyPlayed');
   const [showRandomPicker, setShowRandomPicker] = useState(false);
   const [showBulkWishlist, setShowBulkWishlist] = useState(false);
+  const [detailGame, setDetailGame] = useState<GameWithMetrics | null>(null);
 
   // Calculate week and month data for AI chat
   const weekData = useMemo(() => {
@@ -462,7 +464,7 @@ export default function GameAnalyticsPage() {
                     return (
                     <div
                       key={game.id}
-                      onClick={() => handleEdit(game)}
+                      onClick={() => setDetailGame(game)}
                       className={clsx(
                         'group p-4 bg-white/[0.02] hover:bg-white/[0.04] border border-white/5 hover:border-white/10 rounded-xl cursor-pointer transition-all card-enter',
                         game.status === 'In Progress' && 'in-progress-glow',
@@ -601,6 +603,12 @@ export default function GameAnalyticsPage() {
                                 FREE
                               </span>
                             )}
+
+                            {game.isSpecial && (
+                              <span className="text-[10px] px-2 py-0.5 bg-amber-500/20 text-amber-400 rounded font-medium flex items-center gap-0.5">
+                                <Heart size={8} className="fill-amber-400" /> Special
+                              </span>
+                            )}
                           </div>
                         </div>
 
@@ -645,6 +653,26 @@ export default function GameAnalyticsPage() {
                             title={isInQueue(game.id) ? 'Remove from Up Next' : 'Add to Up Next'}
                           >
                             {isInQueue(game.id) ? <Check size={14} /> : <ListPlus size={14} />}
+                          </button>
+                          <button
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              try {
+                                await updateGame(game.id, { isSpecial: !game.isSpecial });
+                                showToast(game.isSpecial ? 'Removed special tag' : 'Marked as special', 'success');
+                              } catch (err) {
+                                showToast('Failed to update', 'error');
+                              }
+                            }}
+                            className={clsx(
+                              'p-2 rounded-lg transition-all',
+                              game.isSpecial
+                                ? 'text-amber-400 bg-amber-500/10 hover:text-amber-300 hover:bg-amber-500/20'
+                                : 'text-white/30 hover:text-amber-400 hover:bg-amber-500/10'
+                            )}
+                            title={game.isSpecial ? 'Remove special tag' : 'Mark as special'}
+                          >
+                            <Heart size={14} className={game.isSpecial ? 'fill-amber-400' : ''} />
                           </button>
                           <button
                             onClick={(e) => {
@@ -930,6 +958,50 @@ export default function GameAnalyticsPage() {
           onClose={() => setShowBulkWishlist(false)}
           existingGameNames={games.map(g => g.name)}
           existingGames={games}
+        />
+      )}
+
+      {/* Game Detail Panel */}
+      {detailGame && (
+        <GameDetailPanel
+          game={detailGame}
+          allGames={games}
+          onClose={() => setDetailGame(null)}
+          onEdit={() => {
+            handleEdit(detailGame);
+            setDetailGame(null);
+          }}
+          onDelete={() => {
+            handleDelete(detailGame.id, detailGame.name);
+            setDetailGame(null);
+          }}
+          onLogTime={() => {
+            handleOpenPlayLog(detailGame);
+            setDetailGame(null);
+          }}
+          onToggleQueue={async () => {
+            try {
+              if (isInQueue(detailGame.id)) {
+                await removeFromQueue(detailGame.id);
+                showToast('Removed from queue', 'success');
+              } else {
+                await addToQueue(detailGame.id);
+                showToast('Added to queue', 'success');
+              }
+            } catch (err) {
+              showToast('Failed to update queue', 'error');
+            }
+          }}
+          onToggleSpecial={async () => {
+            try {
+              await updateGame(detailGame.id, { isSpecial: !detailGame.isSpecial });
+              showToast(detailGame.isSpecial ? 'Removed special tag' : 'Marked as special', 'success');
+              setDetailGame(null);
+            } catch (err) {
+              showToast('Failed to update', 'error');
+            }
+          }}
+          isInQueue={isInQueue(detailGame.id)}
         />
       )}
     </div>

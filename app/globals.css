@@ -269,3 +269,12 @@ input[type="range"]::-moz-range-thumb {
   animation: sparkGrow 0.5s ease-out forwards;
   transform-origin: bottom;
 }
+
+@keyframes slideInRight {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+.animate-slide-in-right {
+  animation: slideInRight 0.25s ease-out forwards;
+}
