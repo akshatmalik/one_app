@@ -524,8 +524,8 @@ function BiggestDayScreen({ data }: { data: MonthInReviewData }) {
 }
 
 function PersonalityScreen({ data }: { data: MonthInReviewData }) {
-  const top = data.personality[0];
-  if (!top) return null;
+  const p = data.personality;
+  if (!p || p.score === 0) return null;
   const emojis: Record<string, string> = {
     Completionist: '🏆', 'Deep Diver': '🤿', Sampler: '🎲', 'Backlog Hoarder': '📦',
     'Balanced Gamer': '⚖️', Speedrunner: '⚡', Explorer: '🧭',
@@ -536,17 +536,17 @@ function PersonalityScreen({ data }: { data: MonthInReviewData }) {
       <motion.h2 initial={{ opacity: 0 }} animate={{ opacity: 1 }}
         className="text-xs font-bold uppercase tracking-widest text-white/40 mb-6">This Month&apos;s Personality</motion.h2>
       <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.2, type: 'spring' }}
-        className="text-6xl mb-4">{emojis[top.type] || '🎮'}</motion.div>
+        className="text-6xl mb-4">{emojis[p.type] || '🎮'}</motion.div>
       <motion.h3 initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.4 }}
-        className="text-3xl font-bold text-white mb-2">{top.type}</motion.h3>
+        className="text-3xl font-bold text-white mb-2">{p.type}</motion.h3>
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }}
         className="w-48 mx-auto bg-white/10 rounded-full h-3 overflow-hidden">
-        <motion.div initial={{ width: 0 }} animate={{ width: `${top.score}%` }}
+        <motion.div initial={{ width: 0 }} animate={{ width: `${p.score}%` }}
           transition={{ delay: 0.6, duration: 0.8 }}
           className="h-full bg-gradient-to-r from-purple-500 to-pink-500 rounded-full" />
       </motion.div>
       <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.8 }}
-        className="text-sm text-white/40 mt-2">{top.score}% match</motion.p>
+        className="text-sm text-white/40 mt-2">{p.score}% match</motion.p>
     </div>
   );
 }
