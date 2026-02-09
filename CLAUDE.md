@@ -1381,6 +1381,103 @@ Bring the best new stats into the Week in Review story mode screens:
 
 ---
 
+## Game Timeline & Recap Overhaul (Approved)
+
+13 changes across 4 areas: Timeline, Week Recap, Games Tab, and a new Monthly Recap. Approved 2025-02-09.
+
+### A. Timeline Updates
+
+#### A1. AI Month Chapter Titles
+Generate creative 3-5 word AI titles for each month in the timeline, matching the existing quarter chapter title treatment. Quarters currently get AI-generated narrative titles (e.g., "The Conquest Era") displayed with a sparkle icon and decorative divider. Months should get the same treatment but slightly smaller/different color to maintain hierarchy (quarter = purple sparkles, month = blue/cyan sparkles).
+**Files**: `lib/ai-game-service.ts` (add `generateMonthChapterTitles()`), `components/TimelineView.tsx` (render month titles above each month header).
+
+#### A2. AI Week Titles in Period Cards
+Each period card (This Week, Last Week, This Month, Last Month) gets a short AI-generated subtitle. Example: "This Week — *The RPG Deep Dive*". Generated based on the games played and activity during that period.
+**Files**: `lib/ai-game-service.ts` (add `generateWeekTitle()`), `components/TimelinePeriodCards.tsx` (display subtitle in each card).
+
+#### A3. Week Title in Recap Banner + Opening Screen
+Show the AI-generated week title in the WeekInReview banner as a subtitle (under the week vibe text). Also display it on the WeekStoryMode opening screen as the "episode name", giving the recap a named episode feel.
+**Files**: `components/WeekInReview.tsx`, `components/story-screens/OpeningScreen.tsx`.
+
+### B. Week Recap Changes
+
+#### B4. Remove 2 AI Blurb Screens
+Cut `top-game-deep-dive` (Act 2) and `session-patterns` (Act 3) AI blurb screens from the story. Keep only `opening-personality` (Act 1) and `closing-reflection` (Act 5) since those bookend the story naturally. Update prefetch to only request 2 blurb types instead of 4.
+**Files**: `components/WeekStoryMode.tsx`, `components/WeekInReview.tsx`.
+
+#### B5. Remove SessionTypesScreen
+The marathon/power/quick session breakdown screen is not useful when most sessions are under 2 hours. Remove it from the story screen list.
+**Files**: `components/WeekStoryMode.tsx`.
+
+#### B6. Cinematic Week Title Card
+Enhance the opening screen with a Netflix-style cold open: large AI chapter title in prominent text, date range underneath, subtle gradient background. The week gets a named "episode" feel.
+**Files**: `components/story-screens/OpeningScreen.tsx`.
+
+#### B7. "Hot Take" Screen
+One bold, provocative AI-generated sentence displayed huge and centered with a flame icon. Not a paragraph — just one sharp line. Example: "You spent more time on Cricket 24 this week than some people spend at their jobs."
+**Files**: new `components/story-screens/HotTakeScreen.tsx`, `components/WeekStoryMode.tsx`.
+
+#### B8. "Vibe Check" Mood Gradient Screen
+Visual screen showing the week's intensity as a gradient bar from cool blues (chill) to hot reds (intense). Marker showing where this week lands, based on session lengths and frequency. Mostly visual, minimal text.
+**Files**: new `components/story-screens/VibeCheckScreen.tsx`, `components/WeekStoryMode.tsx`.
+
+#### B9. Mini Scoreboard vs Last Week
+This week vs last week side by side with animated counters. Hours, games, sessions, streak — each with a green/red arrow showing improvement or decline. Simple, competitive feel against yourself.
+**Files**: new `components/story-screens/WeekVsWeekScreen.tsx`, `components/WeekStoryMode.tsx`.
+
+### C. Games Tab Updates
+
+#### C10. Collapsible Stats Panel
+The 6 stat cards (Games, Spent, Hours, $/Hour, Avg Rating, Wishlist) plus the Best Value and Most Played highlights become collapsible. Small chevron button to expand/collapse. Persist collapsed state in localStorage so it remembers the user's preference across sessions.
+**Files**: `page.tsx`.
+
+### D. Monthly Recap (NEW)
+
+A full Instagram-story-style recap experience for the month, similar to the existing Week Recap but with monthly scope. Triggered from a "View Recap" button shown per-month in the timeline.
+
+#### D11. Month Recap Infrastructure
+Story modal with the same swipe/tap/keyboard navigation pattern from WeekStoryMode. Banner component with "View Recap" button, shown in the timeline per-month. AI month chapter title generation already covered by A1.
+**Files**: new `components/MonthStoryMode.tsx`, new `components/MonthInReview.tsx`, `components/TimelineView.tsx` (integrate banner).
+
+#### D12. Month Recap Screens
+
+| Screen | Description |
+|--------|------------|
+| **Title Card** | Cinematic month name + AI chapter title + date range. Large text, gradient background. |
+| **Month in Numbers** | Rapid-fire animated stats: total hours, sessions, games, purchases, completions. Staggered animations for impact. |
+| **Top 3 Games** | The 3 most-played games of the month with hours, thumbnails, and percentage of total playtime. |
+| **Game of the Month** | Spotlight on #1 game — hours, sessions, rating, cost/hr, how it compares to library average. |
+| **Activity Heatmap** | 30-day calendar grid, color-coded by hours per day. See the month's rhythm at a glance. |
+| **Week-by-Week** | 4 mini bars comparing each week within the month. Which week was the biggest? Trend arrows. |
+| **Spending Report** | What was bought this month, total spent, best deal, budget progress (if budget is set). |
+| **Genre Breakdown** | Pie/donut showing genre split for the month. "80% RPG, 15% Sports, 5% Action". |
+| **Completions & Milestones** | Games finished, milestones hit, achievements earned this month. Celebratory styling. |
+| **Best Value** | Lowest cost-per-hour game of the month with stats breakdown. |
+| **vs Last Month** | Side-by-side comparison — hours, games, sessions, spending, completions with trend arrows. |
+| **Biggest Day** | The most intense gaming day of the month — which day, how many hours, what was played. |
+| **Personality Snapshot** | Gaming personality calculated for this specific month (may differ from overall personality). |
+| **AI Reflection** | One AI-generated closing paragraph reflecting on the month's gaming story. |
+| **Closing Card** | Summary with final month stats + "See you next month" sign-off. |
+
+### Implementation Summary
+
+| # | Change | Effort | Area |
+|---|--------|--------|------|
+| A1 | AI month chapter titles in timeline | Low | Timeline |
+| A2 | AI week titles in period cards | Low | Timeline |
+| A3 | Week title in recap banner + opening | Low | Timeline/Recap |
+| B4 | Remove 2 AI blurb screens from week recap | Low | Week Recap |
+| B5 | Remove SessionTypesScreen from week recap | Low | Week Recap |
+| B6 | Cinematic week title card on opening | Low | Week Recap |
+| B7 | "Hot Take" single-line AI screen | Low | Week Recap |
+| B8 | "Vibe Check" mood gradient screen | Medium | Week Recap |
+| B9 | Mini scoreboard vs last week | Medium | Week Recap |
+| C10 | Collapsible stats panel on Games tab | Low | Games Tab |
+| D11 | Month Recap infrastructure (modal + banner) | Medium | Month Recap |
+| D12 | 15 Month Recap screens | High | Month Recap |
+
+---
+
 ## Resources
 
 - **Next.js Docs**: https://nextjs.org/docs
@@ -1392,6 +1489,13 @@ Bring the best new stats into the Week in Review story mode screens:
 ---
 
 ## Changelog
+
+### 2025-02-09 (v2.2.0)
+- Added Game Timeline & Recap Overhaul plan: 13 changes across 4 areas (Timeline, Week Recap, Games Tab, Monthly Recap)
+- Timeline: AI chapter titles for months and weeks (matching existing quarter treatment)
+- Week Recap: Remove SessionTypesScreen and 2 AI blurb screens, add Hot Take / Vibe Check / WeekVsWeek screens, cinematic title card
+- Games Tab: Collapsible stats panel with localStorage persistence
+- Monthly Recap: Full story-mode experience with 15 screens (Title Card, Month in Numbers, Top 3, Game of Month, Heatmap, Week-by-Week, Spending, Genre, Completions, Best Value, vs Last Month, Biggest Day, Personality, AI Reflection, Closing)
 
 ### 2025-02-06 (v2.1.0)
 - Refined Enhancement Plan: 24 approved features across 5 phases with user feedback
@@ -1414,6 +1518,6 @@ Bring the best new stats into the Week in Review story mode screens:
 
 ---
 
-**Last Updated**: 2025-02-06
-**Version**: 2.1.0
+**Last Updated**: 2025-02-09
+**Version**: 2.2.0
 **Maintained by**: AI assistants and contributors
