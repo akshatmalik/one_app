@@ -29,6 +29,9 @@ import { ThisTimeLastYearScreen } from './story-screens/ThisTimeLastYearScreen';
 import { SessionOfTheWeekScreen } from './story-screens/SessionOfTheWeekScreen';
 import { MomentumReadScreen } from './story-screens/MomentumReadScreen';
 import { RatingParadoxScreen } from './story-screens/RatingParadoxScreen';
+import { HotTakeScreen, getHotTake } from './story-screens/HotTakeScreen';
+import { VibeCheckScreen } from './story-screens/VibeCheckScreen';
+import { WeekVsWeekScreen } from './story-screens/WeekVsWeekScreen';
 import { generateMultipleBlurbs, AIBlurbType, AIBlurbResult } from '../lib/ai-service';
 
 interface WeekStoryModeProps {
@@ -54,6 +57,7 @@ export function WeekStoryMode({ data, allGames, onClose, prefetchedBlurbs, isLoa
   const historicalEchoes = useMemo(() => getHistoricalEchoes(data, allGames), [data, allGames]);
   const momentumData = useMemo(() => getMomentumData(allGames, data), [allGames, data]);
   const ratingParadox = useMemo(() => getRatingParadox(data, allGames), [data, allGames]);
+  const hotTake = useMemo(() => getHotTake(data), [data]);
 
   // Use prefetched blurbs if available, otherwise generate them
   useEffect(() => {
@@ -86,14 +90,14 @@ export function WeekStoryMode({ data, allGames, onClose, prefetchedBlurbs, isLoa
 
   // ─── 5-ACT FLOW ────────────────────────────────────────────
   //
-  // Act 1: HOOK (3-4 screens)
-  //   Opening → TotalHours → ActivityPulse → AI:Opening
+  // Act 1: HOOK (4-5 screens)
+  //   Opening → TotalHours → ActivityPulse → VibeCheck → AI:Opening
   //
-  // Act 2: DEEP DIVE (4-5 screens)
-  //   TopGame/Top3 → DailyBreakdown → SessionOfTheWeek → GenreUniverse
+  // Act 2: DEEP DIVE (5-7 screens)
+  //   TopGame/Top3 → DailyBreakdown → WeekVsWeek → SessionOfTheWeek → GenreUniverse
   //
-  // Act 3: INSIGHTS (3-5 screens)
-  //   GamingPersonality → CompletionOdds → RatingParadox → GuildFree → BestValue
+  // Act 3: INSIGHTS (4-6 screens)
+  //   GamingPersonality → HotTake → CompletionOdds → RatingParadox → GuildFree → BestValue
   //
   // Act 4: CONTEXT (4-6 screens)
   //   Achievements → BacklogUpdate → YouIgnored → FranchiseCheckIn → ThisTimeLastYear → Momentum
@@ -108,6 +112,7 @@ export function WeekStoryMode({ data, allGames, onClose, prefetchedBlurbs, isLoa
     <OpeningScreen key="opening" data={data} weekTitle={weekTitle} />,
     <TotalHoursScreen key="hours" data={data} />,
     <ActivityPulseScreen key="pulse" data={data} />,
+    <VibeCheckScreen key="vibe-check" data={data} />,
 
     // AI: Opening personality
     <AIBlurbScreen
@@ -124,11 +129,13 @@ export function WeekStoryMode({ data, allGames, onClose, prefetchedBlurbs, isLoa
     data.topGame ? <TopGameScreen key="top-game" data={data} /> : null,
 
     <DailyBreakdownScreen key="daily" data={data} />,
+    <WeekVsWeekScreen key="vs-week" data={data} />,
     data.longestSession ? <SessionOfTheWeekScreen key="session-week" data={data} /> : null,
     data.genresPlayed.length > 0 ? <GenreUniverseScreen key="genres" data={data} /> : null,
 
     // ─── ACT 3: INSIGHTS ───
     <GamingPersonalityScreen key="personality" data={data} />,
+    hotTake ? <HotTakeScreen key="hot-take" hotTake={hotTake} /> : null,
 
     data.weekCompletionProbabilities.length > 0 ? <CompletionOddsScreen key="odds" data={data} /> : null,
     ratingParadox.hasParadox ? <RatingParadoxScreen key="paradox" paradox={ratingParadox} /> : null,
