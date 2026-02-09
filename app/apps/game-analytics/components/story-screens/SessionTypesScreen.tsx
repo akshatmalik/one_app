@@ -20,16 +20,16 @@ export function SessionTypesScreen({ data }: SessionTypesScreenProps) {
   let sessionEmoji = '';
   if (marathonPercent >= 50) {
     sessionStyle = 'Marathon Gamer';
-    sessionEmoji = '';
+    sessionEmoji = '🔥';
   } else if (powerPercent >= 50) {
     sessionStyle = 'Power Player';
-    sessionEmoji = '';
+    sessionEmoji = '⚡';
   } else if (quickPercent >= 50) {
     sessionStyle = 'Quick Hitter';
-    sessionEmoji = '';
+    sessionEmoji = '☕';
   } else {
     sessionStyle = 'Balanced Player';
-    sessionEmoji = '';
+    sessionEmoji = '🎯';
   }
 
   return (

@@ -106,31 +106,42 @@ Gaming Data:
 ${data.totalValueUtilized > 0 ? `- Value utilized: $${data.totalValueUtilized.toFixed(2)}` : ''}
 `.trim();
 
+  // Build game-specific context for deeper blurbs
+  const topGameContext = data.topGame
+    ? `Top game: ${data.topGame.game.name} (${data.topGame.hours.toFixed(1)}h, ${data.topGame.percentage.toFixed(0)}% of total, ${data.topGame.sessions} sessions, rated ${data.topGame.game.rating}/10, genre: ${data.topGame.game.genre || 'unknown'}, status: ${data.topGame.game.status})`
+    : '';
+  const completionContext = data.completedGames.length > 0
+    ? `Completed this week: ${data.completedGames.map(g => g.name).join(', ')}`
+    : '';
+  const streakContext = data.longestStreak > 0 ? `Gaming streak: ${data.longestStreak} consecutive days` : '';
+  const valueContext = data.bestValueGame
+    ? `Best value: ${data.bestValueGame.game.name} at $${data.bestValueGame.costPerHour.toFixed(2)}/hr`
+    : '';
+
   const prompts: Record<AIBlurbType, string> = {
     'opening-personality': `${baseContext}
+${topGameContext}
+${streakContext}
 
-Write a SHORT, fun 2-3 line observation about their ${data.gamingStyle} gaming style and ${data.totalHours.toFixed(1)} hours played.
-Be punchy and enthusiastic. Keep it brief!`,
+Write 2-3 sentences about this player's week. Reference specific games by name, specific numbers, and their ${data.gamingStyle} style. Don't use generic phrases like "what a week!" - be specific and data-driven. Tone: casual friend, not a hype announcer.`,
 
     'top-game-deep-dive': `${baseContext}
+${topGameContext}
+${data.topGame?.game.review ? `Player's own review: "${data.topGame.game.review}"` : ''}
+${data.topGame ? `Total hours all-time on this game: ${data.topGame.game.hours}h` : ''}
 
-${data.topGame ? `They spent ${data.topGame.hours.toFixed(1)} hours on ${data.topGame.game.name} this week.` : ''}
-
-Write a SHORT, fun 2-3 line comment about their dedication to this game.
-Be creative and specific. Keep it brief!`,
+Write 2-3 sentences specifically about ${data.topGame?.game.name || 'their top game'}. Reference the game by name, the hours invested, and what their playtime pattern suggests about how they're experiencing it. If they wrote a review, reference it. No generic "dedication" praise.`,
 
     'session-patterns': `${baseContext}
+Daily breakdown: ${data.dailyHours.map(d => `${d.day}: ${d.hours.toFixed(1)}h (${d.gameNames.join(', ') || 'rest'})`).join(' | ')}
+${data.longestSession ? `Longest single session: ${data.longestSession.hours.toFixed(1)}h of ${data.longestSession.game.name} on ${data.longestSession.day}` : ''}
+${data.busiestDay ? `Biggest day: ${data.busiestDay.day} with ${data.busiestDay.hours.toFixed(1)}h across ${data.busiestDay.sessions} sessions` : ''}
+Rest days: ${data.restDays.join(', ') || 'none'}
 
-Daily pattern: ${data.dailyHours.map(d => `${d.day}: ${d.hours.toFixed(1)}h`).join(', ')}
-Session mix: ${data.marathonSessions} marathon, ${data.powerSessions} power, ${data.quickSessions} quick sessions
-
-Write a SHORT, fun 2-3 line observation about their gaming rhythm.
-Be playful about their pattern. Keep it brief!`,
+Write 2-3 sentences analyzing their specific daily pattern. Name the days, the games they played on specific days, and what it reveals. Be observational, not cheerleading.`,
 
     'achievement-motivation': `${baseContext}
-
-${data.completedGames.length > 0 ? `Completed: ${data.completedGames.map(g => g.name).join(', ')}` : ''}
-${data.milestonesReached.length > 0 ? `Milestones: ${data.milestonesReached.join(', ')}` : ''}
+${completionContext}
 
 Write a SHORT, fun 2-3 line celebration of their achievements.
 Be encouraging and upbeat. Keep it brief!`,
@@ -138,15 +149,13 @@ Be encouraging and upbeat. Keep it brief!`,
     'genre-insights': `${baseContext}
 
 Genres: ${data.genresPlayed.join(', ') || 'Various'}
-Diversity score: ${data.genreDiversityScore.toFixed(1)}/10
+Diversity score: ${data.genreDiversityScore}/10
 
 Write a SHORT, fun 2-3 line comment about their genre choices.
 Be playful about their gaming taste. Keep it brief!`,
 
     'value-wisdom': `${baseContext}
-
-${data.totalValueUtilized > 0 ? `Value utilized: $${data.totalValueUtilized.toFixed(2)}` : ''}
-${data.bestValueGame ? `Best value: ${data.bestValueGame.game.name} at $${data.bestValueGame.costPerHour.toFixed(2)}/hour` : ''}
+${valueContext}
 
 Write a SHORT, fun 2-3 line comment about their gaming value.
 Be playful about bang-for-buck. Keep it brief!`,
@@ -172,9 +181,12 @@ Write a SHORT, fun 2-3 line celebration of their epic gaming sessions.
 Be enthusiastic about the marathons. Keep it brief!`,
 
     'closing-reflection': `${baseContext}
+${completionContext}
+${valueContext}
+${streakContext}
+Games played this week: ${data.gamesPlayed.map(g => `${g.game.name} (${g.hours.toFixed(1)}h)`).join(', ')}
 
-Write a SHORT, fun 2-3 line closing thought about their gaming week.
-Be upbeat and forward-looking. Keep it brief!`,
+Write 2-3 sentences as a closing reflection. Reference the specific games and numbers from their week. Include one forward-looking thought about what's next. Tone: thoughtful friend wrapping up a conversation, not a motivational poster.`,
   };
 
   return prompts[type];
@@ -184,17 +196,18 @@ Be upbeat and forward-looking. Keep it brief!`,
  * Fallback blurbs if AI generation fails
  */
 function getFallbackBlurb(type: AIBlurbType): string {
+  // Fallbacks should be silent/invisible - not generic motivational filler
   const fallbacks: Record<AIBlurbType, string> = {
-    'opening-personality': "Your gaming week has its own unique rhythm and story.",
-    'top-game-deep-dive': "When you find a game that clicks, magic happens.",
-    'session-patterns': "Your gaming rhythm is uniquely yours.",
-    'achievement-motivation': "Every hour played is progress earned.",
-    'genre-insights': "You're exploring a diverse gaming palette.",
-    'value-wisdom': "Smart gaming is about experiences, not just dollars.",
-    'gaming-behavior': "Your gaming habits tell their own story.",
-    'comeback-games': "The games you return to reveal what you truly love.",
-    'binge-sessions': "Epic sessions create the best memories!",
-    'closing-reflection': "Another week of adventures in the books. Here's to the next!",
+    'opening-personality': '',
+    'top-game-deep-dive': '',
+    'session-patterns': '',
+    'achievement-motivation': '',
+    'genre-insights': '',
+    'value-wisdom': '',
+    'gaming-behavior': '',
+    'comeback-games': '',
+    'binge-sessions': '',
+    'closing-reflection': '',
   };
 
   return fallbacks[type];
