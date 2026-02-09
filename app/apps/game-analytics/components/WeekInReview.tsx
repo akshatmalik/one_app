@@ -34,11 +34,9 @@ export function WeekInReview({ data, allGames, weekOffset, maxWeeksBack, onWeekC
       try {
         setIsLoadingAI(true);
 
-        // 4 AI blurb slots in the streamlined story flow
+        // 2 AI blurb slots: opening + closing bookends
         const blurbTypes: AIBlurbType[] = [
           'opening-personality',
-          'top-game-deep-dive',
-          'session-patterns',
           'closing-reflection',
         ];
 
