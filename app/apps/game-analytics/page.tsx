@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
-import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, List, MessageCircle, ListOrdered, ListPlus, Check, Heart } from 'lucide-react';
+import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown } from 'lucide-react';
 import { useGames } from './hooks/useGames';
 import { useAnalytics, GameWithMetrics } from './hooks/useAnalytics';
 import { useBudget } from './hooks/useBudget';
@@ -55,6 +55,10 @@ export default function GameAnalyticsPage() {
   const [showRandomPicker, setShowRandomPicker] = useState(false);
   const [showBulkWishlist, setShowBulkWishlist] = useState(false);
   const [detailGame, setDetailGame] = useState<GameWithMetrics | null>(null);
+  const [statsCollapsed, setStatsCollapsed] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem('ga-stats-collapsed') === 'true';
+  });
 
   // Calculate week and month data for AI chat
   const weekData = useMemo(() => {
@@ -286,37 +290,55 @@ export default function GameAnalyticsPage() {
             </div>
           </div>
 
-          {/* Stats Overview */}
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-            <StatCard icon={<Gamepad2 size={16} />} label="Games" value={summary.totalGames} />
-            <StatCard icon={<DollarSign size={16} />} label="Spent" value={`$${summary.totalSpent.toFixed(0)}`} />
-            <StatCard icon={<Clock size={16} />} label="Hours" value={summary.totalHours.toFixed(0)} />
-            <StatCard icon={<TrendingUp size={16} />} label="$/Hour" value={`$${summary.averageCostPerHour.toFixed(2)}`} />
-            <StatCard icon={<Star size={16} />} label="Avg Rating" value={summary.averageRating.toFixed(1)} />
-            <StatCard icon={<Eye size={16} />} label="Wishlist" value={summary.wishlistCount} accent />
-          </div>
+          {/* Stats Overview — Collapsible */}
+          <div>
+            <button
+              onClick={() => {
+                const next = !statsCollapsed;
+                setStatsCollapsed(next);
+                localStorage.setItem('ga-stats-collapsed', String(next));
+              }}
+              className="flex items-center gap-2 text-xs text-white/40 hover:text-white/60 transition-colors mb-2"
+            >
+              {statsCollapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+              <span>{statsCollapsed ? 'Show stats' : 'Hide stats'}</span>
+            </button>
 
-          {/* Highlights */}
-          {(summary.bestValue || summary.mostPlayed || summary.highestRated) && (
-            <div className="mt-4 flex flex-wrap gap-3">
-              {summary.bestValue && (
-                <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 rounded-lg">
-                  <Trophy size={14} className="text-emerald-400" />
-                  <span className="text-xs text-white/60">Best Value:</span>
-                  <span className="text-xs text-emerald-400 font-medium">{summary.bestValue.name}</span>
-                  <span className="text-xs text-white/40">${summary.bestValue.costPerHour.toFixed(2)}/hr</span>
+            {!statsCollapsed && (
+              <>
+                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                  <StatCard icon={<Gamepad2 size={16} />} label="Games" value={summary.totalGames} />
+                  <StatCard icon={<DollarSign size={16} />} label="Spent" value={`$${summary.totalSpent.toFixed(0)}`} />
+                  <StatCard icon={<Clock size={16} />} label="Hours" value={summary.totalHours.toFixed(0)} />
+                  <StatCard icon={<TrendingUp size={16} />} label="$/Hour" value={`$${summary.averageCostPerHour.toFixed(2)}`} />
+                  <StatCard icon={<Star size={16} />} label="Avg Rating" value={summary.averageRating.toFixed(1)} />
+                  <StatCard icon={<Eye size={16} />} label="Wishlist" value={summary.wishlistCount} accent />
                 </div>
-              )}
-              {summary.mostPlayed && (
-                <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-500/10 rounded-lg">
-                  <Flame size={14} className="text-blue-400" />
-                  <span className="text-xs text-white/60">Most Played:</span>
-                  <span className="text-xs text-blue-400 font-medium">{summary.mostPlayed.name}</span>
-                  <span className="text-xs text-white/40">{summary.mostPlayed.hours}h</span>
-                </div>
-              )}
-            </div>
-          )}
+
+                {/* Highlights */}
+                {(summary.bestValue || summary.mostPlayed || summary.highestRated) && (
+                  <div className="mt-4 flex flex-wrap gap-3">
+                    {summary.bestValue && (
+                      <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 rounded-lg">
+                        <Trophy size={14} className="text-emerald-400" />
+                        <span className="text-xs text-white/60">Best Value:</span>
+                        <span className="text-xs text-emerald-400 font-medium">{summary.bestValue.name}</span>
+                        <span className="text-xs text-white/40">${summary.bestValue.costPerHour.toFixed(2)}/hr</span>
+                      </div>
+                    )}
+                    {summary.mostPlayed && (
+                      <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-500/10 rounded-lg">
+                        <Flame size={14} className="text-blue-400" />
+                        <span className="text-xs text-white/60">Most Played:</span>
+                        <span className="text-xs text-blue-400 font-medium">{summary.mostPlayed.name}</span>
+                        <span className="text-xs text-white/40">{summary.mostPlayed.hours}h</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
         </div>
       </div>
 
