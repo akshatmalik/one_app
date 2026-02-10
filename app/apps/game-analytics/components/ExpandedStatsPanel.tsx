@@ -49,6 +49,7 @@ import {
   getGenreRutAnalysis,
   getMonthlyTrends,
   getTotalHours,
+  parseLocalDate,
 } from '../lib/calculations';
 import clsx from 'clsx';
 
@@ -421,7 +422,7 @@ export function ExpandedStatsPanel({ games }: ExpandedStatsPanelProps) {
 
         {lifetime.firstGameDate && (
           <div className="mt-4 pt-4 border-t border-white/10 text-center text-xs text-white/40">
-            Gaming since {new Date(lifetime.firstGameDate).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+            Gaming since {parseLocalDate(lifetime.firstGameDate).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
             <span className="text-white/20"> • </span>
             {lifetime.daysSinceFirstGame} days ago
           </div>

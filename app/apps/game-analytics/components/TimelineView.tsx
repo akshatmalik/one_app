@@ -3,7 +3,7 @@
 import { useMemo, useState, useEffect } from 'react';
 import { Calendar, Clock, Gamepad2, DollarSign, Play, CheckCircle, XCircle, Plus, Flame, TrendingUp, TrendingDown, Sparkles, ChevronDown, ChevronUp } from 'lucide-react';
 import { Game, PlayLog } from '../lib/types';
-import { getAllPlayLogs, getWeekStatsForOffset, getAvailableWeeksCount, getTotalHours, getMonthlyVibe, getTimelineMilestones, getMonthlyComparison, getStreakSegments, getGameJourneyArc, getCumulativeHoursAtDate, getMonthInReviewData } from '../lib/calculations';
+import { getAllPlayLogs, getWeekStatsForOffset, getAvailableWeeksCount, getTotalHours, getMonthlyVibe, getTimelineMilestones, getMonthlyComparison, getStreakSegments, getGameJourneyArc, getCumulativeHoursAtDate, getMonthInReviewData, parseLocalDate } from '../lib/calculations';
 import { TimelinePeriodCards } from './TimelinePeriodCards';
 import { QuickAddTimeModal } from './QuickAddTimeModal';
 import { WeekInReview } from './WeekInReview';
@@ -91,7 +91,7 @@ export function TimelineView({ games, onLogTime, onQuickAddTime }: TimelineViewP
       });
     }
 
-    return allEvents.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    return allEvents.sort((a, b) => parseLocalDate(b.date).getTime() - parseLocalDate(a.date).getTime());
   }, [games]);
 
   // Group events by month
@@ -239,10 +239,7 @@ export function TimelineView({ games, onLogTime, onQuickAddTime }: TimelineViewP
     return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
   };
 
-  const parseLocalDate = (dateStr: string) => {
-    const [year, month, day] = dateStr.split('-').map(Number);
-    return new Date(year, month - 1, day);
-  };
+  // parseLocalDate imported from calculations
 
   // Get quarter key for a month
   const getQuarterKey = (monthKey: string) => {

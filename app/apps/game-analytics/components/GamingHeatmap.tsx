@@ -1,7 +1,7 @@
 'use client';
 
 import { Game } from '../lib/types';
-import { getAllPlayLogs, getCurrentGamingStreak } from '../lib/calculations';
+import { getAllPlayLogs, getCurrentGamingStreak, parseLocalDate } from '../lib/calculations';
 import { Flame, Calendar } from 'lucide-react';
 import clsx from 'clsx';
 
@@ -135,8 +135,8 @@ export function GamingHeatmap({ games }: GamingHeatmapProps) {
             <div key={weekIdx} className="flex flex-col gap-1">
               {/* Month label (show on first week of month) */}
               <div className="h-3 flex items-center justify-center text-[8px] text-white/30">
-                {week[0]?.date && new Date(week[0].date).getDate() <= 7
-                  ? new Date(week[0].date).toLocaleDateString('en', { month: 'short' })
+                {week[0]?.date && parseLocalDate(week[0].date).getDate() <= 7
+                  ? parseLocalDate(week[0].date).toLocaleDateString('en', { month: 'short' })
                   : ''}
               </div>
 

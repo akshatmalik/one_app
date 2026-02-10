@@ -50,7 +50,7 @@ import {
   List as ListIcon,
 } from 'lucide-react';
 import { Game, GameStatus, AnalyticsSummary, BudgetSettings } from '../lib/types';
-import { calculateSummary, getCumulativeSpending, getHoursByMonth, getSpendingByMonth } from '../lib/calculations';
+import { calculateSummary, getCumulativeSpending, getHoursByMonth, getSpendingByMonth, parseLocalDate } from '../lib/calculations';
 import { GameWithMetrics } from '../hooks/useAnalytics';
 import { PeriodStatsPanel } from './PeriodStatsPanel';
 import { FunStatsPanel } from './FunStatsPanel';
@@ -218,7 +218,7 @@ export function StatsView({ games, summary, budgets = [], onSetBudget }: StatsVi
   const hoursData = Object.entries(hoursByMonth)
     .map(([month, hours]) => ({
       month,
-      label: new Date(month + '-01').toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
+      label: parseLocalDate(month + '-01').toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
       hours,
     }))
     .sort((a, b) => a.month.localeCompare(b.month))
@@ -229,7 +229,7 @@ export function StatsView({ games, summary, budgets = [], onSetBudget }: StatsVi
   const monthlySpendingData = Object.entries(spendingByMonth)
     .map(([month, total]) => ({
       month,
-      label: new Date(month + '-01').toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
+      label: parseLocalDate(month + '-01').toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
       total,
     }))
     .sort((a, b) => a.month.localeCompare(b.month))
@@ -302,7 +302,7 @@ export function StatsView({ games, summary, budgets = [], onSetBudget }: StatsVi
         .filter(([month]) => month.startsWith(selectedYear.toString()))
         .map(([month, total]) => ({
           month,
-          label: new Date(month + '-01').toLocaleDateString('en-US', { month: 'short' }),
+          label: parseLocalDate(month + '-01').toLocaleDateString('en-US', { month: 'short' }),
           total,
         }))
         .sort((a, b) => a.month.localeCompare(b.month));
@@ -807,7 +807,7 @@ export function StatsView({ games, summary, budgets = [], onSetBudget }: StatsVi
                       </div>
                       {game.playLogs && game.playLogs.length > 0 && (
                         <div className="flex items-center gap-2 text-xs text-white/40">
-                          <span>Last played: {new Date(game.playLogs[0].date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                          <span>Last played: {parseLocalDate(game.playLogs[0].date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
                           <span className="text-white/20">•</span>
                           <span>{game.playLogs.length} session{game.playLogs.length !== 1 ? 's' : ''}</span>
                         </div>
@@ -1085,17 +1085,17 @@ export function StatsView({ games, summary, budgets = [], onSetBudget }: StatsVi
         // Filter games with play activity in last 30 days
         const lastMonthGames = games.filter(g => {
           if (!g.playLogs || g.playLogs.length === 0) return false;
-          return g.playLogs.some(log => new Date(log.date) >= lastMonthStart);
+          return g.playLogs.some(log => parseLocalDate(log.date) >= lastMonthStart);
         }).map(g => {
           // Calculate hours played in last month
           const lastMonthHours = g.playLogs!
-            .filter(log => new Date(log.date) >= lastMonthStart)
+            .filter(log => parseLocalDate(log.date) >= lastMonthStart)
             .reduce((sum, log) => sum + log.hours, 0);
 
           // Calculate hours in previous month (30-60 days ago)
           const previousMonthHours = g.playLogs!
             .filter(log => {
-              const logDate = new Date(log.date);
+              const logDate = parseLocalDate(log.date);
               return logDate >= previousMonthStart && logDate < lastMonthStart;
             })
             .reduce((sum, log) => sum + log.hours, 0);
@@ -1122,7 +1122,7 @@ export function StatsView({ games, summary, budgets = [], onSetBudget }: StatsVi
         // Total hours and sessions in last month
         const lastMonthTotalHours = lastMonthGames.reduce((sum, g) => sum + g.lastMonthHours, 0);
         const lastMonthSessions = lastMonthGames.reduce((sum, g) => {
-          const sessions = g.playLogs!.filter(log => new Date(log.date) >= lastMonthStart).length;
+          const sessions = g.playLogs!.filter(log => parseLocalDate(log.date) >= lastMonthStart).length;
           return sum + sessions;
         }, 0);
         const lastMonthAvgSession = lastMonthSessions > 0 ? lastMonthTotalHours / lastMonthSessions : 0;
@@ -1140,13 +1140,13 @@ export function StatsView({ games, summary, budgets = [], onSetBudget }: StatsVi
         // Comeback game (played this month after 30+ day break)
         const comebackGame = lastMonthGames.find(g => {
           if (!g.playLogs || g.playLogs.length < 2) return false;
-          const sortedLogs = [...g.playLogs].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-          const recentLogs = sortedLogs.filter(log => new Date(log.date) >= lastMonthStart);
-          const olderLogs = sortedLogs.filter(log => new Date(log.date) < lastMonthStart);
+          const sortedLogs = [...g.playLogs].sort((a, b) => parseLocalDate(b.date).getTime() - parseLocalDate(a.date).getTime());
+          const recentLogs = sortedLogs.filter(log => parseLocalDate(log.date) >= lastMonthStart);
+          const olderLogs = sortedLogs.filter(log => parseLocalDate(log.date) < lastMonthStart);
 
           if (recentLogs.length === 0 || olderLogs.length === 0) return false;
 
-          const mostRecentOld = new Date(olderLogs[0].date);
+          const mostRecentOld = parseLocalDate(olderLogs[0].date);
           const daysSinceLastPlay = Math.floor((lastMonthStart.getTime() - mostRecentOld.getTime()) / (1000 * 60 * 60 * 24));
           return daysSinceLastPlay >= 30;
         });
@@ -1355,7 +1355,7 @@ export function StatsView({ games, summary, budgets = [], onSetBudget }: StatsVi
             <ResponsiveContainer width="100%" height={250}>
               <LineChart data={cumulativeSpending.map(d => ({
                 ...d,
-                label: new Date(d.month + '-01').toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
+                label: parseLocalDate(d.month + '-01').toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
               }))}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
                 <XAxis dataKey="label" tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 10 }} />
