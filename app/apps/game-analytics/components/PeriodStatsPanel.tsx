@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Clock, Gamepad2, Zap, Calendar, ChevronDown, ChevronUp } from 'lucide-react';
 import { Game } from '../lib/types';
-import { getPeriodStats } from '../lib/calculations';
+import { getPeriodStats, parseLocalDate } from '../lib/calculations';
 import clsx from 'clsx';
 
 interface PeriodStatsPanelProps {
@@ -27,7 +27,7 @@ export function PeriodStatsPanel({ games }: PeriodStatsPanelProps) {
     games.forEach(game => {
       if (game.playLogs) {
         game.playLogs.forEach(log => {
-          const logDate = new Date(log.date);
+          const logDate = parseLocalDate(log.date);
           if (logDate >= cutoffDate) {
             const existing = gameStats.get(game.id) || { game, hours: 0, sessions: 0 };
             existing.hours += log.hours;

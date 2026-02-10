@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { X, Plus, Trash2, Clock, Calendar, MessageSquare } from 'lucide-react';
 import { Game, PlayLog } from '../lib/types';
+import { parseLocalDate } from '../lib/calculations';
 import { v4 as uuidv4 } from 'uuid';
 import clsx from 'clsx';
 
@@ -40,7 +41,7 @@ export function PlayLogModal({ game, onSave, onClose }: PlayLogModalProps) {
       hours: hours,
       notes: newLog.notes || undefined,
     };
-    setLogs([log, ...logs].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+    setLogs([log, ...logs].sort((a, b) => parseLocalDate(b.date).getTime() - parseLocalDate(a.date).getTime()));
     setNewLog({
       date: getLocalDateString(),
       hours: '1',
@@ -65,11 +66,7 @@ export function PlayLogModal({ game, onSave, onClose }: PlayLogModalProps) {
   const totalLoggedHours = logs.reduce((sum, log) => sum + log.hours, 0);
   const totalHours = game.hours + totalLoggedHours; // Baseline + logged hours
 
-  // Parse date string (YYYY-MM-DD) as local date to avoid timezone shift
-  const parseLocalDate = (dateStr: string) => {
-    const [year, month, day] = dateStr.split('-').map(Number);
-    return new Date(year, month - 1, day);
-  };
+  // parseLocalDate imported from calculations
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">

@@ -1,5 +1,16 @@
 import { Game, GameMetrics, AnalyticsSummary } from './types';
 
+/**
+ * Parse a YYYY-MM-DD date string as local time instead of UTC.
+ * new Date("2025-02-10") parses as UTC midnight, which shifts to the
+ * previous day in western timezones. This function avoids that by using
+ * the Date constructor with numeric arguments (which uses local time).
+ */
+export function parseLocalDate(dateStr: string): Date {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  return new Date(year, month - 1, day);
+}
+
 const BASELINE_COST = 3.5;
 
 /**
@@ -75,8 +86,8 @@ export function calculateROI(rating: number, hours: number, price: number): numb
 
 export function calculateDaysToComplete(startDate?: string, endDate?: string): number | null {
   if (!startDate || !endDate) return null;
-  const start = new Date(startDate);
-  const end = new Date(endDate);
+  const start = parseLocalDate(startDate);
+  const end = parseLocalDate(endDate);
   const diffTime = Math.abs(end.getTime() - start.getTime());
   return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 }
@@ -319,7 +330,7 @@ export function getAllPlayLogs(games: Game[]): Array<{ game: Game; log: NonNulla
     }
   });
 
-  return allLogs.sort((a, b) => new Date(b.log.date).getTime() - new Date(a.log.date).getTime());
+  return allLogs.sort((a, b) => parseLocalDate(b.log.date).getTime() - parseLocalDate(a.log.date).getTime());
 }
 
 // Get hours played per month from play logs
@@ -392,7 +403,7 @@ export function getPeriodStats(games: Game[], days: number): PeriodStats {
   games.forEach(game => {
     if (game.playLogs) {
       game.playLogs.forEach(log => {
-        const logDate = new Date(log.date);
+        const logDate = parseLocalDate(log.date);
         if (logDate >= cutoffDate) {
           const existing = gamesWithRecentActivity.get(game.id) || { game, hours: 0, sessions: 0 };
           existing.hours += log.hours;
@@ -428,7 +439,7 @@ export function getPeriodStatsForRange(games: Game[], startDate: Date, endDate: 
   games.forEach(game => {
     if (game.playLogs) {
       game.playLogs.forEach(log => {
-        const logDate = new Date(log.date);
+        const logDate = parseLocalDate(log.date);
         if (logDate >= startDate && logDate <= endDate) {
           const existing = gamesWithActivity.get(game.id) || { game, hours: 0, sessions: 0 };
           existing.hours += log.hours;
@@ -521,7 +532,7 @@ export function findRegretPurchases(games: Game[]): RegretPurchase[] {
     .map(game => {
       // Regret score: high price, low hours relative to purchase date
       const daysSincePurchase = game.datePurchased
-        ? Math.max(1, (Date.now() - new Date(game.datePurchased).getTime()) / (1000 * 60 * 60 * 24))
+        ? Math.max(1, (Date.now() - parseLocalDate(game.datePurchased).getTime()) / (1000 * 60 * 60 * 24))
         : 365;
       const expectedHours = Math.min(daysSincePurchase * 0.5, 50); // Expect at least 0.5h per day, max 50h
       const totalHours = getTotalHours(game);
@@ -548,7 +559,7 @@ export function findShelfWarmers(games: Game[]): ShelfWarmer[] {
   return backlogGames
     .map(game => {
       const daysSitting = game.datePurchased
-        ? (Date.now() - new Date(game.datePurchased).getTime()) / (1000 * 60 * 60 * 24)
+        ? (Date.now() - parseLocalDate(game.datePurchased).getTime()) / (1000 * 60 * 60 * 24)
         : 0;
       return { game, daysSitting };
     })
@@ -586,7 +597,7 @@ export function getCurrentGamingStreak(games: Game[]): number {
   let checkDate = new Date(today);
 
   for (const dateStr of uniqueDates) {
-    const logDate = new Date(dateStr);
+    const logDate = parseLocalDate(dateStr);
     logDate.setHours(0, 0, 0, 0);
 
     const diffDays = Math.round((checkDate.getTime() - logDate.getTime()) / (1000 * 60 * 60 * 24));
@@ -687,8 +698,8 @@ export function getLongestGamingStreak(games: Game[]): number {
   let currentStreak = 1;
 
   for (let i = 1; i < uniqueDates.length; i++) {
-    const prevDate = new Date(uniqueDates[i - 1]);
-    const currDate = new Date(uniqueDates[i]);
+    const prevDate = parseLocalDate(uniqueDates[i - 1]);
+    const currDate = parseLocalDate(uniqueDates[i]);
     const diffDays = Math.round((currDate.getTime() - prevDate.getTime()) / (1000 * 60 * 60 * 24));
 
     if (diffDays === 1) {
@@ -718,8 +729,8 @@ export function getImpulseBuyerStat(games: Game[]): number | null {
   if (gamesWithData.length === 0) return null;
 
   const delays = gamesWithData.map(game => {
-    const purchaseDate = new Date(game.datePurchased!);
-    const firstPlayDate = new Date(game.playLogs![0].date);
+    const purchaseDate = parseLocalDate(game.datePurchased!);
+    const firstPlayDate = parseLocalDate(game.playLogs![0].date);
     return Math.max(0, (firstPlayDate.getTime() - purchaseDate.getTime()) / (1000 * 60 * 60 * 24));
   });
 
@@ -1052,7 +1063,7 @@ export function getSessionAnalysis(games: Game[]): SessionAnalysis {
   const longestSession = Math.max(...sessionHours);
 
   // Calculate sessions per week
-  const dates = allLogs.map(l => new Date(l.log.date).getTime());
+  const dates = allLogs.map(l => parseLocalDate(l.log.date).getTime());
   const oldestDate = Math.min(...dates);
   const newestDate = Math.max(...dates);
   const weekSpan = Math.max(1, (newestDate - oldestDate) / (7 * 24 * 60 * 60 * 1000));
@@ -1107,9 +1118,9 @@ export function getRotationStats(games: Game[]): RotationStats {
   const getLastPlayedDate = (game: Game): Date | null => {
     if (!game.playLogs || game.playLogs.length === 0) return null;
     const sortedLogs = [...game.playLogs].sort((a, b) =>
-      new Date(b.date).getTime() - new Date(a.date).getTime()
+      parseLocalDate(b.date).getTime() - parseLocalDate(a.date).getTime()
     );
-    return new Date(sortedLogs[0].date);
+    return parseLocalDate(sortedLogs[0].date);
   };
 
   const ownedGames = games.filter(g => g.status !== 'Wishlist');
@@ -1194,8 +1205,8 @@ export function getMoneyStats(games: Game[]): MoneyStats {
 
   ownedGames.forEach(game => {
     if (!game.datePurchased || !game.playLogs || game.playLogs.length === 0) return;
-    const purchaseDate = new Date(game.datePurchased);
-    const firstPlayDate = new Date(game.playLogs[game.playLogs.length - 1].date); // oldest log
+    const purchaseDate = parseLocalDate(game.datePurchased);
+    const firstPlayDate = parseLocalDate(game.playLogs[game.playLogs.length - 1].date); // oldest log
     const daysDiff = (firstPlayDate.getTime() - purchaseDate.getTime()) / (1000 * 60 * 60 * 24);
 
     if (daysDiff <= 7) {
@@ -1542,7 +1553,7 @@ export function getLifetimeStats(games: Game[]): LifetimeStats {
   const firstGameDate = datesWithGames[0] || null;
 
   const daysSinceFirstGame = firstGameDate
-    ? Math.floor((Date.now() - new Date(firstGameDate).getTime()) / (1000 * 60 * 60 * 24))
+    ? Math.floor((Date.now() - parseLocalDate(firstGameDate).getTime()) / (1000 * 60 * 60 * 24))
     : 0;
 
   const monthsSinceFirst = daysSinceFirstGame / 30;
@@ -1576,7 +1587,7 @@ export function getPredictedBacklogClearance(games: Game[]): { date: Date | null
   sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
 
   const recentCompletions = games.filter(g =>
-    g.status === 'Completed' && g.endDate && new Date(g.endDate) >= sixMonthsAgo
+    g.status === 'Completed' && g.endDate && parseLocalDate(g.endDate) >= sixMonthsAgo
   ).length;
 
   if (recentCompletions === 0) {
@@ -1611,7 +1622,7 @@ export function getGenreRutAnalysis(games: Game[]): GenreRutAnalysis {
     if (!g.playLogs || g.playLogs.length === 0) return false;
     const lastMonth = new Date();
     lastMonth.setMonth(lastMonth.getMonth() - 3);
-    return g.playLogs.some(log => new Date(log.date) >= lastMonth);
+    return g.playLogs.some(log => parseLocalDate(log.date) >= lastMonth);
   });
 
   if (recentGames.length < 3) {
@@ -1901,7 +1912,7 @@ export function getWeekStatsForOffset(games: Game[], weekOffset: number = 0): We
   games.forEach(game => {
     // Check for completions this week
     if (game.endDate && game.status === 'Completed') {
-      const endDate = new Date(game.endDate);
+      const endDate = parseLocalDate(game.endDate);
       if (endDate >= lastMonday && endDate <= lastSunday) {
         completedGames.push(game);
       }
@@ -1909,7 +1920,7 @@ export function getWeekStatsForOffset(games: Game[], weekOffset: number = 0): We
 
     // Check for new games started
     if (game.startDate) {
-      const startDate = new Date(game.startDate);
+      const startDate = parseLocalDate(game.startDate);
       if (startDate >= lastMonday && startDate <= lastSunday) {
         newGamesStarted.push(game);
       }
@@ -1920,7 +1931,7 @@ export function getWeekStatsForOffset(games: Game[], weekOffset: number = 0): We
       let hadPreviousLogs = false;
 
       game.playLogs.forEach(log => {
-        const logDate = new Date(log.date);
+        const logDate = parseLocalDate(log.date);
 
         // Check if this is a new game (first log this week)
         if (logDate < lastMonday && getTotalHours(game) > 0) {
@@ -2332,7 +2343,7 @@ export function getAvailableWeeksCount(games: Game[]): number {
 
   // Find oldest play log
   const oldestLog = allLogs[allLogs.length - 1]; // Already sorted by date descending
-  const oldestDate = new Date(oldestLog.log.date);
+  const oldestDate = parseLocalDate(oldestLog.log.date);
 
   // Calculate weeks from oldest log to now
   const now = new Date();
@@ -2348,7 +2359,7 @@ export function getGamesPlayedInTimeRange(games: Game[], startDate: Date, endDat
     if (!game.playLogs || game.playLogs.length === 0) return false;
 
     return game.playLogs.some(log => {
-      const logDate = new Date(log.date);
+      const logDate = parseLocalDate(log.date);
       return logDate >= startDate && logDate <= endDate;
     });
   });
@@ -2428,7 +2439,7 @@ export function getBacklogDoomsdayData(games: Game[]): BacklogDoomsdayData {
   const completedWithDates = completed.filter(g => g.endDate);
   let completionRate = 0;
   if (completedWithDates.length >= 2) {
-    const dates = completedWithDates.map(g => new Date(g.endDate!).getTime()).sort();
+    const dates = completedWithDates.map(g => parseLocalDate(g.endDate!).getTime()).sort();
     const monthSpan = (dates[dates.length - 1] - dates[0]) / (30 * 24 * 60 * 60 * 1000);
     completionRate = monthSpan > 0 ? completedWithDates.length / monthSpan : 0;
   } else if (completedWithDates.length === 1) {
@@ -2439,7 +2450,7 @@ export function getBacklogDoomsdayData(games: Game[]): BacklogDoomsdayData {
   const sixMonthsAgo = new Date();
   sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
   const recentAcquisitions = owned.filter(g => {
-    const date = g.datePurchased ? new Date(g.datePurchased) : new Date(g.createdAt);
+    const date = g.datePurchased ? parseLocalDate(g.datePurchased) : new Date(g.createdAt);
     return date >= sixMonthsAgo;
   });
   const acquisitionRate = recentAcquisitions.length / 6;
@@ -2523,7 +2534,7 @@ export function getSpendingForecast(games: Game[], year: number, budgetAmount?: 
   // Get spending by month for this year
   const yearGames = games.filter(g => {
     if (g.status === 'Wishlist') return false;
-    const date = g.datePurchased ? new Date(g.datePurchased) : new Date(g.createdAt);
+    const date = g.datePurchased ? parseLocalDate(g.datePurchased) : new Date(g.createdAt);
     return date.getFullYear() === year;
   });
 
@@ -2531,7 +2542,7 @@ export function getSpendingForecast(games: Game[], year: number, budgetAmount?: 
   for (let m = 0; m < 12; m++) monthlySpending[m] = 0;
 
   yearGames.forEach(g => {
-    const date = g.datePurchased ? new Date(g.datePurchased) : new Date(g.createdAt);
+    const date = g.datePurchased ? parseLocalDate(g.datePurchased) : new Date(g.createdAt);
     const month = date.getMonth();
     monthlySpending[month] += g.price;
   });
@@ -2584,7 +2595,7 @@ export function getOnThisDay(games: Game[]): OnThisDayEvent[] {
   // 1 month, 3 months, 6 months, 1 year, 2 years, etc.
   const checkDate = (dateStr: string | undefined, eventType: OnThisDayEvent['eventType'], game: Game) => {
     if (!dateStr) return;
-    const date = new Date(dateStr);
+    const date = parseLocalDate(dateStr);
     const daysAgo = Math.floor((now.getTime() - date.getTime()) / (24 * 60 * 60 * 1000));
 
     // Only events at least 30 days ago
@@ -2810,7 +2821,7 @@ export function getActivityPulse(games: Game[]): ActivityPulseData {
     return { level: 'Hibernating', daysActive: 0, lastPlayedDaysAgo: Infinity, color: '#6b7280', pulseSpeed: 'none' };
   }
 
-  const lastPlayedDate = new Date(allLogs[0].log.date);
+  const lastPlayedDate = parseLocalDate(allLogs[0].log.date);
   const lastPlayedDaysAgo = Math.floor((now.getTime() - lastPlayedDate.getTime()) / (24 * 60 * 60 * 1000));
 
   // Count unique days with activity in last 7 days
@@ -2818,7 +2829,7 @@ export function getActivityPulse(games: Game[]): ActivityPulseData {
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
   const recentDays = new Set<string>();
   allLogs.forEach(({ log }) => {
-    const logDate = new Date(log.date);
+    const logDate = parseLocalDate(log.date);
     if (logDate >= sevenDaysAgo) {
       recentDays.add(log.date.split('T')[0]);
     }
@@ -2982,8 +2993,8 @@ export function getCompletionProbability(game: Game, allGames: Game[]): Completi
   const totalHours = getTotalHours(game);
   if (game.playLogs && game.playLogs.length > 0) {
     const now = new Date();
-    const sortedLogs = [...game.playLogs].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    const daysSinceLastSession = Math.floor((now.getTime() - new Date(sortedLogs[0].date).getTime()) / (24 * 60 * 60 * 1000));
+    const sortedLogs = [...game.playLogs].sort((a, b) => parseLocalDate(b.date).getTime() - parseLocalDate(a.date).getTime());
+    const daysSinceLastSession = Math.floor((now.getTime() - parseLocalDate(sortedLogs[0].date).getTime()) / (24 * 60 * 60 * 1000));
 
     if (daysSinceLastSession <= 7) {
       factors.push({ label: 'Active Momentum', impact: 15, description: 'Played in the last week' });
@@ -3003,10 +3014,10 @@ export function getCompletionProbability(game: Game, allGames: Game[]): Completi
       const olderLogs = sortedLogs.slice(Math.ceil(sortedLogs.length / 2));
 
       const recentAvgGap = recentLogs.length > 1
-        ? (new Date(recentLogs[0].date).getTime() - new Date(recentLogs[recentLogs.length - 1].date).getTime()) / (recentLogs.length - 1) / (24 * 60 * 60 * 1000)
+        ? (parseLocalDate(recentLogs[0].date).getTime() - parseLocalDate(recentLogs[recentLogs.length - 1].date).getTime()) / (recentLogs.length - 1) / (24 * 60 * 60 * 1000)
         : 0;
       const olderAvgGap = olderLogs.length > 1
-        ? (new Date(olderLogs[0].date).getTime() - new Date(olderLogs[olderLogs.length - 1].date).getTime()) / (olderLogs.length - 1) / (24 * 60 * 60 * 1000)
+        ? (parseLocalDate(olderLogs[0].date).getTime() - parseLocalDate(olderLogs[olderLogs.length - 1].date).getTime()) / (olderLogs.length - 1) / (24 * 60 * 60 * 1000)
         : 0;
 
       if (recentAvgGap > 0 && olderAvgGap > 0 && recentAvgGap < olderAvgGap * 0.7) {
@@ -3020,7 +3031,7 @@ export function getCompletionProbability(game: Game, allGames: Game[]): Completi
   } else if (game.status === 'Not Started') {
     // Never played — check shelf time
     const daysPurchased = game.datePurchased
-      ? Math.floor((Date.now() - new Date(game.datePurchased).getTime()) / (24 * 60 * 60 * 1000))
+      ? Math.floor((Date.now() - parseLocalDate(game.datePurchased).getTime()) / (24 * 60 * 60 * 1000))
       : 0;
     if (daysPurchased > 180) {
       factors.push({ label: 'Shelf Warmer', impact: -20, description: `Bought ${Math.round(daysPurchased / 30)} months ago, never started` });
@@ -3186,7 +3197,7 @@ export function getPlayPatterns(games: Game[]): PlayPatternData {
   // Analyze play logs
   games.forEach(game => {
     game.playLogs?.forEach(log => {
-      const date = new Date(log.date);
+      const date = parseLocalDate(log.date);
       const dow = date.getDay();
       const month = date.getMonth();
       dayStats[dow].sessions++;
@@ -3197,13 +3208,13 @@ export function getPlayPatterns(games: Game[]): PlayPatternData {
 
     // Track start dates
     if (game.startDate) {
-      const month = new Date(game.startDate).getMonth();
+      const month = parseLocalDate(game.startDate).getMonth();
       monthStats[month].started++;
     }
 
     // Track purchase dates
     if (game.datePurchased && game.status !== 'Wishlist') {
-      const month = new Date(game.datePurchased).getMonth();
+      const month = parseLocalDate(game.datePurchased).getMonth();
       monthStats[month].purchased++;
     }
   });
@@ -3720,7 +3731,7 @@ export function getMonthlyAwards(games: Game[], year: number, month: number): Aw
   // Find games played this month
   const monthGames = games.filter(g => {
     return g.playLogs?.some(log => {
-      const d = new Date(log.date);
+      const d = parseLocalDate(log.date);
       return d >= startDate && d <= endDate;
     });
   });
@@ -3730,10 +3741,10 @@ export function getMonthlyAwards(games: Game[], year: number, month: number): Aw
   // Calculate month-specific hours
   const withMonthHours = monthGames.map(g => {
     const monthHours = g.playLogs!
-      .filter(log => { const d = new Date(log.date); return d >= startDate && d <= endDate; })
+      .filter(log => { const d = parseLocalDate(log.date); return d >= startDate && d <= endDate; })
       .reduce((s, l) => s + l.hours, 0);
     const monthSessions = g.playLogs!
-      .filter(log => { const d = new Date(log.date); return d >= startDate && d <= endDate; }).length;
+      .filter(log => { const d = parseLocalDate(log.date); return d >= startDate && d <= endDate; }).length;
     return { game: g, monthHours, monthSessions };
   }).sort((a, b) => b.monthHours - a.monthHours);
 
@@ -3805,7 +3816,7 @@ export function getMonthlyAwards(games: Game[], year: number, month: number): Aw
   // Fastest Completion (completed this month)
   const completedThisMonth = games.filter(g =>
     g.status === 'Completed' && g.endDate && g.startDate &&
-    new Date(g.endDate) >= startDate && new Date(g.endDate) <= endDate
+    parseLocalDate(g.endDate) >= startDate && parseLocalDate(g.endDate) <= endDate
   ).map(g => ({
     game: g,
     days: calculateDaysToComplete(g.startDate!, g.endDate!) ?? 0,
@@ -3909,7 +3920,7 @@ export interface ValueOverTimePoint {
 export function getValueOverTime(game: Game): ValueOverTimePoint[] {
   if (!game.playLogs || game.playLogs.length === 0 || game.price <= 0) return [];
 
-  const sortedLogs = [...game.playLogs].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  const sortedLogs = [...game.playLogs].sort((a, b) => parseLocalDate(a.date).getTime() - parseLocalDate(b.date).getTime());
   let cumHours = game.hours; // Start with baseline
   const points: ValueOverTimePoint[] = [];
 
@@ -3955,7 +3966,7 @@ export function getPersonalityEvolution(games: Game[]): PersonalitySnapshot[] {
 
   games.forEach(game => {
     game.playLogs?.forEach(log => {
-      const date = new Date(log.date);
+      const date = parseLocalDate(log.date);
       const quarter = `${date.getFullYear()}-Q${Math.floor(date.getMonth() / 3) + 1}`;
       if (!quarterMap[quarter]) quarterMap[quarter] = [];
       // Add game reference if not already there
@@ -3966,7 +3977,7 @@ export function getPersonalityEvolution(games: Game[]): PersonalitySnapshot[] {
 
     // Also consider purchases
     if (game.datePurchased && game.status !== 'Wishlist') {
-      const date = new Date(game.datePurchased);
+      const date = parseLocalDate(game.datePurchased);
       const quarter = `${date.getFullYear()}-Q${Math.floor(date.getMonth() / 3) + 1}`;
       if (!quarterMap[quarter]) quarterMap[quarter] = [];
       if (!quarterMap[quarter].find(g => g.id === game.id)) {
@@ -4091,7 +4102,7 @@ export function getPlayNextRecommendations(games: Game[], maxResults: number = 5
   const completed = games.filter(g => g.status === 'Completed');
   const recentlyPlayed = games.filter(g => {
     if (!g.playLogs || g.playLogs.length === 0) return false;
-    const lastPlayed = new Date(g.playLogs[0].date);
+    const lastPlayed = parseLocalDate(g.playLogs[0].date);
     const weekAgo = new Date();
     weekAgo.setDate(weekAgo.getDate() - 7);
     return lastPlayed >= weekAgo;
@@ -4142,7 +4153,7 @@ export function getPlayNextRecommendations(games: Game[], maxResults: number = 5
 
       // Extra boost if recently played
       if (game.playLogs && game.playLogs.length > 0) {
-        const lastPlayed = new Date(game.playLogs[0].date);
+        const lastPlayed = parseLocalDate(game.playLogs[0].date);
         const daysAgo = Math.floor((Date.now() - lastPlayed.getTime()) / (24 * 60 * 60 * 1000));
         if (daysAgo <= 7) {
           score += 10;
@@ -4166,7 +4177,7 @@ export function getPlayNextRecommendations(games: Game[], maxResults: number = 5
 
     // Shelf time penalty (very old unplayed games get slight boost to clear backlog)
     if (game.status === 'Not Started' && game.datePurchased) {
-      const monthsOwned = (Date.now() - new Date(game.datePurchased).getTime()) / (30 * 24 * 60 * 60 * 1000);
+      const monthsOwned = (Date.now() - parseLocalDate(game.datePurchased).getTime()) / (30 * 24 * 60 * 60 * 1000);
       if (monthsOwned > 6) {
         score += 5;
         reasons.push(`Been on shelf ${Math.round(monthsOwned)} months`);
@@ -4199,14 +4210,14 @@ export interface ShelfLifeData {
 export function getShelfLife(game: Game): ShelfLifeData {
   const now = Date.now();
   const daysSincePurchase = game.datePurchased
-    ? Math.floor((now - new Date(game.datePurchased).getTime()) / (24 * 60 * 60 * 1000))
+    ? Math.floor((now - parseLocalDate(game.datePurchased).getTime()) / (24 * 60 * 60 * 1000))
     : 0;
 
   // For "In Progress" games, measure days since last play session
   let daysInQueue = daysSincePurchase;
   if (game.playLogs && game.playLogs.length > 0) {
-    const sorted = [...game.playLogs].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    const daysSinceLastPlay = Math.floor((now - new Date(sorted[0].date).getTime()) / (24 * 60 * 60 * 1000));
+    const sorted = [...game.playLogs].sort((a, b) => parseLocalDate(b.date).getTime() - parseLocalDate(a.date).getTime());
+    const daysSinceLastPlay = Math.floor((now - parseLocalDate(sorted[0].date).getTime()) / (24 * 60 * 60 * 1000));
     // For in-progress games, "freshness" is about recent activity
     if (game.status === 'In Progress') {
       daysInQueue = daysSinceLastPlay;
@@ -4287,13 +4298,13 @@ export function getQueueSmartChirps(queuedGames: Game[], allGames: Game[]): Smar
   if (nowPlaying && nowPlaying.status === 'In Progress') {
     const totalHours = getTotalHours(nowPlaying);
     const daysSinceStart = nowPlaying.startDate
-      ? Math.floor((now.getTime() - new Date(nowPlaying.startDate).getTime()) / (24 * 60 * 60 * 1000))
+      ? Math.floor((now.getTime() - parseLocalDate(nowPlaying.startDate).getTime()) / (24 * 60 * 60 * 1000))
       : 0;
 
     let lastSessionNote = '';
     if (nowPlaying.playLogs && nowPlaying.playLogs.length > 0) {
-      const sorted = [...nowPlaying.playLogs].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-      const daysSinceLastPlay = Math.floor((now.getTime() - new Date(sorted[0].date).getTime()) / (24 * 60 * 60 * 1000));
+      const sorted = [...nowPlaying.playLogs].sort((a, b) => parseLocalDate(b.date).getTime() - parseLocalDate(a.date).getTime());
+      const daysSinceLastPlay = Math.floor((now.getTime() - parseLocalDate(sorted[0].date).getTime()) / (24 * 60 * 60 * 1000));
       if (sorted[0].notes) {
         lastSessionNote = `Last session: "${sorted[0].notes}" · ${daysSinceLastPlay === 0 ? 'today' : daysSinceLastPlay === 1 ? 'yesterday' : `${daysSinceLastPlay}d ago`}`;
       } else {
@@ -4368,7 +4379,7 @@ export function getQueueSmartChirps(queuedGames: Game[], allGames: Game[]): Smar
   } else if (velocity === 0) {
     const allLogs = getAllPlayLogs(allGames);
     if (allLogs.length > 0) {
-      const lastPlayed = new Date(allLogs[0].log.date);
+      const lastPlayed = parseLocalDate(allLogs[0].log.date);
       const daysAgo = Math.floor((now.getTime() - lastPlayed.getTime()) / (24 * 60 * 60 * 1000));
       if (daysAgo > 7) {
         chirps.push({
@@ -4431,9 +4442,9 @@ export function getQueueRivalry(queuedGames: Game[]): RivalryData | null {
   const [g1, g2] = inProgress.slice(0, 2);
 
   const getGameStats = (g: Game) => {
-    const sortedLogs = g.playLogs ? [...g.playLogs].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()) : [];
+    const sortedLogs = g.playLogs ? [...g.playLogs].sort((a, b) => parseLocalDate(b.date).getTime() - parseLocalDate(a.date).getTime()) : [];
     const daysSinceLastPlay = sortedLogs.length > 0
-      ? Math.floor((now - new Date(sortedLogs[0].date).getTime()) / (24 * 60 * 60 * 1000))
+      ? Math.floor((now - parseLocalDate(sortedLogs[0].date).getTime()) / (24 * 60 * 60 * 1000))
       : 999;
     return {
       name: g.name,
@@ -4559,7 +4570,7 @@ export function buildQueueAIContext(queuedGames: Game[], allGames: Game[]): Queu
 
   return {
     queuedGames: queuedGames.map((g, i) => {
-      const sortedLogs = g.playLogs ? [...g.playLogs].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()) : [];
+      const sortedLogs = g.playLogs ? [...g.playLogs].sort((a, b) => parseLocalDate(b.date).getTime() - parseLocalDate(a.date).getTime()) : [];
       return {
         name: g.name,
         genre: g.genre || 'Unknown',
@@ -4567,8 +4578,8 @@ export function buildQueueAIContext(queuedGames: Game[], allGames: Game[]): Queu
         status: g.status,
         hours: getTotalHours(g),
         price: g.price,
-        daysSincePurchase: g.datePurchased ? Math.floor((now.getTime() - new Date(g.datePurchased).getTime()) / (24 * 60 * 60 * 1000)) : 0,
-        daysSinceLastPlay: sortedLogs.length > 0 ? Math.floor((now.getTime() - new Date(sortedLogs[0].date).getTime()) / (24 * 60 * 60 * 1000)) : -1,
+        daysSincePurchase: g.datePurchased ? Math.floor((now.getTime() - parseLocalDate(g.datePurchased).getTime()) / (24 * 60 * 60 * 1000)) : 0,
+        daysSinceLastPlay: sortedLogs.length > 0 ? Math.floor((now.getTime() - parseLocalDate(sortedLogs[0].date).getTime()) / (24 * 60 * 60 * 1000)) : -1,
         sessions: g.playLogs?.length || 0,
         rating: g.rating,
         lastSessionNote: sortedLogs.length > 0 ? (sortedLogs[0].notes || '') : '',
@@ -4623,8 +4634,8 @@ export function getGameHealthDot(game: Game): GameHealthDot {
     return { level: 'dormant', color: '#6b7280', label: 'No sessions', daysSinceLastPlay: -1 };
   }
 
-  const sorted = [...logs].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  const daysSince = Math.floor((Date.now() - new Date(sorted[0].date).getTime()) / (24 * 60 * 60 * 1000));
+  const sorted = [...logs].sort((a, b) => parseLocalDate(b.date).getTime() - parseLocalDate(a.date).getTime());
+  const daysSince = Math.floor((Date.now() - parseLocalDate(sorted[0].date).getTime()) / (24 * 60 * 60 * 1000));
 
   if (daysSince <= 3) return { level: 'active', color: '#10b981', label: 'Active', daysSinceLastPlay: daysSince };
   if (daysSince <= 7) return { level: 'healthy', color: '#3b82f6', label: 'Healthy', daysSinceLastPlay: daysSince };
@@ -4637,7 +4648,7 @@ export function getGameHealthDot(game: Game): GameHealthDot {
  * Relative time formatting - "2 days ago", "3 weeks ago", etc.
  */
 export function getRelativeTime(dateStr: string): string {
-  const date = new Date(dateStr);
+  const date = parseLocalDate(dateStr);
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
   const diffDays = Math.floor(diffMs / (24 * 60 * 60 * 1000));
@@ -4668,7 +4679,7 @@ export function getDaysContext(game: Game): string {
 
   if (game.status === 'Completed') {
     if (game.startDate && game.endDate) {
-      const days = Math.floor((new Date(game.endDate).getTime() - new Date(game.startDate).getTime()) / (24 * 60 * 60 * 1000));
+      const days = Math.floor((parseLocalDate(game.endDate).getTime() - parseLocalDate(game.startDate).getTime()) / (24 * 60 * 60 * 1000));
       if (days === 0) return 'Completed in 1 day';
       return `Completed in ${days} days`;
     }
@@ -4677,7 +4688,7 @@ export function getDaysContext(game: Game): string {
 
   if (game.status === 'Abandoned') {
     if (game.startDate && game.endDate) {
-      const days = Math.floor((new Date(game.endDate).getTime() - new Date(game.startDate).getTime()) / (24 * 60 * 60 * 1000));
+      const days = Math.floor((parseLocalDate(game.endDate).getTime() - parseLocalDate(game.startDate).getTime()) / (24 * 60 * 60 * 1000));
       return `Abandoned after ${days} days`;
     }
     return 'Abandoned';
@@ -4685,7 +4696,7 @@ export function getDaysContext(game: Game): string {
 
   if (game.status === 'In Progress') {
     if (game.startDate) {
-      const days = Math.floor((now - new Date(game.startDate).getTime()) / (24 * 60 * 60 * 1000));
+      const days = Math.floor((now - parseLocalDate(game.startDate).getTime()) / (24 * 60 * 60 * 1000));
       if (days === 0) return 'Started today';
       if (days === 1) return 'Playing for 1 day';
       return `Playing for ${days} days`;
@@ -4695,7 +4706,7 @@ export function getDaysContext(game: Game): string {
 
   if (game.status === 'Not Started') {
     if (game.datePurchased) {
-      const days = Math.floor((now - new Date(game.datePurchased).getTime()) / (24 * 60 * 60 * 1000));
+      const days = Math.floor((now - parseLocalDate(game.datePurchased).getTime()) / (24 * 60 * 60 * 1000));
       if (days === 0) return 'Bought today';
       if (days === 1) return 'Owned since yesterday, untouched';
       if (days < 30) return `Owned ${days} days, untouched`;
@@ -4714,7 +4725,7 @@ export function getSessionMomentum(game: Game, count: number = 5): number[] {
   const logs = game.playLogs || [];
   if (logs.length === 0) return [];
   
-  const sorted = [...logs].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  const sorted = [...logs].sort((a, b) => parseLocalDate(a.date).getTime() - parseLocalDate(b.date).getTime());
   return sorted.slice(-count).map(l => l.hours);
 }
 
@@ -4741,8 +4752,8 @@ export function getValueTrajectory(game: Game): ValueTrajectoryData {
     return { direction: 'stagnant', icon: '→', color: '#f59e0b', label: 'No recent play' };
   }
 
-  const sorted = [...logs].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  const daysSinceLast = Math.floor((Date.now() - new Date(sorted[0].date).getTime()) / (24 * 60 * 60 * 1000));
+  const sorted = [...logs].sort((a, b) => parseLocalDate(b.date).getTime() - parseLocalDate(a.date).getTime());
+  const daysSinceLast = Math.floor((Date.now() - parseLocalDate(sorted[0].date).getTime()) / (24 * 60 * 60 * 1000));
 
   const costPerHour = game.price / totalHours;
 
@@ -4801,7 +4812,7 @@ export function getGameSmartOneLiner(game: Game, allGames: Game[]): string {
 
   // Completed fast
   if (game.status === 'Completed' && game.startDate && game.endDate) {
-    const days = Math.floor((new Date(game.endDate).getTime() - new Date(game.startDate).getTime()) / (24 * 60 * 60 * 1000));
+    const days = Math.floor((parseLocalDate(game.endDate).getTime() - parseLocalDate(game.startDate).getTime()) / (24 * 60 * 60 * 1000));
     if (days <= 3 && totalHours >= 5) {
       return `Speed-ran in ${days} day${days === 1 ? '' : 's'} — couldn't put it down`;
     }
@@ -4835,7 +4846,7 @@ export function getGameSmartOneLiner(game: Game, allGames: Game[]): string {
 
   // Long untouched backlog
   if (game.status === 'Not Started' && game.datePurchased) {
-    const days = Math.floor((Date.now() - new Date(game.datePurchased).getTime()) / (24 * 60 * 60 * 1000));
+    const days = Math.floor((Date.now() - parseLocalDate(game.datePurchased).getTime()) / (24 * 60 * 60 * 1000));
     if (days > 90) {
       return `$${game.price} collecting dust for ${days} days`;
     }
@@ -4903,7 +4914,7 @@ export function getFranchiseInfo(game: Game, allGames: Game[]): FranchiseInfo | 
     .sort((a, b) => {
       const aDate = a.datePurchased || a.createdAt;
       const bDate = b.datePurchased || b.createdAt;
-      return new Date(aDate).getTime() - new Date(bDate).getTime();
+      return parseLocalDate(aDate).getTime() - parseLocalDate(bDate).getTime();
     });
 
   if (franchiseGames.length < 2) return null;
@@ -5048,7 +5059,7 @@ export function getTimelineMilestones(games: Game[]): TimelineMilestone[] {
   let cumulativeHours = 0;
   const hourMilestones = [50, 100, 200, 500, 1000];
   const hitHourMilestones = new Set<number>();
-  const logsByDate = [...allLogs].sort((a, b) => new Date(a.log.date).getTime() - new Date(b.log.date).getTime());
+  const logsByDate = [...allLogs].sort((a, b) => parseLocalDate(a.log.date).getTime() - parseLocalDate(b.log.date).getTime());
 
   for (const { log } of logsByDate) {
     cumulativeHours += log.hours;
@@ -5071,7 +5082,7 @@ export function getTimelineMilestones(games: Game[]): TimelineMilestone[] {
   // Track game completions
   const completedGames = games
     .filter(g => g.status === 'Completed' && g.endDate)
-    .sort((a, b) => new Date(a.endDate!).getTime() - new Date(b.endDate!).getTime());
+    .sort((a, b) => parseLocalDate(a.endDate!).getTime() - parseLocalDate(b.endDate!).getTime());
 
   const completionMilestones = [1, 5, 10, 25, 50];
   completedGames.forEach((game, idx) => {
@@ -5094,7 +5105,7 @@ export function getTimelineMilestones(games: Game[]): TimelineMilestone[] {
     const totalH = getTotalHours(game);
     if (totalH >= 100 && game.playLogs && game.playLogs.length > 0) {
       // Find the log where they crossed 100h
-      const sorted = [...game.playLogs].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      const sorted = [...game.playLogs].sort((a, b) => parseLocalDate(a.date).getTime() - parseLocalDate(b.date).getTime());
       let accum = game.hours; // baseline
       for (const log of sorted) {
         accum += log.hours;
@@ -5120,7 +5131,7 @@ export function getTimelineMilestones(games: Game[]): TimelineMilestone[] {
     .sort((a, b) => {
       const aDate = a.datePurchased || a.createdAt;
       const bDate = b.datePurchased || b.createdAt;
-      return new Date(aDate).getTime() - new Date(bDate).getTime();
+      return parseLocalDate(aDate).getTime() - parseLocalDate(bDate).getTime();
     });
   if (perfectGames.length > 0) {
     const first = perfectGames[0];
@@ -5144,7 +5155,7 @@ export function getTimelineMilestones(games: Game[]): TimelineMilestone[] {
     .sort((a, b) => {
       const aDate = a.startDate || a.datePurchased || a.createdAt;
       const bDate = b.startDate || b.datePurchased || b.createdAt;
-      return new Date(aDate).getTime() - new Date(bDate).getTime();
+      return parseLocalDate(aDate).getTime() - parseLocalDate(bDate).getTime();
     });
   if (excellentValues.length > 0) {
     const first = excellentValues[0];
@@ -5160,7 +5171,7 @@ export function getTimelineMilestones(games: Game[]): TimelineMilestone[] {
     });
   }
 
-  return milestones.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  return milestones.sort((a, b) => parseLocalDate(b.date).getTime() - parseLocalDate(a.date).getTime());
 }
 
 /**
@@ -5223,15 +5234,15 @@ export function getStreakSegments(playEvents: Array<{ date: string; hours?: numb
 
   const segments: StreakSegment[] = [];
   let streakStart = uniqueDays[0];
-  let prevDate = new Date(uniqueDays[0]);
+  let prevDate = parseLocalDate(uniqueDays[0]);
 
   for (let i = 1; i < uniqueDays.length; i++) {
-    const currDate = new Date(uniqueDays[i]);
+    const currDate = parseLocalDate(uniqueDays[i]);
     const diffDays = Math.round((currDate.getTime() - prevDate.getTime()) / (24 * 60 * 60 * 1000));
 
     if (diffDays > 1) {
       // Streak broken - save if it was 3+ days
-      const streakDays = Math.round((prevDate.getTime() - new Date(streakStart).getTime()) / (24 * 60 * 60 * 1000)) + 1;
+      const streakDays = Math.round((prevDate.getTime() - parseLocalDate(streakStart).getTime()) / (24 * 60 * 60 * 1000)) + 1;
       if (streakDays >= 3) {
         const streakHours = playEvents
           .filter(e => e.date >= streakStart && e.date <= uniqueDays[i - 1])
@@ -5249,7 +5260,7 @@ export function getStreakSegments(playEvents: Array<{ date: string; hours?: numb
   }
 
   // Check last streak
-  const lastStreakDays = Math.round((prevDate.getTime() - new Date(streakStart).getTime()) / (24 * 60 * 60 * 1000)) + 1;
+  const lastStreakDays = Math.round((prevDate.getTime() - parseLocalDate(streakStart).getTime()) / (24 * 60 * 60 * 1000)) + 1;
   if (lastStreakDays >= 3) {
     const streakHours = playEvents
       .filter(e => e.date >= streakStart && e.date <= uniqueDays[uniqueDays.length - 1])
@@ -5303,8 +5314,8 @@ export function getGameJourneyArc(game: Game): GameJourneyArc | null {
 
   if (events.length < 2) return null;
 
-  const firstDate = new Date(events[0].date);
-  const lastDate = new Date(events[events.length - 1].date);
+  const firstDate = parseLocalDate(events[0].date);
+  const lastDate = parseLocalDate(events[events.length - 1].date);
   const totalDays = Math.floor((lastDate.getTime() - firstDate.getTime()) / (24 * 60 * 60 * 1000));
 
   return {
@@ -5322,9 +5333,9 @@ export function getCumulativeHoursAtDate(game: Game, eventDate: string): number 
   let hours = game.hours; // baseline
   if (!game.playLogs) return hours;
 
-  const sorted = [...game.playLogs].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  const sorted = [...game.playLogs].sort((a, b) => parseLocalDate(a.date).getTime() - parseLocalDate(b.date).getTime());
   for (const log of sorted) {
-    if (new Date(log.date) <= new Date(eventDate)) {
+    if (parseLocalDate(log.date) <= parseLocalDate(eventDate)) {
       hours += log.hours;
     }
   }
@@ -5457,7 +5468,7 @@ export function getSharpInsight(data: WeekInReviewData, allGames: Game[]): strin
   const weekSpend = data.gamesPlayed.reduce((sum, g) => {
     const purchased = g.game.datePurchased;
     if (purchased) {
-      const purchaseDate = new Date(purchased);
+      const purchaseDate = parseLocalDate(purchased);
       if (purchaseDate >= data.weekStart && purchaseDate <= data.weekEnd) {
         return sum + g.game.price;
       }
@@ -5476,7 +5487,7 @@ export function getSharpInsight(data: WeekInReviewData, allGames: Game[]): strin
   // 7. Game completed in one week
   const quickCompletes = data.completedGames.filter(g => {
     if (g.startDate) {
-      const start = new Date(g.startDate);
+      const start = parseLocalDate(g.startDate);
       return start >= data.weekStart;
     }
     return false;
@@ -5543,8 +5554,8 @@ export function getIgnoredGames(data: WeekInReviewData, allGames: Game[]): Ignor
     .map(g => {
       let daysSinceLastPlay = 999;
       if (g.playLogs && g.playLogs.length > 0) {
-        const sorted = [...g.playLogs].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-        daysSinceLastPlay = Math.floor((Date.now() - new Date(sorted[0].date).getTime()) / (24 * 60 * 60 * 1000));
+        const sorted = [...g.playLogs].sort((a, b) => parseLocalDate(b.date).getTime() - parseLocalDate(a.date).getTime());
+        daysSinceLastPlay = Math.floor((Date.now() - parseLocalDate(sorted[0].date).getTime()) / (24 * 60 * 60 * 1000));
       }
 
       let label: string;
@@ -5598,7 +5609,7 @@ export function getFranchiseCheckIns(data: WeekInReviewData, allGames: Game[]): 
       .sort((a, b) => {
         const aDate = a.datePurchased || a.createdAt;
         const bDate = b.datePurchased || b.createdAt;
-        return new Date(aDate).getTime() - new Date(bDate).getTime();
+        return parseLocalDate(aDate).getTime() - parseLocalDate(bDate).getTime();
       });
 
     if (franchiseGames.length < 2) return; // Need 2+ games for a franchise check-in
@@ -5665,7 +5676,7 @@ export function getHistoricalEchoes(data: WeekInReviewData, allGames: Game[]): H
       // Check for play logs in that period
       if (game.playLogs) {
         const logsInPeriod = game.playLogs.filter(log => {
-          const logDate = new Date(log.date);
+          const logDate = parseLocalDate(log.date);
           return logDate >= targetStart && logDate <= targetEnd;
         });
 
@@ -5683,7 +5694,7 @@ export function getHistoricalEchoes(data: WeekInReviewData, allGames: Game[]): H
 
       // Check for starts
       if (game.startDate) {
-        const startDate = new Date(game.startDate);
+        const startDate = parseLocalDate(game.startDate);
         if (startDate >= targetStart && startDate <= targetEnd) {
           if (!echoes.find(e => e.game.id === game.id && e.label === label)) {
             echoes.push({
@@ -5699,7 +5710,7 @@ export function getHistoricalEchoes(data: WeekInReviewData, allGames: Game[]): H
 
       // Check for completions
       if (game.endDate && game.status === 'Completed') {
-        const endDate = new Date(game.endDate);
+        const endDate = parseLocalDate(game.endDate);
         if (endDate >= targetStart && endDate <= targetEnd) {
           if (!echoes.find(e => e.game.id === game.id && e.label === label)) {
             echoes.push({
@@ -5947,7 +5958,7 @@ export function getMonthInReviewData(games: Game[], year: number, month: number)
   games.forEach(game => {
     if (!game.playLogs) return;
     game.playLogs.forEach(log => {
-      const logDate = new Date(log.date);
+      const logDate = parseLocalDate(log.date);
       if (logDate < monthStart || logDate > monthEnd) return;
 
       const dateKey = log.date.substring(0, 10);
@@ -5992,7 +6003,7 @@ export function getMonthInReviewData(games: Game[], year: number, month: number)
   // Weekly breakdown (weeks 1-5 of the month)
   const weeklyMap: Record<number, { hours: number; sessions: number }> = {};
   Object.entries(dailyMap).forEach(([date, data]) => {
-    const dayOfMonth = new Date(date).getDate();
+    const dayOfMonth = parseLocalDate(date).getDate();
     const weekNum = Math.ceil(dayOfMonth / 7);
     if (!weeklyMap[weekNum]) weeklyMap[weekNum] = { hours: 0, sessions: 0 };
     weeklyMap[weekNum].hours += data.hours;
@@ -6055,7 +6066,7 @@ export function getMonthInReviewData(games: Game[], year: number, month: number)
   games.forEach(game => {
     if (!game.playLogs) return;
     game.playLogs.forEach(log => {
-      const logDate = new Date(log.date);
+      const logDate = parseLocalDate(log.date);
       if (logDate >= prevMonthStart && logDate <= prevMonthEnd) {
         prevHours += log.hours;
         prevSessions += 1;
@@ -6085,8 +6096,8 @@ export function getMonthInReviewData(games: Game[], year: number, month: number)
   let longestStreak = sortedDates.length > 0 ? 1 : 0;
   let currentStreak = 1;
   for (let i = 1; i < sortedDates.length; i++) {
-    const prev = new Date(sortedDates[i - 1]);
-    const curr = new Date(sortedDates[i]);
+    const prev = parseLocalDate(sortedDates[i - 1]);
+    const curr = parseLocalDate(sortedDates[i]);
     const diffDays = Math.round((curr.getTime() - prev.getTime()) / (1000 * 60 * 60 * 24));
     if (diffDays === 1) {
       currentStreak++;
@@ -6102,7 +6113,7 @@ export function getMonthInReviewData(games: Game[], year: number, month: number)
   games.forEach(game => {
     if (!game.playLogs) return;
     game.playLogs.forEach(log => {
-      const logDate = new Date(log.date);
+      const logDate = parseLocalDate(log.date);
       if (logDate < monthStart || logDate > monthEnd) return;
       if (!longestSession || log.hours > longestSession.hours) {
         longestSession = { date: log.date.substring(0, 10), hours: log.hours, gameName: game.name };

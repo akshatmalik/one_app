@@ -4,7 +4,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical, X, CheckCircle2, PlayCircle, Calendar, XCircle, Clock, TrendingDown, Zap } from 'lucide-react';
 import { GameWithMetrics } from '../hooks/useAnalytics';
-import { getShelfLife, getOneHourProjection, getEstimatedHoursToReach } from '../lib/calculations';
+import { getShelfLife, getOneHourProjection, getEstimatedHoursToReach, parseLocalDate } from '../lib/calculations';
 import { Game } from '../lib/types';
 import clsx from 'clsx';
 
@@ -39,14 +39,14 @@ export function QueueGameCard({ game, position, isHero, estimatedHoursAway, onRe
   const getDaysPlaying = () => {
     if (game.status === 'In Progress' && game.startDate) {
       const days = Math.floor(
-        (new Date().getTime() - new Date(game.startDate).getTime()) /
+        (new Date().getTime() - parseLocalDate(game.startDate).getTime()) /
         (1000 * 60 * 60 * 24)
       );
       return days;
     }
     if (game.status === 'Completed' && game.startDate && game.endDate) {
       const days = Math.floor(
-        (new Date(game.endDate).getTime() - new Date(game.startDate).getTime()) /
+        (parseLocalDate(game.endDate).getTime() - parseLocalDate(game.startDate).getTime()) /
         (1000 * 60 * 60 * 24)
       );
       return days;
@@ -59,8 +59,8 @@ export function QueueGameCard({ game, position, isHero, estimatedHoursAway, onRe
   // Days since last session
   const getDaysSinceLastPlay = () => {
     if (game.playLogs && game.playLogs.length > 0) {
-      const sorted = [...game.playLogs].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-      return Math.floor((Date.now() - new Date(sorted[0].date).getTime()) / (24 * 60 * 60 * 1000));
+      const sorted = [...game.playLogs].sort((a, b) => parseLocalDate(b.date).getTime() - parseLocalDate(a.date).getTime());
+      return Math.floor((Date.now() - parseLocalDate(sorted[0].date).getTime()) / (24 * 60 * 60 * 1000));
     }
     return null;
   };
@@ -70,7 +70,7 @@ export function QueueGameCard({ game, position, isHero, estimatedHoursAway, onRe
   // Last session note
   const getLastSessionInfo = () => {
     if (game.playLogs && game.playLogs.length > 0) {
-      const sorted = [...game.playLogs].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      const sorted = [...game.playLogs].sort((a, b) => parseLocalDate(b.date).getTime() - parseLocalDate(a.date).getTime());
       return {
         note: sorted[0].notes || null,
         hours: sorted[0].hours,
@@ -83,7 +83,7 @@ export function QueueGameCard({ game, position, isHero, estimatedHoursAway, onRe
   const lastSession = getLastSessionInfo();
 
   const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
+    const date = parseLocalDate(dateStr);
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
 

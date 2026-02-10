@@ -13,6 +13,7 @@ import {
   getGameSmartOneLiner,
   getROIRating,
   getRelativeTime,
+  parseLocalDate,
   getProgressPercent,
   calculateCostPerHour,
 } from '../lib/calculations';
@@ -74,7 +75,7 @@ export function GameDetailPanel({
 
   const sortedLogs = useMemo(() => {
     if (!game.playLogs || game.playLogs.length === 0) return [];
-    return [...game.playLogs].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    return [...game.playLogs].sort((a, b) => parseLocalDate(b.date).getTime() - parseLocalDate(a.date).getTime());
   }, [game.playLogs]);
 
   const visibleLogs = showAllSessions ? sortedLogs : sortedLogs.slice(0, 5);

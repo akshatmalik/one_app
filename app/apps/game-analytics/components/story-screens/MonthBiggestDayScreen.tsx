@@ -2,7 +2,7 @@
 
 import { motion } from 'framer-motion';
 import { Flame } from 'lucide-react';
-import { MonthInReviewData } from '../../lib/calculations';
+import { MonthInReviewData, parseLocalDate } from '../../lib/calculations';
 
 interface MonthBiggestDayScreenProps {
   data: MonthInReviewData;
@@ -10,7 +10,7 @@ interface MonthBiggestDayScreenProps {
 
 export function MonthBiggestDayScreen({ data }: MonthBiggestDayScreenProps) {
   if (!data.biggestDay) return null;
-  const date = new Date(data.biggestDay.date);
+  const date = parseLocalDate(data.biggestDay.date);
   const dayLabel = date.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
 
   return (

@@ -18,7 +18,7 @@ import { gameRepository } from './lib/storage';
 import { BASELINE_GAMES_2025 } from './data/baseline-games';
 import { useAuthContext } from '@/lib/AuthContext';
 import { useToast } from '@/components/Toast';
-import { getROIRating, getWeekStatsForOffset, getGamesPlayedInTimeRange, getCompletionProbability, getGameHealthDot, getRelativeTime, getDaysContext, getSessionMomentum, getValueTrajectory, getGameSmartOneLiner, getFranchiseInfo, getProgressPercent, getShelfLife } from './lib/calculations';
+import { getROIRating, getWeekStatsForOffset, getGamesPlayedInTimeRange, getCompletionProbability, getGameHealthDot, getRelativeTime, getDaysContext, getSessionMomentum, getValueTrajectory, getGameSmartOneLiner, getFranchiseInfo, getProgressPercent, getShelfLife, parseLocalDate } from './lib/calculations';
 import { OnThisDayCard } from './components/OnThisDayCard';
 import { ActivityPulse } from './components/ActivityPulse';
 import { RandomPicker } from './components/RandomPicker';
@@ -138,7 +138,7 @@ export default function GameAnalyticsPage() {
     if (isFirstSession) {
       // Find the earliest date from the new logs
       const earliestLog = playLogs.reduce((earliest, log) => {
-        return new Date(log.date) < new Date(earliest.date) ? log : earliest;
+        return parseLocalDate(log.date) < parseLocalDate(earliest.date) ? log : earliest;
       });
 
       updates.status = 'In Progress';
@@ -207,10 +207,10 @@ export default function GameAnalyticsPage() {
         case 'recentlyPlayed':
           // Sort by most recent play log date (most recent first)
           const aLastPlayed = a.playLogs && a.playLogs.length > 0
-            ? new Date(a.playLogs[0].date).getTime()
+            ? parseLocalDate(a.playLogs[0].date).getTime()
             : 0;
           const bLastPlayed = b.playLogs && b.playLogs.length > 0
-            ? new Date(b.playLogs[0].date).getTime()
+            ? parseLocalDate(b.playLogs[0].date).getTime()
             : 0;
           return bLastPlayed - aLastPlayed;
         case 'dateAdded':
@@ -475,7 +475,7 @@ export default function GameAnalyticsPage() {
                     const progressPct = getProgressPercent(game);
                     const lastPlayedStr = game.playLogs && game.playLogs.length > 0
                       ? (() => {
-                          const sorted = [...game.playLogs].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+                          const sorted = [...game.playLogs].sort((a, b) => parseLocalDate(b.date).getTime() - parseLocalDate(a.date).getTime());
                           return getRelativeTime(sorted[0].date);
                         })()
                       : null;
@@ -826,7 +826,7 @@ export default function GameAnalyticsPage() {
                               </>
                             )}
                             {(() => {
-                              const sorted = [...game.playLogs].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+                              const sorted = [...game.playLogs].sort((a, b) => parseLocalDate(b.date).getTime() - parseLocalDate(a.date).getTime());
                               return sorted[0].notes ? (
                                 <>
                                   <span className="text-white/10">·</span>
