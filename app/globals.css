@@ -278,3 +278,96 @@ input[type="range"]::-moz-range-thumb {
 .animate-slide-in-right {
   animation: slideInRight 0.25s ease-out forwards;
 }
+
+/* --- Card Redesign Animations --- */
+
+/* Rarity border glows */
+@keyframes rarityGlowUncommon {
+  0%, 100% { box-shadow: 0 0 6px rgba(34, 197, 94, 0.15); border-color: rgba(34, 197, 94, 0.2); }
+  50% { box-shadow: 0 0 12px rgba(34, 197, 94, 0.25); border-color: rgba(34, 197, 94, 0.35); }
+}
+
+@keyframes rarityGlowRare {
+  0%, 100% { box-shadow: 0 0 8px rgba(59, 130, 246, 0.2); border-color: rgba(59, 130, 246, 0.25); }
+  50% { box-shadow: 0 0 16px rgba(59, 130, 246, 0.35); border-color: rgba(59, 130, 246, 0.4); }
+}
+
+@keyframes rarityGlowEpic {
+  0%, 100% { box-shadow: 0 0 10px rgba(168, 85, 247, 0.2); border-color: rgba(168, 85, 247, 0.25); }
+  50% { box-shadow: 0 0 20px rgba(168, 85, 247, 0.35); border-color: rgba(168, 85, 247, 0.45); }
+}
+
+@keyframes rarityGlowLegendary {
+  0% { box-shadow: 0 0 12px rgba(251, 191, 36, 0.2); border-color: rgba(251, 191, 36, 0.3); }
+  33% { box-shadow: 0 0 24px rgba(251, 191, 36, 0.4); border-color: rgba(251, 191, 36, 0.5); }
+  66% { box-shadow: 0 0 18px rgba(245, 158, 11, 0.35); border-color: rgba(245, 158, 11, 0.45); }
+  100% { box-shadow: 0 0 12px rgba(251, 191, 36, 0.2); border-color: rgba(251, 191, 36, 0.3); }
+}
+
+.rarity-glow-uncommon {
+  animation: rarityGlowUncommon 4s ease-in-out infinite;
+}
+
+.rarity-glow-rare {
+  animation: rarityGlowRare 3.5s ease-in-out infinite;
+}
+
+.rarity-glow-epic {
+  animation: rarityGlowEpic 3s ease-in-out infinite;
+}
+
+.rarity-glow-legendary {
+  animation: rarityGlowLegendary 2.5s ease-in-out infinite;
+}
+
+/* Streak flame flicker */
+@keyframes streakFlame {
+  0%, 100% { transform: scale(1) translateY(0); }
+  25% { transform: scale(1.05) translateY(-1px); }
+  50% { transform: scale(0.95) translateY(0); }
+  75% { transform: scale(1.08) translateY(-1px); }
+}
+
+.streak-flame {
+  animation: streakFlame 1.5s ease-in-out infinite;
+}
+
+/* Bottom sheet */
+@keyframes bottomSheetSlideUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+.animate-bottom-sheet-up {
+  animation: bottomSheetSlideUp 0.35s cubic-bezier(0.32, 0.72, 0, 1) forwards;
+}
+
+/* Section header entrance */
+@keyframes sectionFadeIn {
+  from { opacity: 0; transform: translateX(-12px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.section-enter {
+  animation: sectionFadeIn 0.4s ease-out;
+}
+
+/* Poster card image load */
+@keyframes posterReveal {
+  from { opacity: 0; transform: scale(1.05); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.poster-reveal {
+  animation: posterReveal 0.5s ease-out;
+}
+
+/* Journey path pulse for active node */
+@keyframes journeyPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4); }
+  50% { box-shadow: 0 0 0 6px rgba(59, 130, 246, 0); }
+}
+
+.journey-pulse {
+  animation: journeyPulse 2s ease-in-out infinite;
+}

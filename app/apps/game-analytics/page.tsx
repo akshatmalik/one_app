@@ -18,16 +18,28 @@ import { gameRepository } from './lib/storage';
 import { BASELINE_GAMES_2025 } from './data/baseline-games';
 import { useAuthContext } from '@/lib/AuthContext';
 import { useToast } from '@/components/Toast';
-import { getROIRating, getWeekStatsForOffset, getGamesPlayedInTimeRange, getCompletionProbability, getGameHealthDot, getRelativeTime, getDaysContext, getSessionMomentum, getValueTrajectory, getGameSmartOneLiner, getFranchiseInfo, getProgressPercent, getShelfLife, parseLocalDate } from './lib/calculations';
+import { getROIRating, getWeekStatsForOffset, getGamesPlayedInTimeRange, getCompletionProbability, getGameHealthDot, getRelativeTime, getDaysContext, getSessionMomentum, getValueTrajectory, getGameSmartOneLiner, getFranchiseInfo, getProgressPercent, getShelfLife, parseLocalDate, getCardRarity, getRelationshipStatus, getGameStreak, getHeroNumber, getCardFreshness, getGameSections } from './lib/calculations';
 import { OnThisDayCard } from './components/OnThisDayCard';
 import { ActivityPulse } from './components/ActivityPulse';
 import { RandomPicker } from './components/RandomPicker';
 import { BulkWishlistModal } from './components/BulkWishlistModal';
-import { GameDetailPanel } from './components/GameDetailPanel';
+import { GameBottomSheet } from './components/GameBottomSheet';
+import { RatingStars } from './components/RatingStars';
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist';
 type TabMode = 'games' | 'timeline' | 'stats' | 'ai-coach' | 'up-next';
+type CardViewMode = 'poster' | 'compact';
+
+function getValueColor(rating: string): string {
+  switch (rating) {
+    case 'Excellent': return 'text-emerald-400';
+    case 'Good': return 'text-blue-400';
+    case 'Fair': return 'text-yellow-400';
+    case 'Poor': return 'text-red-400';
+    default: return 'text-white/50';
+  }
+}
 
 export default function GameAnalyticsPage() {
   const { user, loading: authLoading } = useAuthContext();
@@ -58,6 +70,14 @@ export default function GameAnalyticsPage() {
   const [statsCollapsed, setStatsCollapsed] = useState(() => {
     if (typeof window === 'undefined') return false;
     return localStorage.getItem('ga-stats-collapsed') === 'true';
+  });
+  const [cardViewMode, setCardViewMode] = useState<CardViewMode>(() => {
+    if (typeof window === 'undefined') return 'poster';
+    return (localStorage.getItem('ga-card-view-mode') as CardViewMode) || 'poster';
+  });
+  const [groupBySection, setGroupBySection] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem('ga-group-sections') === 'true';
   });
 
   // Calculate week and month data for AI chat
@@ -150,6 +170,38 @@ export default function GameAnalyticsPage() {
     showToast(isFirstSession ? 'Game started! Sessions saved' : 'Play sessions saved', 'success');
   };
 
+  const handleQuickLog = async (game: GameWithMetrics, hours: number) => {
+    const now = new Date();
+    const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const newLog: PlayLog = {
+      id: `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+      date: dateStr,
+      hours,
+    };
+    const existingLogs = game.playLogs || [];
+    const updates: Partial<Game> = { playLogs: [...existingLogs, newLog] };
+
+    if (game.status === 'Not Started' && existingLogs.length === 0) {
+      updates.status = 'In Progress';
+      updates.startDate = dateStr;
+    }
+
+    await updateGame(game.id, updates);
+    showToast(`Logged ${hours}h`, 'success');
+  };
+
+  const toggleCardViewMode = () => {
+    const next = cardViewMode === 'poster' ? 'compact' : 'poster';
+    setCardViewMode(next);
+    localStorage.setItem('ga-card-view-mode', next);
+  };
+
+  const toggleGroupBySection = () => {
+    const next = !groupBySection;
+    setGroupBySection(next);
+    localStorage.setItem('ga-group-sections', String(next));
+  };
+
   const handleSeedData = async () => {
     try {
       gameRepository.setUserId(user?.uid || 'local-user');
@@ -218,27 +270,6 @@ export default function GameAnalyticsPage() {
           return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       }
     });
-
-  const getStatusColor = (status: GameStatus) => {
-    switch (status) {
-      case 'Completed': return 'bg-emerald-500/20 text-emerald-400';
-      case 'In Progress': return 'bg-blue-500/20 text-blue-400';
-      case 'Not Started': return 'bg-white/10 text-white/50';
-      case 'Wishlist': return 'bg-purple-500/20 text-purple-400';
-      case 'Abandoned': return 'bg-red-500/20 text-red-400';
-      default: return 'bg-white/10 text-white/50';
-    }
-  };
-
-  const getValueColor = (rating: string) => {
-    switch (rating) {
-      case 'Excellent': return 'text-emerald-400';
-      case 'Good': return 'text-blue-400';
-      case 'Fair': return 'text-yellow-400';
-      case 'Poor': return 'text-red-400';
-      default: return 'text-white/50';
-    }
-  };
 
   return (
     <div className="min-h-[calc(100vh-60px)] flex flex-col">
@@ -428,7 +459,7 @@ export default function GameAnalyticsPage() {
                     </button>
                   ))}
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-xs text-white/40">Sort by:</span>
                   <select
                     value={sortBy}
@@ -443,6 +474,24 @@ export default function GameAnalyticsPage() {
                     <option value="rating">Rating (High to Low)</option>
                     <option value="costPerHour">Value (Best First)</option>
                   </select>
+                  {/* Card view toggle */}
+                  <button
+                    onClick={toggleCardViewMode}
+                    className="px-2 py-1 bg-white/[0.02] border border-white/10 text-white/40 text-[10px] rounded-lg"
+                    title={cardViewMode === 'poster' ? 'Switch to compact' : 'Switch to poster'}
+                  >
+                    {cardViewMode === 'poster' ? 'Compact' : 'Poster'}
+                  </button>
+                  {/* Group toggle */}
+                  <button
+                    onClick={toggleGroupBySection}
+                    className={clsx(
+                      'px-2 py-1 border text-[10px] rounded-lg',
+                      groupBySection ? 'bg-purple-500/10 border-purple-500/20 text-purple-400' : 'bg-white/[0.02] border-white/10 text-white/40'
+                    )}
+                  >
+                    Sections
+                  </button>
                 </div>
               </div>
             )}
@@ -462,385 +511,38 @@ export default function GameAnalyticsPage() {
                   <p className="text-white/30 text-sm">No games in this category</p>
                 </div>
               ) : (
-                <div className="grid gap-3">
-                  {filteredGames.map((game, idx) => {
-                    const healthDot = getGameHealthDot(game);
-                    const daysCtx = getDaysContext(game);
-                    const shelfLifeData = getShelfLife(game);
-                    const valTraj = getValueTrajectory(game);
-                    const momentum = getSessionMomentum(game, 5);
-                    const maxMom = momentum.length > 0 ? Math.max(...momentum) : 0;
-                    const smartLine = getGameSmartOneLiner(game, games);
-                    const franchise = getFranchiseInfo(game, games);
-                    const progressPct = getProgressPercent(game);
-                    const lastPlayedStr = game.playLogs && game.playLogs.length > 0
-                      ? (() => {
-                          const sorted = [...game.playLogs].sort((a, b) => parseLocalDate(b.date).getTime() - parseLocalDate(a.date).getTime());
-                          return getRelativeTime(sorted[0].date);
-                        })()
-                      : null;
-                    const avgSession = game.playLogs && game.playLogs.length > 0
-                      ? Math.round(game.playLogs.reduce((s, l) => s + l.hours, 0) / game.playLogs.length)
-                      : 2;
-
-                    return (
-                    <div
-                      key={game.id}
-                      onClick={() => setDetailGame(game)}
-                      className={clsx(
-                        'group p-4 bg-white/[0.02] hover:bg-white/[0.04] border border-white/5 hover:border-white/10 rounded-xl cursor-pointer transition-all card-enter',
-                        game.status === 'In Progress' && 'in-progress-glow',
-                        game.status === 'Completed' && 'completed-shimmer',
-                      )}
-                      style={{ animationDelay: `${idx * 50}ms` }}
-                    >
-                      {/* Row 1: Thumbnail + Info + Actions */}
-                      <div className="flex items-start gap-3 mb-3">
-                        {/* Thumbnail with Health Dot + Progress Ring */}
-                        <div className="shrink-0 relative">
-                          {game.thumbnail ? (
-                            <div className="relative w-16 h-16">
-                              <img
-                                src={game.thumbnail}
-                                alt={game.name}
-                                className="w-16 h-16 object-cover rounded-lg"
-                                loading="lazy"
-                              />
-                              {/* Progress ring overlay */}
-                              {progressPct > 0 && progressPct < 100 && (
-                                <svg className="absolute inset-0 w-16 h-16 -rotate-90 pointer-events-none" viewBox="0 0 64 64">
-                                  <circle cx="32" cy="32" r="30" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="2.5" />
-                                  <circle
-                                    cx="32" cy="32" r="30" fill="none"
-                                    stroke={game.status === 'In Progress' ? '#3b82f6' : '#8b5cf6'}
-                                    strokeWidth="2.5"
-                                    strokeDasharray={`${(progressPct / 100) * 188.5} 188.5`}
-                                    strokeLinecap="round"
-                                    className="progress-ring-animate"
-                                  />
-                                </svg>
-                              )}
-                              {/* Health dot */}
-                              {healthDot.level !== 'none' && (
-                                <div
-                                  className={clsx(
-                                    'absolute -top-1 -right-1 w-3 h-3 rounded-full border-2 border-[#0a0a0f]',
-                                    healthDot.level === 'active' && 'health-pulse-fast',
-                                    healthDot.level === 'healthy' && 'health-pulse-medium',
-                                    healthDot.level === 'cooling' && 'health-pulse-slow',
-                                  )}
-                                  style={{ backgroundColor: healthDot.color }}
-                                  title={healthDot.label}
-                                />
-                              )}
-                            </div>
-                          ) : (
-                            <div className="relative w-16 h-16 bg-white/5 rounded-lg flex items-center justify-center">
-                              <Gamepad2 size={24} className="text-white/20" />
-                              {healthDot.level !== 'none' && (
-                                <div
-                                  className={clsx(
-                                    'absolute -top-1 -right-1 w-3 h-3 rounded-full border-2 border-[#0a0a0f]',
-                                    healthDot.level === 'active' && 'health-pulse-fast',
-                                  )}
-                                  style={{ backgroundColor: healthDot.color }}
-                                  title={healthDot.label}
-                                />
-                              )}
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Name + Badges + Days Context */}
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
-                            <h3 className="text-white/90 font-medium text-base">{game.name}</h3>
-                            <span className={clsx('text-[10px] px-2 py-0.5 rounded-full font-medium shrink-0', getStatusColor(game.status))}>
-                              {game.status}
-                            </span>
-                            {shelfLifeData.level !== 'fresh' && shelfLifeData.label && (
-                              <span className="text-[10px] px-2 py-0.5 rounded font-medium dust-float" style={{ color: shelfLifeData.color, backgroundColor: `${shelfLifeData.color}15` }}>
-                                {shelfLifeData.label}
-                              </span>
-                            )}
-                          </div>
-
-                          {/* Days context + last played */}
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-[11px] text-white/35">{daysCtx}</span>
-                            {lastPlayedStr && (
-                              <>
-                                <span className="text-white/10 text-[10px]">·</span>
-                                <span className="text-[11px] text-white/30">Last played {lastPlayedStr}</span>
-                              </>
-                            )}
-                          </div>
-
-                          {/* Tags Row */}
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            {game.platform && <span className="text-[10px] px-2 py-0.5 bg-white/5 rounded text-white/40">{game.platform}</span>}
-                            {game.genre && <span className="text-[10px] px-2 py-0.5 bg-white/5 rounded text-white/40">{game.genre}</span>}
-                            {game.purchaseSource && <span className="text-[10px] px-2 py-0.5 bg-white/5 rounded text-white/40">{game.purchaseSource}</span>}
-
-                            {franchise && (
-                              <span className="text-[10px] px-2 py-0.5 bg-purple-500/10 text-purple-400 rounded font-medium">
-                                {franchise.franchiseName} #{franchise.position}/{franchise.gamesInFranchise}
-                              </span>
-                            )}
-
-                            {game.totalHours > 0 && (
-                              <span className={clsx(
-                                'text-[10px] px-2 py-0.5 rounded font-medium',
-                                game.metrics.valueRating === 'Excellent' && 'bg-emerald-500/20 text-emerald-400',
-                                game.metrics.valueRating === 'Good' && 'bg-blue-500/20 text-blue-400',
-                                game.metrics.valueRating === 'Fair' && 'bg-yellow-500/20 text-yellow-400',
-                                game.metrics.valueRating === 'Poor' && 'bg-red-500/20 text-red-400'
-                              )}>
-                                {game.metrics.valueRating}
-                              </span>
-                            )}
-
-                            {(game.status === 'In Progress' || game.status === 'Not Started') && (() => {
-                              const prob = getCompletionProbability(game, games);
-                              return (
-                                <span className={clsx(
-                                  'text-[10px] px-2 py-0.5 rounded font-medium',
-                                  prob.probability >= 70 && 'bg-emerald-500/20 text-emerald-400',
-                                  prob.probability >= 40 && prob.probability < 70 && 'bg-yellow-500/20 text-yellow-400',
-                                  prob.probability < 40 && 'bg-red-500/20 text-red-400',
-                                )} title={prob.verdict}>
-                                  {prob.probability}% finish
-                                </span>
-                              );
-                            })()}
-
-                            {game.originalPrice && game.originalPrice > game.price && (
-                              <span className="text-[10px] px-2 py-0.5 bg-green-500/20 text-green-400 rounded font-medium">
-                                {(((game.originalPrice - game.price) / game.originalPrice) * 100).toFixed(0)}% off
-                              </span>
-                            )}
-
-                            {game.acquiredFree && (
-                              <span className="text-[10px] px-2 py-0.5 bg-emerald-500/20 text-emerald-400 rounded font-medium">
-                                FREE
-                              </span>
-                            )}
-
-                            {game.isSpecial && (
-                              <span className="text-[10px] px-2 py-0.5 bg-amber-500/20 text-amber-400 rounded font-medium flex items-center gap-0.5">
-                                <Heart size={8} className="fill-amber-400" /> Special
-                              </span>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Action Buttons */}
-                        <div className="flex items-center gap-1 sm:opacity-0 sm:group-hover:opacity-100 transition-all shrink-0">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleOpenPlayLog(game);
-                            }}
-                            className="flex items-center gap-1 px-2 py-1.5 text-white/30 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg transition-all text-xs"
-                            title="Log Play Session"
-                          >
-                            <Clock size={12} />
-                            <span className="hidden sm:inline">+{avgSession}h</span>
-                          </button>
-                          <button
-                            onClick={async (e) => {
-                              e.stopPropagation();
-                              if (isInQueue(game.id)) {
-                                try {
-                                  await removeFromQueue(game.id);
-                                  showToast('Removed from queue', 'success');
-                                } catch (err) {
-                                  showToast('Failed to remove from queue', 'error');
-                                }
-                              } else {
-                                try {
-                                  await addToQueue(game.id);
-                                  showToast('Added to queue', 'success');
-                                } catch (err) {
-                                  showToast('Failed to add to queue', 'error');
-                                }
-                              }
-                            }}
-                            className={clsx(
-                              'p-2 rounded-lg transition-all',
-                              isInQueue(game.id)
-                                ? 'text-purple-400 bg-purple-500/10 hover:text-purple-300 hover:bg-purple-500/20'
-                                : 'text-white/30 hover:text-purple-400 hover:bg-purple-500/10'
-                            )}
-                            title={isInQueue(game.id) ? 'Remove from Up Next' : 'Add to Up Next'}
-                          >
-                            {isInQueue(game.id) ? <Check size={14} /> : <ListPlus size={14} />}
-                          </button>
-                          <button
-                            onClick={async (e) => {
-                              e.stopPropagation();
-                              try {
-                                await updateGame(game.id, { isSpecial: !game.isSpecial });
-                                showToast(game.isSpecial ? 'Removed special tag' : 'Marked as special', 'success');
-                              } catch (err) {
-                                showToast('Failed to update', 'error');
-                              }
-                            }}
-                            className={clsx(
-                              'p-2 rounded-lg transition-all',
-                              game.isSpecial
-                                ? 'text-amber-400 bg-amber-500/10 hover:text-amber-300 hover:bg-amber-500/20'
-                                : 'text-white/30 hover:text-amber-400 hover:bg-amber-500/10'
-                            )}
-                            title={game.isSpecial ? 'Remove special tag' : 'Mark as special'}
-                          >
-                            <Heart size={14} className={game.isSpecial ? 'fill-amber-400' : ''} />
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDelete(game.id, game.name);
-                            }}
-                            className="p-2 text-white/30 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all"
-                            title="Delete Game"
-                          >
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                            </svg>
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Row 2: Stats Grid */}
-                      <div className="grid grid-cols-5 gap-2 text-center">
-                        <div className="p-2 bg-white/[0.02] rounded-lg">
-                          <div className="flex flex-col items-center gap-0.5">
-                            {game.originalPrice && game.originalPrice > game.price ? (
-                              <>
-                                <div className="text-white/30 line-through text-xs">${game.originalPrice}</div>
-                                <div className="text-emerald-400 font-medium text-sm">${game.price}</div>
-                              </>
-                            ) : (
-                              <div className="text-white/80 font-medium text-sm">${game.price}</div>
-                            )}
-                          </div>
-                          <div className="text-[10px] text-white/30">{game.acquiredFree ? 'free' : 'price'}</div>
-                        </div>
-
-                        <div className="p-2 bg-white/[0.02] rounded-lg">
-                          <div className="text-white/80 font-medium text-sm">{game.totalHours}h</div>
-                          <div className="text-[10px] text-white/30">played</div>
-                        </div>
-
-                        <div className="p-2 bg-white/[0.02] rounded-lg">
-                          <div className="text-white/80 font-medium text-sm">{game.rating}/10</div>
-                          <div className="text-[10px] text-white/30">rating</div>
-                        </div>
-
-                        {/* Cost/hr with value trajectory arrow */}
-                        <div className="p-2 bg-white/[0.02] rounded-lg">
-                          {game.totalHours > 0 ? (
-                            <>
-                              <div className="flex items-center justify-center gap-1">
-                                <span className={clsx('font-medium text-sm', getValueColor(game.metrics.valueRating))}>
-                                  ${game.metrics.costPerHour.toFixed(2)}
-                                </span>
-                                <span className="text-[10px]" style={{ color: valTraj.color }} title={valTraj.label}>
-                                  {valTraj.icon}
-                                </span>
-                              </div>
-                              <div className="text-[10px] text-white/30">per hr</div>
-                            </>
-                          ) : (
-                            <>
-                              <div className="text-white/30 font-medium text-sm">-</div>
-                              <div className="text-[10px] text-white/30">per hr</div>
-                            </>
-                          )}
-                        </div>
-
-                        <div className="p-2 bg-white/[0.02] rounded-lg">
-                          {game.totalHours > 0 ? (
-                            <>
-                              <div className={clsx('font-medium text-sm', getValueColor(getROIRating(game.metrics.roi)))}>
-                                {game.metrics.roi.toFixed(1)}
-                              </div>
-                              <div className="text-[10px] text-white/30">
-                                {(() => {
-                                  const r = getROIRating(game.metrics.roi);
-                                  const m = Math.floor(game.metrics.roi / 10);
-                                  return r === 'Excellent' && m >= 2 ? `${m}x Excellent` : `${r} ROI`;
-                                })()}
-                              </div>
-                            </>
-                          ) : (
-                            <>
-                              <div className="text-white/30 font-medium text-sm">-</div>
-                              <div className="text-[10px] text-white/30">ROI</div>
-                            </>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Row 3: Smart one-liner + Momentum sparkline */}
-                      {(smartLine || momentum.length >= 3) && (
-                        <div className="mt-3 pt-3 border-t border-white/5 flex items-center justify-between gap-3">
-                          {smartLine && (
-                            <p className="text-[11px] text-white/30 italic flex-1">{smartLine}</p>
-                          )}
-                          {momentum.length >= 3 && (
-                            <div className="flex items-end gap-px h-4 shrink-0" title={`Last ${momentum.length} sessions: ${momentum.map(h => h + 'h').join(', ')}`}>
-                              {momentum.map((hours, i) => (
-                                <div
-                                  key={i}
-                                  className="w-1.5 rounded-sm spark-grow"
-                                  style={{
-                                    height: `${maxMom > 0 ? Math.max(20, (hours / maxMom) * 100) : 20}%`,
-                                    backgroundColor: i === momentum.length - 1 ? '#3b82f6' : 'rgba(255,255,255,0.15)',
-                                    animationDelay: `${i * 100}ms`,
-                                  }}
-                                />
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      {/* Review Preview */}
-                      {game.review && (
-                        <div className="mt-3 pt-3 border-t border-white/5">
-                          <p className="text-xs text-white/40 line-clamp-2">{game.review}</p>
-                        </div>
-                      )}
-
-                      {/* Play Logs Summary with relative time + last note */}
-                      {game.playLogs && game.playLogs.length > 0 && (
-                        <div className="mt-3 pt-3 border-t border-white/5">
-                          <div className="flex items-center gap-2 text-xs text-white/30">
-                            <Clock size={10} />
-                            <span>{game.playLogs.length} sessions</span>
-                            {lastPlayedStr && (
-                              <>
-                                <span className="text-white/10">·</span>
-                                <span>Last: {lastPlayedStr}</span>
-                              </>
-                            )}
-                            {(() => {
-                              const sorted = [...game.playLogs].sort((a, b) => parseLocalDate(b.date).getTime() - parseLocalDate(a.date).getTime());
-                              return sorted[0].notes ? (
-                                <>
-                                  <span className="text-white/10">·</span>
-                                  <span className="text-white/25 italic truncate max-w-[200px]">&ldquo;{sorted[0].notes}&rdquo;</span>
-                                </>
-                              ) : null;
-                            })()}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                    );
-                  })}
-                </div>
+                <GameCardList
+                  games={filteredGames}
+                  allGames={games}
+                  cardViewMode={cardViewMode}
+                  groupBySection={groupBySection}
+                  onCardClick={(game) => setDetailGame(game)}
+                  onLogTime={(game) => handleOpenPlayLog(game)}
+                  onQuickLog={handleQuickLog}
+                  onToggleQueue={async (game) => {
+                    try {
+                      if (isInQueue(game.id)) {
+                        await removeFromQueue(game.id);
+                        showToast('Removed from queue', 'success');
+                      } else {
+                        await addToQueue(game.id);
+                        showToast('Added to queue', 'success');
+                      }
+                    } catch (err) {
+                      showToast('Failed to update queue', 'error');
+                    }
+                  }}
+                  onToggleSpecial={async (game) => {
+                    try {
+                      await updateGame(game.id, { isSpecial: !game.isSpecial });
+                      showToast(game.isSpecial ? 'Removed special tag' : 'Marked as special', 'success');
+                    } catch (err) {
+                      showToast('Failed to update', 'error');
+                    }
+                  }}
+                  onDelete={(game) => handleDelete(game.id, game.name)}
+                  isInQueue={isInQueue}
+                />
               )}
             </>
           )}
@@ -983,9 +685,9 @@ export default function GameAnalyticsPage() {
         />
       )}
 
-      {/* Game Detail Panel */}
+      {/* Game Detail Bottom Sheet */}
       {detailGame && (
-        <GameDetailPanel
+        <GameBottomSheet
           game={detailGame}
           allGames={games}
           onClose={() => setDetailGame(null)}
@@ -997,7 +699,15 @@ export default function GameAnalyticsPage() {
             handleDelete(detailGame.id, detailGame.name);
             setDetailGame(null);
           }}
-          onLogTime={() => {
+          onLogTime={(hours) => {
+            if (hours) {
+              handleQuickLog(detailGame, hours);
+            } else {
+              handleOpenPlayLog(detailGame);
+              setDetailGame(null);
+            }
+          }}
+          onOpenPlayLog={() => {
             handleOpenPlayLog(detailGame);
             setDetailGame(null);
           }}
@@ -1044,6 +754,509 @@ function StatCard({ icon, label, value, accent }: { icon: React.ReactNode; label
       </div>
       <div className={clsx('text-lg font-semibold', accent ? 'text-purple-400' : 'text-white/90')}>
         {value}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// GameCardList — Poster + Compact card views with sections
+// ============================================================
+
+interface GameCardListProps {
+  games: GameWithMetrics[];
+  allGames: Game[];
+  cardViewMode: CardViewMode;
+  groupBySection: boolean;
+  onCardClick: (game: GameWithMetrics) => void;
+  onLogTime: (game: GameWithMetrics) => void;
+  onQuickLog: (game: GameWithMetrics, hours: number) => void;
+  onToggleQueue: (game: GameWithMetrics) => void;
+  onToggleSpecial: (game: GameWithMetrics) => void;
+  onDelete: (game: GameWithMetrics) => void;
+  isInQueue: (id: string) => boolean;
+}
+
+function GameCardList({
+  games,
+  allGames,
+  cardViewMode,
+  groupBySection,
+  onCardClick,
+  onLogTime,
+  onQuickLog,
+  onToggleQueue,
+  onToggleSpecial,
+  onDelete,
+  isInQueue,
+}: GameCardListProps) {
+  const sections = useMemo(() => groupBySection ? getGameSections(allGames) : [], [allGames, groupBySection]);
+
+  // Now Playing card: most recently played game (last 48 hours)
+  const nowPlaying = useMemo(() => {
+    const now = Date.now();
+    const twoDays = 48 * 60 * 60 * 1000;
+    return games.find(g => {
+      if (g.status !== 'In Progress') return false;
+      const logs = g.playLogs || [];
+      if (logs.length === 0) return false;
+      const sorted = [...logs].sort((a, b) => parseLocalDate(b.date).getTime() - parseLocalDate(a.date).getTime());
+      return (now - parseLocalDate(sorted[0].date).getTime()) <= twoDays;
+    }) || null;
+  }, [games]);
+
+  const renderCard = (game: GameWithMetrics, idx: number) => {
+    if (cardViewMode === 'poster') {
+      return <PosterCard key={game.id} game={game} allGames={allGames} idx={idx} onClick={() => onCardClick(game)} onQuickLog={(h) => onQuickLog(game, h)} isInQueue={isInQueue(game.id)} />;
+    }
+    return <CompactCard key={game.id} game={game} allGames={allGames} idx={idx} onClick={() => onCardClick(game)} onLogTime={() => onLogTime(game)} onToggleQueue={() => onToggleQueue(game)} onDelete={() => onDelete(game)} isInQueue={isInQueue(game.id)} />;
+  };
+
+  if (groupBySection && sections.length > 0) {
+    // Map game IDs to games for lookup
+    const gameMap = new Map(games.map(g => [g.id, g]));
+
+    return (
+      <div className="space-y-6">
+        {/* Now Playing */}
+        {nowPlaying && (
+          <NowPlayingCard game={nowPlaying} allGames={allGames} onClick={() => onCardClick(nowPlaying)} onQuickLog={(h) => onQuickLog(nowPlaying, h)} />
+        )}
+
+        {sections.map(section => {
+          const sectionGames = section.gameIds.map(id => gameMap.get(id)).filter(Boolean) as GameWithMetrics[];
+          if (sectionGames.length === 0) return null;
+
+          return (
+            <div key={section.id} className="section-enter">
+              <div className="flex items-center gap-3 mb-3">
+                <SectionIcon id={section.id} />
+                <div>
+                  <h3 className="text-sm font-bold text-white/80">{section.label}</h3>
+                  <p className="text-[10px] text-white/30">{section.insight}</p>
+                </div>
+              </div>
+              <div className="grid gap-3">
+                {sectionGames.map((game, idx) => renderCard(game, idx))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {/* Now Playing */}
+      {nowPlaying && (
+        <NowPlayingCard game={nowPlaying} allGames={allGames} onClick={() => onCardClick(nowPlaying)} onQuickLog={(h) => onQuickLog(nowPlaying, h)} />
+      )}
+
+      <div className="grid gap-3">
+        {games.map((game, idx) => renderCard(game, idx))}
+      </div>
+    </div>
+  );
+}
+
+function SectionIcon({ id }: { id: string }) {
+  const icons: Record<string, { emoji: string; color: string }> = {
+    'on-fire': { emoji: '🔥', color: '#f97316' },
+    'cooling-off': { emoji: '❄️', color: '#3b82f6' },
+    'collection': { emoji: '🏆', color: '#10b981' },
+    'waiting-room': { emoji: '⏳', color: '#6b7280' },
+    'the-shelf': { emoji: '💜', color: '#a855f7' },
+    'graveyard': { emoji: '🪦', color: '#6b7280' },
+    'in-progress': { emoji: '🎮', color: '#3b82f6' },
+  };
+  const config = icons[id] || { emoji: '📁', color: '#6b7280' };
+  return <span className="text-lg">{config.emoji}</span>;
+}
+
+// --- Now Playing Card ---
+
+function NowPlayingCard({ game, allGames, onClick, onQuickLog }: {
+  game: GameWithMetrics;
+  allGames: Game[];
+  onClick: () => void;
+  onQuickLog: (hours: number) => void;
+}) {
+  const relationship = getRelationshipStatus(game, allGames);
+  const streak = getGameStreak(game);
+  const avgSession = game.playLogs && game.playLogs.length > 0
+    ? Math.round(game.playLogs.reduce((s, l) => s + l.hours, 0) / game.playLogs.length * 10) / 10
+    : 2;
+
+  return (
+    <div className="mb-2">
+      <div className="flex items-center gap-2 mb-2">
+        <div className="w-2 h-2 rounded-full bg-blue-500 health-pulse-fast" />
+        <span className="text-[10px] font-bold text-white/40 uppercase tracking-wider">Now Playing</span>
+      </div>
+      <div
+        onClick={onClick}
+        className="relative overflow-hidden rounded-xl border border-blue-500/20 now-playing-glow cursor-pointer"
+      >
+        {/* Banner image */}
+        {game.thumbnail && (
+          <div className="relative h-28 overflow-hidden">
+            <img src={game.thumbnail} alt={game.name} className="w-full h-full object-cover opacity-40 poster-reveal" loading="lazy" />
+            <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0f] via-[#0a0a0f]/60 to-transparent" />
+          </div>
+        )}
+
+        <div className={clsx('p-4', game.thumbnail ? '-mt-10 relative' : '')}>
+          <div className="flex items-center gap-2 mb-1">
+            <h3 className="text-lg font-bold text-white">{game.name}</h3>
+            <span className="text-[10px] px-2 py-0.5 rounded-full font-bold" style={{ color: relationship.color, backgroundColor: relationship.bgColor }}>
+              {relationship.label}
+            </span>
+            {streak.isActive && (
+              <span className="text-[10px] px-1.5 py-0.5 bg-orange-500/20 text-orange-400 rounded font-bold flex items-center gap-0.5 streak-flame">
+                🔥 {streak.days}
+              </span>
+            )}
+          </div>
+
+          <div className="flex items-center gap-4 mt-2">
+            <div className="text-center">
+              <div className="text-white/80 font-bold text-sm">{game.totalHours}h</div>
+              <div className="text-[9px] text-white/30">played</div>
+            </div>
+            <div className="text-center">
+              <RatingStars rating={game.rating} size={10} />
+              <div className="text-[9px] text-white/30 mt-0.5">{game.rating}/10</div>
+            </div>
+            <div className="flex-1" />
+            <button
+              onClick={(e) => { e.stopPropagation(); onQuickLog(avgSession); }}
+              className="px-4 py-2 bg-blue-600/30 text-blue-300 rounded-lg text-xs font-bold active:bg-blue-600/50 transition-all flex items-center gap-1.5"
+            >
+              <Clock size={12} /> Check In
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// --- Poster Card ---
+
+function PosterCard({ game, allGames, idx, onClick, onQuickLog, isInQueue }: {
+  game: GameWithMetrics;
+  allGames: Game[];
+  idx: number;
+  onClick: () => void;
+  onQuickLog: (hours: number) => void;
+  isInQueue: boolean;
+}) {
+  const rarity = getCardRarity(game);
+  const relationship = getRelationshipStatus(game, allGames);
+  const streak = getGameStreak(game);
+  const heroNum = getHeroNumber(game);
+  const freshness = getCardFreshness(game);
+  const smartLine = getGameSmartOneLiner(game, allGames);
+
+  return (
+    <div
+      onClick={onClick}
+      className={clsx(
+        'overflow-hidden rounded-xl border cursor-pointer transition-all card-enter',
+        rarity.borderClass || 'border-white/5',
+      )}
+      style={{
+        animationDelay: `${idx * 40}ms`,
+        opacity: freshness.opacity,
+        backgroundColor: relationship.cardTint,
+      }}
+    >
+      {/* Poster image */}
+      <div className="relative">
+        {game.thumbnail ? (
+          <div className="relative h-28 overflow-hidden">
+            <img
+              src={game.thumbnail}
+              alt={game.name}
+              className="w-full h-full object-cover poster-reveal"
+              loading="lazy"
+              style={{ filter: `saturate(${freshness.saturation})` }}
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0f] via-[#0a0a0f]/40 to-transparent" />
+          </div>
+        ) : (
+          <div className="h-20 bg-gradient-to-r from-purple-900/10 to-blue-900/10 flex items-center justify-center">
+            <Gamepad2 size={28} className="text-white/10" />
+          </div>
+        )}
+
+        {/* Streak flame badge */}
+        {streak.isActive && (
+          <div className="absolute top-2 left-2 text-[10px] px-1.5 py-0.5 bg-black/60 backdrop-blur-sm text-orange-400 rounded font-bold flex items-center gap-0.5 streak-flame">
+            🔥 {streak.days}
+          </div>
+        )}
+
+        {/* Rarity badge */}
+        {rarity.tier !== 'common' && (
+          <div className="absolute top-2 right-2 text-[9px] px-1.5 py-0.5 bg-black/60 backdrop-blur-sm rounded font-bold uppercase tracking-wider"
+            style={{
+              color: rarity.tier === 'legendary' ? '#fbbf24'
+                : rarity.tier === 'epic' ? '#a855f7'
+                : rarity.tier === 'rare' ? '#3b82f6'
+                : '#22c55e',
+            }}
+          >
+            {rarity.label}
+          </div>
+        )}
+
+        {/* Hero number */}
+        <div className="absolute bottom-2 right-3">
+          <div className="text-right">
+            <div className="text-xl font-black" style={{ color: heroNum.color }}>{heroNum.value}</div>
+            <div className="text-[9px] text-white/30 -mt-0.5">{heroNum.label}</div>
+          </div>
+        </div>
+
+        {/* Name + Relationship overlay */}
+        <div className="absolute bottom-2 left-3 right-16">
+          <h3 className="text-white font-bold text-base leading-tight truncate">{game.name}</h3>
+          <div className="flex items-center gap-1.5 mt-0.5">
+            <span
+              className="text-[10px] px-2 py-0.5 rounded-full font-bold"
+              style={{ color: relationship.color, backgroundColor: relationship.bgColor }}
+            >
+              {relationship.label}
+            </span>
+            {game.genre && <span className="text-[10px] text-white/30">{game.genre}</span>}
+          </div>
+        </div>
+      </div>
+
+      {/* Stats bar */}
+      <div className="px-3 py-2.5 flex items-center gap-3">
+        <div className="flex items-center gap-1 text-xs text-white/50">
+          <DollarSign size={10} className="text-white/30" />
+          <span>{game.acquiredFree ? 'Free' : `$${game.price}`}</span>
+        </div>
+        <div className="flex items-center gap-1 text-xs text-white/50">
+          <Clock size={10} className="text-white/30" />
+          <span>{game.totalHours}h</span>
+        </div>
+        <div className="flex items-center gap-0.5">
+          <RatingStars rating={game.rating} size={9} />
+        </div>
+        {game.totalHours > 0 && game.price > 0 && (
+          <span className={clsx('text-xs font-medium', getValueColor(game.metrics.valueRating))}>
+            ${game.metrics.costPerHour.toFixed(2)}/hr
+          </span>
+        )}
+        <div className="flex-1" />
+        {/* Tags that fit */}
+        {game.platform && <span className="text-[9px] px-1.5 py-0.5 bg-white/5 rounded text-white/30">{game.platform}</span>}
+      </div>
+
+      {/* Smart one-liner */}
+      {smartLine && (
+        <div className="px-3 pb-2.5 -mt-1">
+          <p className="text-[10px] text-white/25 italic truncate">{smartLine}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// --- Compact Card (original layout, fixed) ---
+
+function CompactCard({ game, allGames, idx, onClick, onLogTime, onToggleQueue, onDelete, isInQueue }: {
+  game: GameWithMetrics;
+  allGames: Game[];
+  idx: number;
+  onClick: () => void;
+  onLogTime: () => void;
+  onToggleQueue: () => void;
+  onDelete: () => void;
+  isInQueue: boolean;
+}) {
+  const rarity = getCardRarity(game);
+  const relationship = getRelationshipStatus(game, allGames);
+  const streak = getGameStreak(game);
+  const heroNum = getHeroNumber(game);
+  const freshness = getCardFreshness(game);
+  const daysCtx = getDaysContext(game);
+  const franchise = getFranchiseInfo(game, allGames);
+  const smartLine = getGameSmartOneLiner(game, allGames);
+  const lastPlayedStr = game.playLogs && game.playLogs.length > 0
+    ? (() => {
+        const sorted = [...game.playLogs].sort((a, b) => parseLocalDate(b.date).getTime() - parseLocalDate(a.date).getTime());
+        return getRelativeTime(sorted[0].date);
+      })()
+    : null;
+
+  return (
+    <div
+      onClick={onClick}
+      className={clsx(
+        'p-4 rounded-xl border cursor-pointer transition-all card-enter',
+        rarity.borderClass || 'border-white/5',
+      )}
+      style={{
+        animationDelay: `${idx * 40}ms`,
+        opacity: freshness.opacity,
+        backgroundColor: relationship.cardTint,
+      }}
+    >
+      {/* Row 1: Thumbnail + Name + Hero Number */}
+      <div className="flex items-start gap-3 mb-2">
+        <div className="shrink-0 relative">
+          {game.thumbnail ? (
+            <img
+              src={game.thumbnail}
+              alt={game.name}
+              className="w-14 h-14 object-cover rounded-lg"
+              loading="lazy"
+              style={{ filter: `saturate(${freshness.saturation})` }}
+            />
+          ) : (
+            <div className="w-14 h-14 bg-white/5 rounded-lg flex items-center justify-center">
+              <Gamepad2 size={20} className="text-white/20" />
+            </div>
+          )}
+          {/* Streak flame */}
+          {streak.isActive && (
+            <div className="absolute -top-1 -left-1 text-[9px] px-1 py-0.5 bg-orange-500/20 text-orange-400 rounded font-bold streak-flame">
+              🔥{streak.days}
+            </div>
+          )}
+        </div>
+
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
+            <h3 className="text-white/90 font-medium text-sm truncate">{game.name}</h3>
+            <span
+              className="text-[10px] px-2 py-0.5 rounded-full font-bold shrink-0"
+              style={{ color: relationship.color, backgroundColor: relationship.bgColor }}
+            >
+              {relationship.label}
+            </span>
+          </div>
+          <div className="flex items-center gap-2 text-[10px] text-white/30">
+            <span>{daysCtx}</span>
+            {lastPlayedStr && (
+              <>
+                <span className="text-white/10">·</span>
+                <span>Last {lastPlayedStr}</span>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Hero number */}
+        <div className="shrink-0 text-right">
+          <div className="text-lg font-black leading-none" style={{ color: heroNum.color }}>{heroNum.value}</div>
+          <div className="text-[9px] text-white/25">{heroNum.label}</div>
+        </div>
+      </div>
+
+      {/* Row 2: Tags — full width */}
+      <div className="flex items-center gap-1.5 flex-wrap mb-2">
+        {game.platform && <span className="text-[10px] px-2 py-0.5 bg-white/5 rounded text-white/40">{game.platform}</span>}
+        {game.genre && <span className="text-[10px] px-2 py-0.5 bg-white/5 rounded text-white/40">{game.genre}</span>}
+        {game.purchaseSource && <span className="text-[10px] px-2 py-0.5 bg-white/5 rounded text-white/40">{game.purchaseSource}</span>}
+        {franchise && (
+          <span className="text-[10px] px-2 py-0.5 bg-purple-500/10 text-purple-400 rounded font-medium">
+            {franchise.franchiseName} #{franchise.position}/{franchise.gamesInFranchise}
+          </span>
+        )}
+        {game.totalHours > 0 && (
+          <span className={clsx(
+            'text-[10px] px-2 py-0.5 rounded font-medium',
+            game.metrics.valueRating === 'Excellent' && 'bg-emerald-500/20 text-emerald-400',
+            game.metrics.valueRating === 'Good' && 'bg-blue-500/20 text-blue-400',
+            game.metrics.valueRating === 'Fair' && 'bg-yellow-500/20 text-yellow-400',
+            game.metrics.valueRating === 'Poor' && 'bg-red-500/20 text-red-400'
+          )}>
+            {game.metrics.valueRating}
+          </span>
+        )}
+        {rarity.tier !== 'common' && (
+          <span className="text-[9px] px-1.5 py-0.5 rounded font-bold uppercase"
+            style={{
+              color: rarity.tier === 'legendary' ? '#fbbf24' : rarity.tier === 'epic' ? '#a855f7' : rarity.tier === 'rare' ? '#3b82f6' : '#22c55e',
+              backgroundColor: rarity.tier === 'legendary' ? 'rgba(251,191,36,0.1)' : rarity.tier === 'epic' ? 'rgba(168,85,247,0.1)' : rarity.tier === 'rare' ? 'rgba(59,130,246,0.1)' : 'rgba(34,197,94,0.1)',
+            }}
+          >
+            {rarity.label}
+          </span>
+        )}
+        {game.acquiredFree && <span className="text-[10px] px-2 py-0.5 bg-emerald-500/20 text-emerald-400 rounded font-medium">FREE</span>}
+        {game.isSpecial && (
+          <span className="text-[10px] px-2 py-0.5 bg-amber-500/20 text-amber-400 rounded font-medium flex items-center gap-0.5">
+            <Heart size={8} className="fill-amber-400" /> Special
+          </span>
+        )}
+      </div>
+
+      {/* Row 3: Stats grid */}
+      <div className="grid grid-cols-4 gap-2 text-center mb-2">
+        <div className="p-1.5 bg-white/[0.02] rounded-lg">
+          <div className="text-white/80 font-medium text-xs">{game.acquiredFree ? 'Free' : `$${game.price}`}</div>
+          <div className="text-[9px] text-white/25">price</div>
+        </div>
+        <div className="p-1.5 bg-white/[0.02] rounded-lg">
+          <div className="text-white/80 font-medium text-xs">{game.totalHours}h</div>
+          <div className="text-[9px] text-white/25">played</div>
+        </div>
+        <div className="p-1.5 bg-white/[0.02] rounded-lg">
+          <div className="flex justify-center"><RatingStars rating={game.rating} size={9} /></div>
+          <div className="text-[9px] text-white/25">{game.rating}/10</div>
+        </div>
+        <div className="p-1.5 bg-white/[0.02] rounded-lg">
+          {game.totalHours > 0 && game.price > 0 ? (
+            <div className={clsx('font-medium text-xs', getValueColor(game.metrics.valueRating))}>
+              ${game.metrics.costPerHour.toFixed(2)}
+            </div>
+          ) : (
+            <div className="text-white/30 font-medium text-xs">-</div>
+          )}
+          <div className="text-[9px] text-white/25">per hr</div>
+        </div>
+      </div>
+
+      {/* Row 4: Smart one-liner */}
+      {smartLine && (
+        <p className="text-[10px] text-white/25 italic truncate mb-2">{smartLine}</p>
+      )}
+
+      {/* Row 5: Action buttons — always visible */}
+      <div className="flex items-center gap-1.5 pt-2 border-t border-white/5">
+        <button
+          onClick={(e) => { e.stopPropagation(); onLogTime(); }}
+          className="flex items-center gap-1 px-2.5 py-1.5 text-white/30 active:text-blue-400 active:bg-blue-500/10 rounded-lg transition-all text-xs"
+        >
+          <Clock size={12} /> Log
+        </button>
+        <button
+          onClick={(e) => { e.stopPropagation(); onToggleQueue(); }}
+          className={clsx(
+            'px-2.5 py-1.5 rounded-lg transition-all text-xs flex items-center gap-1',
+            isInQueue ? 'text-purple-400 bg-purple-500/10' : 'text-white/30'
+          )}
+        >
+          {isInQueue ? <Check size={12} /> : <ListPlus size={12} />}
+          {isInQueue ? 'Queued' : 'Queue'}
+        </button>
+        <div className="flex-1" />
+        <button
+          onClick={(e) => { e.stopPropagation(); onDelete(); }}
+          className="p-1.5 text-white/20 active:text-red-400 rounded-lg transition-all"
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+          </svg>
+        </button>
       </div>
     </div>
   );
