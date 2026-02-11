@@ -6380,3 +6380,785 @@ export function getMonthMoodArc(data: MonthInReviewData): MoodArcPoint[] {
     return { weekNum: w.weekNum, intensity, label, hours: w.hours, sessions: w.sessions };
   });
 }
+
+// ============================================================
+// CARD REDESIGN — New calculation functions
+// ============================================================
+
+// --- Card Rarity ---
+
+export type RarityTier = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
+
+export interface CardRarity {
+  tier: RarityTier;
+  label: string;
+  score: number;
+  borderClass: string;
+}
+
+export function getCardRarity(game: Game): CardRarity {
+  const totalHours = getTotalHours(game);
+  const metrics = calculateMetrics(game);
+
+  // Composite score: rating 40%, value 30%, hours 20%, completion 10%
+  const ratingScore = (game.rating / 10) * 40;
+
+  let valueScore = 0;
+  if (metrics.valueRating === 'Excellent') valueScore = 30;
+  else if (metrics.valueRating === 'Good') valueScore = 22;
+  else if (metrics.valueRating === 'Fair') valueScore = 12;
+  else valueScore = 5;
+  if (totalHours === 0 && game.price === 0) valueScore = 15; // free, unplayed
+
+  const hoursScore = Math.min(20, (totalHours / 100) * 20);
+
+  let completionScore = 0;
+  if (game.status === 'Completed') completionScore = 10;
+  else if (game.status === 'In Progress') completionScore = 5;
+
+  const score = Math.round(ratingScore + valueScore + hoursScore + completionScore);
+
+  if (score >= 85 && game.rating >= 8) {
+    return { tier: 'legendary', label: 'Legendary', score, borderClass: 'rarity-glow-legendary' };
+  }
+  if (score >= 70) {
+    return { tier: 'epic', label: 'Epic', score, borderClass: 'rarity-glow-epic' };
+  }
+  if (score >= 50) {
+    return { tier: 'rare', label: 'Rare', score, borderClass: 'rarity-glow-rare' };
+  }
+  if (score >= 30) {
+    return { tier: 'uncommon', label: 'Uncommon', score, borderClass: 'rarity-glow-uncommon' };
+  }
+  return { tier: 'common', label: 'Common', score, borderClass: '' };
+}
+
+// --- Relationship Status ---
+
+export interface RelationshipStatus {
+  label: string;
+  color: string;
+  bgColor: string;
+  cardTint: string; // subtle full-card tint for this status
+}
+
+export function getRelationshipStatus(game: Game, allGames: Game[]): RelationshipStatus {
+  const totalHours = getTotalHours(game);
+  const logs = game.playLogs || [];
+  const now = Date.now();
+  const DAY = 24 * 60 * 60 * 1000;
+
+  // Sort logs by date descending
+  const sortedLogs = logs.length > 0
+    ? [...logs].sort((a, b) => parseLocalDate(b.date).getTime() - parseLocalDate(a.date).getTime())
+    : [];
+  const daysSinceLastPlay = sortedLogs.length > 0
+    ? Math.floor((now - parseLocalDate(sortedLogs[0].date).getTime()) / DAY)
+    : -1;
+
+  // Count days played in last 7 days
+  const sevenDaysAgo = now - 7 * DAY;
+  const daysPlayedLast7 = new Set(
+    logs.filter(l => parseLocalDate(l.date).getTime() >= sevenDaysAgo).map(l => l.date)
+  ).size;
+
+  // Days since purchase
+  const daysSincePurchase = game.datePurchased
+    ? Math.floor((now - parseLocalDate(game.datePurchased).getTime()) / DAY)
+    : game.createdAt
+    ? Math.floor((now - new Date(game.createdAt).getTime()) / DAY)
+    : 0;
+
+  // Days since start
+  const daysSinceStart = game.startDate
+    ? Math.floor((now - parseLocalDate(game.startDate).getTime()) / DAY)
+    : 0;
+
+  // Check if recently completed + still playing
+  if (game.status === 'Completed' && game.rating >= 8 && daysSinceLastPlay >= 0 && daysSinceLastPlay <= 14 && logs.length > 0) {
+    return { label: 'Victory Lap', color: '#fbbf24', bgColor: 'rgba(251,191,36,0.15)', cardTint: 'rgba(251,191,36,0.03)' };
+  }
+
+  // Soulmate: 100+ hours AND rating >= 8
+  if (totalHours >= 100 && game.rating >= 8) {
+    return { label: 'Soulmate', color: '#fbbf24', bgColor: 'rgba(251,191,36,0.15)', cardTint: 'rgba(251,191,36,0.04)' };
+  }
+
+  // Obsessed: played 4+ of last 7 days
+  if (daysPlayedLast7 >= 4 && game.status === 'In Progress') {
+    return { label: 'Obsessed', color: '#f97316', bgColor: 'rgba(249,115,22,0.15)', cardTint: 'rgba(249,115,22,0.03)' };
+  }
+
+  // Comfort Game: 50+ hours, still playing, sessions spread over 60+ days
+  if (totalHours >= 50 && game.status === 'In Progress' && daysSinceStart >= 60 && daysSinceLastPlay >= 0 && daysSinceLastPlay <= 14) {
+    return { label: 'Comfort Game', color: '#10b981', bgColor: 'rgba(16,185,129,0.15)', cardTint: 'rgba(16,185,129,0.03)' };
+  }
+
+  // Love at First Sight: rating >= 9, under 10 hours
+  if (game.rating >= 9 && totalHours < 10 && totalHours > 0) {
+    return { label: 'Love at First Sight', color: '#ec4899', bgColor: 'rgba(236,72,153,0.15)', cardTint: 'rgba(236,72,153,0.03)' };
+  }
+
+  // Speed Run: completed in under 14 days
+  if (game.status === 'Completed' && game.startDate && game.endDate) {
+    const completionDays = Math.floor((parseLocalDate(game.endDate).getTime() - parseLocalDate(game.startDate).getTime()) / DAY);
+    if (completionDays <= 14) {
+      return { label: 'Speed Run', color: '#eab308', bgColor: 'rgba(234,179,8,0.15)', cardTint: 'rgba(234,179,8,0.03)' };
+    }
+  }
+
+  // Rebound: started within 3 days of completing another game
+  if (game.startDate) {
+    const startTime = parseLocalDate(game.startDate).getTime();
+    const isRebound = allGames.some(g =>
+      g.id !== game.id && g.status === 'Completed' && g.endDate &&
+      Math.abs(startTime - parseLocalDate(g.endDate).getTime()) <= 3 * DAY
+    );
+    if (isRebound && game.status === 'In Progress') {
+      return { label: 'Rebound', color: '#14b8a6', bgColor: 'rgba(20,184,166,0.15)', cardTint: 'rgba(20,184,166,0.03)' };
+    }
+  }
+
+  // Going Strong: 2-3 sessions in last 7 days
+  if (daysPlayedLast7 >= 2 && daysPlayedLast7 <= 3 && game.status === 'In Progress') {
+    return { label: 'Going Strong', color: '#3b82f6', bgColor: 'rgba(59,130,246,0.15)', cardTint: 'rgba(59,130,246,0.03)' };
+  }
+
+  // Fresh Start: started in last 7 days
+  if (game.status === 'In Progress' && daysSinceStart <= 7 && daysSinceStart >= 0) {
+    return { label: 'Fresh Start', color: '#22d3ee', bgColor: 'rgba(34,211,238,0.15)', cardTint: 'rgba(34,211,238,0.03)' };
+  }
+
+  // Slow Burn: in progress 90+ days, still active
+  if (game.status === 'In Progress' && daysSinceStart >= 90 && daysSinceLastPlay >= 0 && daysSinceLastPlay <= 14) {
+    return { label: 'Slow Burn', color: '#f59e0b', bgColor: 'rgba(245,158,11,0.15)', cardTint: 'rgba(245,158,11,0.03)' };
+  }
+
+  // Completed (generic)
+  if (game.status === 'Completed') {
+    return { label: 'Completed', color: '#10b981', bgColor: 'rgba(16,185,129,0.15)', cardTint: 'rgba(16,185,129,0.02)' };
+  }
+
+  // It's Complicated: abandoned after 20+ hours
+  if (game.status === 'Abandoned' && totalHours >= 20) {
+    return { label: "It's Complicated", color: '#a855f7', bgColor: 'rgba(168,85,247,0.15)', cardTint: 'rgba(168,85,247,0.03)' };
+  }
+
+  // Buyer's Remorse: paid $40+, under 2 hours, no session in 30+ days
+  if (game.price >= 40 && totalHours < 2 && (daysSinceLastPlay > 30 || (logs.length === 0 && daysSincePurchase > 30)) && game.status !== 'Wishlist') {
+    return { label: "Buyer's Remorse", color: '#ef4444', bgColor: 'rgba(239,68,68,0.15)', cardTint: 'rgba(239,68,68,0.03)' };
+  }
+
+  // Ghosted: in progress but no session in 30+ days
+  if (game.status === 'In Progress' && daysSinceLastPlay > 30) {
+    return { label: 'Ghosted', color: '#6b7280', bgColor: 'rgba(107,114,128,0.15)', cardTint: 'rgba(107,114,128,0.03)' };
+  }
+
+  // Abandoned (generic)
+  if (game.status === 'Abandoned') {
+    return { label: 'Abandoned', color: '#ef4444', bgColor: 'rgba(239,68,68,0.15)', cardTint: 'rgba(239,68,68,0.02)' };
+  }
+
+  // The One That Got Away: wishlist 60+ days
+  if (game.status === 'Wishlist' && daysSincePurchase >= 60) {
+    return { label: 'The One That Got Away', color: '#a855f7', bgColor: 'rgba(168,85,247,0.15)', cardTint: 'rgba(168,85,247,0.03)' };
+  }
+
+  // Wishlist (generic)
+  if (game.status === 'Wishlist') {
+    return { label: 'Wishlist', color: '#a855f7', bgColor: 'rgba(168,85,247,0.15)', cardTint: 'rgba(168,85,247,0.02)' };
+  }
+
+  // Dusty Shelf: not started, owned 60+ days
+  if (game.status === 'Not Started' && daysSincePurchase >= 60) {
+    return { label: 'Dusty Shelf', color: '#92400e', bgColor: 'rgba(146,64,14,0.15)', cardTint: 'rgba(146,64,14,0.03)' };
+  }
+
+  // Not Started (generic)
+  if (game.status === 'Not Started') {
+    return { label: 'Waiting Room', color: '#6b7280', bgColor: 'rgba(107,114,128,0.15)', cardTint: 'rgba(107,114,128,0.02)' };
+  }
+
+  // In Progress fallback
+  return { label: 'In Progress', color: '#3b82f6', bgColor: 'rgba(59,130,246,0.15)', cardTint: 'rgba(59,130,246,0.02)' };
+}
+
+// --- Game Streak ---
+
+export interface GameStreakData {
+  days: number;
+  level: 'none' | 'small' | 'medium' | 'large';
+  isActive: boolean;
+}
+
+export function getGameStreak(game: Game): GameStreakData {
+  const logs = game.playLogs || [];
+  if (logs.length === 0) return { days: 0, level: 'none', isActive: false };
+
+  const dates = [...new Set(logs.map(l => l.date))].sort(
+    (a, b) => parseLocalDate(b).getTime() - parseLocalDate(a).getTime()
+  );
+
+  const now = new Date();
+  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  const yesterdayDate = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  const yesterdayStr = `${yesterdayDate.getFullYear()}-${String(yesterdayDate.getMonth() + 1).padStart(2, '0')}-${String(yesterdayDate.getDate()).padStart(2, '0')}`;
+
+  // Streak must include today or yesterday to be "active"
+  if (dates[0] !== todayStr && dates[0] !== yesterdayStr) {
+    return { days: 0, level: 'none', isActive: false };
+  }
+
+  let streak = 1;
+  let currentDate = parseLocalDate(dates[0]);
+
+  for (let i = 1; i < dates.length; i++) {
+    const prevDate = new Date(currentDate.getTime() - 24 * 60 * 60 * 1000);
+    const prevStr = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}-${String(prevDate.getDate()).padStart(2, '0')}`;
+
+    if (dates[i] === prevStr) {
+      streak++;
+      currentDate = prevDate;
+    } else {
+      break;
+    }
+  }
+
+  if (streak < 3) return { days: streak, level: 'none', isActive: false };
+
+  let level: 'small' | 'medium' | 'large';
+  if (streak >= 7) level = 'large';
+  else if (streak >= 5) level = 'medium';
+  else level = 'small';
+
+  return { days: streak, level, isActive: true };
+}
+
+// --- Hero Number ---
+
+export interface HeroNumber {
+  value: string;
+  label: string;
+  color: string;
+}
+
+export function getHeroNumber(game: Game): HeroNumber {
+  const totalHours = getTotalHours(game);
+  const metrics = calculateMetrics(game);
+
+  if (game.status === 'In Progress') {
+    // Show completion probability if we have enough data
+    // Simplified — just show hours since that's always available
+    if (totalHours > 0) {
+      return {
+        value: `${totalHours}h`,
+        label: 'played',
+        color: '#3b82f6',
+      };
+    }
+    return { value: 'New', label: 'just started', color: '#22d3ee' };
+  }
+
+  if (game.status === 'Completed') {
+    if (totalHours > 0 && game.price > 0) {
+      return {
+        value: `$${metrics.costPerHour.toFixed(metrics.costPerHour < 1 ? 2 : 1)}`,
+        label: 'per hr',
+        color: metrics.valueRating === 'Excellent' ? '#10b981'
+          : metrics.valueRating === 'Good' ? '#3b82f6'
+          : metrics.valueRating === 'Fair' ? '#f59e0b'
+          : '#ef4444',
+      };
+    }
+    return { value: `${game.rating}`, label: 'rating', color: '#10b981' };
+  }
+
+  if (game.status === 'Wishlist') {
+    const daysSince = game.createdAt
+      ? Math.floor((Date.now() - new Date(game.createdAt).getTime()) / (24 * 60 * 60 * 1000))
+      : 0;
+    return {
+      value: `${daysSince}d`,
+      label: 'waiting',
+      color: '#a855f7',
+    };
+  }
+
+  if (game.status === 'Not Started') {
+    const daysSince = game.datePurchased
+      ? Math.floor((Date.now() - parseLocalDate(game.datePurchased).getTime()) / (24 * 60 * 60 * 1000))
+      : game.createdAt
+      ? Math.floor((Date.now() - new Date(game.createdAt).getTime()) / (24 * 60 * 60 * 1000))
+      : 0;
+    return {
+      value: `${daysSince}d`,
+      label: 'owned',
+      color: '#6b7280',
+    };
+  }
+
+  if (game.status === 'Abandoned') {
+    return {
+      value: `${totalHours}h`,
+      label: 'sunk',
+      color: '#ef4444',
+    };
+  }
+
+  return { value: '-', label: '', color: '#6b7280' };
+}
+
+// --- Card Freshness (Aging) ---
+
+export interface CardFreshness {
+  level: 'fresh' | 'recent' | 'dusty' | 'forgotten';
+  saturation: number; // CSS saturate value (0 to 1)
+  opacity: number; // card opacity
+}
+
+export function getCardFreshness(game: Game): CardFreshness {
+  if (game.status === 'Completed' || game.status === 'Wishlist') {
+    return { level: 'recent', saturation: 1, opacity: 1 };
+  }
+
+  const logs = game.playLogs || [];
+  if (logs.length === 0) {
+    const daysSince = game.datePurchased
+      ? Math.floor((Date.now() - parseLocalDate(game.datePurchased).getTime()) / (24 * 60 * 60 * 1000))
+      : game.createdAt
+      ? Math.floor((Date.now() - new Date(game.createdAt).getTime()) / (24 * 60 * 60 * 1000))
+      : 0;
+    if (daysSince > 90) return { level: 'forgotten', saturation: 0.4, opacity: 0.85 };
+    if (daysSince > 30) return { level: 'dusty', saturation: 0.7, opacity: 0.92 };
+    return { level: 'recent', saturation: 1, opacity: 1 };
+  }
+
+  const sorted = [...logs].sort((a, b) => parseLocalDate(b.date).getTime() - parseLocalDate(a.date).getTime());
+  const daysSince = Math.floor((Date.now() - parseLocalDate(sorted[0].date).getTime()) / (24 * 60 * 60 * 1000));
+
+  if (daysSince <= 7) return { level: 'fresh', saturation: 1, opacity: 1 };
+  if (daysSince <= 30) return { level: 'recent', saturation: 1, opacity: 1 };
+  if (daysSince <= 90) return { level: 'dusty', saturation: 0.7, opacity: 0.92 };
+  return { level: 'forgotten', saturation: 0.4, opacity: 0.85 };
+}
+
+// --- Game Sections (Personality Grouping) ---
+
+export interface GameSection {
+  id: string;
+  label: string;
+  insight: string;
+  gameIds: string[];
+}
+
+export function getGameSections(games: Game[]): GameSection[] {
+  const now = Date.now();
+  const DAY = 24 * 60 * 60 * 1000;
+  const sections: GameSection[] = [];
+
+  // On Fire: played in last 7 days
+  const onFire = games.filter(g => {
+    const logs = g.playLogs || [];
+    if (logs.length === 0) return false;
+    const sorted = [...logs].sort((a, b) => parseLocalDate(b.date).getTime() - parseLocalDate(a.date).getTime());
+    return (now - parseLocalDate(sorted[0].date).getTime()) <= 7 * DAY;
+  });
+  if (onFire.length > 0) {
+    const totalHrs = onFire.reduce((sum, g) => {
+      const recent = (g.playLogs || []).filter(l => (now - parseLocalDate(l.date).getTime()) <= 7 * DAY);
+      return sum + recent.reduce((s, l) => s + l.hours, 0);
+    }, 0);
+    sections.push({
+      id: 'on-fire',
+      label: 'On Fire',
+      insight: `${onFire.length} game${onFire.length > 1 ? 's' : ''} active — ${totalHrs.toFixed(1)}h this week`,
+      gameIds: onFire.map(g => g.id),
+    });
+  }
+
+  // Cooling Off: In Progress, no session in 14-60 days
+  const coolingOff = games.filter(g => {
+    if (g.status !== 'In Progress') return false;
+    const logs = g.playLogs || [];
+    if (logs.length === 0) return false;
+    const sorted = [...logs].sort((a, b) => parseLocalDate(b.date).getTime() - parseLocalDate(a.date).getTime());
+    const daysSince = (now - parseLocalDate(sorted[0].date).getTime()) / DAY;
+    return daysSince > 14 && daysSince <= 60;
+  });
+  // Exclude games already in onFire
+  const coolingFiltered = coolingOff.filter(g => !onFire.some(f => f.id === g.id));
+  if (coolingFiltered.length > 0) {
+    sections.push({
+      id: 'cooling-off',
+      label: 'Cooling Off',
+      insight: `${coolingFiltered.length} game${coolingFiltered.length > 1 ? 's' : ''} losing momentum`,
+      gameIds: coolingFiltered.map(g => g.id),
+    });
+  }
+
+  // The Collection: completed
+  const completed = games.filter(g => g.status === 'Completed');
+  if (completed.length > 0) {
+    sections.push({
+      id: 'collection',
+      label: 'The Collection',
+      insight: `${completed.length} game${completed.length > 1 ? 's' : ''} completed`,
+      gameIds: completed.map(g => g.id),
+    });
+  }
+
+  // Waiting Room: not started
+  const waiting = games.filter(g => g.status === 'Not Started');
+  if (waiting.length > 0) {
+    sections.push({
+      id: 'waiting-room',
+      label: 'Waiting Room',
+      insight: `${waiting.length} game${waiting.length > 1 ? 's' : ''} in the backlog`,
+      gameIds: waiting.map(g => g.id),
+    });
+  }
+
+  // The Shelf: wishlist
+  const wishlist = games.filter(g => g.status === 'Wishlist');
+  if (wishlist.length > 0) {
+    sections.push({
+      id: 'the-shelf',
+      label: 'The Shelf',
+      insight: `${wishlist.length} game${wishlist.length > 1 ? 's' : ''} on the wishlist`,
+      gameIds: wishlist.map(g => g.id),
+    });
+  }
+
+  // The Graveyard: abandoned
+  const abandoned = games.filter(g => g.status === 'Abandoned');
+  if (abandoned.length > 0) {
+    sections.push({
+      id: 'graveyard',
+      label: 'The Graveyard',
+      insight: `${abandoned.length} game${abandoned.length > 1 ? 's' : ''} laid to rest`,
+      gameIds: abandoned.map(g => g.id),
+    });
+  }
+
+  // In Progress games not in onFire or coolingOff
+  const inProgressRest = games.filter(g =>
+    g.status === 'In Progress' &&
+    !onFire.some(f => f.id === g.id) &&
+    !coolingFiltered.some(f => f.id === g.id)
+  );
+  if (inProgressRest.length > 0) {
+    sections.push({
+      id: 'in-progress',
+      label: 'In Progress',
+      insight: `${inProgressRest.length} game${inProgressRest.length > 1 ? 's' : ''} on the go`,
+      gameIds: inProgressRest.map(g => g.id),
+    });
+  }
+
+  return sections;
+}
+
+// --- Game Biography ---
+
+export function generateGameBiography(game: Game, allGames: Game[]): string {
+  const totalHours = getTotalHours(game);
+  const metrics = calculateMetrics(game);
+  const logs = game.playLogs || [];
+  const DAY = 24 * 60 * 60 * 1000;
+
+  const parts: string[] = [];
+
+  // Opening — how you got it
+  if (game.datePurchased) {
+    const dateObj = parseLocalDate(game.datePurchased);
+    const monthName = dateObj.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
+    if (game.acquiredFree) {
+      parts.push(`Picked up ${game.name} for free on ${monthName}.`);
+    } else if (game.originalPrice && game.originalPrice > game.price) {
+      const discount = Math.round(((game.originalPrice - game.price) / game.originalPrice) * 100);
+      parts.push(`Snagged ${game.name} for $${game.price} (${discount}% off) on ${monthName}.`);
+    } else {
+      parts.push(`Picked up ${game.name} for $${game.price} on ${monthName}.`);
+    }
+  } else if (game.acquiredFree) {
+    parts.push(`${game.name} came free — no strings attached.`);
+  } else {
+    parts.push(`${game.name} joined the library for $${game.price}.`);
+  }
+
+  // How quickly you started
+  if (game.datePurchased && game.startDate) {
+    const daysToStart = Math.floor((parseLocalDate(game.startDate).getTime() - parseLocalDate(game.datePurchased).getTime()) / DAY);
+    if (daysToStart === 0) parts.push("You couldn't wait — started the same day.");
+    else if (daysToStart === 1) parts.push('Started it the very next day.');
+    else if (daysToStart <= 3) parts.push(`Started just ${daysToStart} days later.`);
+    else if (daysToStart <= 14) parts.push(`Started playing ${daysToStart} days after buying.`);
+    else if (daysToStart <= 60) parts.push(`Sat on the shelf for ${daysToStart} days before the first session.`);
+    else parts.push(`Gathered dust for ${daysToStart} days before you gave it a shot.`);
+  }
+
+  // Session summary
+  if (logs.length > 0) {
+    const sortedLogs = [...logs].sort((a, b) => parseLocalDate(a.date).getTime() - parseLocalDate(b.date).getTime());
+    const firstLog = sortedLogs[0];
+    const lastLog = sortedLogs[sortedLogs.length - 1];
+    const spanDays = Math.floor((parseLocalDate(lastLog.date).getTime() - parseLocalDate(firstLog.date).getTime()) / DAY);
+
+    const longestSession = Math.max(...logs.map(l => l.hours));
+    const longestDay = logs.reduce((best, l) => l.hours > best.hours ? l : best, logs[0]);
+    const longestDayOfWeek = parseLocalDate(longestDay.date).toLocaleDateString('en-US', { weekday: 'long' });
+
+    if (spanDays > 0) {
+      parts.push(`Over ${spanDays} day${spanDays > 1 ? 's' : ''} and ${logs.length} session${logs.length > 1 ? 's' : ''}, your longest was a ${longestSession}h ${longestDayOfWeek} marathon.`);
+    } else if (logs.length > 1) {
+      parts.push(`${logs.length} sessions so far, longest being ${longestSession}h.`);
+    }
+  }
+
+  // Completion
+  if (game.status === 'Completed') {
+    if (game.rating >= 9) {
+      parts.push(`Finished with a ${game.rating}/10 — one of your absolute favorites.`);
+    } else if (game.rating >= 7) {
+      parts.push(`Completed it with a solid ${game.rating}/10.`);
+    } else {
+      parts.push(`Saw it through to the end with a ${game.rating}/10.`);
+    }
+  } else if (game.status === 'Abandoned') {
+    if (totalHours >= 20) {
+      parts.push(`Abandoned after ${totalHours}h — it wasn't meant to be, despite a real effort.`);
+    } else {
+      parts.push(`Shelved after ${totalHours}h. Sometimes things just don't click.`);
+    }
+  }
+
+  // Value context
+  if (totalHours > 0 && game.price > 0) {
+    const cph = metrics.costPerHour;
+    if (cph < 1) {
+      // Count how many games have lower CPH
+      const cheaperCount = allGames.filter(g => {
+        const h = getTotalHours(g);
+        return h > 0 && g.price > 0 && calculateCostPerHour(g.price, h) < cph;
+      }).length;
+      if (cheaperCount <= 2) {
+        parts.push(`At $${cph.toFixed(2)}/hr, this is one of the best deals in your entire library.`);
+      } else {
+        parts.push(`Cost just $${cph.toFixed(2)}/hr — excellent value.`);
+      }
+    } else if (cph > 10) {
+      parts.push(`At $${cph.toFixed(2)}/hr, this one's still looking for its value.`);
+    }
+  }
+
+  // Comparison flavor
+  const ratedHigher = allGames.filter(g => g.rating > game.rating).length;
+  const totalRated = allGames.filter(g => g.rating > 0).length;
+  if (game.rating >= 9 && totalRated > 5) {
+    const topCount = allGames.filter(g => g.rating >= game.rating).length;
+    parts.push(`Only ${topCount} game${topCount > 1 ? 's' : ''} in your library rated this highly.`);
+  } else if (game.rating <= 4 && totalRated > 5) {
+    parts.push(`Rated lower than ${totalRated - ratedHigher - 1} other games in your collection.`);
+  }
+
+  return parts.join(' ');
+}
+
+// --- Game Verdicts ---
+
+export interface GameVerdict {
+  category: string;
+  verdict: string;
+  justification: string;
+  color: string;
+}
+
+export function getGameVerdicts(game: Game, allGames: Game[]): GameVerdict[] {
+  const totalHours = getTotalHours(game);
+  const metrics = calculateMetrics(game);
+  const verdicts: GameVerdict[] = [];
+
+  // Value verdict
+  if (totalHours > 0 && game.price > 0) {
+    const cph = metrics.costPerHour;
+    let verdict: string, justification: string, color: string;
+    if (cph <= 0.5) { verdict = 'Absolute Steal'; justification = 'Less than $0.50/hr'; color = '#10b981'; }
+    else if (cph <= 1) { verdict = 'Bargain'; justification = `$${cph.toFixed(2)}/hr — excellent`; color = '#10b981'; }
+    else if (cph <= 3) { verdict = 'Fair Deal'; justification = `$${cph.toFixed(2)}/hr — solid value`; color = '#3b82f6'; }
+    else if (cph <= 5) { verdict = 'Pricey'; justification = `$${cph.toFixed(2)}/hr — could be better`; color = '#f59e0b'; }
+    else { verdict = 'Overpaid'; justification = `$${cph.toFixed(2)}/hr — ouch`; color = '#ef4444'; }
+    verdicts.push({ category: 'Value', verdict, justification, color });
+  } else if (game.acquiredFree) {
+    verdicts.push({ category: 'Value', verdict: 'Free', justification: 'Literally free', color: '#10b981' });
+  }
+
+  // Commitment verdict
+  {
+    let verdict: string, justification: string, color: string;
+    if (totalHours >= 100) { verdict = 'Life Partner'; justification = `${totalHours}h invested`; color = '#fbbf24'; }
+    else if (totalHours >= 30) { verdict = 'Deep Dive'; justification = `${totalHours}h and counting`; color = '#3b82f6'; }
+    else if (totalHours >= 10) { verdict = 'Solid Run'; justification = `${totalHours}h played`; color = '#10b981'; }
+    else if (totalHours >= 2) { verdict = 'Casual Fling'; justification = `Only ${totalHours}h`; color = '#f59e0b'; }
+    else { verdict = 'One Night Stand'; justification = totalHours > 0 ? `Just ${totalHours}h` : 'Never played'; color = '#ef4444'; }
+    verdicts.push({ category: 'Commitment', verdict, justification, color });
+  }
+
+  // Library rank
+  {
+    const sorted = allGames
+      .filter(g => getTotalHours(g) > 0)
+      .sort((a, b) => {
+        const aScore = a.rating * 10 + getTotalHours(a);
+        const bScore = b.rating * 10 + getTotalHours(b);
+        return bScore - aScore;
+      });
+    const rank = sorted.findIndex(g => g.id === game.id);
+    const total = sorted.length;
+
+    if (total > 0 && rank >= 0) {
+      const pct = Math.round(((rank + 1) / total) * 100);
+      let verdict: string, color: string;
+      if (pct <= 10) { verdict = `Top ${pct}%`; color = '#fbbf24'; }
+      else if (pct <= 25) { verdict = 'Above Average'; color = '#10b981'; }
+      else if (pct <= 75) { verdict = 'Middle of the Pack'; color = '#6b7280'; }
+      else { verdict = 'Bottom Shelf'; color = '#ef4444'; }
+      verdicts.push({ category: 'In Your Library', verdict, justification: `#${rank + 1} of ${total} played`, color });
+    }
+  }
+
+  // Would you buy again
+  {
+    let verdict: string, color: string, justification: string;
+    if (game.rating >= 8 && (metrics.valueRating === 'Excellent' || metrics.valueRating === 'Good')) {
+      verdict = 'In a heartbeat'; color = '#10b981'; justification = 'Great rating + great value';
+    } else if (game.rating >= 7) {
+      verdict = 'Probably'; color = '#3b82f6'; justification = 'Enjoyed it enough';
+    } else if (game.rating >= 5 && totalHours >= 10) {
+      verdict = 'Maybe on sale'; color = '#f59e0b'; justification = 'Got some hours, but...';
+    } else if (game.status === 'Abandoned' || game.rating < 5) {
+      verdict = 'Absolutely not'; color = '#ef4444'; justification = game.status === 'Abandoned' ? "Couldn't finish it" : 'Not worth it';
+    } else {
+      verdict = 'Undecided'; color = '#6b7280'; justification = 'Too early to tell';
+    }
+    verdicts.push({ category: 'Buy Again?', verdict, justification, color });
+  }
+
+  // The Vibe
+  {
+    let verdict: string, color: string, justification: string;
+    if (totalHours >= 50 && game.rating >= 8) {
+      verdict = 'Mind-blowing'; color = '#a855f7'; justification = 'High hours, high rating';
+    } else if (totalHours >= 30 && game.rating < 6) {
+      verdict = 'Guilty Pleasure'; color = '#f97316'; justification = 'Many hours despite low rating';
+    } else if (game.rating >= 8 && totalHours < 10) {
+      verdict = 'Hidden Gem'; color = '#22d3ee'; justification = 'Loved it but short';
+    } else if (totalHours >= 20 && game.rating >= 6) {
+      verdict = 'Comfort Food'; color = '#10b981'; justification = 'Reliable and satisfying';
+    } else if (totalHours < 5 && game.rating < 5) {
+      verdict = 'Forgettable'; color = '#6b7280'; justification = "Didn't make an impression";
+    } else {
+      verdict = 'Solid Pick'; color = '#3b82f6'; justification = 'A good time';
+    }
+    verdicts.push({ category: 'The Vibe', verdict, justification, color });
+  }
+
+  return verdicts;
+}
+
+// --- Game Journey ---
+
+export interface JourneyMilestone {
+  date: string;
+  label: string;
+  type: 'purchase' | 'start' | 'session' | 'milestone' | 'completion' | 'abandon';
+  hours?: number;
+  detail?: string;
+  size: 'sm' | 'md' | 'lg'; // dot size
+}
+
+export function getGameJourney(game: Game): JourneyMilestone[] {
+  const milestones: JourneyMilestone[] = [];
+
+  // Purchase
+  if (game.datePurchased) {
+    milestones.push({
+      date: game.datePurchased,
+      label: game.acquiredFree ? 'Acquired free' : `Bought for $${game.price}`,
+      type: 'purchase',
+      size: 'md',
+    });
+  }
+
+  // Start
+  if (game.startDate) {
+    milestones.push({
+      date: game.startDate,
+      label: 'Started playing',
+      type: 'start',
+      size: 'md',
+    });
+  }
+
+  // Play sessions
+  const logs = game.playLogs || [];
+  let cumulativeHours = 0;
+  const sortedLogs = [...logs].sort((a, b) => parseLocalDate(a.date).getTime() - parseLocalDate(b.date).getTime());
+  const milestoneHours = new Set<number>();
+
+  for (const log of sortedLogs) {
+    const prevHours = cumulativeHours;
+    cumulativeHours += log.hours;
+
+    // Check for hour milestones
+    const hourThresholds = [10, 25, 50, 100, 200, 500];
+    for (const threshold of hourThresholds) {
+      if (prevHours < threshold && cumulativeHours >= threshold && !milestoneHours.has(threshold)) {
+        milestoneHours.add(threshold);
+        milestones.push({
+          date: log.date,
+          label: `Hit ${threshold} hours`,
+          type: 'milestone',
+          hours: threshold,
+          size: 'lg',
+        });
+      }
+    }
+
+    // Add session as a regular dot
+    milestones.push({
+      date: log.date,
+      label: `${log.hours}h session`,
+      type: 'session',
+      hours: log.hours,
+      detail: log.notes || undefined,
+      size: log.hours >= 4 ? 'lg' : log.hours >= 2 ? 'md' : 'sm',
+    });
+  }
+
+  // Completion or abandonment
+  if (game.endDate) {
+    if (game.status === 'Completed') {
+      milestones.push({
+        date: game.endDate,
+        label: `Completed — ${game.rating}/10`,
+        type: 'completion',
+        size: 'lg',
+      });
+    } else if (game.status === 'Abandoned') {
+      milestones.push({
+        date: game.endDate,
+        label: 'Abandoned',
+        type: 'abandon',
+        size: 'md',
+      });
+    }
+  }
+
+  // Sort by date, stable
+  milestones.sort((a, b) => parseLocalDate(a.date).getTime() - parseLocalDate(b.date).getTime());
+
+  // Deduplicate sessions that share a date with milestones
+  // Keep milestones, remove the session entry for the same date if there's a milestone
+  const milestoneDates = new Set(milestones.filter(m => m.type === 'milestone').map(m => m.date));
+  return milestones.filter(m => !(m.type === 'session' && milestoneDates.has(m.date)));
+}
