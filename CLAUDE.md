@@ -1478,6 +1478,338 @@ Story modal with the same swipe/tap/keyboard navigation pattern from WeekStoryMo
 
 ---
 
+## Card Redesign & Detail Panel Overhaul (Approved)
+
+Mobile-first redesign of game cards and detail panel. Two view modes: **Poster** (new default, visual-first) and **Compact** (current layout with fixes). 18 features across 4 areas. Approved 2026-02-11.
+
+**Design Philosophy**: Mobile-first. No hover. Visual > text. The game art does the talking. Every card tells a story, not a spreadsheet row. Think PlayStation app meets trading card collection.
+
+### View Mode Toggle
+
+A toggle between **Poster** and **Compact** modes, persisted in localStorage:
+- **Poster Mode** (new default): Visual-first cards with large game art, rarity borders, relationship labels, streak flames, color tints
+- **Compact Mode**: Current card layout with fixes — tags spread full-width (not clustered left), action buttons moved into the card body (not hidden behind hover), cleaner spacing
+
+**Files**: Toggle in `page.tsx`, localStorage key `game-analytics-card-view-mode`.
+
+---
+
+### A. Card Visual Identity
+
+#### A1. Poster Cards
+The current 64x64 thumbnail is a postage stamp on a phone. Make the game art the hero:
+- Full-width banner image across the top of the card (~120px tall on mobile)
+- Game name + status overlaid on a gradient at the bottom of the image (like the detail panel hero, but on every card)
+- Stats, tags, and actions sit below the image in a clean section
+- For games without thumbnails: gradient placeholder with a large centered icon
+- The card becomes a mini movie poster. Scrolling the list feels like browsing a shelf of games, not a data table
+
+**Files**: `page.tsx` game card rendering (lines 486-843).
+
+#### A2. Trading Card Rarity Borders
+Every game gets a **rarity tier** based on a composite score (rating weight 40%, value rating 30%, hours 20%, completion 10%):
+
+| Tier | Border Style | Criteria |
+|------|-------------|----------|
+| **Common** | Subtle grey border (`border-white/10`) | Composite < 30 |
+| **Uncommon** | Green border glow | Composite 30-50 |
+| **Rare** | Blue animated border glow | Composite 50-70 |
+| **Epic** | Purple animated border with subtle shimmer | Composite 70-85 |
+| **Legendary** | Gold animated border with particle shimmer | Composite 85+, requires rating >= 8 |
+
+Gamers instantly understand this language. You scroll and SEE your legendaries glowing. Makes the collection feel like a collection. Rarity tier name shown as a tiny label on the card.
+
+**Files**: `getCardRarity(game)` in calculations.ts, CSS animations in globals.css, applied in `page.tsx`.
+
+#### A3. Color-Tinted Cards
+Extract the dominant color from each game's thumbnail and use it as a very subtle background tint for that card (`rgba(dominant, 0.03-0.06)`). Each card feels unique — Elden Ring gets warm amber, Astro Bot gets cool blue. The list stops looking like a spreadsheet. Implementation: use a small canvas to sample the thumbnail's average color on load, cache in localStorage per game ID.
+
+**Files**: `hooks/useGameColors.ts` (color extraction + cache), applied as inline style in `page.tsx`.
+
+#### A4. Card "Aging" Effect
+Cards for games not touched in a long time get subtle visual aging:
+- **Fresh** (played in last 7 days): Full vibrancy, crisp
+- **Recent** (7-30 days): Normal
+- **Dusty** (30-90 days): Thumbnail slightly desaturated (CSS `saturate(0.7)`), very faint dust overlay
+- **Forgotten** (90+ days): More desaturated (`saturate(0.4)`), slight opacity reduction on the whole card
+
+Like actual game cases gathering dust on a shelf. Active games POP visually. Neglected ones fade. You feel the pull to go back.
+
+**Files**: `getCardFreshness(game)` in calculations.ts, CSS classes in globals.css, applied in `page.tsx`.
+
+---
+
+### B. Card Personality & Data
+
+#### B5. Relationship Status Labels
+Replace dry status badges ("In Progress", "Completed") with **emotional labels** that change based on actual behavioral data. The label is the PRIMARY badge — the technical status shows in tiny text underneath.
+
+| Label | Criteria | Visual |
+|-------|----------|--------|
+| **"Obsessed"** | Played 4+ of last 7 days | Warm red/orange pulse |
+| **"Going Strong"** | 2-3 sessions in last 7 days | Healthy blue |
+| **"It's Complicated"** | Abandoned after 20+ hours | Purple, conflicted |
+| **"Soulmate"** | 100+ hours AND rating >= 8 | Golden glow |
+| **"Love at First Sight"** | Rating >= 9, under 10 hours played | Pink sparkle |
+| **"Ghosted"** | In Progress but no session in 30+ days | Grey, fading |
+| **"Rebound"** | Started within 3 days of completing another game | Teal |
+| **"The One That Got Away"** | Wishlist for 60+ days | Purple, wistful |
+| **"Dusty Shelf"** | Not Started, owned 60+ days | Brown, dusty |
+| **"Speed Run"** | Completed in under 14 days | Lightning bolt, yellow |
+| **"Slow Burn"** | In Progress 90+ days, still active (session in last 14 days) | Amber, warm |
+| **"Comfort Game"** | 50+ hours, still playing, sessions spread over 60+ days | Cozy green |
+| **"Fresh Start"** | Started in the last 7 days | Bright, new |
+| **"Victory Lap"** | Completed, rated 8+, still logging sessions | Gold with stars |
+| **"Buyer's Remorse"** | Paid $40+, under 2 hours, no session in 30+ days | Red, regretful |
+
+Each relationship status gets its OWN subtle visual treatment on the card — "Obsessed" cards feel warm, "Ghosted" cards look slightly faded, "Soulmate" cards have a permanent gentle golden shimmer. The card's MOOD matches its relationship.
+
+**Innovation**: Show a micro-evolution line: tiny dots showing the last 3 relationship status changes. "Fresh Start → Going Strong → Obsessed". You see the journey, not just the destination.
+
+**Files**: `getRelationshipStatus(game, allGames)` in calculations.ts, status display in `page.tsx`.
+
+#### B6. Streak Flames
+If you've played a game 3+ days in a row (consecutive days with play logs), show a **flame badge** on the card:
+- 3-4 days: Small single flame
+- 5-6 days: Medium double flame
+- 7+ days: Large triple flame with glow
+- The flame count shows inside: "5" with a flame icon
+
+Positioned on the thumbnail corner (replacing the health dot, which the flame subsumes). Gamers are wired for streaks. This creates a "don't break the chain" loop.
+
+**Files**: `getGameStreak(game)` in calculations.ts, visual in `page.tsx`, CSS flame animation in globals.css.
+
+#### B7. Rating Stars
+Replace "8/10" text in the stats grid with **visual star display**:
+- 5 stars total (each star = 2 rating points)
+- Filled, half-filled, and empty states
+- Color matches value: gold for 8+, silver for 5-7, dim for under 5
+- Small enough to fit in the stat cell, but instantly scannable
+
+Numbers are for spreadsheets. Stars are for humans.
+
+**Files**: Small `RatingStars` component, used in `page.tsx` stat grid and detail panel.
+
+#### B8. Hero Number
+The wasted space on the right side of each card gets a **single prominent number** — the most important stat for that game right now:
+- **In Progress**: Completion probability percentage, large ("73%")
+- **Completed**: Cost per hour ("$0.67/hr")
+- **Wishlist**: Days waiting ("142d")
+- **Not Started**: Days owned ("34d")
+- **Abandoned**: Total hours sunk ("23h")
+
+Big. Readable. One thumb-scroll tells the story of every game. Positioned in the top-right area of the card, large font with appropriate color coding.
+
+**Files**: `getHeroNumber(game)` in calculations.ts, rendered in `page.tsx`.
+
+---
+
+### C. Card List Experience
+
+#### C9. "Now Playing" Pinned Card
+If there's a game played in the last 48 hours, pin it at the **top of the list** in a special expanded format:
+- Larger thumbnail/poster section
+- Prominent "Check In" button (one-tap to log time)
+- Current streak flame if applicable
+- This week's hours on this game
+- Relationship status front and center
+- Distinct visual treatment: slightly larger, maybe a "NOW PLAYING" header label with a pulsing dot
+
+Like Spotify's "Now Playing" bar. Your most active game greets you when you open the app. Not buried in a sorted list.
+
+**Files**: Rendered above the main game list in `page.tsx`, uses same card component but with `variant="now-playing"` styling.
+
+#### C10. Card Sections with Personality
+Instead of a flat sorted list, group games into **sections with personality**:
+
+| Section | Criteria | Vibe |
+|---------|----------|------|
+| **"On Fire"** | Played in last 7 days | Warm, active, pulsing |
+| **"Cooling Off"** | In Progress, no session in 14-60 days | Cool blue, fading |
+| **"The Collection"** | Completed games | Gold/emerald, proud |
+| **"Waiting Room"** | Not Started, owned | Neutral, patient |
+| **"The Shelf"** | Wishlist | Purple, aspirational |
+| **"The Graveyard"** | Abandoned | Dark, muted |
+
+Each section has a header with the name + game count + a one-line insight ("3 games on fire — your most active week in a month"). Sections are collapsible. The sort option works WITHIN sections. If a section is empty, it doesn't show.
+
+This tells you the state of your gaming life at a glance. You know where your attention is and what's been neglected.
+
+**Files**: `getGameSections(games)` in calculations.ts, section rendering in `page.tsx`. Sort/filter still works within the grouping.
+
+#### C11. Compact Mode Tag Fix
+In Compact mode (the current layout), fix the tag spacing issue:
+- Move the tags row out of the nested flex column and into its own full-width row
+- Tags span the entire card width between the name row and the stats grid
+- Action buttons (log time, queue, special, delete) move to a row below the stats grid, always visible (no hover dependency), styled as subtle icon buttons
+- This is the "fixed" version of the current layout for users who prefer density over visuals
+
+**Files**: `page.tsx` compact mode rendering.
+
+---
+
+### D. Detail Panel Redesign
+
+#### D12. Bottom Sheet (Replace Side Panel)
+Replace the right-sliding detail panel with a **mobile-native bottom sheet**:
+- Slides up from the bottom of the screen
+- Starts at ~60% screen height (hero image + key stats visible)
+- Drag handle at the top to pull to full screen
+- Drag down to dismiss (with velocity-based snap: gentle pull = snap back, firm pull = dismiss)
+- The game list is still visible above the sheet, maintaining spatial context
+- Background dims but doesn't fully black out
+- Smooth spring animation on open/close
+
+This is THE mobile interaction pattern (Maps, Uber, Spotify, every modern app). The current `animate-slide-in-right` with `max-w-xl` is a desktop pattern that feels foreign on a phone.
+
+**Files**: New `components/GameBottomSheet.tsx` replacing `GameDetailPanel.tsx`, integrate in `page.tsx`.
+
+#### D13. Game Biography
+Auto-generated **narrative paragraph** at the top of the detail view, built entirely from data (no AI needed):
+
+> *"Picked up Elden Ring for $60 on March 3. You couldn't wait — started just 2 days later. Over 47 days and 15 sessions, your longest being a 6-hour Saturday marathon. Completed it with a perfect 10/10 and a cost of $0.67/hr — that's better than 95% of your library. One of only 3 games you've ever rated that highly."*
+
+**Innovation — Narrative Voice Styles** based on the game's data:
+- **Epic/Heroic** (high-rated RPGs, 50+ hours): *"An epic 47-day odyssey through the Lands Between..."*
+- **Casual/Playful** (sports, party games): *"Quick pickup sessions of Cricket 24 became your go-to wind-down..."*
+- **Dramatic** (abandoned games): *"It started with such promise. 3 sessions in 2 days. Then... silence."*
+- **Celebratory** (completed gems, excellent value): *"A triumph. $60 well spent, 89 hours well lived."*
+- **Regretful** (high price, low hours, low rating): *"$70 for 2 hours. We don't talk about this one."*
+
+**Innovation — Contextual Comparisons** woven into the narrative:
+- "This is your 3rd longest relationship with a game"
+- "Only 2 other games cost less per hour"
+- "Your fastest completion — 8 days from start to finish"
+- "You've spent more hours here than on your entire Nintendo library"
+
+**Files**: `generateGameBiography(game, allGames)` in calculations.ts, displayed in bottom sheet.
+
+#### D14. "Your Verdict" Section
+A dedicated verdicts area that frames cold data as human judgments:
+
+| Verdict | Logic | Display |
+|---------|-------|---------|
+| **Value** | Based on cost-per-hour | "Bargain" / "Fair Deal" / "Overpaid" / "Robbery" on a visual scale |
+| **Commitment** | Hours + session pattern | "Deep Dive" / "Casual Fling" / "One Night Stand" / "Life Partner" |
+| **In Your Library** | Percentile rank by hours, rating, or value | "Top 5%" / "Above Average" / "Middle of the Pack" / "Bottom Shelf" |
+| **Would You Buy Again?** | Rating >= 7 AND value Good+ = Yes | "In a heartbeat" / "Probably" / "Hmm, maybe on sale" / "Absolutely not" |
+| **The Vibe** | Genre + hours + rating combo | "Comfort food" / "Mind-blowing" / "Guilty pleasure" / "Background noise" |
+
+Each verdict is a small card with the label, the answer, and a one-line justification. The section reads like a quick review you'd give a friend.
+
+**Files**: `getGameVerdicts(game, allGames)` in calculations.ts, rendered in bottom sheet.
+
+#### D15. Visual Journey Map
+Replace the session list with a **visual path** from "Purchased" to "Now" (or "Completed"):
+- A winding road/path drawn vertically
+- Dots at each milestone: purchase, first play, each session, completion
+- Dot size proportional to session length
+- Path color shifts from warm (early excitement) to the game's current state color
+- Gaps in the path show breaks in play (visible gap = "you didn't play for 3 weeks")
+- Key milestones labeled: "First session", "Longest session (6h)", "Hit 50 hours", "Completed"
+
+You see the game's entire lifecycle as a visual story. Was this a binge? A slow burn? Did you take a 3-week break and come back? All visible instantly.
+
+**Files**: `getGameJourney(game)` in calculations.ts, `components/GameJourney.tsx`, rendered in bottom sheet.
+
+#### D16. Quick Check-In
+Reframe "Log Time" as a **check-in** with a streamlined flow:
+- Big beautiful button with the game's thumbnail as background: "Check in to Elden Ring"
+- One tap opens a minimal overlay (not a full modal)
+- Hour slider defaulting to average session length for this game
+- Optional one-tap mood: [Great] [Good] [Meh] [Grind] (stored in playLog as mood field)
+- "Done" — two taps total for the common case
+- "Add details" expand link for the full PlayLogModal (date picker, notes) when needed
+
+The fast path should be FAST. You just finished a session, you're on the couch, you want to log it in 2 seconds.
+
+**Files**: `components/QuickCheckIn.tsx`, integrate as primary action in bottom sheet and Now Playing card.
+
+---
+
+### E. Extra Innovations
+
+#### E17. Animated Card Transitions
+When sorting or filtering, cards don't just reorder — they **animate into their new positions**. Cards that leave (filtered out) fade and shrink. Cards that enter fade in. Cards that move slide smoothly to their new position. Like a deck of cards being shuffled. Satisfying to watch, and it maintains spatial context so you don't lose track of where things are.
+
+**Files**: Wrap card list in animation container in `page.tsx`. Use CSS `layout` animations or framer-motion `layoutId`.
+
+#### E18. Micro-Stat Interactions
+On the stats grid, tapping any stat reveals a **contextual tooltip/popover** with deeper context:
+- Tap **price**: "You saved $25 vs full price" or "Paid full price"
+- Tap **hours**: "Average session: 2.3h" + mini sparkline
+- Tap **rating**: "Higher than 70% of your library"
+- Tap **$/hr**: "Was $15/hr after first session, now $0.67"
+- Tap **ROI**: "Top 10% ROI in your collection"
+
+Each stat becomes a discoverable moment. The card stays compact but has hidden depth.
+
+**Files**: Stat popover component, integrated in `page.tsx` stat grid cells.
+
+---
+
+### Implementation Order
+
+| # | Feature | Area | Effort |
+|---|---------|------|--------|
+| A1 | Poster Cards | Card Visual | High |
+| A2 | Trading Card Rarity Borders | Card Visual | Medium |
+| A3 | Color-Tinted Cards | Card Visual | Medium |
+| A4 | Card Aging Effect | Card Visual | Low |
+| B5 | Relationship Status Labels | Card Data | Medium |
+| B6 | Streak Flames | Card Data | Low |
+| B7 | Rating Stars | Card Data | Low |
+| B8 | Hero Number | Card Data | Low |
+| C9 | Now Playing Pinned Card | List Experience | Medium |
+| C10 | Card Sections with Personality | List Experience | Medium |
+| C11 | Compact Mode Tag Fix | List Experience | Low |
+| D12 | Bottom Sheet Detail Panel | Detail Panel | High |
+| D13 | Game Biography | Detail Panel | Medium |
+| D14 | Your Verdict Section | Detail Panel | Medium |
+| D15 | Visual Journey Map | Detail Panel | Medium |
+| D16 | Quick Check-In | Detail Panel | Medium |
+| E17 | Animated Card Transitions | Extra | Medium |
+| E18 | Micro-Stat Interactions | Extra | Low |
+
+### New Calculation Functions Needed
+
+```
+getCardRarity(game) → { tier, label, score, borderClass }
+getRelationshipStatus(game, allGames) → { label, emoji, color, bgColor, evolution[] }
+getGameStreak(game) → { days, level, isActive }
+getHeroNumber(game) → { value, label, color }
+getGameSections(games) → { section, label, insight, games[] }[]
+getCardFreshness(game) → { level, saturation, opacity }
+generateGameBiography(game, allGames) → string
+getGameVerdicts(game, allGames) → { category, verdict, justification, scale }[]
+getGameJourney(game) → { milestones[], path[] }
+```
+
+### New Components Needed
+
+```
+components/GameBottomSheet.tsx    — Mobile bottom sheet replacing side panel
+components/GameJourney.tsx        — Visual journey path
+components/QuickCheckIn.tsx       — Streamlined play logging
+components/RatingStars.tsx        — Visual star rating display
+hooks/useGameColors.ts            — Dominant color extraction from thumbnails
+```
+
+### New CSS Animations Needed
+
+```
+rarity-glow-uncommon   — Subtle green border pulse
+rarity-glow-rare       — Blue border pulse
+rarity-glow-epic       — Purple border shimmer
+rarity-glow-legendary  — Gold border with particle effect
+streak-flame           — Flame flicker animation
+card-aging-dust        — Subtle dust overlay for neglected games
+bottom-sheet-slide     — Spring-based slide up/down
+card-layout-move       — Smooth position transitions on sort/filter
+```
+
+---
+
 ## Resources
 
 - **Next.js Docs**: https://nextjs.org/docs
@@ -1489,6 +1821,14 @@ Story modal with the same swipe/tap/keyboard navigation pattern from WeekStoryMo
 ---
 
 ## Changelog
+
+### 2026-02-11 (v2.3.0)
+- Added Card Redesign & Detail Panel Overhaul plan: 18 features across 5 areas
+- Cards: Poster mode with large game art, trading card rarity borders, color-tinted cards, card aging effect
+- Card Data: Relationship status labels (15 emotional states), streak flames, visual rating stars, hero numbers
+- List: Now Playing pinned card, personality-based sections (On Fire/Cooling Off/Collection/etc.), compact mode tag fix
+- Detail Panel: Mobile-native bottom sheet, auto-generated game biographies with narrative voice styles, Your Verdict section, visual journey map, quick check-in flow
+- Extra: Animated card transitions on sort/filter, micro-stat interactions with contextual tooltips
 
 ### 2025-02-09 (v2.2.0)
 - Added Game Timeline & Recap Overhaul plan: 13 changes across 4 areas (Timeline, Week Recap, Games Tab, Monthly Recap)
@@ -1518,6 +1858,6 @@ Story modal with the same swipe/tap/keyboard navigation pattern from WeekStoryMo
 
 ---
 
-**Last Updated**: 2025-02-09
-**Version**: 2.2.0
+**Last Updated**: 2026-02-11
+**Version**: 2.3.0
 **Maintained by**: AI assistants and contributors
