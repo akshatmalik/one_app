@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { ChevronDown, X } from 'lucide-react';
+import { ChevronDown, X, Tag, DollarSign, Calendar, MessageSquare, Sparkles } from 'lucide-react';
 import { Game, GameStatus, PurchaseSource, SubscriptionSource } from '../lib/types';
 import { calculateCostPerHour, getValueRating } from '../lib/calculations';
 import clsx from 'clsx';
@@ -18,12 +18,12 @@ const GENRES = ['Action', 'Action-Adventure', 'RPG', 'JRPG', 'Horror', 'Platform
 const PURCHASE_SOURCES: PurchaseSource[] = ['Steam', 'PlayStation', 'Xbox', 'Nintendo', 'Epic', 'GOG', 'Physical', 'Other'];
 const SUBSCRIPTION_SOURCES: SubscriptionSource[] = ['PS Plus', 'Game Pass', 'Epic Free', 'Prime Gaming', 'Humble Choice', 'Other'];
 
-const STATUS_CONFIG: { status: GameStatus; label: string; icon: string; activeClass: string }[] = [
-  { status: 'Not Started', label: 'Backlog', icon: '📦', activeClass: 'bg-white/10 text-white/80 ring-1 ring-white/20' },
-  { status: 'In Progress', label: 'Playing', icon: '🎮', activeClass: 'bg-blue-500/20 text-blue-400 ring-1 ring-blue-500/50' },
-  { status: 'Completed', label: 'Done', icon: '✅', activeClass: 'bg-emerald-500/20 text-emerald-400 ring-1 ring-emerald-500/50' },
-  { status: 'Wishlist', label: 'Wishlist', icon: '⭐', activeClass: 'bg-purple-500/20 text-purple-400 ring-1 ring-purple-500/50' },
-  { status: 'Abandoned', label: 'Dropped', icon: '💀', activeClass: 'bg-red-500/20 text-red-400 ring-1 ring-red-500/50' },
+const STATUS_CONFIG: { status: GameStatus; label: string; dotClass: string; activeClass: string }[] = [
+  { status: 'Not Started', label: 'Backlog', dotClass: 'bg-white/40', activeClass: 'bg-white/10 text-white/80 ring-1 ring-white/20' },
+  { status: 'In Progress', label: 'Playing', dotClass: 'bg-blue-400', activeClass: 'bg-blue-500/20 text-blue-400 ring-1 ring-blue-500/50' },
+  { status: 'Completed', label: 'Done', dotClass: 'bg-emerald-400', activeClass: 'bg-emerald-500/20 text-emerald-400 ring-1 ring-emerald-500/50' },
+  { status: 'Wishlist', label: 'Wishlist', dotClass: 'bg-purple-400', activeClass: 'bg-purple-500/20 text-purple-400 ring-1 ring-purple-500/50' },
+  { status: 'Abandoned', label: 'Dropped', dotClass: 'bg-red-400', activeClass: 'bg-red-500/20 text-red-400 ring-1 ring-red-500/50' },
 ];
 
 const RATING_LABELS: Record<number, string> = {
@@ -59,7 +59,7 @@ function getRatingColor(rating: number) {
 // Collapsible section component
 function Section({ title, icon, defaultOpen = false, children, badge }: {
   title: string;
-  icon: string;
+  icon: React.ReactNode;
   defaultOpen?: boolean;
   children: React.ReactNode;
   badge?: string;
@@ -74,10 +74,10 @@ function Section({ title, icon, defaultOpen = false, children, badge }: {
         className="w-full flex items-center justify-between px-4 py-3 bg-white/[0.02] active:bg-white/[0.05] transition-colors"
       >
         <div className="flex items-center gap-2.5">
-          <span className="text-base">{icon}</span>
+          <span className="text-white/30">{icon}</span>
           <span className="text-sm font-medium text-white/80">{title}</span>
           {badge && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-500/20 text-purple-400">{badge}</span>
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/5 text-white/40">{badge}</span>
           )}
         </div>
         <ChevronDown size={16} className={clsx(
@@ -279,7 +279,7 @@ export function GameForm({ onSubmit, onClose, initialGame, existingFranchises = 
             <div>
               <label className="block text-xs font-medium text-white/50 mb-2">Status</label>
               <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-1 px-1">
-                {STATUS_CONFIG.map(({ status, label, icon, activeClass }) => (
+                {STATUS_CONFIG.map(({ status, label, dotClass, activeClass }) => (
                   <button
                     key={status}
                     type="button"
@@ -291,61 +291,81 @@ export function GameForm({ onSubmit, onClose, initialGame, existingFranchises = 
                         : 'bg-white/[0.03] text-white/40 active:bg-white/[0.06]'
                     )}
                   >
-                    <span className="text-sm">{icon}</span>
+                    <span className={clsx('w-1.5 h-1.5 rounded-full', dotClass)} />
                     {label}
                   </button>
                 ))}
               </div>
             </div>
 
-            {/* Price + Hours + Live Value */}
-            <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
+            {/* Price Row — Paid + Original together */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-white/50 mb-1.5">
+                  Paid Price ($) {formData.acquiredFree && <span className="text-emerald-400 text-[10px]">• Free</span>}
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={formData.price}
+                  onChange={e => setFormData({ ...formData, price: e.target.value })}
+                  className="w-full px-3 py-3 bg-white/[0.03] border border-white/5 text-white rounded-xl text-sm focus:outline-none focus:bg-white/[0.05] focus:border-white/10 transition-all"
+                  placeholder="0.00"
+                  disabled={formData.acquiredFree}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-white/50 mb-1.5">Original Price ($)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={formData.originalPrice}
+                  onChange={e => setFormData({ ...formData, originalPrice: e.target.value })}
+                  className="w-full px-3 py-3 bg-white/[0.03] border border-white/5 text-white rounded-xl text-sm focus:outline-none focus:bg-white/[0.05] focus:border-white/10 transition-all"
+                  placeholder="0.00"
+                />
+              </div>
+            </div>
+
+            {/* Discount Display */}
+            {discount > 0 && (
+              <div className="px-3 py-2 rounded-xl bg-emerald-500/10 text-emerald-400 text-sm flex items-center justify-between">
+                <span className="font-medium">{discount.toFixed(0)}% discount</span>
+                <span className="text-xs opacity-70">Saved ${savings.toFixed(2)}</span>
+              </div>
+            )}
+
+            {/* Hours */}
+            <div>
+              <label className="block text-xs font-medium text-white/50 mb-1.5">Total Hours</label>
+              <input
+                type="number"
+                step="0.5"
+                min="0"
+                value={formData.hours}
+                onChange={e => setFormData({ ...formData, hours: e.target.value })}
+                className="w-full px-3 py-3 bg-white/[0.03] border border-white/5 text-white rounded-xl text-sm focus:outline-none focus:bg-white/[0.05] focus:border-white/10 transition-all"
+                placeholder="0.0"
+              />
+            </div>
+
+            {/* Live Value Card */}
+            {hoursNum > 0 && priceNum > 0 && (
+              <div className={clsx(
+                'flex items-center justify-between px-4 py-3 rounded-xl border transition-all',
+                getValueColor(valueRating)
+              )}>
                 <div>
-                  <label className="block text-xs font-medium text-white/50 mb-1.5">
-                    Paid ($) {formData.acquiredFree && <span className="text-emerald-400">• Free</span>}
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={formData.price}
-                    onChange={e => setFormData({ ...formData, price: e.target.value })}
-                    className="w-full px-3 py-3 bg-white/[0.03] border border-white/5 text-white rounded-xl text-sm focus:outline-none focus:bg-white/[0.05] focus:border-white/10 transition-all"
-                    placeholder="0.00"
-                    disabled={formData.acquiredFree}
-                  />
+                  <div className="text-lg font-bold">${costPerHour.toFixed(2)}<span className="text-xs font-normal opacity-70">/hr</span></div>
                 </div>
-                <div>
-                  <label className="block text-xs font-medium text-white/50 mb-1.5">Hours Played</label>
-                  <input
-                    type="number"
-                    step="0.5"
-                    min="0"
-                    value={formData.hours}
-                    onChange={e => setFormData({ ...formData, hours: e.target.value })}
-                    className="w-full px-3 py-3 bg-white/[0.03] border border-white/5 text-white rounded-xl text-sm focus:outline-none focus:bg-white/[0.05] focus:border-white/10 transition-all"
-                    placeholder="0.0"
-                  />
+                <div className="text-right">
+                  <div className="text-xs font-semibold">{valueRating}</div>
+                  <div className="text-[10px] opacity-60">value rating</div>
                 </div>
               </div>
-
-              {/* Live Value Card */}
-              {hoursNum > 0 && priceNum > 0 && (
-                <div className={clsx(
-                  'flex items-center justify-between px-4 py-3 rounded-xl border transition-all',
-                  getValueColor(valueRating)
-                )}>
-                  <div>
-                    <div className="text-lg font-bold">${costPerHour.toFixed(2)}<span className="text-xs font-normal opacity-70">/hr</span></div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-xs font-semibold">{valueRating}</div>
-                    <div className="text-[10px] opacity-60">value rating</div>
-                  </div>
-                </div>
-              )}
-            </div>
+            )}
 
             {/* Rating — tap-to-rate circles */}
             {showRating && (
@@ -384,7 +404,7 @@ export function GameForm({ onSubmit, onClose, initialGame, existingFranchises = 
             {/* --- Collapsible Sections --- */}
 
             {/* Details Section */}
-            <Section title="Details" icon="🏷️" defaultOpen={!initialGame} badge={[formData.platform, formData.genre].filter(Boolean).join(' · ') || undefined}>
+            <Section title="Details" icon={<Tag size={14} />} defaultOpen={!initialGame} badge={[formData.platform, formData.genre].filter(Boolean).join(' · ') || undefined}>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-white/50 mb-1.5">Platform</label>
@@ -438,41 +458,18 @@ export function GameForm({ onSubmit, onClose, initialGame, existingFranchises = 
               </div>
             </Section>
 
-            {/* Pricing Section */}
-            <Section
-              title="Pricing"
-              icon="💰"
-              badge={discount > 0 ? `${discount.toFixed(0)}% off` : undefined}
-            >
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-white/50 mb-1.5">Original Price ($)</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={formData.originalPrice}
-                    onChange={e => setFormData({ ...formData, originalPrice: e.target.value })}
-                    className="w-full px-3 py-2.5 bg-white/[0.03] border border-white/5 text-white rounded-xl text-sm focus:outline-none focus:bg-white/[0.05] focus:border-white/10 transition-all"
-                    placeholder="0.00"
-                  />
-                </div>
-                <div className="flex items-end">
-                  {discount > 0 && (
-                    <div className="w-full px-3 py-2.5 rounded-xl bg-emerald-500/10 text-emerald-400 text-sm text-center">
-                      <div className="font-bold">{discount.toFixed(0)}% off</div>
-                      <div className="text-[10px] opacity-70">Saved ${savings.toFixed(2)}</div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Acquired Free Toggle */}
-              {isOwned && (
+            {/* Subscription / Free Section */}
+            {isOwned && (
+              <Section
+                title="Subscription / Free"
+                icon={<DollarSign size={14} />}
+                badge={formData.acquiredFree ? 'Free' : undefined}
+              >
+                {/* Acquired Free Toggle */}
                 <div className="flex items-center justify-between p-3 bg-white/[0.02] rounded-xl">
                   <div>
                     <div className="text-sm text-white/80">Acquired Free</div>
-                    <div className="text-[10px] text-white/40">PS Plus, Game Pass, etc.</div>
+                    <div className="text-[10px] text-white/40">From PS Plus, Game Pass, etc.</div>
                   </div>
                   <button
                     type="button"
@@ -491,28 +488,28 @@ export function GameForm({ onSubmit, onClose, initialGame, existingFranchises = 
                     )} />
                   </button>
                 </div>
-              )}
 
-              {formData.acquiredFree && (
-                <div>
-                  <label className="block text-xs font-medium text-white/50 mb-1.5">Subscription Source</label>
-                  <select
-                    value={formData.subscriptionSource}
-                    onChange={e => setFormData({ ...formData, subscriptionSource: e.target.value as SubscriptionSource })}
-                    className="w-full px-3 py-2.5 bg-white/[0.03] border border-white/5 text-white rounded-xl text-sm focus:outline-none focus:bg-white/[0.05] focus:border-white/10 transition-all"
-                  >
-                    <option value="">Select...</option>
-                    {SUBSCRIPTION_SOURCES.map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                </div>
-              )}
-            </Section>
+                {formData.acquiredFree && (
+                  <div>
+                    <label className="block text-xs font-medium text-white/50 mb-1.5">Subscription Source</label>
+                    <select
+                      value={formData.subscriptionSource}
+                      onChange={e => setFormData({ ...formData, subscriptionSource: e.target.value as SubscriptionSource })}
+                      className="w-full px-3 py-2.5 bg-white/[0.03] border border-white/5 text-white rounded-xl text-sm focus:outline-none focus:bg-white/[0.05] focus:border-white/10 transition-all"
+                    >
+                      <option value="">Select...</option>
+                      {SUBSCRIPTION_SOURCES.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </div>
+                )}
+              </Section>
+            )}
 
             {/* Dates Section */}
             {isOwned && (
               <Section
                 title="Dates"
-                icon="📅"
+                icon={<Calendar size={14} />}
                 badge={formData.datePurchased ? `Bought ${formData.datePurchased}` : undefined}
               >
                 <div className="grid grid-cols-2 gap-3">
@@ -556,7 +553,7 @@ export function GameForm({ onSubmit, onClose, initialGame, existingFranchises = 
             {/* Your Take Section */}
             <Section
               title="Your Take"
-              icon="💬"
+              icon={<MessageSquare size={14} />}
               badge={formData.review ? 'Has review' : undefined}
             >
               <div>
@@ -583,10 +580,10 @@ export function GameForm({ onSubmit, onClose, initialGame, existingFranchises = 
               {/* Special Game Toggle */}
               <div className="flex items-center justify-between p-3 bg-white/[0.02] rounded-xl">
                 <div className="flex items-center gap-2">
-                  <span className="text-base">✨</span>
+                  <Sparkles size={14} className={clsx(formData.isSpecial ? 'text-amber-400' : 'text-white/30')} />
                   <div>
                     <div className="text-sm text-white/80">Special Game</div>
-                    <div className="text-[10px] text-white/40">One you truly love</div>
+                    <div className="text-[10px] text-white/40">Mark as an exceptional game you love</div>
                   </div>
                 </div>
                 <button
