@@ -28,7 +28,6 @@ import {
   getQuickFixGames,
   getPatientGamerStats,
   getCompletionistRate,
-  getHiddenGems,
   getMostInvestedFranchise,
   getValueChampion,
   getAverageDiscount,
@@ -70,7 +69,6 @@ export function FunStatsPanel({ games }: FunStatsPanelProps) {
   const quickFix = getQuickFixGames(games);
   const patientGamer = getPatientGamerStats(games);
   const completionist = getCompletionistRate(games);
-  const hiddenGemsResult = getHiddenGems(games);
   const mostInvestedFranchise = getMostInvestedFranchise(games);
   const valueChampion = getValueChampion(games);
   const avgDiscount = getAverageDiscount(games);

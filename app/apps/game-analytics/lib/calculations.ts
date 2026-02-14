@@ -26,7 +26,7 @@ export function calculateCostPerHour(price: number, hours: number): number {
   return hours > 0 ? price / hours : 0;
 }
 
-export function calculateBlendScore(rating: number, costPerHour: number): number {
+function calculateBlendScore(rating: number, costPerHour: number): number {
   const normalizedCost = Math.min(costPerHour / BASELINE_COST, 1);
   return (rating * 10) + (10 - normalizedCost * 10);
 }
@@ -77,14 +77,14 @@ function getRatingWeight(rating: number): number {
  * - $70, 50h, 6/10 = 11.3 (Long but mediocre)
  * - $70, 10h, 9/10 = 6.7 (Good but short)
  */
-export function calculateROI(rating: number, hours: number, price: number): number {
+function calculateROI(rating: number, hours: number, price: number): number {
   if (price === 0) return getRatingWeight(rating) * hours; // Free games get massive ROI
   const weight = getRatingWeight(rating);
   const roi = (weight * hours * 4.67) / price;
   return Math.round(roi * 10) / 10; // Round to 1 decimal place
 }
 
-export function calculateDaysToComplete(startDate?: string, endDate?: string): number | null {
+function calculateDaysToComplete(startDate?: string, endDate?: string): number | null {
   if (!startDate || !endDate) return null;
   const start = parseLocalDate(startDate);
   const end = parseLocalDate(endDate);
@@ -431,7 +431,7 @@ export function getPeriodStats(games: Game[], days: number): PeriodStats {
 }
 
 // Get stats for a specific date range
-export function getPeriodStatsForRange(games: Game[], startDate: Date, endDate: Date): PeriodStats {
+function getPeriodStatsForRange(games: Game[], startDate: Date, endDate: Date): PeriodStats {
   const gamesWithActivity: Map<string, { game: Game; hours: number; sessions: number }> = new Map();
   let totalHours = 0;
   let totalSessions = 0;
@@ -646,30 +646,6 @@ export function getPlatformPreference(games: Game[]): Array<{ platform: string; 
 }
 
 // Get discount effectiveness - how much you saved per game on average
-export function getDiscountEffectiveness(games: Game[]): { avgSavings: number; bestDeal: Game | null } {
-  const discountedGames = games.filter(g =>
-    !g.acquiredFree && g.originalPrice && g.originalPrice > g.price && g.status !== 'Wishlist'
-  );
-
-  if (discountedGames.length === 0) {
-    return { avgSavings: 0, bestDeal: null };
-  }
-
-  const totalSavings = discountedGames.reduce((sum, g) =>
-    sum + ((g.originalPrice || 0) - g.price), 0
-  );
-
-  const bestDeal = discountedGames.sort((a, b) => {
-    const aSavings = (a.originalPrice || 0) - a.price;
-    const bSavings = (b.originalPrice || 0) - b.price;
-    return bSavings - aSavings;
-  })[0];
-
-  return {
-    avgSavings: totalSavings / discountedGames.length,
-    bestDeal,
-  };
-}
 
 /**
  * Get ROI rating category based on exponential rating weight formula
@@ -713,12 +689,6 @@ export function getLongestGamingStreak(games: Game[]): number {
   return longestStreak;
 }
 
-// Calculate night owl score (% of gaming between 10pm-4am)
-export function getNightOwlScore(games: Game[]): number {
-  // Since we don't have time data in play logs, we'll return 0 for now
-  // This could be enhanced if play logs include time of day
-  return 0;
-}
 
 // Calculate impulse buyer stat (average days between purchase and first play)
 export function getImpulseBuyerStat(games: Game[]): number | null {
@@ -878,20 +848,6 @@ export function getCompletionistRate(games: Game[]): {
 }
 
 // Get hidden gems (cheap games with high value)
-export function getHiddenGems(games: Game[]): Game[] {
-  return games.filter(g =>
-    getTotalHours(g) >= 10 &&
-    g.status !== 'Wishlist' &&
-    !g.acquiredFree &&
-    g.price <= 10 &&
-    g.rating >= 8
-  ).sort((a, b) => {
-    const aValue = calculateROI(a.rating, getTotalHours(a), a.price);
-    const bValue = calculateROI(b.rating, getTotalHours(b), b.price);
-    return bValue - aValue;
-  });
-}
-
 // Get most invested franchise
 export function getMostInvestedFranchise(games: Game[]): {
   franchise: string;
@@ -2332,10 +2288,6 @@ export function getWeekStatsForOffset(games: Game[], weekOffset: number = 0): We
 
 // Get last completed week (Monday-Sunday) with comprehensive stats
 // This is a wrapper around getWeekStatsForOffset for backwards compatibility
-export function getLastCompletedWeekStats(games: Game[]): WeekInReviewData {
-  return getWeekStatsForOffset(games, 0);
-}
-
 // Get the number of weeks with data (to know how far back we can navigate)
 export function getAvailableWeeksCount(games: Game[]): number {
   const allLogs = getAllPlayLogs(games);
