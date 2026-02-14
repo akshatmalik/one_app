@@ -7410,3 +7410,1030 @@ export function getProgressRingData(game: Game, allGames: Game[]): ProgressRingD
 
   return { progress: 0, color: '#4b5563', label: '' };
 }
+
+// ==========================================================================
+// Stats Overhaul — 28 New Stats
+// ==========================================================================
+
+// --- Composite Scores & Dashboards ---
+
+// Stat 1: Gaming Credit Score (300-850)
+export interface GamingCreditScoreData {
+  score: number;
+  label: string;
+  factors: { played: number; value: number; completion: number; regret: number };
+  color: string;
+}
+
+export function getGamingCreditScore(games: Game[]): GamingCreditScoreData {
+  const owned = games.filter(g => g.status !== 'Wishlist');
+  if (owned.length === 0) return { score: 550, label: 'Average', factors: { played: 0, value: 0, completion: 0, regret: 0 }, color: '#f59e0b' };
+
+  // Factor 1: % of library actually played (30% weight)
+  const played = owned.filter(g => getTotalHours(g) > 0);
+  const playedPct = played.length / owned.length;
+  const playedScore = playedPct * 100;
+
+  // Factor 2: Average cost-per-hour — lower is better (25% weight)
+  const paidPlayed = played.filter(g => g.price > 0);
+  const avgCph = paidPlayed.length > 0
+    ? paidPlayed.reduce((s, g) => s + g.price / getTotalHours(g), 0) / paidPlayed.length
+    : 5;
+  const valueScore = Math.max(0, Math.min(100, 100 - (avgCph - 0.5) * 12));
+
+  // Factor 3: Completion rate (25% weight)
+  const completed = owned.filter(g => g.status === 'Completed');
+  const started = owned.filter(g => g.status !== 'Not Started');
+  const completionRate = started.length > 0 ? completed.length / started.length : 0;
+  const completionScore = completionRate * 100;
+
+  // Factor 4: Regret rate — low = good (20% weight)
+  const regrets = owned.filter(g => {
+    const hours = getTotalHours(g);
+    return g.price > 20 && hours < 2 && g.status !== 'Not Started';
+  });
+  const regretRate = owned.length > 0 ? regrets.length / owned.length : 0;
+  const regretScore = Math.max(0, (1 - regretRate * 5) * 100);
+
+  const rawScore = playedScore * 0.3 + valueScore * 0.25 + completionScore * 0.25 + regretScore * 0.2;
+  const score = Math.round(300 + (rawScore / 100) * 550);
+  const clamped = Math.max(300, Math.min(850, score));
+
+  let label: string, color: string;
+  if (clamped >= 750) { label = 'Excellent Spender'; color = '#10b981'; }
+  else if (clamped >= 650) { label = 'Smart Buyer'; color = '#3b82f6'; }
+  else if (clamped >= 550) { label = 'Average'; color = '#f59e0b'; }
+  else if (clamped >= 450) { label = 'Impulse Risk'; color = '#f97316'; }
+  else { label = 'Needs Work'; color = '#ef4444'; }
+
+  return { score: clamped, label, factors: { played: Math.round(playedScore), value: Math.round(valueScore), completion: Math.round(completionScore), regret: Math.round(regretScore) }, color };
+}
+
+// Stat 2: Completion Funnel
+export interface CompletionFunnelData {
+  stages: { label: string; count: number; percentage: number; dropoff: number }[];
+}
+
+export function getCompletionFunnel(games: Game[]): CompletionFunnelData {
+  const owned = games.filter(g => g.status !== 'Wishlist');
+  const total = owned.length;
+  if (total === 0) return { stages: [] };
+
+  const started = owned.filter(g => getTotalHours(g) > 0);
+  const past10h = owned.filter(g => getTotalHours(g) >= 10);
+  const past50pct = owned.filter(g => {
+    const hours = getTotalHours(g);
+    return hours >= 20; // rough estimate of "50% through"
+  });
+  const completed = owned.filter(g => g.status === 'Completed');
+
+  const stages = [
+    { label: 'Games Owned', count: total },
+    { label: 'Started', count: started.length },
+    { label: 'Past 10h', count: past10h.length },
+    { label: 'Deep In (20h+)', count: past50pct.length },
+    { label: 'Completed', count: completed.length },
+  ];
+
+  return {
+    stages: stages.map((s, i) => ({
+      ...s,
+      percentage: total > 0 ? Math.round((s.count / total) * 100) : 0,
+      dropoff: i > 0 ? Math.round(((stages[i - 1].count - s.count) / Math.max(stages[i - 1].count, 1)) * 100) : 0,
+    })),
+  };
+}
+
+// Stat 3: The 80/20 Rule (Pareto Lite)
+export interface Pareto8020Data {
+  topPercent: number;
+  hoursPercent: number;
+  topGames: { name: string; hours: number }[];
+  cumulativeData: { game: string; cumulativePct: number }[];
+}
+
+export function getPareto8020(games: Game[]): Pareto8020Data {
+  const played = games.filter(g => g.status !== 'Wishlist' && getTotalHours(g) > 0);
+  if (played.length === 0) return { topPercent: 0, hoursPercent: 0, topGames: [], cumulativeData: [] };
+
+  const sorted = [...played].sort((a, b) => getTotalHours(b) - getTotalHours(a));
+  const totalHours = sorted.reduce((s, g) => s + getTotalHours(g), 0);
+
+  let cumulative = 0;
+  let topCount = 0;
+  for (const g of sorted) {
+    cumulative += getTotalHours(g);
+    topCount++;
+    if (cumulative >= totalHours * 0.8) break;
+  }
+
+  const topPercent = Math.round((topCount / played.length) * 100);
+  const topGames = sorted.slice(0, Math.min(5, topCount)).map(g => ({ name: g.name, hours: getTotalHours(g) }));
+
+  let runningTotal = 0;
+  const cumulativeData = sorted.slice(0, 10).map(g => {
+    runningTotal += getTotalHours(g);
+    return { game: g.name, cumulativePct: Math.round((runningTotal / totalHours) * 100) };
+  });
+
+  return { topPercent, hoursPercent: 80, topGames, cumulativeData };
+}
+
+// Stat 8: Library Health Dashboard
+export interface LibraryHealthData {
+  activeRate: number;
+  completionRate: number;
+  abandonmentRate: number;
+  dustRate: number;
+}
+
+export function getLibraryHealth(games: Game[]): LibraryHealthData {
+  const owned = games.filter(g => g.status !== 'Wishlist');
+  if (owned.length === 0) return { activeRate: 0, completionRate: 0, abandonmentRate: 0, dustRate: 0 };
+
+  const now = Date.now();
+  const thirtyDaysAgo = now - 30 * 24 * 60 * 60 * 1000;
+
+  const active = owned.filter(g => {
+    const logs = g.playLogs || [];
+    return logs.some(l => parseLocalDate(l.date).getTime() >= thirtyDaysAgo);
+  });
+  const completed = owned.filter(g => g.status === 'Completed');
+  const abandoned = owned.filter(g => g.status === 'Abandoned');
+  const dusty = owned.filter(g => {
+    if (g.status === 'Completed' || g.status === 'Abandoned') return false;
+    const logs = g.playLogs || [];
+    if (logs.length === 0) return true;
+    const latest = Math.max(...logs.map(l => parseLocalDate(l.date).getTime()));
+    return (now - latest) > 60 * 24 * 60 * 60 * 1000;
+  });
+
+  const total = owned.length;
+  return {
+    activeRate: Math.round((active.length / total) * 100),
+    completionRate: Math.round((completed.length / total) * 100),
+    abandonmentRate: Math.round((abandoned.length / total) * 100),
+    dustRate: Math.round((dusty.length / total) * 100),
+  };
+}
+
+// --- Play Style Analysis ---
+
+// Stat 4: Game Length Sweet Spot
+export interface GameLengthBracket {
+  label: string;
+  range: string;
+  count: number;
+  avgRating: number;
+  completionRate: number;
+  avgCostPerHour: number;
+}
+
+export function getGameLengthSweetSpot(games: Game[]): { brackets: GameLengthBracket[]; bestBracket: string } {
+  const owned = games.filter(g => g.status !== 'Wishlist' && getTotalHours(g) > 0);
+  const brackets: { label: string; range: string; min: number; max: number }[] = [
+    { label: 'Quick', range: '<10h', min: 0, max: 10 },
+    { label: 'Medium', range: '10-30h', min: 10, max: 30 },
+    { label: 'Long', range: '30-60h', min: 30, max: 60 },
+    { label: 'Epic', range: '60h+', min: 60, max: Infinity },
+  ];
+
+  const result = brackets.map(b => {
+    const inBracket = owned.filter(g => {
+      const h = getTotalHours(g);
+      return h >= b.min && h < b.max;
+    });
+    const completed = inBracket.filter(g => g.status === 'Completed');
+    const paid = inBracket.filter(g => g.price > 0);
+    return {
+      label: b.label,
+      range: b.range,
+      count: inBracket.length,
+      avgRating: inBracket.length > 0 ? Math.round((inBracket.reduce((s, g) => s + g.rating, 0) / inBracket.length) * 10) / 10 : 0,
+      completionRate: inBracket.length > 0 ? Math.round((completed.length / inBracket.length) * 100) : 0,
+      avgCostPerHour: paid.length > 0 ? Math.round((paid.reduce((s, g) => s + g.price / getTotalHours(g), 0) / paid.length) * 100) / 100 : 0,
+    };
+  });
+
+  const best = result.filter(b => b.count >= 2).sort((a, b) => b.avgRating - a.avgRating)[0];
+  return { brackets: result, bestBracket: best?.label || 'N/A' };
+}
+
+// Stat 5: Money Efficiency Trend
+export interface MoneyEfficiencyData {
+  quarters: { period: string; avgCostPerHour: number }[];
+  trend: 'improving' | 'declining' | 'stable';
+  improvement: number;
+}
+
+export function getMoneyEfficiencyTrend(games: Game[]): MoneyEfficiencyData {
+  const paidGames = games.filter(g => g.status !== 'Wishlist' && g.datePurchased && g.price > 0 && getTotalHours(g) > 0);
+  if (paidGames.length < 3) return { quarters: [], trend: 'stable', improvement: 0 };
+
+  const byQuarter: Record<string, Game[]> = {};
+  paidGames.forEach(g => {
+    const d = parseLocalDate(g.datePurchased!);
+    const q = `Q${Math.ceil((d.getMonth() + 1) / 3)} ${d.getFullYear()}`;
+    if (!byQuarter[q]) byQuarter[q] = [];
+    byQuarter[q].push(g);
+  });
+
+  const quarters = Object.entries(byQuarter)
+    .map(([period, gs]) => ({
+      period,
+      avgCostPerHour: Math.round((gs.reduce((s, g) => s + g.price / getTotalHours(g), 0) / gs.length) * 100) / 100,
+    }))
+    .sort((a, b) => a.period.localeCompare(b.period));
+
+  if (quarters.length < 2) return { quarters, trend: 'stable', improvement: 0 };
+
+  const first = quarters[0].avgCostPerHour;
+  const last = quarters[quarters.length - 1].avgCostPerHour;
+  const improvement = first > 0 ? Math.round(((first - last) / first) * 100) : 0;
+  const trend = improvement > 10 ? 'improving' : improvement < -10 ? 'declining' : 'stable';
+
+  return { quarters, trend, improvement };
+}
+
+// Stat 6: Return Rate / Comeback Analysis
+export interface ReturnRateData {
+  returnRate: number;
+  totalGapped: number;
+  returnedCount: number;
+  topComebacks: { name: string; gapDays: number }[];
+}
+
+export function getReturnRate(games: Game[]): ReturnRateData {
+  const gamesWithLogs = games.filter(g => g.playLogs && g.playLogs.length >= 2 && g.status !== 'Wishlist');
+  let totalGapped = 0;
+  let returnedCount = 0;
+  const comebacks: { name: string; gapDays: number }[] = [];
+
+  for (const game of gamesWithLogs) {
+    const sorted = [...game.playLogs!].sort((a, b) => parseLocalDate(a.date).getTime() - parseLocalDate(b.date).getTime());
+    let hadBigGap = false;
+    let returnedAfterGap = false;
+    let maxGap = 0;
+
+    for (let i = 1; i < sorted.length; i++) {
+      const gap = (parseLocalDate(sorted[i].date).getTime() - parseLocalDate(sorted[i - 1].date).getTime()) / (24 * 60 * 60 * 1000);
+      if (gap >= 30) {
+        hadBigGap = true;
+        maxGap = Math.max(maxGap, gap);
+        if (i < sorted.length - 1 || gap < 90) returnedAfterGap = true;
+      }
+    }
+
+    if (hadBigGap) {
+      totalGapped++;
+      if (returnedAfterGap) {
+        returnedCount++;
+        comebacks.push({ name: game.name, gapDays: Math.round(maxGap) });
+      }
+    }
+  }
+
+  comebacks.sort((a, b) => b.gapDays - a.gapDays);
+  return {
+    returnRate: totalGapped > 0 ? Math.round((returnedCount / totalGapped) * 100) : 0,
+    totalGapped,
+    returnedCount,
+    topComebacks: comebacks.slice(0, 3),
+  };
+}
+
+// Stat 7: Session Consistency Score
+export interface SessionConsistencyData {
+  score: number;
+  label: string;
+  avgGap: number;
+  pattern: 'metronome' | 'rhythm' | 'burst' | 'chaos';
+}
+
+export function getSessionConsistency(games: Game[]): SessionConsistencyData {
+  const allLogs = getAllPlayLogs(games);
+  if (allLogs.length < 5) return { score: 0, label: 'Not enough data', avgGap: 0, pattern: 'chaos' };
+
+  const dates = [...new Set(allLogs.map(l => l.log.date))].sort();
+  const gaps: number[] = [];
+  for (let i = 1; i < dates.length; i++) {
+    gaps.push((parseLocalDate(dates[i]).getTime() - parseLocalDate(dates[i - 1]).getTime()) / (24 * 60 * 60 * 1000));
+  }
+
+  const avgGap = gaps.reduce((s, g) => s + g, 0) / gaps.length;
+  const variance = gaps.reduce((s, g) => s + (g - avgGap) ** 2, 0) / gaps.length;
+  const stdDev = Math.sqrt(variance);
+  const cv = avgGap > 0 ? stdDev / avgGap : 10;
+
+  let pattern: SessionConsistencyData['pattern'], label: string, score: number;
+  if (cv < 0.5) { pattern = 'metronome'; label = 'Metronome'; score = 95; }
+  else if (cv < 1.0) { pattern = 'rhythm'; label = 'Rhythm Player'; score = 75; }
+  else if (cv < 2.0) { pattern = 'burst'; label = 'Burst Gamer'; score = 50; }
+  else { pattern = 'chaos'; label = 'Chaos Mode'; score = 25; }
+
+  return { score, label, avgGap: Math.round(avgGap * 10) / 10, pattern };
+}
+
+// --- Spending Psychology ---
+
+// Stat 9: The Impulse Tax
+export interface ImpulseTaxData {
+  total: number;
+  gameCount: number;
+  percentOfSpend: number;
+  games: { name: string; price: number; hours: number }[];
+}
+
+export function getImpulseTax(games: Game[], year?: number): ImpulseTaxData {
+  let owned = games.filter(g => g.status !== 'Wishlist' && !g.acquiredFree && g.price > 0);
+  if (year) {
+    owned = owned.filter(g => g.datePurchased && parseLocalDate(g.datePurchased).getFullYear() === year);
+  }
+
+  const impulseGames = owned.filter(g => {
+    const hours = getTotalHours(g);
+    return hours < 2 && hours > 0;
+  });
+
+  const total = impulseGames.reduce((s, g) => s + g.price, 0);
+  const totalSpend = owned.reduce((s, g) => s + g.price, 0);
+
+  return {
+    total: Math.round(total * 100) / 100,
+    gameCount: impulseGames.length,
+    percentOfSpend: totalSpend > 0 ? Math.round((total / totalSpend) * 100) : 0,
+    games: impulseGames.sort((a, b) => b.price - a.price).slice(0, 5).map(g => ({ name: g.name, price: g.price, hours: getTotalHours(g) })),
+  };
+}
+
+// Stat 10: Purchase Rhythm Detector
+export interface PurchaseRhythmData {
+  type: string;
+  avgGap: number;
+  daysSinceLast: number;
+  clusters: { start: string; count: number }[];
+}
+
+export function getPurchaseRhythm(games: Game[]): PurchaseRhythmData {
+  const withDates = games.filter(g => g.datePurchased && g.status !== 'Wishlist')
+    .sort((a, b) => parseLocalDate(a.datePurchased!).getTime() - parseLocalDate(b.datePurchased!).getTime());
+
+  if (withDates.length < 3) return { type: 'Not enough data', avgGap: 0, daysSinceLast: 0, clusters: [] };
+
+  const dates = withDates.map(g => parseLocalDate(g.datePurchased!));
+  const gaps: number[] = [];
+  for (let i = 1; i < dates.length; i++) {
+    gaps.push((dates[i].getTime() - dates[i - 1].getTime()) / (24 * 60 * 60 * 1000));
+  }
+
+  const avgGap = gaps.reduce((s, g) => s + g, 0) / gaps.length;
+  const daysSinceLast = Math.round((Date.now() - dates[dates.length - 1].getTime()) / (24 * 60 * 60 * 1000));
+
+  // Detect clusters (3+ purchases within 7 days)
+  const clusters: { start: string; count: number }[] = [];
+  let clusterStart = 0;
+  for (let i = 1; i < dates.length; i++) {
+    const gap = (dates[i].getTime() - dates[clusterStart].getTime()) / (24 * 60 * 60 * 1000);
+    if (gap > 7) {
+      if (i - clusterStart >= 3) {
+        clusters.push({ start: withDates[clusterStart].datePurchased!, count: i - clusterStart });
+      }
+      clusterStart = i;
+    }
+  }
+  if (dates.length - clusterStart >= 3) {
+    clusters.push({ start: withDates[clusterStart].datePurchased!, count: dates.length - clusterStart });
+  }
+
+  const stdDev = Math.sqrt(gaps.reduce((s, g) => s + (g - avgGap) ** 2, 0) / gaps.length);
+  const cv = avgGap > 0 ? stdDev / avgGap : 0;
+
+  let type: string;
+  if (clusters.length >= 2 && cv > 1.5) type = 'Binge Buyer';
+  else if (cv < 0.6) type = 'Steady Drip';
+  else if (clusters.length >= 1) type = 'Sale Chaser';
+  else type = 'Drought Breaker';
+
+  return { type, avgGap: Math.round(avgGap), daysSinceLast, clusters };
+}
+
+// Stat 11: Price Creep / Price Discipline
+export interface PriceCreepData {
+  trend: 'up' | 'down' | 'stable';
+  quarterlyAvgPrice: { period: string; avg: number }[];
+  direction: string;
+  change: number;
+}
+
+export function getPriceCreep(games: Game[]): PriceCreepData {
+  const withDates = games.filter(g => g.datePurchased && g.status !== 'Wishlist' && !g.acquiredFree && g.price > 0);
+  if (withDates.length < 4) return { trend: 'stable', quarterlyAvgPrice: [], direction: 'Not enough data', change: 0 };
+
+  const byQ: Record<string, number[]> = {};
+  withDates.forEach(g => {
+    const d = parseLocalDate(g.datePurchased!);
+    const q = `Q${Math.ceil((d.getMonth() + 1) / 3)} ${d.getFullYear()}`;
+    if (!byQ[q]) byQ[q] = [];
+    byQ[q].push(g.price);
+  });
+
+  const quarterly = Object.entries(byQ)
+    .map(([period, prices]) => ({ period, avg: Math.round((prices.reduce((a, b) => a + b, 0) / prices.length) * 100) / 100 }))
+    .sort((a, b) => a.period.localeCompare(b.period));
+
+  if (quarterly.length < 2) return { trend: 'stable', quarterlyAvgPrice: quarterly, direction: 'Not enough data', change: 0 };
+
+  const first = quarterly[0].avg;
+  const last = quarterly[quarterly.length - 1].avg;
+  const change = first > 0 ? Math.round(((last - first) / first) * 100) : 0;
+  const trend = change > 15 ? 'up' : change < -15 ? 'down' : 'stable';
+  const direction = trend === 'up' ? 'Prices rising' : trend === 'down' ? 'Getting thriftier' : 'Stable spending';
+
+  return { trend, quarterlyAvgPrice: quarterly, direction, change };
+}
+
+// --- Behavioral Patterns ---
+
+// Stat 12: "Just One More Hour" Sticky Games
+export interface StickyGamesData {
+  games: { name: string; avgSession: number; multiplier: number }[];
+  overallAvgSession: number;
+}
+
+export function getStickyGames(games: Game[]): StickyGamesData {
+  const withLogs = games.filter(g => g.playLogs && g.playLogs.length >= 3 && g.status !== 'Wishlist');
+  const allLogs = getAllPlayLogs(games);
+  const overallAvg = allLogs.length > 0 ? allLogs.reduce((s, l) => s + l.log.hours, 0) / allLogs.length : 1;
+
+  const results = withLogs.map(g => {
+    const avg = g.playLogs!.reduce((s, l) => s + l.hours, 0) / g.playLogs!.length;
+    return { name: g.name, avgSession: Math.round(avg * 10) / 10, multiplier: Math.round((avg / overallAvg) * 10) / 10 };
+  }).filter(g => g.multiplier >= 1.5).sort((a, b) => b.multiplier - a.multiplier);
+
+  return { games: results.slice(0, 5), overallAvgSession: Math.round(overallAvg * 10) / 10 };
+}
+
+// Stat 13: Attention Span Spectrum
+export interface AttentionSpanData {
+  buckets: { label: string; count: number; percent: number }[];
+  dominantType: string;
+}
+
+export function getAttentionSpanSpectrum(games: Game[]): AttentionSpanData {
+  const playedGames = games.filter(g => g.status !== 'Wishlist' && g.playLogs && g.playLogs.length > 0);
+
+  const categorize = (game: Game): string => {
+    const logs = [...(game.playLogs || [])].sort((a, b) => parseLocalDate(a.date).getTime() - parseLocalDate(b.date).getTime());
+    if (logs.length < 2) return 'Quick Fling';
+    const firstDate = parseLocalDate(logs[0].date).getTime();
+    const lastDate = parseLocalDate(logs[logs.length - 1].date).getTime();
+    const days = (lastDate - firstDate) / (24 * 60 * 60 * 1000);
+    if (days < 7) return 'Quick Fling';
+    if (days < 28) return 'Short Affair';
+    if (days < 90) return 'Steady Relationship';
+    return 'Long-Term Commitment';
+  };
+
+  const labels = ['Quick Fling', 'Short Affair', 'Steady Relationship', 'Long-Term Commitment'];
+  const counts: Record<string, number> = {};
+  labels.forEach(l => counts[l] = 0);
+  playedGames.forEach(g => { const cat = categorize(g); counts[cat] = (counts[cat] || 0) + 1; });
+
+  const total = playedGames.length || 1;
+  const buckets = labels.map(l => ({ label: l, count: counts[l], percent: Math.round((counts[l] / total) * 100) }));
+  const dominant = buckets.sort((a, b) => b.count - a.count)[0];
+
+  return { buckets, dominantType: dominant?.label || 'Unknown' };
+}
+
+// Stat 14: Sunk Cost Hall of Shame
+export interface SunkCostData {
+  games: { name: string; hours: number; rating: number; regretHours: number }[];
+}
+
+export function getSunkCostGames(games: Game[]): SunkCostData {
+  const candidates = games.filter(g => g.status !== 'Wishlist' && g.rating > 0 && g.rating <= 6 && getTotalHours(g) >= 5);
+  const ranked = candidates.map(g => ({
+    name: g.name,
+    hours: getTotalHours(g),
+    rating: g.rating,
+    regretHours: Math.round(getTotalHours(g) * (10 - g.rating)),
+  })).sort((a, b) => b.regretHours - a.regretHours);
+
+  return { games: ranked.slice(0, 5) };
+}
+
+// Stat 15: The Replacement Chain
+export interface ReplacementChainData {
+  chains: { abandoned: string; replacement: string; gapDays: number }[];
+  biggestAttractor: string;
+}
+
+export function getReplacementChains(games: Game[]): ReplacementChainData {
+  const ghosted = games.filter(g => (g.status === 'Abandoned' || g.status === 'In Progress') && g.playLogs && g.playLogs.length > 0);
+  const chains: { abandoned: string; replacement: string; gapDays: number }[] = [];
+
+  for (const game of ghosted) {
+    const logs = [...game.playLogs!].sort((a, b) => parseLocalDate(b.date).getTime() - parseLocalDate(a.date).getTime());
+    const lastPlayDate = parseLocalDate(logs[0].date);
+    const now = Date.now();
+    const daysSinceLast = (now - lastPlayDate.getTime()) / (24 * 60 * 60 * 1000);
+
+    if (daysSinceLast < 30) continue;
+
+    // Find games started within 7 days after this game's last session
+    const replacements = games.filter(g => {
+      if (g.id === game.id || !g.startDate) return false;
+      const startTime = parseLocalDate(g.startDate).getTime();
+      const gap = (startTime - lastPlayDate.getTime()) / (24 * 60 * 60 * 1000);
+      return gap >= 0 && gap <= 7;
+    });
+
+    for (const r of replacements) {
+      chains.push({
+        abandoned: game.name,
+        replacement: r.name,
+        gapDays: Math.round((parseLocalDate(r.startDate!).getTime() - lastPlayDate.getTime()) / (24 * 60 * 60 * 1000)),
+      });
+    }
+  }
+
+  // Find the biggest attractor
+  const attractorCounts: Record<string, number> = {};
+  chains.forEach(c => { attractorCounts[c.replacement] = (attractorCounts[c.replacement] || 0) + 1; });
+  const biggest = Object.entries(attractorCounts).sort((a, b) => b[1] - a[1])[0];
+
+  return { chains: chains.slice(0, 5), biggestAttractor: biggest?.[0] || 'None' };
+}
+
+// Stat 16: Finishing Sprint Score
+export interface FinishingSprintData {
+  avgSprintPercent: number;
+  sprintFinishers: number;
+  steadyFinishers: number;
+}
+
+export function getFinishingSprintScore(games: Game[]): FinishingSprintData {
+  const completed = games.filter(g => g.status === 'Completed' && g.playLogs && g.playLogs.length >= 3 && g.endDate);
+  if (completed.length === 0) return { avgSprintPercent: 0, sprintFinishers: 0, steadyFinishers: 0 };
+
+  let totalSprintPct = 0;
+  let sprintCount = 0;
+  let steadyCount = 0;
+
+  for (const game of completed) {
+    const endDate = parseLocalDate(game.endDate!);
+    const weekBefore = new Date(endDate.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const totalHours = game.playLogs!.reduce((s, l) => s + l.hours, 0);
+    const lastWeekHours = game.playLogs!.filter(l => parseLocalDate(l.date).getTime() >= weekBefore.getTime()).reduce((s, l) => s + l.hours, 0);
+    const sprintPct = totalHours > 0 ? (lastWeekHours / totalHours) * 100 : 0;
+
+    totalSprintPct += sprintPct;
+    if (sprintPct >= 40) sprintCount++;
+    else steadyCount++;
+  }
+
+  return {
+    avgSprintPercent: Math.round(totalSprintPct / completed.length),
+    sprintFinishers: sprintCount,
+    steadyFinishers: steadyCount,
+  };
+}
+
+// --- Time & Engagement ---
+
+// Stat 17: Dopamine Curve
+export type DopaminePattern = 'honeymoon' | 'slow_burn' | 'steady_love' | 'spike_crash' | 'revival';
+
+export interface DopamineCurveData {
+  pattern: DopaminePattern;
+  sessionTrend: number[];
+}
+
+export function getDopamineCurve(game: Game): DopamineCurveData {
+  const logs = game.playLogs || [];
+  if (logs.length < 3) return { pattern: 'steady_love', sessionTrend: logs.map(l => l.hours) };
+
+  const sorted = [...logs].sort((a, b) => parseLocalDate(a.date).getTime() - parseLocalDate(b.date).getTime());
+  const hours = sorted.map(l => l.hours);
+  const mid = Math.floor(hours.length / 2);
+  const firstHalf = hours.slice(0, mid);
+  const secondHalf = hours.slice(mid);
+  const firstAvg = firstHalf.reduce((s, h) => s + h, 0) / firstHalf.length;
+  const secondAvg = secondHalf.reduce((s, h) => s + h, 0) / secondHalf.length;
+
+  // Check for revival (big gap then comeback)
+  const dates = sorted.map(l => parseLocalDate(l.date).getTime());
+  let hasGap = false;
+  for (let i = 1; i < dates.length; i++) {
+    if ((dates[i] - dates[i - 1]) > 30 * 24 * 60 * 60 * 1000) { hasGap = true; break; }
+  }
+
+  // Check for spike & crash
+  const maxSession = Math.max(...hours);
+  const avgSession = hours.reduce((s, h) => s + h, 0) / hours.length;
+  const hasMassiveSpike = maxSession > avgSession * 3;
+
+  let pattern: DopaminePattern;
+  if (hasGap && secondAvg >= firstAvg * 0.8) pattern = 'revival';
+  else if (hasMassiveSpike && hours.indexOf(maxSession) < mid) pattern = 'spike_crash';
+  else if (firstAvg > secondAvg * 1.3) pattern = 'honeymoon';
+  else if (secondAvg > firstAvg * 1.3) pattern = 'slow_burn';
+  else pattern = 'steady_love';
+
+  return { pattern, sessionTrend: hours };
+}
+
+export function getLibraryDopamineProfile(games: Game[]): { dominantPattern: string; distribution: { pattern: string; count: number }[] } {
+  const withLogs = games.filter(g => g.playLogs && g.playLogs.length >= 3 && g.status !== 'Wishlist');
+  const counts: Record<string, number> = {};
+  const labels: Record<DopaminePattern, string> = {
+    honeymoon: 'Honeymoon', slow_burn: 'Slow Burn', steady_love: 'Steady Love',
+    spike_crash: 'Spike & Crash', revival: 'Revival',
+  };
+
+  for (const g of withLogs) {
+    const curve = getDopamineCurve(g);
+    counts[curve.pattern] = (counts[curve.pattern] || 0) + 1;
+  }
+
+  const distribution = Object.entries(counts).map(([pattern, count]) => ({ pattern: labels[pattern as DopaminePattern] || pattern, count })).sort((a, b) => b.count - a.count);
+  return { dominantPattern: distribution[0]?.pattern || 'Unknown', distribution };
+}
+
+// Stat 18: Genre Fatigue Detector
+export interface GenreFatigueData {
+  fatigueGenres: { genre: string; ratingDrop: number; gamesBeforeFatigue: number }[];
+}
+
+export function getGenreFatigue(games: Game[]): GenreFatigueData {
+  const owned = games.filter(g => g.status !== 'Wishlist' && g.genre && g.rating > 0 && g.datePurchased);
+  const byGenre: Record<string, { rating: number; date: string }[]> = {};
+
+  owned.forEach(g => {
+    if (!byGenre[g.genre!]) byGenre[g.genre!] = [];
+    byGenre[g.genre!].push({ rating: g.rating, date: g.datePurchased || g.createdAt });
+  });
+
+  const fatigueGenres: GenreFatigueData['fatigueGenres'] = [];
+  for (const [genre, entries] of Object.entries(byGenre)) {
+    if (entries.length < 3) continue;
+    const sorted = entries.sort((a, b) => parseLocalDate(a.date).getTime() - parseLocalDate(b.date).getTime());
+    const firstTwo = sorted.slice(0, 2).reduce((s, e) => s + e.rating, 0) / 2;
+    const rest = sorted.slice(2).reduce((s, e) => s + e.rating, 0) / sorted.slice(2).length;
+    const drop = firstTwo - rest;
+    if (drop >= 1) {
+      fatigueGenres.push({ genre, ratingDrop: Math.round(drop * 10) / 10, gamesBeforeFatigue: 2 });
+    }
+  }
+
+  return { fatigueGenres: fatigueGenres.sort((a, b) => b.ratingDrop - a.ratingDrop) };
+}
+
+// Stat 19: Session Time-of-Week Heatmap
+export interface WeekOfMonthHeatmapData {
+  grid: number[][]; // 7 days × 4 weeks
+  peakCell: { day: number; week: number; hours: number };
+  deadCell: { day: number; week: number };
+}
+
+export function getWeekOfMonthHeatmap(games: Game[]): WeekOfMonthHeatmapData {
+  const grid: number[][] = Array.from({ length: 7 }, () => Array(4).fill(0));
+  const allLogs = getAllPlayLogs(games);
+
+  for (const entry of allLogs) {
+    const d = parseLocalDate(entry.log.date);
+    const dayOfWeek = d.getDay(); // 0=Sun
+    const weekOfMonth = Math.min(3, Math.floor((d.getDate() - 1) / 7));
+    grid[dayOfWeek][weekOfMonth] += entry.log.hours;
+  }
+
+  let peakHours = 0, peakDay = 0, peakWeek = 0, deadDay = 0, deadWeek = 0, minHours = Infinity;
+  for (let d = 0; d < 7; d++) {
+    for (let w = 0; w < 4; w++) {
+      if (grid[d][w] > peakHours) { peakHours = grid[d][w]; peakDay = d; peakWeek = w; }
+      if (grid[d][w] < minHours) { minHours = grid[d][w]; deadDay = d; deadWeek = w; }
+    }
+  }
+
+  return {
+    grid,
+    peakCell: { day: peakDay, week: peakWeek, hours: Math.round(peakHours * 10) / 10 },
+    deadCell: { day: deadDay, week: deadWeek },
+  };
+}
+
+// Stat 20: The Dead Zone
+export interface DeadZoneData {
+  longestDrought: number;
+  startDate: string;
+  endDate: string;
+  whatBrokeIt: string;
+}
+
+export function getDeadZone(games: Game[]): DeadZoneData {
+  const allLogs = getAllPlayLogs(games);
+  if (allLogs.length < 2) return { longestDrought: 0, startDate: '', endDate: '', whatBrokeIt: '' };
+
+  const dates = [...new Set(allLogs.map(l => l.log.date))].sort();
+  let longest = 0, startDate = '', endDate = '';
+
+  for (let i = 1; i < dates.length; i++) {
+    const gap = (parseLocalDate(dates[i]).getTime() - parseLocalDate(dates[i - 1]).getTime()) / (24 * 60 * 60 * 1000);
+    if (gap > longest) {
+      longest = Math.round(gap);
+      startDate = dates[i - 1];
+      endDate = dates[i];
+    }
+  }
+
+  // Find what broke the drought
+  const breakEntries = allLogs.filter(l => l.log.date === endDate);
+  const breakGame = breakEntries.length > 0 ? breakEntries[0].game : null;
+
+  return { longestDrought: longest, startDate, endDate, whatBrokeIt: breakGame?.name || 'Unknown' };
+}
+
+// Stat 21: Library DNA Fingerprint
+export interface LibraryDNAData {
+  axes: { label: string; value: number }[];
+}
+
+export function getLibraryDNA(games: Game[]): LibraryDNAData {
+  const owned = games.filter(g => g.status !== 'Wishlist');
+  if (owned.length === 0) return { axes: [] };
+
+  const totalHours = owned.reduce((s, g) => s + getTotalHours(g), 0);
+  const played = owned.filter(g => getTotalHours(g) > 0);
+  const completed = owned.filter(g => g.status === 'Completed');
+  const uniqueGenres = new Set(owned.filter(g => g.genre).map(g => g.genre)).size;
+  const uniquePlatforms = new Set(owned.filter(g => g.platform).map(g => g.platform)).size;
+  const avgRating = owned.length > 0 ? owned.reduce((s, g) => s + g.rating, 0) / owned.length : 0;
+  const avgPrice = owned.filter(g => g.price > 0).length > 0
+    ? owned.filter(g => g.price > 0).reduce((s, g) => s + g.price, 0) / owned.filter(g => g.price > 0).length
+    : 0;
+
+  // Normalize to 0-100 scale
+  return {
+    axes: [
+      { label: 'Engagement', value: Math.min(100, Math.round((played.length / owned.length) * 100)) },
+      { label: 'Completion', value: Math.min(100, Math.round((completed.length / Math.max(played.length, 1)) * 100)) },
+      { label: 'Genre Variety', value: Math.min(100, uniqueGenres * 10) },
+      { label: 'Platform Spread', value: Math.min(100, uniquePlatforms * 20) },
+      { label: 'Time Invested', value: Math.min(100, Math.round(totalHours / 10)) },
+      { label: 'Quality Bar', value: Math.round(avgRating * 10) },
+      { label: 'Budget Level', value: Math.min(100, Math.round(avgPrice * 2)) },
+    ],
+  };
+}
+
+// --- Library Meta-Stats ---
+
+// Stat 22: Rating Confidence Score
+export interface RatingConfidenceData {
+  confidentTop10: { name: string; rating: number; hours: number }[];
+  rawTop10: { name: string; rating: number; hours: number }[];
+  differences: number;
+  generosityBias: boolean;
+}
+
+export function getRatingConfidence(games: Game[]): RatingConfidenceData {
+  const rated = games.filter(g => g.status !== 'Wishlist' && g.rating > 0);
+  const rawTop10 = [...rated].sort((a, b) => b.rating - a.rating || getTotalHours(b) - getTotalHours(a))
+    .slice(0, 10).map(g => ({ name: g.name, rating: g.rating, hours: getTotalHours(g) }));
+
+  const confident = rated.filter(g => getTotalHours(g) >= 5);
+  const confidentTop10 = [...confident].sort((a, b) => b.rating - a.rating || getTotalHours(b) - getTotalHours(a))
+    .slice(0, 10).map(g => ({ name: g.name, rating: g.rating, hours: getTotalHours(g) }));
+
+  const rawNames = new Set(rawTop10.map(g => g.name));
+  const confidentNames = new Set(confidentTop10.map(g => g.name));
+  let diffs = 0;
+  rawNames.forEach(n => { if (!confidentNames.has(n)) diffs++; });
+
+  const lowHoursGames = rated.filter(g => getTotalHours(g) < 5);
+  const highHoursGames = rated.filter(g => getTotalHours(g) >= 5);
+  const lowAvg = lowHoursGames.length > 0 ? lowHoursGames.reduce((s, g) => s + g.rating, 0) / lowHoursGames.length : 0;
+  const highAvg = highHoursGames.length > 0 ? highHoursGames.reduce((s, g) => s + g.rating, 0) / highHoursGames.length : 0;
+
+  return { confidentTop10, rawTop10, differences: diffs, generosityBias: lowAvg > highAvg + 0.5 };
+}
+
+// Stat 23: The Pareto Games (Power Law)
+export interface ParetoAnalysisData {
+  topN: number;
+  percentOfTotal: number;
+  cumulativeChart: { name: string; cumPct: number }[];
+}
+
+export function getParetoAnalysis(games: Game[]): ParetoAnalysisData {
+  const played = games.filter(g => g.status !== 'Wishlist' && getTotalHours(g) > 0);
+  if (played.length === 0) return { topN: 0, percentOfTotal: 0, cumulativeChart: [] };
+
+  const sorted = [...played].sort((a, b) => getTotalHours(b) - getTotalHours(a));
+  const totalHours = sorted.reduce((s, g) => s + getTotalHours(g), 0);
+  const top3 = sorted.slice(0, 3);
+  const top3Hours = top3.reduce((s, g) => s + getTotalHours(g), 0);
+
+  let running = 0;
+  const chart = sorted.slice(0, 15).map(g => {
+    running += getTotalHours(g);
+    return { name: g.name, cumPct: Math.round((running / totalHours) * 100) };
+  });
+
+  return { topN: 3, percentOfTotal: Math.round((top3Hours / totalHours) * 100), cumulativeChart: chart };
+}
+
+// Stat 24: Library Age Profile
+export interface LibraryAgeProfileData {
+  histogram: { period: string; count: number }[];
+  medianAgeDays: number;
+  oldestGame: string;
+  newestGame: string;
+}
+
+export function getLibraryAgeProfile(games: Game[]): LibraryAgeProfileData {
+  const withDates = games.filter(g => g.datePurchased && g.status !== 'Wishlist');
+  if (withDates.length === 0) return { histogram: [], medianAgeDays: 0, oldestGame: '', newestGame: '' };
+
+  const now = Date.now();
+  const ages = withDates.map(g => ({
+    name: g.name,
+    days: Math.round((now - parseLocalDate(g.datePurchased!).getTime()) / (24 * 60 * 60 * 1000)),
+  }));
+
+  const sorted = ages.sort((a, b) => a.days - b.days);
+  const median = sorted[Math.floor(sorted.length / 2)].days;
+
+  const buckets: Record<string, number> = { '<3mo': 0, '3-6mo': 0, '6-12mo': 0, '1-2yr': 0, '2yr+': 0 };
+  ages.forEach(a => {
+    if (a.days < 90) buckets['<3mo']++;
+    else if (a.days < 180) buckets['3-6mo']++;
+    else if (a.days < 365) buckets['6-12mo']++;
+    else if (a.days < 730) buckets['1-2yr']++;
+    else buckets['2yr+']++;
+  });
+
+  return {
+    histogram: Object.entries(buckets).map(([period, count]) => ({ period, count })),
+    medianAgeDays: median,
+    oldestGame: sorted[sorted.length - 1]?.name || '',
+    newestGame: sorted[0]?.name || '',
+  };
+}
+
+// --- Predictive & Comparative ---
+
+// Stat 25: Value Velocity Chart
+export interface ValueVelocityData {
+  fastValueGames: { name: string; sessionsToGood: number }[];
+  slowValueGames: { name: string; sessions: number; currentCph: number }[];
+  neverWorthIt: { name: string; cph: number }[];
+}
+
+export function getValueVelocity(games: Game[]): ValueVelocityData {
+  const paidWithLogs = games.filter(g => g.status !== 'Wishlist' && g.price > 0 && g.playLogs && g.playLogs.length > 0);
+  const fast: ValueVelocityData['fastValueGames'] = [];
+  const slow: ValueVelocityData['slowValueGames'] = [];
+  const never: ValueVelocityData['neverWorthIt'] = [];
+
+  for (const game of paidWithLogs) {
+    const sorted = [...game.playLogs!].sort((a, b) => parseLocalDate(a.date).getTime() - parseLocalDate(b.date).getTime());
+    let cumHours = 0;
+    let foundGood = false;
+
+    for (let i = 0; i < sorted.length; i++) {
+      cumHours += sorted[i].hours;
+      if (game.price / cumHours <= 3) { // Good value threshold
+        fast.push({ name: game.name, sessionsToGood: i + 1 });
+        foundGood = true;
+        break;
+      }
+    }
+
+    if (!foundGood) {
+      const totalHours = getTotalHours(game);
+      const cph = game.price / totalHours;
+      if (cph > 5) never.push({ name: game.name, cph: Math.round(cph * 100) / 100 });
+      else slow.push({ name: game.name, sessions: sorted.length, currentCph: Math.round(cph * 100) / 100 });
+    }
+  }
+
+  return {
+    fastValueGames: fast.sort((a, b) => a.sessionsToGood - b.sessionsToGood).slice(0, 5),
+    slowValueGames: slow.slice(0, 5),
+    neverWorthIt: never.sort((a, b) => b.cph - a.cph).slice(0, 5),
+  };
+}
+
+// Stat 26: Cross-Genre Affinity Map
+export interface CrossGenreAffinityData {
+  pairs: { genre1: string; genre2: string; strength: number }[];
+}
+
+export function getCrossGenreAffinity(games: Game[]): CrossGenreAffinityData {
+  const withGenre = games.filter(g => g.genre && g.playLogs && g.playLogs.length > 0 && g.status !== 'Wishlist');
+  const monthlyGenres: Record<string, Set<string>> = {};
+
+  for (const game of withGenre) {
+    for (const log of game.playLogs!) {
+      const d = parseLocalDate(log.date);
+      const key = `${d.getFullYear()}-${d.getMonth()}`;
+      if (!monthlyGenres[key]) monthlyGenres[key] = new Set();
+      monthlyGenres[key].add(game.genre!);
+    }
+  }
+
+  const pairCounts: Record<string, number> = {};
+  for (const genres of Object.values(monthlyGenres)) {
+    const arr = [...genres];
+    for (let i = 0; i < arr.length; i++) {
+      for (let j = i + 1; j < arr.length; j++) {
+        const key = [arr[i], arr[j]].sort().join('|');
+        pairCounts[key] = (pairCounts[key] || 0) + 1;
+      }
+    }
+  }
+
+  const pairs = Object.entries(pairCounts)
+    .map(([key, count]) => {
+      const [genre1, genre2] = key.split('|');
+      return { genre1, genre2, strength: count };
+    })
+    .sort((a, b) => b.strength - a.strength)
+    .slice(0, 10);
+
+  return { pairs };
+}
+
+// Stat 27: Seasonal Genre Drift
+export interface SeasonalGenreDriftData {
+  months: { month: number; genreShares: { genre: string; percent: number }[] }[];
+}
+
+export function getSeasonalGenreDrift(games: Game[]): SeasonalGenreDriftData {
+  const withGenre = games.filter(g => g.genre && g.playLogs && g.playLogs.length > 0 && g.status !== 'Wishlist');
+  const monthlyHours: Record<number, Record<string, number>> = {};
+
+  for (let m = 0; m < 12; m++) monthlyHours[m] = {};
+
+  for (const game of withGenre) {
+    for (const log of game.playLogs!) {
+      const month = parseLocalDate(log.date).getMonth();
+      monthlyHours[month][game.genre!] = (monthlyHours[month][game.genre!] || 0) + log.hours;
+    }
+  }
+
+  const months = Object.entries(monthlyHours).map(([m, genres]) => {
+    const total = Object.values(genres).reduce((s, h) => s + h, 0);
+    const shares = Object.entries(genres)
+      .map(([genre, hours]) => ({ genre, percent: total > 0 ? Math.round((hours / total) * 100) : 0 }))
+      .sort((a, b) => b.percent - a.percent)
+      .slice(0, 5);
+    return { month: parseInt(m), genreShares: shares };
+  });
+
+  return { months };
+}
+
+// Stat 28: "If You Stopped Today" Snapshot
+export interface IfYouStoppedTodayData {
+  totalHours: number;
+  totalSpent: number;
+  costPerHour: number;
+  completed: number;
+  completionRate: number;
+  bestValue: string;
+  worstValue: string;
+  longestGame: string;
+}
+
+export function getIfYouStoppedToday(games: Game[]): IfYouStoppedTodayData {
+  const owned = games.filter(g => g.status !== 'Wishlist');
+  const totalHours = owned.reduce((s, g) => s + getTotalHours(g), 0);
+  const totalSpent = owned.reduce((s, g) => s + g.price, 0);
+  const completed = owned.filter(g => g.status === 'Completed');
+  const played = owned.filter(g => getTotalHours(g) > 0);
+  const paidPlayed = played.filter(g => g.price > 0);
+
+  const bestValueGame = paidPlayed.length > 0
+    ? paidPlayed.reduce((best, g) => (g.price / getTotalHours(g)) < (best.price / getTotalHours(best)) ? g : best)
+    : null;
+  const worstValueGame = paidPlayed.length > 0
+    ? paidPlayed.reduce((worst, g) => (g.price / getTotalHours(g)) > (worst.price / getTotalHours(worst)) ? g : worst)
+    : null;
+  const longestGame = played.length > 0
+    ? played.reduce((longest, g) => getTotalHours(g) > getTotalHours(longest) ? g : longest)
+    : null;
+
+  return {
+    totalHours: Math.round(totalHours),
+    totalSpent: Math.round(totalSpent * 100) / 100,
+    costPerHour: totalHours > 0 ? Math.round((totalSpent / totalHours) * 100) / 100 : 0,
+    completed: completed.length,
+    completionRate: played.length > 0 ? Math.round((completed.length / played.length) * 100) : 0,
+    bestValue: bestValueGame?.name || 'N/A',
+    worstValue: worstValueGame?.name || 'N/A',
+    longestGame: longestGame?.name || 'N/A',
+  };
+}
