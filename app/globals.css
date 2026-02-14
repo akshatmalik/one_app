@@ -371,3 +371,40 @@ input[type="range"]::-moz-range-thumb {
 .journey-pulse {
   animation: journeyPulse 2s ease-in-out infinite;
 }
+
+/* Card Flip */
+.card-flip-container {
+  perspective: 1000px;
+}
+
+.card-flip-inner {
+  position: relative;
+  transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  transform-style: preserve-3d;
+}
+
+.card-flip-inner.flipped {
+  transform: rotateY(180deg);
+}
+
+.card-flip-front,
+.card-flip-back {
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+.card-flip-back {
+  position: absolute;
+  inset: 0;
+  transform: rotateY(180deg);
+}
+
+/* Mood Pulse Strip */
+@keyframes moodPulseGlow {
+  0%, 100% { opacity: 0.7; }
+  50% { opacity: 1; }
+}
+
+.mood-pulse-strip {
+  animation: moodPulseGlow 3s ease-in-out infinite;
+}

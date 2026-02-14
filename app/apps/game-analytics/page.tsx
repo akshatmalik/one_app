@@ -18,13 +18,15 @@ import { gameRepository } from './lib/storage';
 import { BASELINE_GAMES_2025 } from './data/baseline-games';
 import { useAuthContext } from '@/lib/AuthContext';
 import { useToast } from '@/components/Toast';
-import { getROIRating, getWeekStatsForOffset, getGamesPlayedInTimeRange, getCompletionProbability, getGameHealthDot, getRelativeTime, getDaysContext, getSessionMomentum, getValueTrajectory, getGameSmartOneLiner, getFranchiseInfo, getProgressPercent, getShelfLife, parseLocalDate, getCardRarity, getRelationshipStatus, getGameStreak, getHeroNumber, getCardFreshness, getGameSections } from './lib/calculations';
+import { getROIRating, getWeekStatsForOffset, getGamesPlayedInTimeRange, getCompletionProbability, getGameHealthDot, getRelativeTime, getDaysContext, getSessionMomentum, getValueTrajectory, getGameSmartOneLiner, getFranchiseInfo, getProgressPercent, getShelfLife, parseLocalDate, getCardRarity, getRelationshipStatus, getGameStreak, getHeroNumber, getCardFreshness, getGameSections, getCardBackData, getContextualWhisper, getLibraryRank, getCardMoodPulse, getProgressRingData } from './lib/calculations';
 import { OnThisDayCard } from './components/OnThisDayCard';
 import { ActivityPulse } from './components/ActivityPulse';
 import { RandomPicker } from './components/RandomPicker';
 import { BulkWishlistModal } from './components/BulkWishlistModal';
 import { GameBottomSheet } from './components/GameBottomSheet';
 import { RatingStars } from './components/RatingStars';
+import { MomentumDots } from './components/MomentumDots';
+import { ProgressRing } from './components/ProgressRing';
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist';
@@ -542,6 +544,7 @@ export default function GameAnalyticsPage() {
                   }}
                   onDelete={(game) => handleDelete(game.id, game.name)}
                   isInQueue={isInQueue}
+                  sortBy={sortBy}
                 />
               )}
             </>
@@ -775,6 +778,7 @@ interface GameCardListProps {
   onToggleSpecial: (game: GameWithMetrics) => void;
   onDelete: (game: GameWithMetrics) => void;
   isInQueue: (id: string) => boolean;
+  sortBy?: string;
 }
 
 function GameCardList({
@@ -789,6 +793,7 @@ function GameCardList({
   onToggleSpecial,
   onDelete,
   isInQueue,
+  sortBy = 'hours',
 }: GameCardListProps) {
   const sections = useMemo(() => groupBySection ? getGameSections(allGames) : [], [allGames, groupBySection]);
 
@@ -809,9 +814,9 @@ function GameCardList({
 
   const renderCard = (game: GameWithMetrics, idx: number) => {
     if (cardViewMode === 'poster') {
-      return <PosterCard key={game.id} game={game} allGames={allGames} idx={idx} onClick={() => onCardClick(game)} onQuickLog={(h) => onQuickLog(game, h)} isInQueue={isInQueue(game.id)} />;
+      return <PosterCard key={game.id} game={game} allGames={allGames} idx={idx} onClick={() => onCardClick(game)} onQuickLog={(h) => onQuickLog(game, h)} isInQueue={isInQueue(game.id)} sortBy={sortBy} />;
     }
-    return <CompactCard key={game.id} game={game} allGames={allGames} idx={idx} onClick={() => onCardClick(game)} onLogTime={() => onLogTime(game)} onToggleQueue={() => onToggleQueue(game)} onDelete={() => onDelete(game)} isInQueue={isInQueue(game.id)} />;
+    return <CompactCard key={game.id} game={game} allGames={allGames} idx={idx} onClick={() => onCardClick(game)} onLogTime={() => onLogTime(game)} onToggleQueue={() => onToggleQueue(game)} onDelete={() => onDelete(game)} isInQueue={isInQueue(game.id)} sortBy={sortBy} />;
   };
 
   if (groupBySection && sections.length > 0) {
@@ -964,124 +969,278 @@ function NowPlayingCard({ game, allGames, onClick, onQuickLog }: {
 
 // --- Poster Card ---
 
-function PosterCard({ game, allGames, idx, onClick, onQuickLog, isInQueue }: {
+function PosterCard({ game, allGames, idx, onClick, onQuickLog, isInQueue, sortBy = 'hours' }: {
   game: GameWithMetrics;
   allGames: Game[];
   idx: number;
   onClick: () => void;
   onQuickLog: (hours: number) => void;
   isInQueue: boolean;
+  sortBy?: string;
 }) {
+  const [isFlipped, setIsFlipped] = useState(false);
   const rarity = getCardRarity(game);
   const relationship = getRelationshipStatus(game, allGames);
   const streak = getGameStreak(game);
   const heroNum = getHeroNumber(game);
   const freshness = getCardFreshness(game);
   const smartLine = getGameSmartOneLiner(game, allGames);
+  const momentum = getSessionMomentum(game);
+  const whisper = getContextualWhisper(game, allGames);
+  const libraryRank = getLibraryRank(game, allGames, sortBy);
+  const moodPulse = getCardMoodPulse(game);
+  const progressRing = getProgressRingData(game, allGames);
+
+  const handleFlip = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsFlipped(!isFlipped);
+  };
 
   return (
     <div
-      onClick={onClick}
+      className="card-flip-container card-enter"
+      style={{ animationDelay: `${idx * 40}ms` }}
+    >
+      <div className={clsx('card-flip-inner', isFlipped && 'flipped')}>
+        {/* === FRONT FACE === */}
+        <div
+          onClick={onClick}
+          className={clsx(
+            'card-flip-front overflow-hidden rounded-xl border cursor-pointer transition-all relative',
+            rarity.borderClass || 'border-white/5',
+          )}
+          style={{
+            opacity: freshness.opacity,
+            backgroundColor: relationship.cardTint,
+          }}
+        >
+          {/* Poster image */}
+          <div className="relative">
+            {game.thumbnail ? (
+              <div className="relative h-28 overflow-hidden">
+                <img
+                  src={game.thumbnail}
+                  alt={game.name}
+                  className="w-full h-full object-cover poster-reveal"
+                  loading="lazy"
+                  style={{ filter: `saturate(${freshness.saturation})` }}
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0f] via-[#0a0a0f]/40 to-transparent" />
+              </div>
+            ) : (
+              <div className="h-20 bg-gradient-to-r from-purple-900/10 to-blue-900/10 flex items-center justify-center">
+                <Gamepad2 size={28} className="text-white/10" />
+              </div>
+            )}
+
+            {/* Streak flame badge */}
+            {streak.isActive && (
+              <div className="absolute top-2 left-2 text-[10px] px-1.5 py-0.5 bg-black/60 backdrop-blur-sm text-orange-400 rounded font-bold flex items-center gap-0.5 streak-flame">
+                🔥 {streak.days}
+              </div>
+            )}
+
+            {/* Rarity badge */}
+            {rarity.tier !== 'common' && (
+              <div className="absolute top-2 right-2 text-[9px] px-1.5 py-0.5 bg-black/60 backdrop-blur-sm rounded font-bold uppercase tracking-wider"
+                style={{
+                  color: rarity.tier === 'legendary' ? '#fbbf24'
+                    : rarity.tier === 'epic' ? '#a855f7'
+                    : rarity.tier === 'rare' ? '#3b82f6'
+                    : '#22c55e',
+                }}
+              >
+                {rarity.label}
+              </div>
+            )}
+
+            {/* Library rank badge — positioned to avoid overlap */}
+            {libraryRank.rank > 0 && (() => {
+              const pos: React.CSSProperties = streak.isActive ? { left: 52 } : rarity.tier === 'common' ? { right: 8 } : { left: 8 };
+              return (
+                <div
+                  className="absolute top-2 text-[9px] px-1.5 py-0.5 bg-black/60 backdrop-blur-sm rounded font-bold text-white/50"
+                  style={pos}
+                >
+                  {libraryRank.label}
+                </div>
+              );
+            })()}
+
+            {/* Hero number with progress ring */}
+            <div className="absolute bottom-2 right-3">
+              <ProgressRing progress={progressRing.progress} color={progressRing.color} size={44} strokeWidth={2}>
+                <div className="text-right">
+                  <div className="text-lg font-black leading-none" style={{ color: heroNum.color }}>{heroNum.value}</div>
+                </div>
+              </ProgressRing>
+              <div className="text-[9px] text-white/30 text-right -mt-0.5">{heroNum.label}</div>
+            </div>
+
+            {/* Name + Relationship overlay */}
+            <div className="absolute bottom-2 left-3 right-16">
+              <h3 className="text-white font-bold text-base leading-tight truncate">{game.name}</h3>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <span
+                  className="text-[10px] px-2 py-0.5 rounded-full font-bold"
+                  style={{ color: relationship.color, backgroundColor: relationship.bgColor }}
+                >
+                  {relationship.label}
+                </span>
+                {game.genre && <span className="text-[10px] text-white/30">{game.genre}</span>}
+              </div>
+            </div>
+          </div>
+
+          {/* Stats bar with momentum dots */}
+          <div className="px-3 py-2.5 flex items-center gap-3">
+            <div className="flex items-center gap-1 text-xs text-white/50">
+              <DollarSign size={10} className="text-white/30" />
+              <span>{game.acquiredFree ? 'Free' : `$${game.price}`}</span>
+            </div>
+            <div className="flex items-center gap-1 text-xs text-white/50">
+              <Clock size={10} className="text-white/30" />
+              <span>{game.totalHours}h</span>
+            </div>
+            <div className="flex items-center gap-0.5">
+              <RatingStars rating={game.rating} size={9} />
+            </div>
+            {game.totalHours > 0 && game.price > 0 && (
+              <span className={clsx('text-xs font-medium', getValueColor(game.metrics.valueRating))}>
+                ${game.metrics.costPerHour.toFixed(2)}/hr
+              </span>
+            )}
+            <div className="flex-1" />
+            {/* Momentum sparkline */}
+            {momentum.length >= 2 && <MomentumDots sessions={momentum} />}
+            {game.platform && <span className="text-[9px] px-1.5 py-0.5 bg-white/5 rounded text-white/30">{game.platform}</span>}
+          </div>
+
+          {/* Smart one-liner + contextual whisper */}
+          <div className="px-3 pb-2.5 -mt-1 space-y-0.5">
+            {smartLine && (
+              <p className="text-[10px] text-white/25 italic truncate">{smartLine}</p>
+            )}
+            {whisper.text && whisper.text !== smartLine && (
+              <p className="text-[10px] text-white/20 italic truncate">{whisper.text}</p>
+            )}
+          </div>
+
+          {/* Mood pulse strip */}
+          {moodPulse.level !== 'never' && (
+            <div
+              className="h-[2px] mood-pulse-strip"
+              style={{ backgroundColor: moodPulse.color }}
+            />
+          )}
+
+          {/* Flip button */}
+          <button
+            onClick={handleFlip}
+            className="absolute bottom-[42px] right-2 w-5 h-5 rounded-full bg-white/5 flex items-center justify-center text-white/20 hover:text-white/50 hover:bg-white/10 transition-all z-10"
+            title="Flip card"
+          >
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M17 1l4 4-4 4" /><path d="M3 11V9a4 4 0 0 1 4-4h14" /><path d="M7 23l-4-4 4-4" /><path d="M21 13v2a4 4 0 0 1-4 4H3" />
+            </svg>
+          </button>
+        </div>
+
+        {/* === BACK FACE === */}
+        <PosterCardBack game={game} allGames={allGames} onFlip={handleFlip} rarity={rarity} freshness={freshness} relationship={relationship} />
+      </div>
+    </div>
+  );
+}
+
+// Back face content for poster card
+function PosterCardBack({ game, allGames, onFlip, rarity, freshness, relationship }: {
+  game: GameWithMetrics;
+  allGames: Game[];
+  onFlip: (e: React.MouseEvent) => void;
+  rarity: ReturnType<typeof getCardRarity>;
+  freshness: ReturnType<typeof getCardFreshness>;
+  relationship: ReturnType<typeof getRelationshipStatus>;
+}) {
+  const backData = getCardBackData(game, allGames);
+
+  return (
+    <div
       className={clsx(
-        'overflow-hidden rounded-xl border cursor-pointer transition-all card-enter',
+        'card-flip-back overflow-hidden rounded-xl border p-3 flex flex-col',
         rarity.borderClass || 'border-white/5',
       )}
       style={{
-        animationDelay: `${idx * 40}ms`,
         opacity: freshness.opacity,
-        backgroundColor: relationship.cardTint,
+        backgroundColor: relationship.cardTint || 'rgba(10,10,15,0.95)',
       }}
     >
-      {/* Poster image */}
-      <div className="relative">
-        {game.thumbnail ? (
-          <div className="relative h-28 overflow-hidden">
-            <img
-              src={game.thumbnail}
-              alt={game.name}
-              className="w-full h-full object-cover poster-reveal"
-              loading="lazy"
-              style={{ filter: `saturate(${freshness.saturation})` }}
+      {/* Header: game name + flip-back button */}
+      <div className="flex items-center justify-between mb-2">
+        <h3 className="text-white/80 font-bold text-sm truncate flex-1">{game.name}</h3>
+        <button
+          onClick={onFlip}
+          className="w-5 h-5 rounded-full bg-white/5 flex items-center justify-center text-white/30 hover:text-white/60 transition-all shrink-0 ml-2"
+        >
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M17 1l4 4-4 4" /><path d="M3 11V9a4 4 0 0 1 4-4h14" /><path d="M7 23l-4-4 4-4" /><path d="M21 13v2a4 4 0 0 1-4 4H3" />
+          </svg>
+        </button>
+      </div>
+
+      {/* AI Whisper */}
+      {backData.whisper && (
+        <p className="text-[11px] text-white/50 italic mb-2.5 leading-relaxed">{backData.whisper}</p>
+      )}
+
+      {/* Mini sparkline: 30-day session dots */}
+      {backData.sparkline.length > 0 && (
+        <div className="mb-2.5">
+          <div className="text-[9px] text-white/25 mb-1">Last 30 days</div>
+          <div className="flex items-end gap-[2px] h-4">
+            {backData.sparkline.map((s, i) => {
+              const maxH = Math.max(...backData.sparkline.map(d => d.hours), 1);
+              const height = Math.max(2, (s.hours / maxH) * 14);
+              return (
+                <div key={i} className="rounded-full bg-blue-400/60 shrink-0" style={{ width: 4, height }} />
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Library rank */}
+      <div className="flex items-center gap-2 mb-2">
+        <span className="text-[10px] text-white/30">📊</span>
+        <span className="text-[11px] text-white/50">{backData.rank.label}</span>
+        <span className="text-[10px] text-white/20">{backData.rank.detail}</span>
+      </div>
+
+      {/* Next milestone progress */}
+      {backData.nextMilestone && (
+        <div className="mb-2.5">
+          <div className="flex items-center gap-1.5 mb-1">
+            <span className="text-[10px]">{backData.nextMilestone.icon}</span>
+            <span className="text-[10px] text-white/40">{backData.nextMilestone.name}</span>
+            <span className="text-[10px] text-white/20 ml-auto">{backData.nextMilestone.label}</span>
+          </div>
+          <div className="h-1 bg-white/5 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-blue-500/60 rounded-full transition-all"
+              style={{ width: `${backData.nextMilestone.progress}%` }}
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0f] via-[#0a0a0f]/40 to-transparent" />
-          </div>
-        ) : (
-          <div className="h-20 bg-gradient-to-r from-purple-900/10 to-blue-900/10 flex items-center justify-center">
-            <Gamepad2 size={28} className="text-white/10" />
-          </div>
-        )}
-
-        {/* Streak flame badge */}
-        {streak.isActive && (
-          <div className="absolute top-2 left-2 text-[10px] px-1.5 py-0.5 bg-black/60 backdrop-blur-sm text-orange-400 rounded font-bold flex items-center gap-0.5 streak-flame">
-            🔥 {streak.days}
-          </div>
-        )}
-
-        {/* Rarity badge */}
-        {rarity.tier !== 'common' && (
-          <div className="absolute top-2 right-2 text-[9px] px-1.5 py-0.5 bg-black/60 backdrop-blur-sm rounded font-bold uppercase tracking-wider"
-            style={{
-              color: rarity.tier === 'legendary' ? '#fbbf24'
-                : rarity.tier === 'epic' ? '#a855f7'
-                : rarity.tier === 'rare' ? '#3b82f6'
-                : '#22c55e',
-            }}
-          >
-            {rarity.label}
-          </div>
-        )}
-
-        {/* Hero number */}
-        <div className="absolute bottom-2 right-3">
-          <div className="text-right">
-            <div className="text-xl font-black" style={{ color: heroNum.color }}>{heroNum.value}</div>
-            <div className="text-[9px] text-white/30 -mt-0.5">{heroNum.label}</div>
           </div>
         </div>
+      )}
 
-        {/* Name + Relationship overlay */}
-        <div className="absolute bottom-2 left-3 right-16">
-          <h3 className="text-white font-bold text-base leading-tight truncate">{game.name}</h3>
-          <div className="flex items-center gap-1.5 mt-0.5">
-            <span
-              className="text-[10px] px-2 py-0.5 rounded-full font-bold"
-              style={{ color: relationship.color, backgroundColor: relationship.bgColor }}
-            >
-              {relationship.label}
+      {/* Quick verdicts */}
+      {backData.verdicts.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mt-auto pt-2">
+          {backData.verdicts.map((v, i) => (
+            <span key={i} className="text-[9px] px-2 py-0.5 rounded-full bg-white/5 font-medium" style={{ color: v.color }}>
+              {v.category}: {v.verdict}
             </span>
-            {game.genre && <span className="text-[10px] text-white/30">{game.genre}</span>}
-          </div>
-        </div>
-      </div>
-
-      {/* Stats bar */}
-      <div className="px-3 py-2.5 flex items-center gap-3">
-        <div className="flex items-center gap-1 text-xs text-white/50">
-          <DollarSign size={10} className="text-white/30" />
-          <span>{game.acquiredFree ? 'Free' : `$${game.price}`}</span>
-        </div>
-        <div className="flex items-center gap-1 text-xs text-white/50">
-          <Clock size={10} className="text-white/30" />
-          <span>{game.totalHours}h</span>
-        </div>
-        <div className="flex items-center gap-0.5">
-          <RatingStars rating={game.rating} size={9} />
-        </div>
-        {game.totalHours > 0 && game.price > 0 && (
-          <span className={clsx('text-xs font-medium', getValueColor(game.metrics.valueRating))}>
-            ${game.metrics.costPerHour.toFixed(2)}/hr
-          </span>
-        )}
-        <div className="flex-1" />
-        {/* Tags that fit */}
-        {game.platform && <span className="text-[9px] px-1.5 py-0.5 bg-white/5 rounded text-white/30">{game.platform}</span>}
-      </div>
-
-      {/* Smart one-liner */}
-      {smartLine && (
-        <div className="px-3 pb-2.5 -mt-1">
-          <p className="text-[10px] text-white/25 italic truncate">{smartLine}</p>
+          ))}
         </div>
       )}
     </div>
@@ -1090,7 +1249,7 @@ function PosterCard({ game, allGames, idx, onClick, onQuickLog, isInQueue }: {
 
 // --- Compact Card (original layout, fixed) ---
 
-function CompactCard({ game, allGames, idx, onClick, onLogTime, onToggleQueue, onDelete, isInQueue }: {
+function CompactCard({ game, allGames, idx, onClick, onLogTime, onToggleQueue, onDelete, isInQueue, sortBy = 'hours' }: {
   game: GameWithMetrics;
   allGames: Game[];
   idx: number;
@@ -1099,7 +1258,9 @@ function CompactCard({ game, allGames, idx, onClick, onLogTime, onToggleQueue, o
   onToggleQueue: () => void;
   onDelete: () => void;
   isInQueue: boolean;
+  sortBy?: string;
 }) {
+  const [isFlipped, setIsFlipped] = useState(false);
   const rarity = getCardRarity(game);
   const relationship = getRelationshipStatus(game, allGames);
   const streak = getGameStreak(game);
@@ -1108,6 +1269,11 @@ function CompactCard({ game, allGames, idx, onClick, onLogTime, onToggleQueue, o
   const daysCtx = getDaysContext(game);
   const franchise = getFranchiseInfo(game, allGames);
   const smartLine = getGameSmartOneLiner(game, allGames);
+  const momentum = getSessionMomentum(game);
+  const whisper = getContextualWhisper(game, allGames);
+  const libraryRank = getLibraryRank(game, allGames, sortBy);
+  const moodPulse = getCardMoodPulse(game);
+  const progressRing = getProgressRingData(game, allGames);
   const lastPlayedStr = game.playLogs && game.playLogs.length > 0
     ? (() => {
         const sorted = [...game.playLogs].sort((a, b) => parseLocalDate(b.date).getTime() - parseLocalDate(a.date).getTime());
@@ -1115,169 +1281,317 @@ function CompactCard({ game, allGames, idx, onClick, onLogTime, onToggleQueue, o
       })()
     : null;
 
+  const handleFlip = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsFlipped(!isFlipped);
+  };
+
   return (
     <div
-      onClick={onClick}
+      className="card-flip-container card-enter"
+      style={{ animationDelay: `${idx * 40}ms` }}
+    >
+      <div className={clsx('card-flip-inner', isFlipped && 'flipped')}>
+        {/* === FRONT FACE === */}
+        <div
+          onClick={onClick}
+          className={clsx(
+            'card-flip-front p-4 rounded-xl border cursor-pointer transition-all relative',
+            rarity.borderClass || 'border-white/5',
+          )}
+          style={{
+            opacity: freshness.opacity,
+            backgroundColor: relationship.cardTint,
+          }}
+        >
+          {/* Row 1: Thumbnail + Name + Hero Number with Progress Ring */}
+          <div className="flex items-start gap-3 mb-2">
+            <div className="shrink-0 relative">
+              {game.thumbnail ? (
+                <img
+                  src={game.thumbnail}
+                  alt={game.name}
+                  className="w-14 h-14 object-cover rounded-lg"
+                  loading="lazy"
+                  style={{ filter: `saturate(${freshness.saturation})` }}
+                />
+              ) : (
+                <div className="w-14 h-14 bg-white/5 rounded-lg flex items-center justify-center">
+                  <Gamepad2 size={20} className="text-white/20" />
+                </div>
+              )}
+              {/* Streak flame */}
+              {streak.isActive && (
+                <div className="absolute -top-1 -left-1 text-[9px] px-1 py-0.5 bg-orange-500/20 text-orange-400 rounded font-bold streak-flame">
+                  🔥{streak.days}
+                </div>
+              )}
+            </div>
+
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
+                <h3 className="text-white/90 font-medium text-sm truncate">{game.name}</h3>
+                <span
+                  className="text-[10px] px-2 py-0.5 rounded-full font-bold shrink-0"
+                  style={{ color: relationship.color, backgroundColor: relationship.bgColor }}
+                >
+                  {relationship.label}
+                </span>
+                {/* Library rank badge */}
+                {libraryRank.rank > 0 && (
+                  <span className="text-[9px] px-1.5 py-0.5 bg-white/5 rounded text-white/35 font-medium shrink-0">
+                    {libraryRank.label}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-2 text-[10px] text-white/30">
+                <span>{daysCtx}</span>
+                {lastPlayedStr && (
+                  <>
+                    <span className="text-white/10">·</span>
+                    <span>Last {lastPlayedStr}</span>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Hero number with progress ring */}
+            <div className="shrink-0 text-right">
+              <ProgressRing progress={progressRing.progress} color={progressRing.color} size={40} strokeWidth={2}>
+                <div className="text-lg font-black leading-none" style={{ color: heroNum.color }}>{heroNum.value}</div>
+              </ProgressRing>
+              <div className="text-[9px] text-white/25">{heroNum.label}</div>
+            </div>
+          </div>
+
+          {/* Row 2: Tags — full width */}
+          <div className="flex items-center gap-1.5 flex-wrap mb-2">
+            {game.platform && <span className="text-[10px] px-2 py-0.5 bg-white/5 rounded text-white/40">{game.platform}</span>}
+            {game.genre && <span className="text-[10px] px-2 py-0.5 bg-white/5 rounded text-white/40">{game.genre}</span>}
+            {game.purchaseSource && <span className="text-[10px] px-2 py-0.5 bg-white/5 rounded text-white/40">{game.purchaseSource}</span>}
+            {franchise && (
+              <span className="text-[10px] px-2 py-0.5 bg-purple-500/10 text-purple-400 rounded font-medium">
+                {franchise.franchiseName} #{franchise.position}/{franchise.gamesInFranchise}
+              </span>
+            )}
+            {game.totalHours > 0 && (
+              <span className={clsx(
+                'text-[10px] px-2 py-0.5 rounded font-medium',
+                game.metrics.valueRating === 'Excellent' && 'bg-emerald-500/20 text-emerald-400',
+                game.metrics.valueRating === 'Good' && 'bg-blue-500/20 text-blue-400',
+                game.metrics.valueRating === 'Fair' && 'bg-yellow-500/20 text-yellow-400',
+                game.metrics.valueRating === 'Poor' && 'bg-red-500/20 text-red-400'
+              )}>
+                {game.metrics.valueRating}
+              </span>
+            )}
+            {rarity.tier !== 'common' && (
+              <span className="text-[9px] px-1.5 py-0.5 rounded font-bold uppercase"
+                style={{
+                  color: rarity.tier === 'legendary' ? '#fbbf24' : rarity.tier === 'epic' ? '#a855f7' : rarity.tier === 'rare' ? '#3b82f6' : '#22c55e',
+                  backgroundColor: rarity.tier === 'legendary' ? 'rgba(251,191,36,0.1)' : rarity.tier === 'epic' ? 'rgba(168,85,247,0.1)' : rarity.tier === 'rare' ? 'rgba(59,130,246,0.1)' : 'rgba(34,197,94,0.1)',
+                }}
+              >
+                {rarity.label}
+              </span>
+            )}
+            {game.acquiredFree && <span className="text-[10px] px-2 py-0.5 bg-emerald-500/20 text-emerald-400 rounded font-medium">FREE</span>}
+            {game.isSpecial && (
+              <span className="text-[10px] px-2 py-0.5 bg-amber-500/20 text-amber-400 rounded font-medium flex items-center gap-0.5">
+                <Heart size={8} className="fill-amber-400" /> Special
+              </span>
+            )}
+          </div>
+
+          {/* Row 3: Stats grid with momentum dots */}
+          <div className="grid grid-cols-4 gap-2 text-center mb-2">
+            <div className="p-1.5 bg-white/[0.02] rounded-lg">
+              <div className="text-white/80 font-medium text-xs">{game.acquiredFree ? 'Free' : `$${game.price}`}</div>
+              <div className="text-[9px] text-white/25">price</div>
+            </div>
+            <div className="p-1.5 bg-white/[0.02] rounded-lg">
+              <div className="text-white/80 font-medium text-xs">{game.totalHours}h</div>
+              <div className="text-[9px] text-white/25">played</div>
+            </div>
+            <div className="p-1.5 bg-white/[0.02] rounded-lg">
+              <div className="flex justify-center"><RatingStars rating={game.rating} size={9} /></div>
+              <div className="text-[9px] text-white/25">{game.rating}/10</div>
+            </div>
+            <div className="p-1.5 bg-white/[0.02] rounded-lg">
+              {game.totalHours > 0 && game.price > 0 ? (
+                <div className={clsx('font-medium text-xs', getValueColor(game.metrics.valueRating))}>
+                  ${game.metrics.costPerHour.toFixed(2)}
+                </div>
+              ) : (
+                <div className="text-white/30 font-medium text-xs">-</div>
+              )}
+              <div className="text-[9px] text-white/25">per hr</div>
+            </div>
+          </div>
+
+          {/* Momentum sparkline between stats and one-liner */}
+          {momentum.length >= 2 && (
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-[9px] text-white/20">Sessions:</span>
+              <MomentumDots sessions={momentum} />
+            </div>
+          )}
+
+          {/* Row 4: Smart one-liner + whisper */}
+          <div className="mb-2 space-y-0.5">
+            {smartLine && (
+              <p className="text-[10px] text-white/25 italic truncate">{smartLine}</p>
+            )}
+            {whisper.text && whisper.text !== smartLine && (
+              <p className="text-[10px] text-white/20 italic truncate">{whisper.text}</p>
+            )}
+          </div>
+
+          {/* Row 5: Action buttons — always visible */}
+          <div className="flex items-center gap-1.5 pt-2 border-t border-white/5">
+            <button
+              onClick={(e) => { e.stopPropagation(); onLogTime(); }}
+              className="flex items-center gap-1 px-2.5 py-1.5 text-white/30 active:text-blue-400 active:bg-blue-500/10 rounded-lg transition-all text-xs"
+            >
+              <Clock size={12} /> Log
+            </button>
+            <button
+              onClick={(e) => { e.stopPropagation(); onToggleQueue(); }}
+              className={clsx(
+                'px-2.5 py-1.5 rounded-lg transition-all text-xs flex items-center gap-1',
+                isInQueue ? 'text-purple-400 bg-purple-500/10' : 'text-white/30'
+              )}
+            >
+              {isInQueue ? <Check size={12} /> : <ListPlus size={12} />}
+              {isInQueue ? 'Queued' : 'Queue'}
+            </button>
+            <div className="flex-1" />
+            {/* Flip button */}
+            <button
+              onClick={handleFlip}
+              className="p-1.5 text-white/20 hover:text-white/50 rounded-lg transition-all"
+              title="Flip card"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M17 1l4 4-4 4" /><path d="M3 11V9a4 4 0 0 1 4-4h14" /><path d="M7 23l-4-4 4-4" /><path d="M21 13v2a4 4 0 0 1-4 4H3" />
+              </svg>
+            </button>
+            <button
+              onClick={(e) => { e.stopPropagation(); onDelete(); }}
+              className="p-1.5 text-white/20 active:text-red-400 rounded-lg transition-all"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+              </svg>
+            </button>
+          </div>
+
+          {/* Mood pulse strip */}
+          {moodPulse.level !== 'never' && (
+            <div
+              className="absolute bottom-0 left-0 right-0 h-[2px] rounded-b-xl mood-pulse-strip"
+              style={{ backgroundColor: moodPulse.color }}
+            />
+          )}
+        </div>
+
+        {/* === BACK FACE === */}
+        <CompactCardBack game={game} allGames={allGames} onFlip={handleFlip} rarity={rarity} freshness={freshness} relationship={relationship} />
+      </div>
+    </div>
+  );
+}
+
+// Back face content for compact card
+function CompactCardBack({ game, allGames, onFlip, rarity, freshness, relationship }: {
+  game: GameWithMetrics;
+  allGames: Game[];
+  onFlip: (e: React.MouseEvent) => void;
+  rarity: ReturnType<typeof getCardRarity>;
+  freshness: ReturnType<typeof getCardFreshness>;
+  relationship: ReturnType<typeof getRelationshipStatus>;
+}) {
+  const backData = getCardBackData(game, allGames);
+
+  return (
+    <div
       className={clsx(
-        'p-4 rounded-xl border cursor-pointer transition-all card-enter',
+        'card-flip-back rounded-xl border p-4 flex flex-col',
         rarity.borderClass || 'border-white/5',
       )}
       style={{
-        animationDelay: `${idx * 40}ms`,
         opacity: freshness.opacity,
-        backgroundColor: relationship.cardTint,
+        backgroundColor: relationship.cardTint || 'rgba(10,10,15,0.95)',
       }}
     >
-      {/* Row 1: Thumbnail + Name + Hero Number */}
-      <div className="flex items-start gap-3 mb-2">
-        <div className="shrink-0 relative">
-          {game.thumbnail ? (
-            <img
-              src={game.thumbnail}
-              alt={game.name}
-              className="w-14 h-14 object-cover rounded-lg"
-              loading="lazy"
-              style={{ filter: `saturate(${freshness.saturation})` }}
-            />
-          ) : (
-            <div className="w-14 h-14 bg-white/5 rounded-lg flex items-center justify-center">
-              <Gamepad2 size={20} className="text-white/20" />
-            </div>
-          )}
-          {/* Streak flame */}
-          {streak.isActive && (
-            <div className="absolute -top-1 -left-1 text-[9px] px-1 py-0.5 bg-orange-500/20 text-orange-400 rounded font-bold streak-flame">
-              🔥{streak.days}
-            </div>
-          )}
-        </div>
-
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
-            <h3 className="text-white/90 font-medium text-sm truncate">{game.name}</h3>
-            <span
-              className="text-[10px] px-2 py-0.5 rounded-full font-bold shrink-0"
-              style={{ color: relationship.color, backgroundColor: relationship.bgColor }}
-            >
-              {relationship.label}
-            </span>
-          </div>
-          <div className="flex items-center gap-2 text-[10px] text-white/30">
-            <span>{daysCtx}</span>
-            {lastPlayedStr && (
-              <>
-                <span className="text-white/10">·</span>
-                <span>Last {lastPlayedStr}</span>
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* Hero number */}
-        <div className="shrink-0 text-right">
-          <div className="text-lg font-black leading-none" style={{ color: heroNum.color }}>{heroNum.value}</div>
-          <div className="text-[9px] text-white/25">{heroNum.label}</div>
-        </div>
-      </div>
-
-      {/* Row 2: Tags — full width */}
-      <div className="flex items-center gap-1.5 flex-wrap mb-2">
-        {game.platform && <span className="text-[10px] px-2 py-0.5 bg-white/5 rounded text-white/40">{game.platform}</span>}
-        {game.genre && <span className="text-[10px] px-2 py-0.5 bg-white/5 rounded text-white/40">{game.genre}</span>}
-        {game.purchaseSource && <span className="text-[10px] px-2 py-0.5 bg-white/5 rounded text-white/40">{game.purchaseSource}</span>}
-        {franchise && (
-          <span className="text-[10px] px-2 py-0.5 bg-purple-500/10 text-purple-400 rounded font-medium">
-            {franchise.franchiseName} #{franchise.position}/{franchise.gamesInFranchise}
-          </span>
-        )}
-        {game.totalHours > 0 && (
-          <span className={clsx(
-            'text-[10px] px-2 py-0.5 rounded font-medium',
-            game.metrics.valueRating === 'Excellent' && 'bg-emerald-500/20 text-emerald-400',
-            game.metrics.valueRating === 'Good' && 'bg-blue-500/20 text-blue-400',
-            game.metrics.valueRating === 'Fair' && 'bg-yellow-500/20 text-yellow-400',
-            game.metrics.valueRating === 'Poor' && 'bg-red-500/20 text-red-400'
-          )}>
-            {game.metrics.valueRating}
-          </span>
-        )}
-        {rarity.tier !== 'common' && (
-          <span className="text-[9px] px-1.5 py-0.5 rounded font-bold uppercase"
-            style={{
-              color: rarity.tier === 'legendary' ? '#fbbf24' : rarity.tier === 'epic' ? '#a855f7' : rarity.tier === 'rare' ? '#3b82f6' : '#22c55e',
-              backgroundColor: rarity.tier === 'legendary' ? 'rgba(251,191,36,0.1)' : rarity.tier === 'epic' ? 'rgba(168,85,247,0.1)' : rarity.tier === 'rare' ? 'rgba(59,130,246,0.1)' : 'rgba(34,197,94,0.1)',
-            }}
-          >
-            {rarity.label}
-          </span>
-        )}
-        {game.acquiredFree && <span className="text-[10px] px-2 py-0.5 bg-emerald-500/20 text-emerald-400 rounded font-medium">FREE</span>}
-        {game.isSpecial && (
-          <span className="text-[10px] px-2 py-0.5 bg-amber-500/20 text-amber-400 rounded font-medium flex items-center gap-0.5">
-            <Heart size={8} className="fill-amber-400" /> Special
-          </span>
-        )}
-      </div>
-
-      {/* Row 3: Stats grid */}
-      <div className="grid grid-cols-4 gap-2 text-center mb-2">
-        <div className="p-1.5 bg-white/[0.02] rounded-lg">
-          <div className="text-white/80 font-medium text-xs">{game.acquiredFree ? 'Free' : `$${game.price}`}</div>
-          <div className="text-[9px] text-white/25">price</div>
-        </div>
-        <div className="p-1.5 bg-white/[0.02] rounded-lg">
-          <div className="text-white/80 font-medium text-xs">{game.totalHours}h</div>
-          <div className="text-[9px] text-white/25">played</div>
-        </div>
-        <div className="p-1.5 bg-white/[0.02] rounded-lg">
-          <div className="flex justify-center"><RatingStars rating={game.rating} size={9} /></div>
-          <div className="text-[9px] text-white/25">{game.rating}/10</div>
-        </div>
-        <div className="p-1.5 bg-white/[0.02] rounded-lg">
-          {game.totalHours > 0 && game.price > 0 ? (
-            <div className={clsx('font-medium text-xs', getValueColor(game.metrics.valueRating))}>
-              ${game.metrics.costPerHour.toFixed(2)}
-            </div>
-          ) : (
-            <div className="text-white/30 font-medium text-xs">-</div>
-          )}
-          <div className="text-[9px] text-white/25">per hr</div>
-        </div>
-      </div>
-
-      {/* Row 4: Smart one-liner */}
-      {smartLine && (
-        <p className="text-[10px] text-white/25 italic truncate mb-2">{smartLine}</p>
-      )}
-
-      {/* Row 5: Action buttons — always visible */}
-      <div className="flex items-center gap-1.5 pt-2 border-t border-white/5">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-2.5">
+        <h3 className="text-white/80 font-bold text-sm truncate flex-1">{game.name}</h3>
         <button
-          onClick={(e) => { e.stopPropagation(); onLogTime(); }}
-          className="flex items-center gap-1 px-2.5 py-1.5 text-white/30 active:text-blue-400 active:bg-blue-500/10 rounded-lg transition-all text-xs"
+          onClick={onFlip}
+          className="w-6 h-6 rounded-full bg-white/5 flex items-center justify-center text-white/30 hover:text-white/60 transition-all shrink-0 ml-2"
         >
-          <Clock size={12} /> Log
-        </button>
-        <button
-          onClick={(e) => { e.stopPropagation(); onToggleQueue(); }}
-          className={clsx(
-            'px-2.5 py-1.5 rounded-lg transition-all text-xs flex items-center gap-1',
-            isInQueue ? 'text-purple-400 bg-purple-500/10' : 'text-white/30'
-          )}
-        >
-          {isInQueue ? <Check size={12} /> : <ListPlus size={12} />}
-          {isInQueue ? 'Queued' : 'Queue'}
-        </button>
-        <div className="flex-1" />
-        <button
-          onClick={(e) => { e.stopPropagation(); onDelete(); }}
-          className="p-1.5 text-white/20 active:text-red-400 rounded-lg transition-all"
-        >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M17 1l4 4-4 4" /><path d="M3 11V9a4 4 0 0 1 4-4h14" /><path d="M7 23l-4-4 4-4" /><path d="M21 13v2a4 4 0 0 1-4 4H3" />
           </svg>
         </button>
       </div>
+
+      {/* AI Whisper */}
+      {backData.whisper && (
+        <p className="text-[11px] text-white/50 italic mb-3 leading-relaxed">{backData.whisper}</p>
+      )}
+
+      {/* Mini sparkline */}
+      {backData.sparkline.length > 0 && (
+        <div className="mb-3">
+          <div className="text-[9px] text-white/25 mb-1">Last 30 days</div>
+          <div className="flex items-end gap-[2px] h-4">
+            {backData.sparkline.map((s, i) => {
+              const maxH = Math.max(...backData.sparkline.map(d => d.hours), 1);
+              const height = Math.max(2, (s.hours / maxH) * 14);
+              return (
+                <div key={i} className="rounded-full bg-blue-400/60 shrink-0" style={{ width: 4, height }} />
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Library rank */}
+      <div className="flex items-center gap-2 mb-2.5">
+        <span className="text-[10px] text-white/30">📊</span>
+        <span className="text-[11px] text-white/50">{backData.rank.label}</span>
+        <span className="text-[10px] text-white/20">{backData.rank.detail}</span>
+      </div>
+
+      {/* Next milestone */}
+      {backData.nextMilestone && (
+        <div className="mb-3">
+          <div className="flex items-center gap-1.5 mb-1">
+            <span className="text-[10px]">{backData.nextMilestone.icon}</span>
+            <span className="text-[10px] text-white/40">{backData.nextMilestone.name}</span>
+            <span className="text-[10px] text-white/20 ml-auto">{backData.nextMilestone.label}</span>
+          </div>
+          <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-blue-500/60 rounded-full transition-all"
+              style={{ width: `${backData.nextMilestone.progress}%` }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Quick verdicts */}
+      {backData.verdicts.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mt-auto pt-2">
+          {backData.verdicts.map((v, i) => (
+            <span key={i} className="text-[9px] px-2 py-0.5 rounded-full bg-white/5 font-medium" style={{ color: v.color }}>
+              {v.category}: {v.verdict}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

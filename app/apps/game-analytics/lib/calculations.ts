@@ -7162,3 +7162,299 @@ export function getGameJourney(game: Game): JourneyMilestone[] {
   const milestoneDates = new Set(milestones.filter(m => m.type === 'milestone').map(m => m.date));
   return milestones.filter(m => !(m.type === 'session' && milestoneDates.has(m.date)));
 }
+
+// --- Card Info Enhancements ---
+
+// Feature 1: Card Back Data (for card flip)
+export interface CardBackData {
+  whisper: string;
+  sparkline: { date: string; hours: number }[];
+  rank: { label: string; detail: string };
+  nextMilestone: { name: string; icon: string; progress: number; target: number; label: string } | null;
+  verdicts: { category: string; verdict: string; color: string }[];
+}
+
+export function getCardBackData(game: Game, allGames: Game[]): CardBackData {
+  const totalHours = getTotalHours(game);
+  const owned = allGames.filter(g => g.status !== 'Wishlist');
+  const played = owned.filter(g => getTotalHours(g) > 0);
+
+  // Whisper: pick most interesting contextual observation
+  const whisper = getContextualWhisper(game, allGames).text;
+
+  // Sparkline: last 30 days of sessions
+  const now = new Date();
+  const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+  const logs = (game.playLogs || [])
+    .filter(l => parseLocalDate(l.date).getTime() >= thirtyDaysAgo.getTime())
+    .sort((a, b) => parseLocalDate(a.date).getTime() - parseLocalDate(b.date).getTime())
+    .map(l => ({ date: l.date, hours: l.hours }));
+
+  // Rank: by hours among played games
+  const sortedByHours = [...played].sort((a, b) => getTotalHours(b) - getTotalHours(a));
+  const hoursRank = sortedByHours.findIndex(g => g.id === game.id) + 1;
+  const rank = totalHours > 0 && hoursRank > 0
+    ? { label: `#${hoursRank} most played`, detail: `of ${played.length} games` }
+    : { label: 'Unplayed', detail: `${owned.length} games in library` };
+
+  // Next milestone for this game
+  const hourThresholds = [10, 25, 50, 100, 200, 500];
+  let nextMilestone: CardBackData['nextMilestone'] = null;
+  for (const threshold of hourThresholds) {
+    if (totalHours < threshold) {
+      const progress = Math.min((totalHours / threshold) * 100, 99);
+      const names: Record<number, string> = { 10: 'Getting Started', 25: 'Committed', 50: 'Half Century', 100: 'Century Club', 200: 'Deep Diver', 500: 'Life Game' };
+      const icons: Record<number, string> = { 10: '🎯', 25: '📌', 50: '🏅', 100: '💯', 200: '🌊', 500: '🏆' };
+      nextMilestone = {
+        name: names[threshold] || `${threshold}h`,
+        icon: icons[threshold] || '🎯',
+        progress: Math.round(progress),
+        target: threshold,
+        label: `${Math.round(threshold - totalHours)}h to go`,
+      };
+      break;
+    }
+  }
+
+  // If no hour milestone, check value tier milestone
+  if (!nextMilestone && game.price > 0 && totalHours > 0) {
+    const costPerHour = game.price / totalHours;
+    const valueThresholds: { threshold: number; name: string; icon: string }[] = [
+      { threshold: 5, name: 'Fair Value', icon: '📊' },
+      { threshold: 3, name: 'Good Value', icon: '💎' },
+      { threshold: 1, name: 'Excellent Value', icon: '🌟' },
+    ];
+    for (const vt of valueThresholds) {
+      if (costPerHour > vt.threshold) {
+        const hoursNeeded = (game.price / vt.threshold) - totalHours;
+        nextMilestone = {
+          name: vt.name,
+          icon: vt.icon,
+          progress: Math.round(Math.min((totalHours / (game.price / vt.threshold)) * 100, 99)),
+          target: Math.round(game.price / vt.threshold),
+          label: `${Math.round(hoursNeeded)}h to ${vt.name}`,
+        };
+        break;
+      }
+    }
+  }
+
+  // Quick verdicts (top 3 from getGameVerdicts)
+  const fullVerdicts = getGameVerdicts(game, allGames);
+  const verdicts = fullVerdicts.slice(0, 3).map(v => ({
+    category: v.category,
+    verdict: v.verdict,
+    color: v.color,
+  }));
+
+  return { whisper, sparkline: logs, rank, nextMilestone, verdicts };
+}
+
+// Feature 2: Contextual AI Whisper
+export interface ContextualWhisperData {
+  text: string;
+  type: string;
+  priority: number;
+}
+
+export function getContextualWhisper(game: Game, allGames: Game[]): ContextualWhisperData {
+  const totalHours = getTotalHours(game);
+  const owned = allGames.filter(g => g.status !== 'Wishlist');
+  const played = owned.filter(g => getTotalHours(g) > 0 && g.price > 0);
+  const candidates: ContextualWhisperData[] = [];
+
+  // Value trajectory whisper
+  if (game.price > 0 && totalHours > 0 && game.playLogs && game.playLogs.length >= 2) {
+    const sorted = [...game.playLogs].sort((a, b) => parseLocalDate(a.date).getTime() - parseLocalDate(b.date).getTime());
+    const firstSessionHours = sorted[0].hours;
+    const cphAfterFirst = firstSessionHours > 0 ? game.price / firstSessionHours : 0;
+    const cphNow = game.price / totalHours;
+    if (cphAfterFirst > 5 && cphNow < 3) {
+      candidates.push({ text: `Was $${cphAfterFirst.toFixed(0)}/hr after session 1, now $${cphNow.toFixed(2)}/hr`, type: 'value', priority: 8 });
+    }
+  }
+
+  // Streak context
+  const streak = getGameStreak(game);
+  if (streak.isActive && streak.days >= 3) {
+    const allStreaks = allGames.map(g => getGameStreak(g)).filter(s => s.isActive);
+    const longestActive = allStreaks.reduce((max, s) => s.days > max.days ? s : max, { days: 0, level: 'none' as const, isActive: false });
+    if (longestActive.days === streak.days) {
+      candidates.push({ text: `Day ${streak.days} — your longest active streak right now`, type: 'streak', priority: 9 });
+    } else {
+      candidates.push({ text: `${streak.days}-day streak and counting`, type: 'streak', priority: 6 });
+    }
+  }
+
+  // Comparative: platform hours
+  if (game.platform && totalHours > 0) {
+    const platformGames = owned.filter(g => g.platform === game.platform && g.id !== game.id);
+    const platformHours = platformGames.reduce((s, g) => s + getTotalHours(g), 0);
+    if (totalHours > platformHours && platformGames.length >= 2) {
+      candidates.push({ text: `More hours than your entire ${game.platform} library combined`, type: 'comparative', priority: 9 });
+    }
+  }
+
+  // Milestone proximity
+  const hourThresholds = [10, 25, 50, 100, 200, 500];
+  for (const threshold of hourThresholds) {
+    const remaining = threshold - totalHours;
+    if (remaining > 0 && remaining <= threshold * 0.2) {
+      const names: Record<number, string> = { 100: 'Century Club', 200: 'Deep Diver', 500: 'Life Game' };
+      const name = names[threshold] || `${threshold}h`;
+      candidates.push({ text: `${Math.round(remaining)} more hours to hit ${name}`, type: 'milestone', priority: 7 });
+      break;
+    }
+  }
+
+  // Neglect nudge
+  if (game.playLogs && game.playLogs.length > 0 && game.status !== 'Completed' && game.status !== 'Abandoned') {
+    const sorted = [...game.playLogs].sort((a, b) => parseLocalDate(b.date).getTime() - parseLocalDate(a.date).getTime());
+    const daysSince = Math.floor((Date.now() - parseLocalDate(sorted[0].date).getTime()) / (24 * 60 * 60 * 1000));
+    if (daysSince >= 30) {
+      candidates.push({ text: `Last played ${daysSince} days ago — missing this one?`, type: 'neglect', priority: 5 });
+    }
+  }
+
+  // Hours percentile
+  if (totalHours > 0 && played.length >= 5) {
+    const sortedByHours = [...played].sort((a, b) => getTotalHours(b) - getTotalHours(a));
+    const rank = sortedByHours.findIndex(g => g.id === game.id) + 1;
+    const percentile = Math.round((1 - rank / played.length) * 100);
+    if (percentile >= 90) {
+      candidates.push({ text: `Top ${100 - percentile}% most played in your library`, type: 'rank', priority: 7 });
+    }
+  }
+
+  // Rating context
+  if (game.rating >= 9 && totalHours >= 5) {
+    const nineOrAbove = owned.filter(g => g.rating >= 9);
+    candidates.push({ text: `One of only ${nineOrAbove.length} game${nineOrAbove.length === 1 ? '' : 's'} you've rated 9+`, type: 'rating', priority: 6 });
+  }
+
+  // Sort by priority, pick highest
+  candidates.sort((a, b) => b.priority - a.priority);
+  return candidates[0] || { text: '', type: 'none', priority: 0 };
+}
+
+// Feature 4: Library Rank Badge
+export interface LibraryRankData {
+  rank: number;
+  total: number;
+  percentile: number;
+  label: string;
+}
+
+export function getLibraryRank(game: Game, allGames: Game[], sortBy: string): LibraryRankData {
+  const owned = allGames.filter(g => g.status !== 'Wishlist');
+  if (owned.length === 0) return { rank: 0, total: 0, percentile: 0, label: '-' };
+
+  let sorted: Game[];
+  switch (sortBy) {
+    case 'hours':
+      sorted = [...owned].sort((a, b) => getTotalHours(b) - getTotalHours(a));
+      break;
+    case 'price':
+      sorted = [...owned].sort((a, b) => b.price - a.price);
+      break;
+    case 'rating':
+      sorted = [...owned].sort((a, b) => b.rating - a.rating);
+      break;
+    case 'value': {
+      const withValue = owned.filter(g => getTotalHours(g) > 0 && g.price > 0);
+      sorted = [...withValue].sort((a, b) => (a.price / getTotalHours(a)) - (b.price / getTotalHours(b)));
+      break;
+    }
+    default:
+      sorted = [...owned].sort((a, b) => getTotalHours(b) - getTotalHours(a));
+  }
+
+  const rank = sorted.findIndex(g => g.id === game.id) + 1;
+  const total = sorted.length;
+  const percentile = total > 0 ? Math.round((1 - (rank - 1) / total) * 100) : 0;
+
+  let label: string;
+  if (rank === 0) {
+    label = '-';
+  } else if (rank <= 3) {
+    label = `#${rank}`;
+  } else if (percentile >= 90) {
+    label = `Top ${100 - percentile + 1}%`;
+  } else {
+    label = `#${rank}`;
+  }
+
+  return { rank, total, percentile, label };
+}
+
+// Feature 6: Mood Pulse Color Strip
+export interface CardMoodPulseData {
+  level: 'obsessed' | 'consistent' | 'casual' | 'dormant' | 'never';
+  color: string;
+  label: string;
+}
+
+export function getCardMoodPulse(game: Game): CardMoodPulseData {
+  const logs = game.playLogs || [];
+  if (logs.length === 0) return { level: 'never', color: 'transparent', label: 'Never played' };
+
+  const now = Date.now();
+  const msPerDay = 24 * 60 * 60 * 1000;
+  const recentLogs = logs.filter(l => (now - parseLocalDate(l.date).getTime()) <= 7 * msPerDay);
+  const weeklyLogs = logs.filter(l => {
+    const diff = now - parseLocalDate(l.date).getTime();
+    return diff <= 14 * msPerDay;
+  });
+
+  const uniqueDaysThisWeek = new Set(recentLogs.map(l => l.date)).size;
+  const uniqueDaysLast2Weeks = new Set(weeklyLogs.map(l => l.date)).size;
+
+  if (uniqueDaysThisWeek >= 4) {
+    return { level: 'obsessed', color: '#f43f5e', label: 'Obsessed' };
+  }
+  if (uniqueDaysLast2Weeks >= 4) {
+    return { level: 'consistent', color: '#f59e0b', label: 'Consistent' };
+  }
+  if (uniqueDaysLast2Weeks >= 1) {
+    return { level: 'casual', color: '#3b82f6', label: 'Casual' };
+  }
+  return { level: 'dormant', color: '#4b5563', label: 'Dormant' };
+}
+
+// Feature 5: Progress Ring Data
+export interface ProgressRingData {
+  progress: number; // 0-100
+  color: string;
+  label: string;
+}
+
+export function getProgressRingData(game: Game, allGames: Game[]): ProgressRingData {
+  const totalHours = getTotalHours(game);
+
+  // For In Progress games: use completion probability
+  if (game.status === 'In Progress') {
+    const prob = getCompletionProbability(game, allGames);
+    return {
+      progress: Math.round(prob.probability),
+      color: prob.probability >= 70 ? '#10b981' : prob.probability >= 40 ? '#f59e0b' : '#ef4444',
+      label: `${Math.round(prob.probability)}% likely to complete`,
+    };
+  }
+
+  // For paid games: progress toward next value tier
+  if (game.price > 0 && totalHours > 0) {
+    const costPerHour = game.price / totalHours;
+    if (costPerHour > 1) {
+      const hoursForExcellent = game.price / 1;
+      const progress = Math.min((totalHours / hoursForExcellent) * 100, 100);
+      return {
+        progress: Math.round(progress),
+        color: '#3b82f6',
+        label: `${Math.round(progress)}% to Excellent value`,
+      };
+    }
+    return { progress: 100, color: '#10b981', label: 'Excellent value' };
+  }
+
+  return { progress: 0, color: '#4b5563', label: '' };
+}
