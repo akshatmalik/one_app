@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   BarChart,
   Bar,
@@ -45,12 +45,12 @@ import {
   CalendarDays,
   ChevronDown,
   ChevronUp,
-  Layers,
   Gift,
   List as ListIcon,
+  Heart,
 } from 'lucide-react';
 import { Game, GameStatus, AnalyticsSummary, BudgetSettings } from '../lib/types';
-import { calculateSummary, getCumulativeSpending, getHoursByMonth, getSpendingByMonth, parseLocalDate } from '../lib/calculations';
+import { calculateSummary, getCumulativeSpending, getHoursByMonth, getSpendingByMonth, parseLocalDate, getLibraryHealth } from '../lib/calculations';
 import { GameWithMetrics } from '../hooks/useAnalytics';
 import { PeriodStatsPanel } from './PeriodStatsPanel';
 import { FunStatsPanel } from './FunStatsPanel';
@@ -88,7 +88,7 @@ export function StatsView({ games, summary, budgets = [], onSetBudget }: StatsVi
   const [showDiscountGames, setShowDiscountGames] = useState(false);
   const [showAllGamesPlayed, setShowAllGamesPlayed] = useState(false);
   const [showROIRankings, setShowROIRankings] = useState(false);
-  const [showAllFranchises, setShowAllFranchises] = useState(false);
+  const libraryHealth = useMemo(() => getLibraryHealth(games), [games]);
 
   const isAllTime = selectedPeriod === 'all';
   const selectedYear = isAllTime ? currentYear : selectedPeriod;
@@ -256,17 +256,6 @@ export function StatsView({ games, summary, budgets = [], onSetBudget }: StatsVi
     .sort((a, b) => b.hours - a.hours)
     .slice(0, 8);
 
-  // ROI rankings (exclude free games)
-  const roiRankings = [...playedGames]
-    .filter(g => g.price > 0 && !g.acquiredFree)
-    .map(g => ({
-      name: g.name.length > 15 ? g.name.slice(0, 15) + '...' : g.name,
-      fullName: g.name,
-      roi: g.metrics.roi,
-    }))
-    .sort((a, b) => b.roi - a.roi)
-    .slice(0, 8);
-
   // Period ROI rankings
   const periodROIRankings = [...filteredGames]
     .filter(g => g.hours > 0 && g.price > 0 && !g.acquiredFree && g.status !== 'Wishlist')
@@ -306,28 +295,6 @@ export function StatsView({ games, summary, budgets = [], onSetBudget }: StatsVi
           total,
         }))
         .sort((a, b) => a.month.localeCompare(b.month));
-
-  // Franchise stats for the period
-  const franchiseStats = Object.entries(
-    filteredGames
-      .filter(g => g.franchise && g.status !== 'Wishlist')
-      .reduce((acc, g) => {
-        const franchise = g.franchise!;
-        if (!acc[franchise]) {
-          acc[franchise] = { spent: 0, hours: 0, games: 0 };
-        }
-        acc[franchise].spent += g.price;
-        acc[franchise].hours += g.hours;
-        acc[franchise].games += 1;
-        return acc;
-      }, {} as Record<string, { spent: number; hours: number; games: number }>)
-  )
-    .map(([name, stats]) => ({
-      name,
-      ...stats,
-      avgCostPerHour: stats.hours > 0 ? stats.spent / stats.hours : 0,
-    }))
-    .sort((a, b) => b.spent - a.spent);
 
   // Subscription stats for the period
   const periodFreeGames = filteredGames.filter(g => g.acquiredFree && g.status !== 'Wishlist');
@@ -383,6 +350,63 @@ export function StatsView({ games, summary, budgets = [], onSetBudget }: StatsVi
 
   return (
     <div className="space-y-8">
+      {/* Library Health Dashboard */}
+      <div className="p-5 bg-gradient-to-br from-white/[0.03] to-white/[0.01] border border-white/10 rounded-2xl">
+        <div className="flex items-center gap-2 mb-4">
+          <Heart size={18} className="text-pink-400" />
+          <h2 className="text-base font-semibold text-white">Library Health</h2>
+        </div>
+        <div className="space-y-3">
+          {/* Active Rate */}
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-white/50 w-24 shrink-0">Active</span>
+            <div className="flex-1 h-3 bg-white/5 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-emerald-500 rounded-full transition-all duration-500"
+                style={{ width: `${libraryHealth.activeRate}%` }}
+              />
+            </div>
+            <span className="text-xs font-medium text-emerald-400 w-10 text-right">{libraryHealth.activeRate}%</span>
+          </div>
+          {/* Completion Rate */}
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-white/50 w-24 shrink-0">Completed</span>
+            <div className="flex-1 h-3 bg-white/5 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-blue-500 rounded-full transition-all duration-500"
+                style={{ width: `${libraryHealth.completionRate}%` }}
+              />
+            </div>
+            <span className="text-xs font-medium text-blue-400 w-10 text-right">{libraryHealth.completionRate}%</span>
+          </div>
+          {/* Abandonment Rate */}
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-white/50 w-24 shrink-0">Abandoned</span>
+            <div className="flex-1 h-3 bg-white/5 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-red-500 rounded-full transition-all duration-500"
+                style={{ width: `${libraryHealth.abandonmentRate}%` }}
+              />
+            </div>
+            <span className="text-xs font-medium text-red-400 w-10 text-right">{libraryHealth.abandonmentRate}%</span>
+          </div>
+          {/* Dust Rate */}
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-white/50 w-24 shrink-0">Dusty</span>
+            <div className="flex-1 h-3 bg-white/5 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-gray-500 rounded-full transition-all duration-500"
+                style={{ width: `${libraryHealth.dustRate}%` }}
+              />
+            </div>
+            <span className="text-xs font-medium text-gray-400 w-10 text-right">{libraryHealth.dustRate}%</span>
+          </div>
+        </div>
+        <p className="text-[10px] text-white/30 mt-3">
+          Active = played in last 30 days &bull; Dusty = untouched 60+ days (excluding completed/abandoned)
+        </p>
+      </div>
+
       {/* Time Period Selector & Stats Section */}
       <div className="space-y-4">
         {/* Time Period Selector */}
@@ -633,57 +657,6 @@ export function StatsView({ games, summary, budgets = [], onSetBudget }: StatsVi
               </BarChart>
             </ResponsiveContainer>
           </ChartCard>
-        )}
-
-        {/* Franchise Stats */}
-        {franchiseStats.length > 0 && (
-          <div className="p-4 bg-white/[0.02] border border-white/5 rounded-xl">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-medium text-white/70 flex items-center gap-2">
-                <Layers size={14} className="text-purple-400" />
-                {isAllTime ? 'All Time' : selectedYear} Franchise Stats
-              </h3>
-              {franchiseStats.length > 6 && (
-                <button
-                  onClick={() => setShowAllFranchises(!showAllFranchises)}
-                  className="text-xs text-white/40 hover:text-white/70 transition-all"
-                >
-                  {showAllFranchises ? 'Show Less' : `Show All (${franchiseStats.length})`}
-                </button>
-              )}
-            </div>
-            <div className="space-y-3">
-              {(showAllFranchises ? franchiseStats : franchiseStats.slice(0, 6)).map((franchise, idx) => (
-                <div key={idx} className="p-3 bg-white/[0.03] rounded-lg">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium text-white/90">{franchise.name}</span>
-                    <span className="text-xs text-white/40">{franchise.games} game{franchise.games !== 1 ? 's' : ''}</span>
-                  </div>
-                  <div className="grid grid-cols-3 gap-2 text-center">
-                    <div>
-                      <div className="text-sm font-semibold text-emerald-400">${franchise.spent.toFixed(0)}</div>
-                      <div className="text-[10px] text-white/30">spent</div>
-                    </div>
-                    <div>
-                      <div className="text-sm font-semibold text-blue-400">{franchise.hours.toFixed(0)}h</div>
-                      <div className="text-[10px] text-white/30">played</div>
-                    </div>
-                    <div>
-                      <div className={clsx(
-                        'text-sm font-semibold',
-                        franchise.avgCostPerHour <= 1 ? 'text-emerald-400' :
-                        franchise.avgCostPerHour <= 3 ? 'text-blue-400' :
-                        franchise.avgCostPerHour <= 5 ? 'text-yellow-400' : 'text-red-400'
-                      )}>
-                        ${franchise.avgCostPerHour.toFixed(2)}/h
-                      </div>
-                      <div className="text-[10px] text-white/30">avg cost</div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
         )}
 
         {/* Period ROI Rankings */}
@@ -1024,54 +997,6 @@ export function StatsView({ games, summary, budgets = [], onSetBudget }: StatsVi
 
       {/* Advanced Charts */}
       <AdvancedCharts games={games} />
-
-      {/* All-Time Summary Cards */}
-      <div>
-        <h3 className="text-sm font-medium text-white/50 mb-3">All-Time Statistics</h3>
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-        <SummaryCard
-          icon={<Gamepad2 size={16} />}
-          label="Total Games"
-          value={summary.totalGames}
-          subValue={`${summary.ownedCount} owned`}
-        />
-        <SummaryCard
-          icon={<DollarSign size={16} />}
-          label="Total Spent"
-          value={`$${summary.totalSpent.toFixed(0)}`}
-          subValue={`$${summary.averagePrice.toFixed(0)} avg`}
-          color="emerald"
-        />
-        <SummaryCard
-          icon={<Clock size={16} />}
-          label="Total Hours"
-          value={`${summary.totalHours.toFixed(0)}h`}
-          subValue={`${summary.averageHoursPerGame.toFixed(1)}h avg`}
-          color="blue"
-        />
-        <SummaryCard
-          icon={<TrendingUp size={16} />}
-          label="Cost Per Hour"
-          value={`$${summary.averageCostPerHour.toFixed(2)}`}
-          subValue={summary.averageCostPerHour <= 3 ? 'Great value!' : 'Could be better'}
-          color={summary.averageCostPerHour <= 3 ? 'emerald' : 'yellow'}
-        />
-        <SummaryCard
-          icon={<Star size={16} />}
-          label="Avg Rating"
-          value={`${summary.averageRating.toFixed(1)}/10`}
-          subValue={summary.averageRating >= 7 ? 'High quality' : 'Mixed bag'}
-          color="purple"
-        />
-        <SummaryCard
-          icon={<Target size={16} />}
-          label="Completion"
-          value={`${summary.completionRate.toFixed(0)}%`}
-          subValue={`${summary.completedCount} completed`}
-          color="cyan"
-        />
-        </div>
-      </div>
 
       {/* Highlights - Last Month (Horizontal Scroll) */}
       {(() => {
@@ -1495,21 +1420,6 @@ export function StatsView({ games, summary, budgets = [], onSetBudget }: StatsVi
           </ChartCard>
         )}
 
-        {/* ROI Rankings */}
-        {roiRankings.length > 0 && (
-          <ChartCard title="Best ROI (Quality-Weighted Value Score)" icon={<Trophy size={16} />}>
-            <ResponsiveContainer width="100%" height={250}>
-              <BarChart data={roiRankings} layout="vertical">
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                <XAxis type="number" tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 10 }} />
-                <YAxis type="category" dataKey="name" tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 10 }} width={100} />
-                <Tooltip content={<CustomTooltip />} />
-                <Bar dataKey="roi" fill="#10b981" radius={[0, 4, 4, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </ChartCard>
-        )}
-
         {/* Hours by Genre Radar */}
         {genreHoursData.length >= 3 && (
           <ChartCard title="Hours by Genre" icon={<Activity size={16} />}>
@@ -1590,44 +1500,6 @@ export function StatsView({ games, summary, budgets = [], onSetBudget }: StatsVi
           </p>
         </div>
       )}
-    </div>
-  );
-}
-
-function SummaryCard({ icon, label, value, subValue, color = 'default' }: {
-  icon: React.ReactNode;
-  label: string;
-  value: string | number;
-  subValue?: string;
-  color?: 'default' | 'emerald' | 'blue' | 'purple' | 'yellow' | 'cyan' | 'red';
-}) {
-  const colors = {
-    default: 'bg-white/[0.02] border-white/5',
-    emerald: 'bg-emerald-500/10 border-emerald-500/20',
-    blue: 'bg-blue-500/10 border-blue-500/20',
-    purple: 'bg-purple-500/10 border-purple-500/20',
-    yellow: 'bg-yellow-500/10 border-yellow-500/20',
-    cyan: 'bg-cyan-500/10 border-cyan-500/20',
-    red: 'bg-red-500/10 border-red-500/20',
-  };
-  const textColors = {
-    default: 'text-white/40',
-    emerald: 'text-emerald-400',
-    blue: 'text-blue-400',
-    purple: 'text-purple-400',
-    yellow: 'text-yellow-400',
-    cyan: 'text-cyan-400',
-    red: 'text-red-400',
-  };
-
-  return (
-    <div className={clsx('p-3 rounded-xl border transition-all', colors[color])}>
-      <div className="flex items-center gap-2 mb-1">
-        <span className={textColors[color]}>{icon}</span>
-        <span className="text-xs text-white/40">{label}</span>
-      </div>
-      <div className="text-lg font-semibold text-white/90">{value}</div>
-      {subValue && <div className="text-xs text-white/30 mt-0.5">{subValue}</div>}
     </div>
   );
 }

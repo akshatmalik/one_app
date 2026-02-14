@@ -3,8 +3,8 @@
 import { useState } from 'react';
 import {
   Sparkles, Gem, Frown, Package, Flame, Trophy, Target, TrendingUp, Zap,
-  Award, Clock, Heart, Percent, Calendar, Star, Shield, Rocket, Crown,
-  DollarSign, Gamepad2, CheckCircle2
+  Clock, Heart, Percent, Calendar, Star, Shield, Rocket, Crown,
+  Gamepad2, CheckCircle2, Timer, Skull, Snowflake, Activity, RotateCcw
 } from 'lucide-react';
 import { Game } from '../lib/types';
 import {
@@ -18,7 +18,6 @@ import {
   getGamingVelocity,
   getBestGamingMonth,
   getImpulseBuyerStat,
-  getBacklogInDays,
   getGenreDiversity,
   getCommitmentScore,
   getFastestCompletion,
@@ -30,8 +29,12 @@ import {
   getCompletionistRate,
   getMostInvestedFranchise,
   getValueChampion,
-  getAverageDiscount,
   getTotalHours,
+  getStickyGames,
+  getSunkCostGames,
+  getDeadZone,
+  getFinishingSprintScore,
+  getReturnRate,
 } from '../lib/calculations';
 import { GameListModal } from './GameListModal';
 import clsx from 'clsx';
@@ -59,7 +62,6 @@ export function FunStatsPanel({ games }: FunStatsPanelProps) {
 
   // New creative stats
   const impulseBuyer = getImpulseBuyerStat(games);
-  const backlogDays = getBacklogInDays(games);
   const genreDiversity = getGenreDiversity(games);
   const commitmentScore = getCommitmentScore(games);
   const fastestCompletion = getFastestCompletion(games);
@@ -71,7 +73,13 @@ export function FunStatsPanel({ games }: FunStatsPanelProps) {
   const completionist = getCompletionistRate(games);
   const mostInvestedFranchise = getMostInvestedFranchise(games);
   const valueChampion = getValueChampion(games);
-  const avgDiscount = getAverageDiscount(games);
+
+  // New stats
+  const stickyGames = getStickyGames(games);
+  const sunkCostGames = getSunkCostGames(games);
+  const deadZone = getDeadZone(games);
+  const finishingSprint = getFinishingSprintScore(games);
+  const returnRate = getReturnRate(games);
 
   // Calculate some fun badges
   const ownedGames = games.filter(g => g.status !== 'Wishlist');
@@ -197,27 +205,7 @@ export function FunStatsPanel({ games }: FunStatsPanelProps) {
           <div className="text-xs text-white/30">games &gt;10hrs</div>
         </div>
 
-        {/* Genre Diversity */}
-        <div className="p-3 bg-gradient-to-br from-cyan-500/10 to-blue-500/10 border border-cyan-500/20 rounded-xl">
-          <div className="flex items-center gap-2 mb-1">
-            <Award size={14} className="text-cyan-400" />
-            <span className="text-xs text-white/40">Genre Diversity</span>
-          </div>
-          <div className="text-2xl font-bold text-cyan-400">{genreDiversity.percentage.toFixed(0)}%</div>
-          <div className="text-xs text-white/30">{genreDiversity.uniqueGenres} genres</div>
-        </div>
 
-        {/* Backlog Boss */}
-        {backlogDays > 0 && (
-          <div className="p-3 bg-gradient-to-br from-yellow-500/10 to-orange-500/10 border border-yellow-500/20 rounded-xl">
-            <div className="flex items-center gap-2 mb-1">
-              <Package size={14} className="text-yellow-400" />
-              <span className="text-xs text-white/40">Backlog Boss</span>
-            </div>
-            <div className="text-2xl font-bold text-yellow-400">{backlogDays.toFixed(0)}</div>
-            <div className="text-xs text-white/30">days of backlog</div>
-          </div>
-        )}
       </div>
 
       {/* Hidden Gems */}
@@ -394,22 +382,6 @@ export function FunStatsPanel({ games }: FunStatsPanelProps) {
         </div>
       )}
 
-      {/* Bargain Hunter */}
-      {avgDiscount > 0 && (
-        <div className="p-4 bg-gradient-to-br from-blue-500/10 to-cyan-500/10 border border-blue-500/20 rounded-xl">
-          <div className="flex items-center gap-2 mb-3">
-            <DollarSign size={16} className="text-blue-400" />
-            <h4 className="text-sm font-medium text-white">Bargain Hunter</h4>
-            <span className="text-xs text-white/30">Avg discount</span>
-          </div>
-          <div className="p-3 bg-white/5 rounded-lg text-center">
-            <div className="text-3xl font-bold text-blue-400 mb-1">{avgDiscount.toFixed(0)}%</div>
-            <div className="text-xs text-white/40">
-              {avgDiscount >= 50 ? '🏆 Elite Bargain Hunter!' : avgDiscount >= 30 ? '⭐ Great Deal Seeker!' : '👍 Smart Shopper!'}
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Speed Records */}
       {(fastestCompletion || slowestCompletion || longestSession) && (
@@ -494,6 +466,179 @@ export function FunStatsPanel({ games }: FunStatsPanelProps) {
             </div>
             <div className="text-xs text-white/30 mt-1">avg days to first play</div>
           </div>
+        </div>
+      )}
+
+      {/* "Just One More Hour" - Sticky Games */}
+      {stickyGames.games.length > 0 && (
+        <div className="p-4 bg-gradient-to-br from-amber-500/10 to-orange-500/10 border border-amber-500/20 rounded-xl">
+          <div className="flex items-center gap-2 mb-3">
+            <Timer size={16} className="text-amber-400" />
+            <h4 className="text-sm font-medium text-white">Just One More Hour</h4>
+            <span className="text-xs text-white/30">Games you can&apos;t put down</span>
+          </div>
+          <div className="text-xs text-white/40 mb-3">
+            Your avg session: {stickyGames.overallAvgSession}h
+          </div>
+          <div className="space-y-2">
+            {stickyGames.games.map((game, idx) => (
+              <div key={idx} className="flex items-center gap-3 p-2 bg-white/5 rounded-lg">
+                <div className="flex items-center justify-center w-6 h-6 rounded-full bg-amber-500/20 text-amber-400 text-xs font-bold shrink-0">
+                  {idx + 1}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium text-white/90 truncate">{game.name}</div>
+                  <div className="text-xs text-white/40">Avg session: {game.avgSession}h</div>
+                </div>
+                <div className="text-sm font-semibold text-amber-400 shrink-0">
+                  {game.multiplier}x
+                </div>
+              </div>
+            ))}
+          </div>
+          <p className="text-xs text-amber-400/70 mt-3 italic">
+            These games make you lose track of time
+          </p>
+        </div>
+      )}
+
+      {/* Sunk Cost Hall of Shame */}
+      {sunkCostGames.games.length > 0 && (
+        <div className="p-4 bg-gradient-to-br from-red-500/10 to-orange-500/10 border border-red-500/20 rounded-xl">
+          <div className="flex items-center gap-2 mb-3">
+            <Skull size={16} className="text-red-400" />
+            <h4 className="text-sm font-medium text-white">Sunk Cost Hall of Shame</h4>
+            <span className="text-xs text-white/30">Hours you&apos;ll never get back</span>
+          </div>
+          <div className="space-y-2">
+            {sunkCostGames.games.map((game, idx) => (
+              <div key={idx} className="flex items-center gap-3 p-2 bg-white/5 rounded-lg">
+                <div className="flex items-center justify-center w-6 h-6 rounded-full bg-red-500/20 text-red-400 text-xs font-bold shrink-0">
+                  {idx + 1}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium text-white/90 truncate">{game.name}</div>
+                  <div className="text-xs text-white/40">
+                    {game.hours.toFixed(1)}h played • {game.rating}/10 rating
+                  </div>
+                </div>
+                <div className="text-right shrink-0">
+                  <div className="text-sm font-semibold text-red-400">{game.regretHours}</div>
+                  <div className="text-xs text-white/30">regret hrs</div>
+                </div>
+              </div>
+            ))}
+          </div>
+          <p className="text-xs text-red-400/70 mt-3 italic">
+            You kept playing even though you weren&apos;t enjoying it
+          </p>
+        </div>
+      )}
+
+      {/* The Dead Zone */}
+      {deadZone.longestDrought > 0 && (
+        <div className="p-4 bg-gradient-to-br from-slate-500/10 to-gray-500/10 border border-slate-500/20 rounded-xl">
+          <div className="flex items-center gap-2 mb-3">
+            <Snowflake size={16} className="text-slate-400" />
+            <h4 className="text-sm font-medium text-white">The Dead Zone</h4>
+            <span className="text-xs text-white/30">Longest gaming drought</span>
+          </div>
+          <div className="p-3 bg-white/5 rounded-lg">
+            <div className="text-center mb-3">
+              <div className="text-3xl font-bold text-slate-300">{deadZone.longestDrought}</div>
+              <div className="text-xs text-white/40">days without gaming</div>
+            </div>
+            <div className="grid grid-cols-2 gap-3 text-center text-xs">
+              <div>
+                <div className="text-sm font-medium text-white/60">{deadZone.startDate}</div>
+                <div className="text-white/30">started</div>
+              </div>
+              <div>
+                <div className="text-sm font-medium text-white/60">{deadZone.endDate}</div>
+                <div className="text-white/30">ended</div>
+              </div>
+            </div>
+            {deadZone.whatBrokeIt && (
+              <div className="mt-3 text-center">
+                <div className="text-xs text-white/40">Broken by</div>
+                <div className="text-sm font-medium text-slate-300">{deadZone.whatBrokeIt}</div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Finishing Sprint Score */}
+      {(finishingSprint.sprintFinishers > 0 || finishingSprint.steadyFinishers > 0) && (
+        <div className="p-4 bg-gradient-to-br from-violet-500/10 to-fuchsia-500/10 border border-violet-500/20 rounded-xl">
+          <div className="flex items-center gap-2 mb-3">
+            <Activity size={16} className="text-violet-400" />
+            <h4 className="text-sm font-medium text-white">Finishing Sprint</h4>
+            <span className="text-xs text-white/30">How you finish games</span>
+          </div>
+          <div className="p-3 bg-white/5 rounded-lg">
+            <div className="text-center mb-3">
+              <div className="text-3xl font-bold text-violet-400">{finishingSprint.avgSprintPercent}%</div>
+              <div className="text-xs text-white/40">of playtime in the final week</div>
+            </div>
+            <div className="grid grid-cols-2 gap-3 text-center text-xs">
+              <div className="p-2 bg-white/5 rounded-lg">
+                <div className="text-lg font-semibold text-violet-300">{finishingSprint.sprintFinishers}</div>
+                <div className="text-white/30">sprint finishers</div>
+              </div>
+              <div className="p-2 bg-white/5 rounded-lg">
+                <div className="text-lg font-semibold text-fuchsia-300">{finishingSprint.steadyFinishers}</div>
+                <div className="text-white/30">steady finishers</div>
+              </div>
+            </div>
+          </div>
+          <p className="text-xs text-violet-400/70 mt-3 italic">
+            {finishingSprint.avgSprintPercent >= 40
+              ? 'You tend to sprint to the finish line!'
+              : 'You maintain a steady pace throughout'}
+          </p>
+        </div>
+      )}
+
+      {/* Return Rate / Comeback Analysis */}
+      {returnRate.totalGapped > 0 && (
+        <div className="p-4 bg-gradient-to-br from-teal-500/10 to-emerald-500/10 border border-teal-500/20 rounded-xl">
+          <div className="flex items-center gap-2 mb-3">
+            <RotateCcw size={16} className="text-teal-400" />
+            <h4 className="text-sm font-medium text-white">Comeback Analysis</h4>
+            <span className="text-xs text-white/30">Do you go back?</span>
+          </div>
+          <div className="p-3 bg-white/5 rounded-lg">
+            <div className="text-center mb-3">
+              <div className="text-3xl font-bold text-teal-400">{returnRate.returnRate}%</div>
+              <div className="text-xs text-white/40">
+                return rate ({returnRate.returnedCount}/{returnRate.totalGapped} games with 30+ day gaps)
+              </div>
+            </div>
+            {returnRate.topComebacks.length > 0 && (
+              <div className="space-y-2 mt-3">
+                <div className="text-xs text-white/50 font-medium">Top Comebacks</div>
+                {returnRate.topComebacks.map((comeback, idx) => (
+                  <div key={idx} className="flex items-center gap-3 p-2 bg-white/5 rounded-lg">
+                    <div className="flex items-center justify-center w-6 h-6 rounded-full bg-teal-500/20 text-teal-400 text-xs font-bold shrink-0">
+                      {idx + 1}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium text-white/90 truncate">{comeback.name}</div>
+                    </div>
+                    <div className="text-sm font-semibold text-teal-400 shrink-0">
+                      {comeback.gapDays}d gap
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <p className="text-xs text-teal-400/70 mt-3 italic">
+            {returnRate.returnRate >= 50
+              ? 'You\'re a revisitor — games earn second chances from you'
+              : 'Once you move on, you rarely look back'}
+          </p>
         </div>
       )}
 

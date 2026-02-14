@@ -1,12 +1,14 @@
 'use client';
 
-import { useMemo } from 'react';
+import React, { useMemo } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   Cell, LineChart, Line, ScatterChart, Scatter, ZAxis, AreaChart, Area,
 } from 'recharts';
 import {
   Brain, Calendar, Skull, Grid3X3, TrendingDown,
+  Filter, Ruler, Hourglass, ArrowRightLeft, Activity,
+  AlertTriangle, LayoutGrid, Zap, Link2, Leaf,
 } from 'lucide-react';
 import { Game } from '../lib/types';
 import {
@@ -14,6 +16,16 @@ import {
   getPlayPatterns,
   getAbandonmentAutopsy,
   GenreSatisfactionPoint,
+  getCompletionFunnel,
+  getGameLengthSweetSpot,
+  getAttentionSpanSpectrum,
+  getReplacementChains,
+  getLibraryDopamineProfile,
+  getGenreFatigue,
+  getWeekOfMonthHeatmap,
+  getValueVelocity,
+  getCrossGenreAffinity,
+  getSeasonalGenreDrift,
 } from '../lib/calculations';
 import clsx from 'clsx';
 
@@ -32,6 +44,16 @@ export function AnalyticsPanel({ games }: AnalyticsPanelProps) {
   const genreMatrix = useMemo(() => getGenreSatisfactionMatrix(games), [games]);
   const patterns = useMemo(() => getPlayPatterns(games), [games]);
   const autopsy = useMemo(() => getAbandonmentAutopsy(games), [games]);
+  const funnel = useMemo(() => getCompletionFunnel(games), [games]);
+  const sweetSpot = useMemo(() => getGameLengthSweetSpot(games), [games]);
+  const attentionSpan = useMemo(() => getAttentionSpanSpectrum(games), [games]);
+  const replacementChains = useMemo(() => getReplacementChains(games), [games]);
+  const dopamineProfile = useMemo(() => getLibraryDopamineProfile(games), [games]);
+  const genreFatigue = useMemo(() => getGenreFatigue(games), [games]);
+  const weekHeatmap = useMemo(() => getWeekOfMonthHeatmap(games), [games]);
+  const valueVelocity = useMemo(() => getValueVelocity(games), [games]);
+  const genreAffinity = useMemo(() => getCrossGenreAffinity(games), [games]);
+  const seasonalDrift = useMemo(() => getSeasonalGenreDrift(games), [games]);
 
   const ownedGames = games.filter(g => g.status !== 'Wishlist');
   if (ownedGames.length === 0) return null;
@@ -358,6 +380,504 @@ export function AnalyticsPanel({ games }: AnalyticsPanelProps) {
               )}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Completion Funnel */}
+      {funnel.stages.length > 0 && (
+        <div className="p-4 bg-gradient-to-br from-emerald-500/10 to-teal-500/10 border border-emerald-500/20 rounded-xl">
+          <h4 className="text-sm font-medium text-white/70 flex items-center gap-2 mb-3">
+            <Filter size={14} className="text-emerald-400" />
+            Completion Funnel
+          </h4>
+          <div className="space-y-2">
+            {funnel.stages.map((stage, i) => {
+              const maxCount = funnel.stages[0]?.count || 1;
+              const widthPct = Math.max(8, (stage.count / maxCount) * 100);
+              return (
+                <div key={stage.label}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs text-white/60">{stage.label}</span>
+                    <span className="text-xs text-white/40">{stage.count} ({stage.percentage}%)</span>
+                  </div>
+                  <div className="relative h-6 bg-white/5 rounded-lg overflow-hidden">
+                    <div
+                      className="h-full rounded-lg transition-all duration-500"
+                      style={{
+                        width: `${widthPct}%`,
+                        background: `linear-gradient(90deg, rgba(16,185,129,${0.8 - i * 0.12}), rgba(16,185,129,${0.5 - i * 0.08}))`,
+                      }}
+                    />
+                  </div>
+                  {i > 0 && stage.dropoff > 0 && (
+                    <div className="text-[10px] text-red-400/60 text-right mt-0.5">
+                      -{stage.dropoff}% drop-off
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          {funnel.stages.length >= 2 && (() => {
+            const biggestDrop = funnel.stages.slice(1).sort((a, b) => b.dropoff - a.dropoff)[0];
+            return biggestDrop && biggestDrop.dropoff > 0 ? (
+              <div className="mt-3 text-xs text-white/40 text-center">
+                Biggest drop-off: <span className="text-emerald-400">{biggestDrop.label}</span> ({biggestDrop.dropoff}% lost)
+              </div>
+            ) : null;
+          })()}
+        </div>
+      )}
+
+      {/* Game Length Sweet Spot */}
+      {sweetSpot.brackets.some(b => b.count > 0) && (
+        <div className="p-4 bg-gradient-to-br from-amber-500/10 to-orange-500/10 border border-amber-500/20 rounded-xl">
+          <h4 className="text-sm font-medium text-white/70 flex items-center gap-2 mb-3">
+            <Ruler size={14} className="text-amber-400" />
+            Game Length Sweet Spot
+          </h4>
+          <div className="grid grid-cols-2 gap-2">
+            {sweetSpot.brackets.map(bracket => (
+              <div
+                key={bracket.label}
+                className={clsx(
+                  'p-3 rounded-lg border',
+                  bracket.label === sweetSpot.bestBracket
+                    ? 'bg-amber-500/15 border-amber-500/30'
+                    : 'bg-white/5 border-white/10'
+                )}
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className={clsx(
+                    'text-sm font-bold',
+                    bracket.label === sweetSpot.bestBracket ? 'text-amber-400' : 'text-white/70'
+                  )}>
+                    {bracket.label}
+                  </span>
+                  {bracket.label === sweetSpot.bestBracket && (
+                    <span className="text-[9px] bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded-full">BEST</span>
+                  )}
+                </div>
+                <div className="text-[10px] text-white/40 mb-2">{bracket.range}</div>
+                <div className="space-y-1">
+                  <div className="flex justify-between text-xs">
+                    <span className="text-white/40">Games</span>
+                    <span className="text-white/60">{bracket.count}</span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-white/40">Avg Rating</span>
+                    <span className="text-white/60">{bracket.avgRating}/10</span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-white/40">Completion</span>
+                    <span className="text-white/60">{bracket.completionRate}%</span>
+                  </div>
+                  {bracket.avgCostPerHour > 0 && (
+                    <div className="flex justify-between text-xs">
+                      <span className="text-white/40">$/hr</span>
+                      <span className="text-white/60">${bracket.avgCostPerHour}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+          {sweetSpot.bestBracket !== 'N/A' && (
+            <div className="mt-3 text-xs text-white/40 text-center">
+              Your sweet spot is <span className="text-amber-400">{sweetSpot.bestBracket}</span> games — highest average rating
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Attention Span Spectrum */}
+      {attentionSpan.buckets.some(b => b.count > 0) && (
+        <div className="p-4 bg-gradient-to-br from-violet-500/10 to-purple-500/10 border border-violet-500/20 rounded-xl">
+          <h4 className="text-sm font-medium text-white/70 flex items-center gap-2 mb-3">
+            <Hourglass size={14} className="text-violet-400" />
+            Attention Span Spectrum
+          </h4>
+          <div className="text-center mb-3">
+            <div className="text-lg font-bold text-violet-400">{attentionSpan.dominantType}</div>
+            <div className="text-[10px] text-white/40">Your dominant engagement style</div>
+          </div>
+          <div className="space-y-2">
+            {attentionSpan.buckets.map(bucket => (
+              <div key={bucket.label} className="flex items-center gap-2">
+                <div className="w-28 text-xs text-white/60 shrink-0">{bucket.label}</div>
+                <div className="flex-1 h-5 bg-white/5 rounded-full overflow-hidden">
+                  <div
+                    className={clsx(
+                      'h-full rounded-full transition-all duration-500',
+                      bucket.label === attentionSpan.dominantType
+                        ? 'bg-violet-500/70'
+                        : 'bg-violet-500/30'
+                    )}
+                    style={{ width: `${Math.max(2, bucket.percent)}%` }}
+                  />
+                </div>
+                <div className="text-xs text-white/40 w-16 text-right">
+                  {bucket.count} ({bucket.percent}%)
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Replacement Chain */}
+      {replacementChains.chains.length > 0 && (
+        <div className="p-4 bg-gradient-to-br from-rose-500/10 to-pink-500/10 border border-rose-500/20 rounded-xl">
+          <h4 className="text-sm font-medium text-white/70 flex items-center gap-2 mb-3">
+            <ArrowRightLeft size={14} className="text-rose-400" />
+            Replacement Chain
+          </h4>
+          <div className="space-y-2 mb-3">
+            {replacementChains.chains.map((chain, i) => (
+              <div key={i} className="flex items-center gap-2 p-2 bg-white/5 rounded-lg">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5 text-xs">
+                    <span className="text-red-400 truncate">{chain.abandoned}</span>
+                    <span className="text-white/30 shrink-0">&rarr;</span>
+                    <span className="text-emerald-400 truncate">{chain.replacement}</span>
+                  </div>
+                </div>
+                <div className="text-[10px] text-white/40 shrink-0">
+                  {chain.gapDays === 0 ? 'same day' : `${chain.gapDays}d gap`}
+                </div>
+              </div>
+            ))}
+          </div>
+          {replacementChains.biggestAttractor !== 'None' && (
+            <div className="pt-2 border-t border-white/10 text-xs text-white/40 text-center">
+              Biggest attention magnet: <span className="text-rose-400">{replacementChains.biggestAttractor}</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Dopamine Curve — Library Profile */}
+      {dopamineProfile.distribution.length > 0 && (
+        <div className="p-4 bg-gradient-to-br from-fuchsia-500/10 to-pink-500/10 border border-fuchsia-500/20 rounded-xl">
+          <h4 className="text-sm font-medium text-white/70 flex items-center gap-2 mb-3">
+            <Activity size={14} className="text-fuchsia-400" />
+            Dopamine Curve
+          </h4>
+          <div className="text-center mb-3">
+            <div className="text-lg font-bold text-fuchsia-400">{dopamineProfile.dominantPattern}</div>
+            <div className="text-[10px] text-white/40">Your dominant engagement trajectory</div>
+          </div>
+          {(() => {
+            const total = dopamineProfile.distribution.reduce((s, d) => s + d.count, 0) || 1;
+            const maxCount = Math.max(...dopamineProfile.distribution.map(d => d.count));
+            const patternDescriptions: Record<string, string> = {
+              'Honeymoon': 'Big sessions early, tapering off',
+              'Slow Burn': 'Small sessions growing bigger',
+              'Steady Love': 'Consistent session lengths',
+              'Spike & Crash': 'One massive session then nothing',
+              'Revival': 'Dropped off, then came back strong',
+            };
+            return (
+              <div className="space-y-2">
+                {dopamineProfile.distribution.map(item => (
+                  <div key={item.pattern}>
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className={clsx(
+                          'text-xs font-medium',
+                          item.pattern === dopamineProfile.dominantPattern ? 'text-fuchsia-400' : 'text-white/60'
+                        )}>
+                          {item.pattern}
+                        </span>
+                        <span className="text-[9px] text-white/30">{patternDescriptions[item.pattern] || ''}</span>
+                      </div>
+                      <span className="text-xs text-white/40">{item.count} ({Math.round((item.count / total) * 100)}%)</span>
+                    </div>
+                    <div className="h-4 bg-white/5 rounded-full overflow-hidden">
+                      <div
+                        className={clsx(
+                          'h-full rounded-full transition-all duration-500',
+                          item.pattern === dopamineProfile.dominantPattern
+                            ? 'bg-fuchsia-500/70'
+                            : 'bg-fuchsia-500/30'
+                        )}
+                        style={{ width: `${maxCount > 0 ? (item.count / maxCount) * 100 : 0}%` }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
+        </div>
+      )}
+
+      {/* Genre Fatigue Detector */}
+      {genreFatigue.fatigueGenres.length > 0 && (
+        <div className="p-4 bg-gradient-to-br from-orange-500/10 to-red-500/10 border border-orange-500/20 rounded-xl">
+          <h4 className="text-sm font-medium text-white/70 flex items-center gap-2 mb-3">
+            <AlertTriangle size={14} className="text-orange-400" />
+            Genre Fatigue Detector
+          </h4>
+          <div className="text-xs text-white/40 mb-3">
+            Genres where your ratings drop after 2+ consecutive games
+          </div>
+          <div className="space-y-2">
+            {genreFatigue.fatigueGenres.map(fg => (
+              <div key={fg.genre} className="flex items-center gap-3 p-2 bg-white/5 rounded-lg">
+                <div className="flex-1">
+                  <div className="text-sm font-medium text-white/70">{fg.genre}</div>
+                  <div className="text-[10px] text-white/40">
+                    Fatigue starts after {fg.gamesBeforeFatigue} games
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="text-sm font-bold text-orange-400">-{fg.ratingDrop}</div>
+                  <div className="text-[10px] text-white/40">rating drop</div>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-3 text-xs text-white/40 text-center">
+            Consider mixing genres to keep ratings fresh
+          </div>
+        </div>
+      )}
+
+      {/* Session Time-of-Week Heatmap */}
+      {hasPlayLogs && (
+        <div className="p-4 bg-gradient-to-br from-sky-500/10 to-blue-500/10 border border-sky-500/20 rounded-xl">
+          <h4 className="text-sm font-medium text-white/70 flex items-center gap-2 mb-3">
+            <LayoutGrid size={14} className="text-sky-400" />
+            Session Time-of-Week Heatmap
+          </h4>
+          {(() => {
+            const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+            const weekLabels = ['Wk 1', 'Wk 2', 'Wk 3', 'Wk 4'];
+            const maxHours = Math.max(...weekHeatmap.grid.flat(), 0.1);
+            return (
+              <>
+                <div className="mb-2">
+                  <div className="grid gap-1" style={{ gridTemplateColumns: '36px repeat(4, 1fr)' }}>
+                    {/* Header row */}
+                    <div />
+                    {weekLabels.map(w => (
+                      <div key={w} className="text-[9px] text-white/30 text-center">{w}</div>
+                    ))}
+                    {/* Data rows */}
+                    {dayLabels.map((day, dayIdx) => (
+                      <React.Fragment key={day}>
+                        <div className="text-[10px] text-white/40 flex items-center">{day}</div>
+                        {weekHeatmap.grid[dayIdx].map((hours, weekIdx) => {
+                          const intensity = maxHours > 0 ? hours / maxHours : 0;
+                          const isPeak = dayIdx === weekHeatmap.peakCell.day && weekIdx === weekHeatmap.peakCell.week;
+                          const isDead = dayIdx === weekHeatmap.deadCell.day && weekIdx === weekHeatmap.deadCell.week;
+                          return (
+                            <div
+                              key={weekIdx}
+                              className={clsx(
+                                'h-8 rounded flex items-center justify-center text-[9px] relative',
+                                isPeak && 'ring-1 ring-sky-400',
+                                isDead && hours === 0 && 'ring-1 ring-white/10'
+                              )}
+                              style={{
+                                backgroundColor: hours > 0
+                                  ? `rgba(56, 189, 248, ${0.1 + intensity * 0.6})`
+                                  : 'rgba(255,255,255,0.03)',
+                              }}
+                              title={`${day} ${weekLabels[weekIdx]}: ${Math.round(hours * 10) / 10}h`}
+                            >
+                              <span className={clsx(
+                                'text-[9px]',
+                                hours > 0 ? 'text-white/60' : 'text-white/20'
+                              )}>
+                                {hours > 0 ? `${Math.round(hours * 10) / 10}` : ''}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </React.Fragment>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex justify-between text-[10px] text-white/40 mt-2">
+                  <span>Peak: <span className="text-sky-400">{dayLabels[weekHeatmap.peakCell.day]} {weekLabels[weekHeatmap.peakCell.week]}</span> ({weekHeatmap.peakCell.hours}h)</span>
+                  <span>Dead: <span className="text-white/30">{dayLabels[weekHeatmap.deadCell.day]} {weekLabels[weekHeatmap.deadCell.week]}</span></span>
+                </div>
+              </>
+            );
+          })()}
+        </div>
+      )}
+
+      {/* Value Velocity */}
+      {(valueVelocity.fastValueGames.length > 0 || valueVelocity.slowValueGames.length > 0 || valueVelocity.neverWorthIt.length > 0) && (
+        <div className="p-4 bg-gradient-to-br from-green-500/10 to-emerald-500/10 border border-green-500/20 rounded-xl">
+          <h4 className="text-sm font-medium text-white/70 flex items-center gap-2 mb-3">
+            <Zap size={14} className="text-green-400" />
+            Value Velocity
+          </h4>
+          <div className="text-xs text-white/40 mb-3">
+            How quickly games become worth the money
+          </div>
+          <div className="space-y-3">
+            {valueVelocity.fastValueGames.length > 0 && (
+              <div>
+                <div className="text-[10px] text-emerald-400 uppercase tracking-wider mb-1.5">Fast Value (reached Good quickly)</div>
+                <div className="space-y-1">
+                  {valueVelocity.fastValueGames.map(g => (
+                    <div key={g.name} className="flex items-center justify-between p-1.5 bg-white/5 rounded-lg">
+                      <span className="text-xs text-white/60 truncate">{g.name}</span>
+                      <span className="text-xs text-emerald-400 shrink-0 ml-2">{g.sessionsToGood} session{g.sessionsToGood !== 1 ? 's' : ''}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {valueVelocity.slowValueGames.length > 0 && (
+              <div>
+                <div className="text-[10px] text-yellow-400 uppercase tracking-wider mb-1.5">Slow Burn (still working toward value)</div>
+                <div className="space-y-1">
+                  {valueVelocity.slowValueGames.map(g => (
+                    <div key={g.name} className="flex items-center justify-between p-1.5 bg-white/5 rounded-lg">
+                      <span className="text-xs text-white/60 truncate">{g.name}</span>
+                      <span className="text-xs text-yellow-400 shrink-0 ml-2">${g.currentCph}/hr after {g.sessions} sessions</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {valueVelocity.neverWorthIt.length > 0 && (
+              <div>
+                <div className="text-[10px] text-red-400 uppercase tracking-wider mb-1.5">Never Worth It (still above $5/hr)</div>
+                <div className="space-y-1">
+                  {valueVelocity.neverWorthIt.map(g => (
+                    <div key={g.name} className="flex items-center justify-between p-1.5 bg-white/5 rounded-lg">
+                      <span className="text-xs text-white/60 truncate">{g.name}</span>
+                      <span className="text-xs text-red-400 shrink-0 ml-2">${g.cph}/hr</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Cross-Genre Affinity Map */}
+      {genreAffinity.pairs.length > 0 && (
+        <div className="p-4 bg-gradient-to-br from-purple-500/10 to-indigo-500/10 border border-purple-500/20 rounded-xl">
+          <h4 className="text-sm font-medium text-white/70 flex items-center gap-2 mb-3">
+            <Link2 size={14} className="text-purple-400" />
+            Cross-Genre Affinity Map
+          </h4>
+          <div className="text-xs text-white/40 mb-3">
+            Genres you tend to play in the same time periods
+          </div>
+          {(() => {
+            const maxStrength = Math.max(...genreAffinity.pairs.map(p => p.strength), 1);
+            return (
+              <div className="space-y-2">
+                {genreAffinity.pairs.map((pair, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <div className="w-32 text-xs text-white/60 shrink-0 truncate">
+                      {pair.genre1} + {pair.genre2}
+                    </div>
+                    <div className="flex-1 h-4 bg-white/5 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-purple-500/60 rounded-full transition-all duration-500"
+                        style={{ width: `${(pair.strength / maxStrength) * 100}%` }}
+                      />
+                    </div>
+                    <div className="text-xs text-white/40 w-10 text-right shrink-0">
+                      {pair.strength}x
+                    </div>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
+          {genreAffinity.pairs.length > 0 && (
+            <div className="mt-3 text-xs text-white/40 text-center">
+              Strongest pairing: <span className="text-purple-400">{genreAffinity.pairs[0].genre1}</span> + <span className="text-purple-400">{genreAffinity.pairs[0].genre2}</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Seasonal Genre Drift */}
+      {seasonalDrift.months.some(m => m.genreShares.length > 0) && (
+        <div className="p-4 bg-gradient-to-br from-teal-500/10 to-cyan-500/10 border border-teal-500/20 rounded-xl">
+          <h4 className="text-sm font-medium text-white/70 flex items-center gap-2 mb-3">
+            <Leaf size={14} className="text-teal-400" />
+            Seasonal Genre Drift
+          </h4>
+          <div className="text-xs text-white/40 mb-3">
+            How your genre preferences shift throughout the year
+          </div>
+          {(() => {
+            const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            const genreColors: Record<string, string> = {};
+            const colorPalette = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#84cc16', '#f97316', '#6366f1'];
+            let colorIdx = 0;
+            seasonalDrift.months.forEach(m => {
+              m.genreShares.forEach(gs => {
+                if (!genreColors[gs.genre]) {
+                  genreColors[gs.genre] = colorPalette[colorIdx % colorPalette.length];
+                  colorIdx++;
+                }
+              });
+            });
+            return (
+              <div className="space-y-1.5">
+                {seasonalDrift.months.map(m => {
+                  if (m.genreShares.length === 0) return null;
+                  const topGenre = m.genreShares[0];
+                  return (
+                    <div key={m.month} className="flex items-center gap-2">
+                      <div className="w-8 text-[10px] text-white/40 shrink-0">{monthNames[m.month]}</div>
+                      <div className="flex-1 h-5 bg-white/5 rounded overflow-hidden flex">
+                        {m.genreShares.slice(0, 3).map(gs => (
+                          <div
+                            key={gs.genre}
+                            className="h-full flex items-center justify-center text-[8px] text-white/80 overflow-hidden"
+                            style={{
+                              width: `${gs.percent}%`,
+                              backgroundColor: genreColors[gs.genre] || '#6b7280',
+                              opacity: 0.7,
+                            }}
+                            title={`${gs.genre}: ${gs.percent}%`}
+                          >
+                            {gs.percent >= 15 ? gs.genre : ''}
+                          </div>
+                        ))}
+                      </div>
+                      <div className="w-20 text-[10px] text-white/40 shrink-0 text-right truncate">
+                        {topGenre.genre} {topGenre.percent}%
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
+          {/* Genre color legend */}
+          {(() => {
+            const allGenres = new Set<string>();
+            seasonalDrift.months.forEach(m => m.genreShares.forEach(gs => allGenres.add(gs.genre)));
+            const colorPalette = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#84cc16', '#f97316', '#6366f1'];
+            const genreArr = [...allGenres];
+            return genreArr.length > 0 ? (
+              <div className="flex flex-wrap gap-2 mt-3 justify-center">
+                {genreArr.slice(0, 8).map((genre, i) => (
+                  <div key={genre} className="flex items-center gap-1">
+                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: colorPalette[i % colorPalette.length] }} />
+                    <span className="text-[9px] text-white/40">{genre}</span>
+                  </div>
+                ))}
+              </div>
+            ) : null;
+          })()}
         </div>
       )}
     </div>
