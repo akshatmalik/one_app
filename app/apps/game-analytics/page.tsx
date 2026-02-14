@@ -792,18 +792,20 @@ function GameCardList({
 }: GameCardListProps) {
   const sections = useMemo(() => groupBySection ? getGameSections(allGames) : [], [allGames, groupBySection]);
 
-  // Now Playing card: most recently played game (last 48 hours)
-  const nowPlaying = useMemo(() => {
-    const now = Date.now();
-    const twoDays = 48 * 60 * 60 * 1000;
-    return games.find(g => {
-      if (g.status !== 'In Progress') return false;
-      const logs = g.playLogs || [];
-      if (logs.length === 0) return false;
-      const sorted = [...logs].sort((a, b) => parseLocalDate(b.date).getTime() - parseLocalDate(a.date).getTime());
-      return (now - parseLocalDate(sorted[0].date).getTime()) <= twoDays;
-    }) || null;
+  // Now Playing: all In Progress games, sorted by most recently played
+  const nowPlayingGames = useMemo(() => {
+    return games
+      .filter(g => g.status === 'In Progress')
+      .sort((a, b) => {
+        const aLogs = a.playLogs || [];
+        const bLogs = b.playLogs || [];
+        const aLast = aLogs.length > 0 ? Math.max(...aLogs.map(l => parseLocalDate(l.date).getTime())) : 0;
+        const bLast = bLogs.length > 0 ? Math.max(...bLogs.map(l => parseLocalDate(l.date).getTime())) : 0;
+        return bLast - aLast;
+      });
   }, [games]);
+
+  const nowPlayingIds = useMemo(() => new Set(nowPlayingGames.map(g => g.id)), [nowPlayingGames]);
 
   const renderCard = (game: GameWithMetrics, idx: number) => {
     if (cardViewMode === 'poster') {
@@ -819,12 +821,23 @@ function GameCardList({
     return (
       <div className="space-y-6">
         {/* Now Playing */}
-        {nowPlaying && (
-          <NowPlayingCard game={nowPlaying} allGames={allGames} onClick={() => onCardClick(nowPlaying)} onQuickLog={(h) => onQuickLog(nowPlaying, h)} />
+        {nowPlayingGames.length > 0 && (
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-2 h-2 rounded-full bg-blue-500 health-pulse-fast" />
+              <span className="text-[10px] font-bold text-white/40 uppercase tracking-wider">Now Playing</span>
+              <span className="text-[10px] text-white/20">{nowPlayingGames.length}</span>
+            </div>
+            <div className="space-y-3">
+              {nowPlayingGames.map(g => (
+                <NowPlayingCard key={g.id} game={g} allGames={allGames} onClick={() => onCardClick(g)} onQuickLog={(h) => onQuickLog(g, h)} />
+              ))}
+            </div>
+          </div>
         )}
 
         {sections.map(section => {
-          const sectionGames = section.gameIds.map(id => gameMap.get(id)).filter(Boolean) as GameWithMetrics[];
+          const sectionGames = (section.gameIds.map(id => gameMap.get(id)).filter(Boolean) as GameWithMetrics[]).filter(g => !nowPlayingIds.has(g.id));
           if (sectionGames.length === 0) return null;
 
           return (
@@ -849,12 +862,23 @@ function GameCardList({
   return (
     <div className="space-y-3">
       {/* Now Playing */}
-      {nowPlaying && (
-        <NowPlayingCard game={nowPlaying} allGames={allGames} onClick={() => onCardClick(nowPlaying)} onQuickLog={(h) => onQuickLog(nowPlaying, h)} />
+      {nowPlayingGames.length > 0 && (
+        <div>
+          <div className="flex items-center gap-2 mb-2">
+            <div className="w-2 h-2 rounded-full bg-blue-500 health-pulse-fast" />
+            <span className="text-[10px] font-bold text-white/40 uppercase tracking-wider">Now Playing</span>
+            <span className="text-[10px] text-white/20">{nowPlayingGames.length}</span>
+          </div>
+          <div className="space-y-3">
+            {nowPlayingGames.map(g => (
+              <NowPlayingCard key={g.id} game={g} allGames={allGames} onClick={() => onCardClick(g)} onQuickLog={(h) => onQuickLog(g, h)} />
+            ))}
+          </div>
+        </div>
       )}
 
       <div className="grid gap-3">
-        {games.map((game, idx) => renderCard(game, idx))}
+        {games.filter(game => !nowPlayingIds.has(game.id)).map((game, idx) => renderCard(game, idx))}
       </div>
     </div>
   );
@@ -889,11 +913,7 @@ function NowPlayingCard({ game, allGames, onClick, onQuickLog }: {
     : 2;
 
   return (
-    <div className="mb-2">
-      <div className="flex items-center gap-2 mb-2">
-        <div className="w-2 h-2 rounded-full bg-blue-500 health-pulse-fast" />
-        <span className="text-[10px] font-bold text-white/40 uppercase tracking-wider">Now Playing</span>
-      </div>
+    <div>
       <div
         onClick={onClick}
         className="relative overflow-hidden rounded-xl border border-blue-500/20 now-playing-glow cursor-pointer"
