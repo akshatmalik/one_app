@@ -7,6 +7,7 @@ import { useAnalytics, GameWithMetrics } from './hooks/useAnalytics';
 import { useBudget } from './hooks/useBudget';
 import { useGameThumbnails } from './hooks/useGameThumbnails';
 import { useGameQueue } from './hooks/useGameQueue';
+import { useGameColors } from './hooks/useGameColors';
 import { GameForm } from './components/GameForm';
 import { PlayLogModal } from './components/PlayLogModal';
 import { TimelineView } from './components/TimelineView';
@@ -50,6 +51,7 @@ export default function GameAnalyticsPage() {
   const { gamesWithMetrics, summary } = useAnalytics(games);
   const { budgets, setBudget } = useBudget(user?.uid ?? null);
   const { loading: thumbnailsLoading, fetchedCount } = useGameThumbnails(games, updateGame);
+  const gameColors = useGameColors(games);
   const {
     queuedGames,
     availableGames,
@@ -545,6 +547,7 @@ export default function GameAnalyticsPage() {
                   onDelete={(game) => handleDelete(game.id, game.name)}
                   isInQueue={isInQueue}
                   sortBy={sortBy}
+                  gameColors={gameColors}
                 />
               )}
             </>
@@ -820,6 +823,7 @@ interface GameCardListProps {
   onDelete: (game: GameWithMetrics) => void;
   isInQueue: (id: string) => boolean;
   sortBy?: string;
+  gameColors: Map<string, string>;
 }
 
 function GameCardList({
@@ -835,6 +839,7 @@ function GameCardList({
   onDelete,
   isInQueue,
   sortBy = 'hours',
+  gameColors,
 }: GameCardListProps) {
   const sections = useMemo(() => groupBySection ? getGameSections(allGames) : [], [allGames, groupBySection]);
 
@@ -883,13 +888,13 @@ function GameCardList({
     if (cardViewMode === 'poster') {
       return (
         <div key={game.id} className={animClass}>
-          <PosterCard game={game} allGames={allGames} idx={idx} onClick={() => onCardClick(game)} onQuickLog={(h) => onQuickLog(game, h)} isInQueue={isInQueue(game.id)} sortBy={sortBy} />
+          <PosterCard game={game} allGames={allGames} idx={idx} onClick={() => onCardClick(game)} onQuickLog={(h) => onQuickLog(game, h)} isInQueue={isInQueue(game.id)} sortBy={sortBy} tintColor={gameColors.get(game.id)} />
         </div>
       );
     }
     return (
       <div key={game.id} className={animClass}>
-        <CompactCard game={game} allGames={allGames} idx={idx} onClick={() => onCardClick(game)} onLogTime={() => onLogTime(game)} onToggleQueue={() => onToggleQueue(game)} onDelete={() => onDelete(game)} isInQueue={isInQueue(game.id)} sortBy={sortBy} />
+        <CompactCard game={game} allGames={allGames} idx={idx} onClick={() => onCardClick(game)} onLogTime={() => onLogTime(game)} onToggleQueue={() => onToggleQueue(game)} onDelete={() => onDelete(game)} isInQueue={isInQueue(game.id)} sortBy={sortBy} tintColor={gameColors.get(game.id)} />
       </div>
     );
   };
@@ -1048,7 +1053,7 @@ function NowPlayingCard({ game, allGames, onClick, onQuickLog }: {
 
 // --- Poster Card ---
 
-function PosterCard({ game, allGames, idx, onClick, onQuickLog, isInQueue, sortBy = 'hours' }: {
+function PosterCard({ game, allGames, idx, onClick, onQuickLog, isInQueue, sortBy = 'hours', tintColor }: {
   game: GameWithMetrics;
   allGames: Game[];
   idx: number;
@@ -1056,6 +1061,7 @@ function PosterCard({ game, allGames, idx, onClick, onQuickLog, isInQueue, sortB
   onQuickLog: (hours: number) => void;
   isInQueue: boolean;
   sortBy?: string;
+  tintColor?: string;
 }) {
   const [isFlipped, setIsFlipped] = useState(false);
   const rarity = getCardRarity(game);
@@ -1090,7 +1096,8 @@ function PosterCard({ game, allGames, idx, onClick, onQuickLog, isInQueue, sortB
           )}
           style={{
             opacity: freshness.opacity,
-            backgroundColor: relationship.cardTint,
+            backgroundColor: relationship.cardTint || (tintColor ? `${tintColor}08` : undefined),
+            backgroundImage: relationship.cardTint && tintColor ? `linear-gradient(${relationship.cardTint}, ${tintColor}06)` : undefined,
           }}
         >
           {/* Poster image */}
@@ -1328,7 +1335,7 @@ function PosterCardBack({ game, allGames, onFlip, rarity, freshness, relationshi
 
 // --- Compact Card (original layout, fixed) ---
 
-function CompactCard({ game, allGames, idx, onClick, onLogTime, onToggleQueue, onDelete, isInQueue, sortBy = 'hours' }: {
+function CompactCard({ game, allGames, idx, onClick, onLogTime, onToggleQueue, onDelete, isInQueue, sortBy = 'hours', tintColor }: {
   game: GameWithMetrics;
   allGames: Game[];
   idx: number;
@@ -1338,6 +1345,7 @@ function CompactCard({ game, allGames, idx, onClick, onLogTime, onToggleQueue, o
   onDelete: () => void;
   isInQueue: boolean;
   sortBy?: string;
+  tintColor?: string;
 }) {
   const [isFlipped, setIsFlipped] = useState(false);
   const rarity = getCardRarity(game);
@@ -1380,7 +1388,8 @@ function CompactCard({ game, allGames, idx, onClick, onLogTime, onToggleQueue, o
           )}
           style={{
             opacity: freshness.opacity,
-            backgroundColor: relationship.cardTint,
+            backgroundColor: relationship.cardTint || (tintColor ? `${tintColor}08` : undefined),
+            backgroundImage: relationship.cardTint && tintColor ? `linear-gradient(${relationship.cardTint}, ${tintColor}06)` : undefined,
           }}
         >
           {/* Row 1: Thumbnail + Name + Hero Number with Progress Ring */}
