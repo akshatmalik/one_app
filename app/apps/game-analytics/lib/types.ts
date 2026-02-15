@@ -113,6 +113,25 @@ export interface BudgetSettings {
   updatedAt: string;
 }
 
+export type GoalType = 'completion' | 'spending' | 'hours' | 'genre_variety' | 'backlog' | 'custom';
+export type GoalStatus = 'active' | 'completed' | 'failed' | 'archived';
+
+export interface GamingGoal {
+  id: string;
+  userId: string;
+  title: string;
+  description?: string;
+  type: GoalType;
+  targetValue: number;
+  currentValue: number;
+  unit: string; // "games", "dollars", "hours", "genres", etc.
+  startDate: string;
+  endDate: string;
+  status: GoalStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface GameRepository {
   setUserId(userId: string): void;
   getAll(): Promise<Game[]>;

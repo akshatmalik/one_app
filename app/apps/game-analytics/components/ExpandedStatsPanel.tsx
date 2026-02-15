@@ -2,23 +2,16 @@
 
 import { useState } from 'react';
 import {
-  LineChart,
-  Line,
   ResponsiveContainer,
   AreaChart,
   Area,
 } from 'recharts';
 import {
-  User,
   Zap,
-  Clock,
   Rotate3D,
-  DollarSign,
-  Trophy,
   Calendar,
   Infinity,
   Brain,
-  Flame,
   TrendingUp,
   TrendingDown,
   Minus,
@@ -26,7 +19,6 @@ import {
   Sparkles,
   AlertTriangle,
   CheckCircle,
-  Lock,
   ChevronDown,
   ChevronUp,
   Gamepad2,
@@ -38,18 +30,19 @@ import {
 } from 'lucide-react';
 import { Game } from '../lib/types';
 import {
-  getGamingPersonality,
   getSessionAnalysis,
   getRotationStats,
   getMoneyStats,
-  getGamingAchievements,
   getYearInReview,
   getLifetimeStats,
-  getPredictedBacklogClearance,
   getGenreRutAnalysis,
   getMonthlyTrends,
   getTotalHours,
   parseLocalDate,
+  getSessionConsistency,
+  getLibraryDNA,
+  getLibraryAgeProfile,
+  getIfYouStoppedToday,
 } from '../lib/calculations';
 import clsx from 'clsx';
 
@@ -58,36 +51,22 @@ interface ExpandedStatsPanelProps {
 }
 
 export function ExpandedStatsPanel({ games }: ExpandedStatsPanelProps) {
-  const [showAllAchievements, setShowAllAchievements] = useState(false);
   const [showActiveGames, setShowActiveGames] = useState(false);
   const [showCoolingOff, setShowCoolingOff] = useState(false);
   const currentYear = new Date().getFullYear();
 
   // Calculate all the stats
-  const personality = getGamingPersonality(games);
   const sessionAnalysis = getSessionAnalysis(games);
   const rotation = getRotationStats(games);
   const moneyStats = getMoneyStats(games);
-  const achievements = getGamingAchievements(games);
   const yearReview = getYearInReview(games, currentYear);
   const lifetime = getLifetimeStats(games);
-  const backlogClearance = getPredictedBacklogClearance(games);
   const genreRut = getGenreRutAnalysis(games);
   const monthlyTrends = getMonthlyTrends(games, 6);
-
-  const unlockedAchievements = achievements.filter(a => a.unlocked);
-  const lockedAchievements = achievements.filter(a => !a.unlocked);
-
-  // Personality type icons
-  const personalityIcons: Record<string, string> = {
-    'Completionist': '🏆',
-    'Deep Diver': '🤿',
-    'Sampler': '🎲',
-    'Backlog Hoarder': '📦',
-    'Balanced Gamer': '⚖️',
-    'Speedrunner': '⚡',
-    'Explorer': '🧭',
-  };
+  const sessionConsistency = getSessionConsistency(games);
+  const libraryDNA = getLibraryDNA(games);
+  const libraryAge = getLibraryAgeProfile(games);
+  const stoppedToday = getIfYouStoppedToday(games);
 
   // Session style icons
   const sessionStyleIcons: Record<string, string> = {
@@ -113,47 +92,6 @@ export function ExpandedStatsPanel({ games }: ExpandedStatsPanelProps) {
       <div className="flex items-center gap-2">
         <Sparkles size={18} className="text-purple-400" />
         <h3 className="text-base font-semibold text-white">Deep Insights</h3>
-      </div>
-
-      {/* Gaming Personality Card */}
-      <div className="p-5 bg-gradient-to-br from-purple-500/15 to-pink-500/15 border border-purple-500/30 rounded-2xl">
-        <div className="flex items-center gap-2 mb-4">
-          <User size={18} className="text-purple-400" />
-          <h4 className="text-sm font-medium text-white">Your Gaming Personality</h4>
-        </div>
-
-        <div className="flex items-center gap-4 mb-4">
-          <div className="text-5xl">{personalityIcons[personality.type] || '🎮'}</div>
-          <div className="flex-1">
-            <div className="text-2xl font-bold text-purple-400 mb-1">{personality.type}</div>
-            <div className="text-sm text-white/60">{personality.description}</div>
-          </div>
-        </div>
-
-        {/* Traits */}
-        {personality.traits.length > 0 && (
-          <div className="flex flex-wrap gap-2">
-            {personality.traits.map((trait, idx) => (
-              <span key={idx} className="px-3 py-1 bg-purple-500/20 text-purple-300 text-xs rounded-full">
-                {trait}
-              </span>
-            ))}
-          </div>
-        )}
-
-        {/* Personality Score */}
-        <div className="mt-4 pt-4 border-t border-white/10">
-          <div className="flex items-center justify-between text-xs text-white/40 mb-1">
-            <span>Type Match Strength</span>
-            <span>{personality.score.toFixed(0)}%</span>
-          </div>
-          <div className="h-2 bg-white/10 rounded-full overflow-hidden">
-            <div
-              className="h-full bg-gradient-to-r from-purple-500 to-pink-500 rounded-full transition-all"
-              style={{ width: `${personality.score}%` }}
-            />
-          </div>
-        </div>
       </div>
 
       {/* Session Style + Rotation Health Row */}
@@ -275,7 +213,7 @@ export function ExpandedStatsPanel({ games }: ExpandedStatsPanelProps) {
           <h4 className="text-sm font-medium text-white">Money Deep Dive</h4>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+        <div className="grid grid-cols-3 gap-3 mb-4">
           {/* Cost of Backlog */}
           <div className="p-3 bg-white/5 rounded-xl text-center">
             <div className="text-xl font-bold text-red-400">${moneyStats.costOfBacklog.toFixed(0)}</div>
@@ -286,12 +224,6 @@ export function ExpandedStatsPanel({ games }: ExpandedStatsPanelProps) {
           <div className="p-3 bg-white/5 rounded-xl text-center">
             <div className="text-xl font-bold text-blue-400">${moneyStats.monthlyAverage.toFixed(0)}</div>
             <div className="text-[10px] text-white/40">monthly avg</div>
-          </div>
-
-          {/* Avg Cost Per Completion */}
-          <div className="p-3 bg-white/5 rounded-xl text-center">
-            <div className="text-xl font-bold text-purple-400">${moneyStats.avgCostPerCompletion.toFixed(0)}</div>
-            <div className="text-[10px] text-white/40">per completion</div>
           </div>
 
           {/* Spending Trend */}
@@ -339,41 +271,6 @@ export function ExpandedStatsPanel({ games }: ExpandedStatsPanelProps) {
           </div>
         )}
 
-        {/* Best Bargain & Biggest Regret */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {moneyStats.bestBargain && (
-            <div className="p-3 bg-emerald-500/10 rounded-lg">
-              <div className="text-[10px] text-emerald-400 mb-1">Best Bargain</div>
-              <div className="flex items-center gap-2">
-                {moneyStats.bestBargain.game.thumbnail && (
-                  <img src={moneyStats.bestBargain.game.thumbnail} alt="" className="w-8 h-8 rounded object-cover" />
-                )}
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm text-white/90 truncate">{moneyStats.bestBargain.game.name}</div>
-                  <div className="text-xs text-white/40">
-                    ${moneyStats.bestBargain.game.price} • {getTotalHours(moneyStats.bestBargain.game)}h
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-          {moneyStats.biggestRegret && (
-            <div className="p-3 bg-red-500/10 rounded-lg">
-              <div className="text-[10px] text-red-400 mb-1">Biggest Regret</div>
-              <div className="flex items-center gap-2">
-                {moneyStats.biggestRegret.game.thumbnail && (
-                  <img src={moneyStats.biggestRegret.game.thumbnail} alt="" className="w-8 h-8 rounded object-cover" />
-                )}
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm text-white/90 truncate">{moneyStats.biggestRegret.game.name}</div>
-                  <div className="text-xs text-white/40">
-                    ${moneyStats.biggestRegret.game.price} • {getTotalHours(moneyStats.biggestRegret.game)}h played
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
       </div>
 
       {/* Lifetime Stats */}
@@ -487,38 +384,8 @@ export function ExpandedStatsPanel({ games }: ExpandedStatsPanelProps) {
         </div>
       </div>
 
-      {/* Backlog Prediction + Genre Rut */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Backlog Clearance Prediction */}
-        <div className="p-4 bg-gradient-to-br from-orange-500/10 to-yellow-500/10 border border-orange-500/20 rounded-xl">
-          <div className="flex items-center gap-2 mb-3">
-            <Calendar size={16} className="text-orange-400" />
-            <h4 className="text-sm font-medium text-white">Backlog Clearance</h4>
-          </div>
-
-          {backlogClearance.neverAt ? (
-            <div className="text-center py-4">
-              <div className="text-3xl mb-2">♾️</div>
-              <div className="text-sm text-orange-400">Never at {backlogClearance.neverAt}</div>
-              <div className="text-xs text-white/40 mt-1">Start completing games!</div>
-            </div>
-          ) : backlogClearance.daysRemaining === 0 ? (
-            <div className="text-center py-4">
-              <div className="text-3xl mb-2">🎉</div>
-              <div className="text-sm text-emerald-400">Backlog Clear!</div>
-            </div>
-          ) : (
-            <div className="text-center">
-              <div className="text-3xl font-bold text-orange-400 mb-1">
-                {backlogClearance.date?.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
-              </div>
-              <div className="text-xs text-white/40">
-                {backlogClearance.daysRemaining} days at current rate
-              </div>
-            </div>
-          )}
-        </div>
-
+      {/* Genre Rut */}
+      <div className="grid grid-cols-1 gap-4">
         {/* Genre Rut Analysis */}
         <div className={clsx(
           'p-4 rounded-xl border',
@@ -623,84 +490,184 @@ export function ExpandedStatsPanel({ games }: ExpandedStatsPanelProps) {
         )}
       </div>
 
-      {/* Gaming Achievements */}
-      <div className="p-5 bg-gradient-to-br from-amber-500/10 to-orange-500/10 border border-amber-500/20 rounded-2xl">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <Trophy size={18} className="text-amber-400" />
-            <h4 className="text-sm font-medium text-white">Gaming Achievements</h4>
+      {/* Session Consistency Score */}
+      <div className="p-5 bg-gradient-to-br from-purple-500/15 to-pink-500/15 border border-purple-500/30 rounded-2xl">
+        <div className="flex items-center gap-2 mb-4">
+          <Gamepad2 size={18} className="text-purple-400" />
+          <h4 className="text-sm font-medium text-white">Session Consistency</h4>
+        </div>
+
+        <div className="flex items-center gap-4 mb-4">
+          <div className="text-5xl">
+            {sessionConsistency.pattern === 'metronome' ? '🎯' :
+             sessionConsistency.pattern === 'rhythm' ? '🎵' :
+             sessionConsistency.pattern === 'burst' ? '💥' : '🌀'}
           </div>
-          <div className="text-xs text-white/40">
-            {unlockedAchievements.length}/{achievements.length} unlocked
+          <div className="flex-1">
+            <div className="text-2xl font-bold text-purple-400 mb-1">{sessionConsistency.label}</div>
+            <div className="text-sm text-white/60">
+              {sessionConsistency.pattern === 'metronome' && 'You game like clockwork — incredibly consistent schedule'}
+              {sessionConsistency.pattern === 'rhythm' && 'Mostly steady with a natural rhythm to your sessions'}
+              {sessionConsistency.pattern === 'burst' && 'Intense bursts of gaming followed by quiet spells'}
+              {sessionConsistency.pattern === 'chaos' && 'Totally unpredictable — you game when the mood strikes'}
+            </div>
           </div>
         </div>
 
-        {/* Unlocked Achievements */}
-        {unlockedAchievements.length > 0 && (
-          <div className="mb-4">
-            <div className="text-xs text-emerald-400 mb-2 flex items-center gap-1">
-              <CheckCircle size={12} /> Unlocked
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
-              {unlockedAchievements.map(achievement => (
-                <div
-                  key={achievement.id}
-                  className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-lg text-center"
-                >
-                  <div className="text-2xl mb-1">{achievement.icon}</div>
-                  <div className="text-xs font-medium text-white/90">{achievement.name}</div>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="p-3 bg-white/5 rounded-lg text-center">
+            <div className="text-lg font-bold text-white">{sessionConsistency.score}</div>
+            <div className="text-[10px] text-white/40">consistency score</div>
+          </div>
+          <div className="p-3 bg-white/5 rounded-lg text-center">
+            <div className="text-lg font-bold text-white">{sessionConsistency.avgGap}d</div>
+            <div className="text-[10px] text-white/40">avg gap between sessions</div>
+          </div>
+        </div>
+
+        <div className="mt-4 pt-4 border-t border-white/10">
+          <div className="flex items-center justify-between text-xs text-white/40 mb-1">
+            <span>Consistency</span>
+            <span>{sessionConsistency.score}/100</span>
+          </div>
+          <div className="h-2 bg-white/10 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-gradient-to-r from-purple-500 to-pink-500 rounded-full transition-all"
+              style={{ width: `${sessionConsistency.score}%` }}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Library DNA Fingerprint */}
+      <div className="p-5 bg-gradient-to-br from-cyan-500/10 to-blue-500/10 border border-cyan-500/20 rounded-2xl">
+        <div className="flex items-center gap-2 mb-4">
+          <Zap size={18} className="text-cyan-400" />
+          <h4 className="text-sm font-medium text-white">Library DNA</h4>
+        </div>
+
+        {libraryDNA.axes.length > 0 ? (
+          <div className="space-y-3">
+            {libraryDNA.axes.map((axis, idx) => (
+              <div key={idx}>
+                <div className="flex items-center justify-between text-xs mb-1">
+                  <span className="text-white/60">{axis.label}</span>
+                  <span className="text-white/40">{axis.value}</span>
                 </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Locked Achievements */}
-        {lockedAchievements.length > 0 && (
-          <div>
-            <button
-              onClick={() => setShowAllAchievements(!showAllAchievements)}
-              className="w-full flex items-center justify-between text-xs text-white/40 hover:text-white/70 transition-all mb-2"
-            >
-              <span className="flex items-center gap-1">
-                <Lock size={12} /> Locked ({lockedAchievements.length})
-              </span>
-              {showAllAchievements ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-            </button>
-
-            {showAllAchievements && (
-              <div className="space-y-2">
-                {lockedAchievements.map(achievement => (
-                  <div key={achievement.id} className="p-3 bg-white/5 rounded-lg">
-                    <div className="flex items-center gap-3">
-                      <div className="text-2xl opacity-40">{achievement.icon}</div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm font-medium text-white/70">{achievement.name}</span>
-                          {achievement.current !== undefined && achievement.target && (
-                            <span className="text-xs text-white/40">
-                              {achievement.current}/{achievement.target}
-                            </span>
-                          )}
-                        </div>
-                        <div className="text-xs text-white/40">{achievement.description}</div>
-                        {/* Progress Bar */}
-                        {achievement.progress !== undefined && (
-                          <div className="mt-2 h-1.5 bg-white/10 rounded-full overflow-hidden">
-                            <div
-                              className="h-full bg-amber-500/50 rounded-full transition-all"
-                              style={{ width: `${achievement.progress}%` }}
-                            />
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                <div className="h-2 bg-white/10 rounded-full overflow-hidden">
+                  <div
+                    className="h-full rounded-full transition-all"
+                    style={{
+                      width: `${axis.value}%`,
+                      background: `linear-gradient(to right, ${
+                        idx === 0 ? '#06b6d4, #3b82f6' :
+                        idx === 1 ? '#10b981, #06b6d4' :
+                        idx === 2 ? '#8b5cf6, #d946ef' :
+                        idx === 3 ? '#f59e0b, #ef4444' :
+                        idx === 4 ? '#ec4899, #8b5cf6' :
+                        idx === 5 ? '#14b8a6, #3b82f6' :
+                        '#f97316, #ef4444'
+                      })`,
+                    }}
+                  />
+                </div>
               </div>
-            )}
+            ))}
           </div>
+        ) : (
+          <div className="text-center py-4 text-sm text-white/40">Not enough data yet</div>
         )}
+      </div>
+
+      {/* Library Age Profile */}
+      <div className="p-5 bg-gradient-to-br from-amber-500/10 to-orange-500/10 border border-amber-500/20 rounded-2xl">
+        <div className="flex items-center gap-2 mb-4">
+          <Calendar size={18} className="text-amber-400" />
+          <h4 className="text-sm font-medium text-white">Library Age Profile</h4>
+        </div>
+
+        {libraryAge.histogram.length > 0 ? (
+          <>
+            <div className="flex items-end gap-2 mb-4" style={{ height: '80px' }}>
+              {(() => {
+                const maxCount = Math.max(...libraryAge.histogram.map(h => h.count), 1);
+                return libraryAge.histogram.map((bucket, idx) => (
+                  <div key={idx} className="flex-1 flex flex-col items-center gap-1">
+                    <div className="text-[10px] text-white/60 font-medium">{bucket.count}</div>
+                    <div
+                      className="w-full rounded-t-md bg-gradient-to-t from-amber-500/40 to-amber-400/70 transition-all"
+                      style={{ height: `${Math.max((bucket.count / maxCount) * 60, 4)}px` }}
+                    />
+                    <div className="text-[9px] text-white/40">{bucket.period}</div>
+                  </div>
+                ));
+              })()}
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="p-3 bg-white/5 rounded-lg text-center">
+                <div className="text-[10px] text-white/40 mb-1">Oldest Game</div>
+                <div className="text-xs font-medium text-white/90 truncate">{libraryAge.oldestGame || 'N/A'}</div>
+              </div>
+              <div className="p-3 bg-white/5 rounded-lg text-center">
+                <div className="text-[10px] text-white/40 mb-1">Newest Game</div>
+                <div className="text-xs font-medium text-white/90 truncate">{libraryAge.newestGame || 'N/A'}</div>
+              </div>
+            </div>
+
+            <div className="mt-3 text-center text-xs text-white/40">
+              Median library age: {libraryAge.medianAgeDays} days
+            </div>
+          </>
+        ) : (
+          <div className="text-center py-4 text-sm text-white/40">Add purchase dates to see your library age profile</div>
+        )}
+      </div>
+
+      {/* "If You Stopped Today" Snapshot */}
+      <div className="p-5 bg-gradient-to-br from-rose-500/10 to-red-500/10 border border-rose-500/20 rounded-2xl">
+        <div className="flex items-center gap-2 mb-4">
+          <Infinity size={18} className="text-rose-400" />
+          <h4 className="text-sm font-medium text-white">If You Stopped Today</h4>
+        </div>
+
+        <div className="text-center mb-4">
+          <div className="text-xs text-white/40 mb-2">Your gaming career in a snapshot</div>
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+          <div className="p-3 bg-white/5 rounded-xl text-center">
+            <div className="text-xl font-bold text-rose-400">{stoppedToday.totalHours.toLocaleString()}h</div>
+            <div className="text-[10px] text-white/40">total hours</div>
+          </div>
+          <div className="p-3 bg-white/5 rounded-xl text-center">
+            <div className="text-xl font-bold text-emerald-400">${stoppedToday.totalSpent.toLocaleString()}</div>
+            <div className="text-[10px] text-white/40">total spent</div>
+          </div>
+          <div className="p-3 bg-white/5 rounded-xl text-center">
+            <div className="text-xl font-bold text-blue-400">${stoppedToday.costPerHour.toFixed(2)}</div>
+            <div className="text-[10px] text-white/40">cost per hour</div>
+          </div>
+          <div className="p-3 bg-white/5 rounded-xl text-center">
+            <div className="text-xl font-bold text-violet-400">{stoppedToday.completed}</div>
+            <div className="text-[10px] text-white/40">completed ({stoppedToday.completionRate}%)</div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-3 gap-3">
+          <div className="p-3 bg-white/5 rounded-lg text-center">
+            <div className="text-[10px] text-white/40 mb-1">Best Value</div>
+            <div className="text-xs font-medium text-emerald-400 truncate">{stoppedToday.bestValue}</div>
+          </div>
+          <div className="p-3 bg-white/5 rounded-lg text-center">
+            <div className="text-[10px] text-white/40 mb-1">Worst Value</div>
+            <div className="text-xs font-medium text-red-400 truncate">{stoppedToday.worstValue}</div>
+          </div>
+          <div className="p-3 bg-white/5 rounded-lg text-center">
+            <div className="text-[10px] text-white/40 mb-1">Longest Game</div>
+            <div className="text-xs font-medium text-purple-400 truncate">{stoppedToday.longestGame}</div>
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -14,6 +14,11 @@ This document provides comprehensive guidance for AI assistants working with the
 8. [Common Tasks](#common-tasks)
 9. [Testing & Quality](#testing--quality)
 10. [Important Notes for AI Assistants](#important-notes-for-ai-assistants)
+11. [Game Analytics Enhancement Plan](#game-analytics-enhancement-plan-approved)
+12. [Game Timeline & Recap Overhaul](#game-timeline--recap-overhaul-approved)
+13. [Card Redesign & Detail Panel Overhaul](#card-redesign--detail-panel-overhaul-approved)
+14. [Card Info Enhancements](#card-info-enhancements-approved)
+15. [Stats Overhaul Plan](#stats-overhaul-plan-approved)
 
 ---
 
@@ -1810,6 +1815,436 @@ card-layout-move       — Smooth position transitions on sort/filter
 
 ---
 
+## Card Info Enhancements (Approved)
+
+6 enhancements to add depth to game cards without cluttering the existing visual design. Approved 2026-02-14.
+
+**Philosophy**: The cards already look great — rarity borders, relationship status, streak flames, hero numbers, freshness aging. These additions layer in MORE depth while keeping the front clean. Reward curiosity. Every card has hidden depth.
+
+### 1. Card Flip — "The Back of the Card"
+
+Like a trading card, tapping a card flips it (CSS 3D transform, perspective + rotateY) to reveal a **second face**. The front stays untouched. The back shows:
+
+- **AI Whisper**: One AI-generated contextual sentence about this game right now. Not generic — specific. *"You're 8 hours from Excellent value"* or *"Your longest break from this game — 47 days and counting"* or *"This is your 2nd most played RPG but your lowest rated one."*
+- **Mini Sparkline**: Tiny 30-day session dot chart showing play frequency (horizontal dots, sized by session length)
+- **Library Rank**: "#3 most played" / "Top 10% value" / "#1 most expensive" — the game's position in your collection
+- **Next Milestone**: Progress bar toward the nearest achievement/trophy for THIS game (e.g., "Century Club: 67/100 hours" or "12 more hours to Good value tier")
+- **Quick Verdicts**: 3 tiny verdict chips from `getGameVerdicts()` — Value: Bargain | Commitment: Deep Dive | Vibe: Comfort Food
+
+**Files**: Card flip CSS in globals.css, back-face rendering in `page.tsx`, `getCardBackData(game, allGames)` in calculations.ts.
+
+### 2. Contextual AI Whisper Line
+
+Subtle rotating italic line on the card front (below the smart one-liner). Picks the most interesting observation about this game RIGHT NOW from a pool of contextual observations:
+- Value trajectory: *"Was $15/hr after session 1, now $0.67/hr"*
+- Streak context: *"Day 5 — your longest streak on any game this year"*
+- Comparative: *"More hours than your entire Nintendo library"*
+- Milestone proximity: *"3 more hours to hit Century Club"*
+- Neglect nudge: *"Last played 43 days ago — your 2nd longest gap"*
+
+Rotates on each app visit or every 30 seconds. Small italic text, subtle but discoverable.
+
+**Files**: `getContextualWhisper(game, allGames)` in calculations.ts, rendered in `page.tsx` card body.
+
+### 3. Session Momentum Sparkline
+
+Tiny 5-dot visual in the card's stat area showing the last 5 sessions' hours. Each dot sized proportionally to session length. Green tint = trending up, red tint = trending down, neutral = flat. At a glance: is this game heating up or cooling down?
+
+Already have `getSessionMomentum()` — just needs a compact visual component.
+
+**Files**: Small `MomentumDots` component, rendered in `page.tsx` stat grid.
+
+### 4. Library Rank Badge
+
+Small subtle badge positioned opposite the rarity badge: "#3" or "Top 5%". Rank by the **current sort criterion** — if sorted by hours, show hours rank. If sorted by value, show value rank. Dynamic and contextually relevant.
+
+**Files**: `getLibraryRank(game, allGames, sortCriterion)` in calculations.ts, rendered in `page.tsx`.
+
+### 5. Micro-Progress Ring
+
+Circular progress ring rendered around the hero number. For In Progress games: ring shows completion probability filling up. For games approaching a value tier threshold: ring shows progress toward next tier. The number stays the same, but the ring adds a "progress toward something" feel.
+
+**Files**: Small `ProgressRing` SVG component, wrapped around hero number in `page.tsx`.
+
+### 6. Mood Pulse Color Strip
+
+2px colored strip along the bottom edge of each card. Shifts based on recent activity:
+- **Hot pink/red** = obsessed (daily play)
+- **Warm amber** = consistent (2-3 sessions/week)
+- **Cool blue** = casual (1 session/week)
+- **Grey** = dormant (no recent activity)
+- **No strip** = never played
+
+Subtle but when you scroll the list, you SEE the energy distribution across your collection.
+
+**Files**: `getCardMoodPulse(game)` in calculations.ts, CSS in `page.tsx` card wrapper.
+
+### Implementation Order
+
+| # | Feature | Effort |
+|---|---------|--------|
+| 1 | Card Flip | High |
+| 2 | AI Whisper Line | Medium |
+| 3 | Session Momentum Sparkline | Low |
+| 4 | Library Rank Badge | Low |
+| 5 | Micro-Progress Ring | Medium |
+| 6 | Mood Pulse Color Strip | Low |
+
+### New Calculation Functions Needed
+
+```
+getCardBackData(game, allGames) → { whisper, sparkline[], rank, nextMilestone, verdicts[] }
+getContextualWhisper(game, allGames) → { text, type, priority }
+getLibraryRank(game, allGames, sortBy) → { rank, total, percentile, label }
+getCardMoodPulse(game) → { level, color, label }
+```
+
+### New Components Needed
+
+```
+components/MomentumDots.tsx      — 5-dot session trend sparkline
+components/ProgressRing.tsx      — Circular SVG progress ring for hero number
+```
+
+---
+
+## Stats Overhaul Plan (Approved)
+
+Comprehensive stats audit and overhaul: 12 redundancy removals, 10 dead code cleanups, 28 new stats. Approved 2026-02-14.
+
+### Part 1: Stats Redundancy Removals (12 sections)
+
+These sections show data that's already displayed better elsewhere. Remove to declutter the Stats tab.
+
+| # | Section to Remove | Location | Why Redundant | Better Version |
+|---|-------------------|----------|---------------|----------------|
+| 1 | **Franchise Stats** section | StatsView | Shows per-franchise spent/hours/cost-per-hour | DiscoverPanel's Franchise Analytics is richer — has rating trends, individual games, trend arrows |
+| 2 | **Backlog Boss** key insight | FunStatsPanel (Key Insights grid) | Shows "days to clear backlog" | InsightsPanel's Backlog Doomsday Clock has humor tiers, clearance date, trend, acquisition vs completion rate |
+| 3 | **Backlog Clearance Prediction** card | ExpandedStatsPanel | Shows clearance date + days remaining | Same — Doomsday Clock is the definitive version |
+| 4 | **Avg cost per completion** stat | ExpandedStatsPanel → Money Deep Dive grid | Shows single number | InsightsPanel has a dedicated Cost Per Completion section with clean vs abandoned breakdown |
+| 5 | **Gaming Personality** standalone card | ExpandedStatsPanel | Shows type, traits, score | DiscoverPanel's Personality Evolution includes current type PLUS historical timeline — strictly better |
+| 6 | **Gaming Achievements** section (20+) | ExpandedStatsPanel | Grid of achievements with progress | TrophyRoom has Milestones + Collection Trophies with bronze/silver/gold/platinum tiers — supersedes this older system |
+| 7 | **All-Time Summary Cards** (6 cards at bottom) | StatsView | Shows Games, Spent, Hours, $/hr, Rating, Completion % | Period Selector at the top already shows these same stats and switches between All Time / per year. Duplicate when "All Time" selected |
+| 8 | **Bargain Hunter** card | FunStatsPanel | Shows avg discount % | Patient Gamer badge covers discount game count + modal; InsightsPanel has full Discount vs Full Price analysis with hours and completion comparison |
+| 9 | **Best Bargain** in Money Deep Dive | ExpandedStatsPanel | Shows single best value game | FunStatsPanel's Value Champion section is the same concept, more prominently displayed |
+| 10 | **Biggest Regret** in Money Deep Dive | ExpandedStatsPanel | Shows single worst game | FunStatsPanel's Buyer's Remorse section shows top 3 with regret scores — better version |
+| 11 | **Genre Diversity** key insight | FunStatsPanel (Key Insights grid) | Shows "% unique genres" | ExpandedStatsPanel's Genre Rut Analysis has dominant genre, suggestions, untouched genres — deeper version |
+| 12 | **Best ROI Rankings** chart | StatsView charts grid | Bar chart of top 8 by ROI | Period ROI Rankings section above already shows a ranked list with thumbnails, badges, and more detail. Same data twice |
+
+### Part 2: Dead Code Cleanup (10 functions)
+
+Exported functions in `calculations.ts` that are never imported anywhere. Remove to reduce file size and confusion.
+
+| # | Function | Reason for Removal |
+|---|----------|--------------------|
+| 1 | `calculateCostPerHour()` | Never called directly; metrics calculated internally in `calculateMetrics()` |
+| 2 | `calculateBlendScore()` | Never called directly; used only via metrics object |
+| 3 | `calculateROI()` | Never called directly; stored in `metrics.roi` |
+| 4 | `calculateDaysToComplete()` | Logic calculated inline in components wherever needed |
+| 5 | `calculateMetrics()` | Only called inside `useAnalytics` hook, never from components |
+| 6 | `getPeriodStatsForRange()` | Never used; `getPeriodStats(days)` covers all use cases |
+| 7 | `getLastCompletedWeekStats()` | Never used anywhere in UI |
+| 8 | `getDiscountEffectiveness()` | Replaced by `getDiscountInsights()` which has better data |
+| 9 | `getNightOwlScore()` | Placeholder function with no implementation or UI |
+| 10 | `getHiddenGems()` | Duplicate of `findHiddenGems()` which is the primary version used in FunStatsPanel |
+
+**Note**: `whatIfMoreHours()` and `whatIfNeverBought()` are Phase 4 planned features. Keep them — they'll be used when the full What-If Simulator UI is built.
+
+### Part 3: New Stats (28 features)
+
+28 new stats organized by the story they tell about you as a gamer. Each stat has a specific panel destination and effort level.
+
+---
+
+#### Category: Spending Psychology (3 stats)
+
+##### Stat 9: The Impulse Tax
+Total money spent on games played less than 2 hours — your literal cost of impulsive buying. Annual figure with year-over-year comparison. *"Your impulse tax this year: $185 across 7 games. That's 22% of your total spend on games you barely touched."*
+**Where**: InsightsPanel | **Effort**: Low
+**Files**: `getImpulseTax(games, year?)` in calculations.ts, section in InsightsPanel.
+
+##### Stat 10: Purchase Rhythm Detector
+Analyze timing of purchases to classify your buying personality:
+- **Binge Buyer** — purchases cluster together (3+ in a week, then nothing for months)
+- **Steady Drip** — roughly even spacing between purchases
+- **Sale Chaser** — clusters align with major sale periods (June/Nov/Dec)
+- **Reward Buyer** — tends to buy after completing a game
+- **Drought Breaker** — long gaps then sudden sprees
+
+Visual: dot timeline of purchases showing clusters and gaps. Current state: *"12 days since last purchase (your average gap is 18 days)"*
+**Where**: InsightsPanel | **Effort**: Medium
+**Files**: `getPurchaseRhythm(games)` in calculations.ts, section in InsightsPanel.
+
+##### Stat 11: Price Creep / Price Discipline
+Is your average purchase price going up or down over time? Quarterly trend line. *"Your average game price rose from $22 to $38 over the last year — you're buying more premium titles."* Or: *"Down from $45 to $18 — your patience is paying off."*
+**Where**: InsightsPanel | **Effort**: Low
+**Files**: `getPriceCreep(games)` in calculations.ts, small chart/card in InsightsPanel.
+
+---
+
+#### Category: Behavioral Patterns (5 stats)
+
+##### Stat 12: The "Just One More Hour" Games
+Games where your average session length is significantly above your overall average. The games that make you lose track of time. Ranked list with stickiness multiplier. *"Elden Ring sessions average 3.2h — 2.1x your normal session. It's your stickiest game."*
+**Where**: FunStatsPanel | **Effort**: Low
+**Files**: `getStickyGames(games)` in calculations.ts, section in FunStatsPanel.
+
+##### Stat 13: Attention Span Spectrum
+How long do you stay engaged with a game before moving on? Measure active play window (first session to last session before 30+ day gap or new game started). Histogram:
+- **Quick Fling** (<7 days active)
+- **Short Affair** (1-4 weeks)
+- **Steady Relationship** (1-3 months)
+- **Long-Term Commitment** (3+ months)
+
+*"65% of your games are Quick Flings. You cycle through games fast."*
+**Where**: AnalyticsPanel | **Effort**: Medium
+**Files**: `getAttentionSpanSpectrum(games)` in calculations.ts, chart in AnalyticsPanel.
+
+##### Stat 14: Sunk Cost Hall of Shame
+Games with the most hours despite a rating of 6 or below. You kept playing even though you weren't enjoying it. Ranked by hours × (10 - rating) — the "regret-hours" formula. *"You put 34 hours into a game you rated 5/10. That's the sunk cost fallacy in action."*
+**Where**: FunStatsPanel | **Effort**: Low
+**Files**: `getSunkCostGames(games)` in calculations.ts, section in FunStatsPanel.
+
+##### Stat 15: The Replacement Chain
+When you abandon or ghost a game, what did you start playing instead? Map the chain: Game A ghosted → Game B started 3 days later → Game B ghosted → Game C started. Shows what pulls your attention away. *"You ghosted 3 games for Elden Ring. It was the attention black hole of 2024."*
+**Where**: AnalyticsPanel | **Effort**: Medium
+**Files**: `getReplacementChains(games)` in calculations.ts, visual chain in AnalyticsPanel.
+
+##### Stat 16: Finishing Sprint Score
+For completed games: what % of total playtime happened in the final week before completion? High % = you sprint to the finish. Low % = steady pace throughout. *"You sprint-finish 60% of your games — the last week accounts for 40% of total playtime on average."*
+**Where**: FunStatsPanel | **Effort**: Low
+**Files**: `getFinishingSprintScore(games)` in calculations.ts, card in FunStatsPanel.
+
+---
+
+#### Category: Time & Engagement (5 stats)
+
+##### Stat 17: Dopamine Curve
+Per-game engagement trajectory. Plot session length over time for a game. Classify the pattern:
+- **Honeymoon** — big sessions early, tapering off (novelty wore off)
+- **Slow Burn** — small sessions growing bigger (it grew on you)
+- **Steady Love** — consistent session lengths throughout
+- **Spike & Crash** — one massive session then nothing (binge regret?)
+- **Revival** — dropped off, then came back strong
+
+Show the dominant pattern across your library. *"70% of your games follow the Honeymoon curve — you front-load your excitement."*
+**Where**: AnalyticsPanel | **Effort**: High
+**Files**: `getDopamineCurve(game)` and `getLibraryDopamineProfile(games)` in calculations.ts, chart in AnalyticsPanel.
+
+##### Stat 18: Genre Fatigue Detector
+After playing a lot of one genre in a short period, do your ratings drop? Measure: when you play 3+ games of the same genre within 60 days, does the 3rd+ game get rated lower? *"Your RPG ratings drop 1.5 points after 3 consecutive RPGs. You might benefit from mixing it up."*
+**Where**: AnalyticsPanel | **Effort**: Medium
+**Files**: `getGenreFatigue(games)` in calculations.ts, card in AnalyticsPanel.
+
+##### Stat 19: Session Time-of-Week Heatmap
+Not just day-of-week — a proper 7×4 grid: day of week × week of month. Reveals patterns like "you game hardest on the first weekend of the month" or "mid-week is dead." More granular than the existing day-of-week chart in Play Patterns.
+**Where**: AnalyticsPanel | **Effort**: Medium
+**Files**: `getWeekOfMonthHeatmap(games)` in calculations.ts, heatmap grid in AnalyticsPanel.
+
+##### Stat 20: The Dead Zone
+Identify your longest consecutive period with zero gaming activity. When was it? How long? What broke the streak? *"Your longest gaming drought was 23 days in March 2025. You came back with a 6-hour Elden Ring binge."*
+**Where**: FunStatsPanel | **Effort**: Low
+**Files**: `getDeadZone(games)` in calculations.ts, card in FunStatsPanel.
+
+##### Stat 21: Library DNA Fingerprint
+Unique radial visualization of your library's composition: genre split, platform split, price range split, status split, session length preference — all in one radar/spider chart. No two gamers have the same DNA. Compact, visual, instantly shows what kind of gamer you are at a glance.
+**Where**: ExpandedStatsPanel | **Effort**: Medium
+**Files**: `getLibraryDNA(games)` in calculations.ts, radar chart in ExpandedStatsPanel.
+
+---
+
+#### Category: Library Meta-Stats (3 stats)
+
+##### Stat 22: Rating Confidence Score
+Ratings on games with <5 hours are "low confidence" — you barely experienced them. Recalculate top 10 weighted by hours played. Does the list change? *"Your 'confident' top 10 (rated after 20+ hours) differs from your raw top 10 by 4 games. Your quick ratings tend to be more generous."*
+**Where**: InsightsPanel | **Effort**: Low
+**Files**: `getRatingConfidence(games)` in calculations.ts, comparison card in InsightsPanel.
+
+##### Stat 23: The Pareto Games (Power Law)
+Beyond 80/20 — show the full power law curve. Your top 3 games probably account for a shocking % of total hours. *"Your top 3 games (5% of library) account for 45% of all your gaming hours. You know what you like."* Visual: stacked bar or cumulative % line chart.
+**Where**: InsightsPanel | **Effort**: Low
+**Files**: `getParetoAnalysis(games)` in calculations.ts, chart in InsightsPanel.
+
+##### Stat 24: Library Age Profile
+Histogram of when your games were purchased. Is your library young and growing, or mature and stable? *"72% of your library was bought in the last 12 months. You're in an active acquisition phase."* Or: *"Your oldest game is from 2019 and you're still playing it."*
+**Where**: ExpandedStatsPanel | **Effort**: Low
+**Files**: `getLibraryAgeProfile(games)` in calculations.ts, histogram in ExpandedStatsPanel.
+
+---
+
+#### Category: Predictive & Comparative (4 stats)
+
+##### Stat 25: Value Velocity Chart
+For each game: how quickly did it become "worth the money"? Plot cost-per-hour after each session. Some games are great value from session 1 ($15 game, 5-hour first session = $3/hr immediately). Others take 30 hours to reach Fair value. *"Astro Bot hit Excellent value in 4 sessions. Starfield took 22 sessions and still hasn't."*
+**Where**: AnalyticsPanel | **Effort**: Medium
+**Files**: `getValueVelocity(games)` in calculations.ts, multi-line chart in AnalyticsPanel.
+
+##### Stat 26: Cross-Genre Affinity Map
+Which genres do you tend to play in the same time periods? Network graph where genres that co-occur within the same month get connected. Thick lines = strong pairing. *"You always pair RPGs with Sports — they're your peanut butter and jelly."*
+**Where**: AnalyticsPanel | **Effort**: High
+**Files**: `getCrossGenreAffinity(games)` in calculations.ts, network/chord visualization in AnalyticsPanel.
+
+##### Stat 27: Seasonal Genre Drift
+What genres dominate each season? Stacked area chart: Jan-Dec, colored by genre share. *"Winter is your RPG season (55% of hours). Summer shifts to Sports and Action."* Helps predict what you'll want to play next based on time of year.
+**Where**: AnalyticsPanel | **Effort**: Medium
+**Files**: `getSeasonalGenreDrift(games)` in calculations.ts, stacked area chart in AnalyticsPanel.
+
+##### Stat 28: "If You Stopped Today" Snapshot
+Freeze your library right now. Final stats: total hours, total spent, overall cost-per-hour, games completed, completion rate, longest game, best value, worst value. Frame it like a lifetime achievement summary. *"If you never bought another game, your gaming career stands at: 1,247 hours across 64 games, at $1.82/hr. Not bad."*
+**Where**: ExpandedStatsPanel | **Effort**: Low
+**Files**: `getIfYouStoppedToday(games)` in calculations.ts, summary card in ExpandedStatsPanel.
+
+---
+
+#### Category: Composite Scores & Dashboards (4 stats)
+
+##### Stat 1: Gaming Credit Score
+Single 300-850 composite score grading your spending habits. Factors:
+- % of library actually played (30% weight)
+- Average cost-per-hour (25% weight)
+- Completion rate (25% weight)
+- Regret rate — low = good (20% weight)
+
+Visual gauge/dial. Labels: "Excellent Spender" (750+) / "Smart Buyer" (650-749) / "Average" (550-649) / "Impulse Risk" (450-549) / "Needs Work" (<450). One number that answers: "Am I spending my gaming money well?"
+**Where**: InsightsPanel (hero position) | **Effort**: Medium
+**Files**: `getGamingCreditScore(games)` in calculations.ts, gauge component in InsightsPanel.
+
+##### Stat 2: Completion Funnel
+Visual funnel diagram showing where you lose games:
+- Games Owned → Started (played at all) → Past 10h → Past 50% estimated → Completed
+
+Shows the biggest drop-off point. *"You start 75% of your games but only 30% make it past 10 hours. The 10-hour mark is where you lose interest."*
+**Where**: AnalyticsPanel | **Effort**: Medium
+**Files**: `getCompletionFunnel(games)` in calculations.ts, funnel visualization in AnalyticsPanel.
+
+##### Stat 3: The 80/20 Rule (Pareto Lite)
+*"82% of your gaming hours come from 18% of your library."* Visual: ranked games with a cumulative % line chart overlaid. Reveals how concentrated vs distributed your play is. High concentration = you know what you like. Low = you spread thin.
+**Where**: InsightsPanel | **Effort**: Low
+**Files**: `getPareto8020(games)` in calculations.ts, chart in InsightsPanel.
+
+##### Stat 8: Library Health Dashboard
+One compact hero visual at the top of the Stats tab showing the "vital signs" of your entire collection:
+- **Active rate** — % played in last 30 days (green)
+- **Completion rate** — % completed (blue)
+- **Abandonment rate** — % abandoned (red)
+- **Dust rate** — % untouched 60+ days (grey)
+
+Four-bar horizontal visual, color-coded. Quick glance tells you: is my collection healthy or neglected?
+**Where**: Top of Stats tab (hero position) | **Effort**: Medium
+**Files**: `getLibraryHealth(games)` in calculations.ts, dashboard component at top of StatsView.
+
+---
+
+#### Category: Play Style Analysis (4 stats)
+
+##### Stat 4: Game Length Sweet Spot
+Group games by actual playtime: Quick (<10h), Medium (10-30h), Long (30-60h), Epic (60+h). Per bucket: avg rating, completion rate, count, avg cost-per-hour. *"Your sweet spot is Medium games (10-30h) — highest avg rating and 80% completion rate."*
+**Where**: AnalyticsPanel | **Effort**: Low
+**Files**: `getGameLengthSweetSpot(games)` in calculations.ts, bracket display in AnalyticsPanel.
+
+##### Stat 5: Money Efficiency Trend
+Is your spending getting smarter? Line chart of avg cost-per-hour for games bought each quarter. Downward trend = improving value instincts. *"Your Q4 2025 purchases average $1.20/hr vs $4.50/hr in Q1 2025 — you're getting better at finding value."*
+**Where**: InsightsPanel | **Effort**: Medium
+**Files**: `getMoneyEfficiencyTrend(games)` in calculations.ts, line chart in InsightsPanel.
+
+##### Stat 6: Return Rate / Comeback Analysis
+Of games with a 30+ day play gap, what % did you return to? Shows if you're a "one and done" or "revisitor" type. *"You've returned to 40% of games you stopped playing — higher than typical."* List top comebacks with gap duration.
+**Where**: FunStatsPanel | **Effort**: Medium
+**Files**: `getReturnRate(games)` in calculations.ts, section in FunStatsPanel.
+
+##### Stat 7: Session Consistency Score
+How regular is your gaming? Based on standard deviation of gaps between sessions. Visual heartbeat-style line. Labels:
+- **Metronome** — very consistent (low std dev)
+- **Rhythm Player** — mostly steady
+- **Burst Gamer** — spikes and valleys
+- **Chaos Mode** — totally random
+
+**Where**: ExpandedStatsPanel (replaces removed personality card) | **Effort**: Low
+**Files**: `getSessionConsistency(games)` in calculations.ts, card in ExpandedStatsPanel.
+
+---
+
+### Implementation Order (All Stats)
+
+| Priority | # | Feature | Panel | Effort |
+|----------|---|---------|-------|--------|
+| **High** | 1 | Gaming Credit Score | InsightsPanel | Medium |
+| **High** | 8 | Library Health Dashboard | StatsView top | Medium |
+| **High** | 2 | Completion Funnel | AnalyticsPanel | Medium |
+| **High** | 3 | The 80/20 Rule | InsightsPanel | Low |
+| **Medium** | 9 | The Impulse Tax | InsightsPanel | Low |
+| **Medium** | 12 | "Just One More Hour" Games | FunStatsPanel | Low |
+| **Medium** | 14 | Sunk Cost Hall of Shame | FunStatsPanel | Low |
+| **Medium** | 20 | The Dead Zone | FunStatsPanel | Low |
+| **Medium** | 16 | Finishing Sprint Score | FunStatsPanel | Low |
+| **Medium** | 22 | Rating Confidence Score | InsightsPanel | Low |
+| **Medium** | 23 | Pareto Games (Power Law) | InsightsPanel | Low |
+| **Medium** | 24 | Library Age Profile | ExpandedStatsPanel | Low |
+| **Medium** | 28 | "If You Stopped Today" | ExpandedStatsPanel | Low |
+| **Medium** | 7 | Session Consistency Score | ExpandedStatsPanel | Low |
+| **Medium** | 11 | Price Creep/Discipline | InsightsPanel | Low |
+| **Medium** | 4 | Game Length Sweet Spot | AnalyticsPanel | Low |
+| **Medium** | 6 | Return Rate / Comeback | FunStatsPanel | Medium |
+| **Medium** | 10 | Purchase Rhythm Detector | InsightsPanel | Medium |
+| **Medium** | 5 | Money Efficiency Trend | InsightsPanel | Medium |
+| **Lower** | 13 | Attention Span Spectrum | AnalyticsPanel | Medium |
+| **Lower** | 15 | Replacement Chain | AnalyticsPanel | Medium |
+| **Lower** | 18 | Genre Fatigue Detector | AnalyticsPanel | Medium |
+| **Lower** | 19 | Session Time-of-Week Heatmap | AnalyticsPanel | Medium |
+| **Lower** | 25 | Value Velocity Chart | AnalyticsPanel | Medium |
+| **Lower** | 27 | Seasonal Genre Drift | AnalyticsPanel | Medium |
+| **Lower** | 21 | Library DNA Fingerprint | ExpandedStatsPanel | Medium |
+| **Lower** | 17 | Dopamine Curve | AnalyticsPanel | High |
+| **Lower** | 26 | Cross-Genre Affinity Map | AnalyticsPanel | High |
+
+### New Calculation Functions Needed (28)
+
+```
+getGamingCreditScore(games) → { score, label, factors: { played, value, completion, regret }, color }
+getCompletionFunnel(games) → { stages: { label, count, percentage, dropoff }[] }
+getPareto8020(games) → { topPercent, hoursPercent, topGames[], cumulativeData[] }
+getGameLengthSweetSpot(games) → { brackets: { label, count, avgRating, completionRate, avgCostPerHour }[] }
+getMoneyEfficiencyTrend(games) → { quarters: { period, avgCostPerHour }[], trend, improvement }
+getReturnRate(games) → { returnRate, totalGapped, returnedCount, topComebacks: { game, gapDays }[] }
+getSessionConsistency(games) → { score, label, stdDev, avgGap, pattern[] }
+getLibraryHealth(games) → { activeRate, completionRate, abandonmentRate, dustRate }
+getImpulseTax(games, year?) → { total, gameCount, percentOfSpend, yearOverYear? }
+getPurchaseRhythm(games) → { type, avgGap, daysSinceLast, clusters[], timeline[] }
+getPriceCreep(games) → { trend, quarterlyAvgPrice[], direction, change }
+getStickyGames(games) → { games: { game, avgSession, multiplier }[], overallAvgSession }
+getAttentionSpanSpectrum(games) → { buckets: { label, count, percent }[], dominantType }
+getSunkCostGames(games) → { games: { game, hours, rating, regretHours }[] }
+getReplacementChains(games) → { chains: { abandoned, replacement, gapDays }[], biggestAttractor }
+getFinishingSprintScore(games) → { avgSprintPercent, sprintFinishers, steadyFinishers }
+getDopamineCurve(game) → { pattern, sessionTrend[] }
+getLibraryDopamineProfile(games) → { dominantPattern, distribution: { pattern, count }[] }
+getGenreFatigue(games) → { fatigueGenres: { genre, ratingDrop, gamesBeforeFatigue }[] }
+getWeekOfMonthHeatmap(games) → { grid: number[][] (7×4), peakCell, deadCell }
+getDeadZone(games) → { longestDrought, startDate, endDate, whatBrokeIt }
+getLibraryDNA(games) → { axes: { label, value }[] } (for radar chart)
+getRatingConfidence(games) → { confidentTop10[], rawTop10[], differences, generosityBias }
+getParetoAnalysis(games) → { topN, percentOfTotal, cumulativeChart[] }
+getLibraryAgeProfile(games) → { histogram: { period, count }[], medianAge, oldestGame, newestGame }
+getValueVelocity(games) → { fastValueGames[], slowValueGames[], neverWorthIt[] }
+getCrossGenreAffinity(games) → { pairs: { genre1, genre2, strength }[] }
+getSeasonalGenreDrift(games) → { months: { month, genreShares: { genre, percent }[] }[] }
+getIfYouStoppedToday(games) → { totalHours, totalSpent, costPerHour, completed, completionRate, bestValue, worstValue, longestGame }
+```
+
+### Panel Destination Summary
+
+| Panel | Stats Added | Stats Removed |
+|-------|-------------|---------------|
+| **StatsView** | Library Health Dashboard (top), remove All-Time Summary Cards, remove Franchise Stats, remove Best ROI chart | -3 sections |
+| **InsightsPanel** | Gaming Credit Score, 80/20 Rule, Impulse Tax, Purchase Rhythm, Price Creep, Money Efficiency, Rating Confidence, Pareto Games | +8 sections |
+| **AnalyticsPanel** | Completion Funnel, Game Length Sweet Spot, Attention Span, Replacement Chain, Dopamine Curve, Genre Fatigue, Session Heatmap, Value Velocity, Cross-Genre Affinity, Seasonal Genre Drift | +10 sections |
+| **FunStatsPanel** | "Just One More Hour", Sunk Cost Hall, Dead Zone, Finishing Sprint, Return Rate, remove Backlog Boss, remove Genre Diversity, remove Bargain Hunter | +5/-3 sections |
+| **ExpandedStatsPanel** | Session Consistency, Library DNA, Library Age Profile, "If You Stopped Today", remove Gaming Personality, remove Achievements, remove Backlog Clearance, remove Best Bargain, remove Biggest Regret, remove Cost Per Completion | +4/-6 sections |
+| **TrophyRoom** | No changes | — |
+| **DiscoverPanel** | No changes | — |
+
+---
+
 ## Resources
 
 - **Next.js Docs**: https://nextjs.org/docs
@@ -1821,6 +2256,12 @@ card-layout-move       — Smooth position transitions on sort/filter
 ---
 
 ## Changelog
+
+### 2026-02-14 (v2.4.0)
+- Added Card Info Enhancements plan: 6 features (card flip, AI whisper, momentum sparkline, library rank, progress ring, mood pulse)
+- Added Stats Overhaul Plan: comprehensive audit with 12 redundancy removals, 10 dead code cleanups, 28 new stats
+- Redundancy removals: duplicate franchise stats, backlog predictions, cost-per-completion, personality card, achievements, all-time summary cards, bargain hunter, best bargain, biggest regret, genre diversity, ROI chart
+- New stats categories: Spending Psychology (impulse tax, purchase rhythm, price creep), Behavioral Patterns (sticky games, attention span, sunk cost, replacement chain, finishing sprint), Time & Engagement (dopamine curve, genre fatigue, session heatmap, dead zone, library DNA), Library Meta (rating confidence, pareto games, library age), Predictive (value velocity, cross-genre affinity, seasonal genre drift, if you stopped today), Composite Scores (gaming credit score, completion funnel, 80/20 rule, library health dashboard), Play Style (game length sweet spot, money efficiency trend, return rate, session consistency)
 
 ### 2026-02-11 (v2.3.0)
 - Added Card Redesign & Detail Panel Overhaul plan: 18 features across 5 areas
@@ -1858,6 +2299,6 @@ card-layout-move       — Smooth position transitions on sort/filter
 
 ---
 
-**Last Updated**: 2026-02-11
-**Version**: 2.3.0
+**Last Updated**: 2026-02-14
+**Version**: 2.4.0
 **Maintained by**: AI assistants and contributors
