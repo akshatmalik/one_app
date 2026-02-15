@@ -61,6 +61,7 @@ import { InsightsPanel } from './InsightsPanel';
 import { AnalyticsPanel } from './AnalyticsPanel';
 import { TrophyRoom } from './TrophyRoom';
 import { DiscoverPanel } from './DiscoverPanel';
+import { WeeklyDigest } from './WeeklyDigest';
 import clsx from 'clsx';
 
 interface StatsViewProps {
@@ -968,6 +969,9 @@ export function StatsView({ games, summary, budgets = [], onSetBudget }: StatsVi
 
       {/* Period Stats Panel (This Week / This Month) */}
       <PeriodStatsPanel games={games} />
+
+      {/* Weekly Digest / Gaming Journal */}
+      <WeeklyDigest games={games} />
 
       {/* Gaming Activity Heatmap */}
       <GamingHeatmap games={games} />

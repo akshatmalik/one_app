@@ -8437,3 +8437,99 @@ export function getIfYouStoppedToday(games: Game[]): IfYouStoppedTodayData {
     longestGame: longestGame?.name || 'N/A',
   };
 }
+
+// ============================================================
+// Stat Popover Data — contextual info for micro-stat interactions
+// ============================================================
+
+export interface StatPopoverData {
+  price: string;
+  hours: string;
+  rating: string;
+  costPerHour: string;
+  roi: string;
+}
+
+export function getStatPopoverData(game: Game, allGames: Game[]): StatPopoverData {
+  const totalHours = getTotalHours(game);
+  const sessions = game.playLogs?.length || 0;
+
+  // Price context
+  let priceText: string;
+  if (game.acquiredFree) {
+    priceText = 'Free game!';
+  } else if (game.originalPrice && game.originalPrice > game.price) {
+    const saved = game.originalPrice - game.price;
+    const pct = Math.round((1 - game.price / game.originalPrice) * 100);
+    priceText = `Saved $${saved.toFixed(0)} (${pct}% off)`;
+  } else {
+    priceText = 'Paid full price';
+  }
+
+  // Hours context
+  let hoursText: string;
+  if (sessions > 0) {
+    const avgSession = (totalHours / sessions).toFixed(1);
+    hoursText = `Avg session: ${avgSession}h \u00B7 ${sessions} session${sessions !== 1 ? 's' : ''}`;
+  } else if (totalHours > 0) {
+    hoursText = 'No individual sessions logged';
+  } else {
+    hoursText = 'Not played yet';
+  }
+
+  // Rating context — percentile in library
+  let ratingText: string;
+  const ratedGames = allGames.filter(g => g.rating > 0).sort((a, b) => a.rating - b.rating);
+  if (game.rating > 0 && ratedGames.length > 1) {
+    const rank = ratedGames.filter(g => g.rating <= game.rating).length;
+    const percentile = Math.round((rank / ratedGames.length) * 100);
+    ratingText = `${percentile}th percentile in your library`;
+  } else if (game.rating > 0) {
+    ratingText = 'Only rated game so far';
+  } else {
+    ratingText = 'Not rated yet';
+  }
+
+  // Cost per hour context — trajectory from first session to now
+  let costPerHourText: string;
+  if (totalHours > 0 && game.price > 0) {
+    const currentCPH = game.price / totalHours;
+    const logs = game.playLogs ? [...game.playLogs].sort((a, b) => parseLocalDate(a.date).getTime() - parseLocalDate(b.date).getTime()) : [];
+    if (logs.length >= 2) {
+      const firstSessionHours = game.hours > 0 ? game.hours + logs[0].hours : logs[0].hours;
+      const firstCPH = game.price / firstSessionHours;
+      costPerHourText = `Was $${firstCPH.toFixed(2)}/hr after first session, now $${currentCPH.toFixed(2)}/hr`;
+    } else {
+      costPerHourText = `$${currentCPH.toFixed(2)} per hour of entertainment`;
+    }
+  } else if (game.acquiredFree && totalHours > 0) {
+    costPerHourText = 'Free game \u2014 infinite value!';
+  } else {
+    costPerHourText = 'No playtime logged yet';
+  }
+
+  // ROI context — ranking in collection
+  let roiText: string;
+  const metrics = calculateMetrics(game);
+  if (metrics.roi > 0) {
+    const gamesWithROI = allGames
+      .filter(g => {
+        const m = calculateMetrics(g);
+        return m.roi > 0;
+      })
+      .sort((a, b) => calculateMetrics(b).roi - calculateMetrics(a).roi);
+    const roiRank = gamesWithROI.findIndex(g => g.id === game.id);
+    if (roiRank >= 0 && gamesWithROI.length > 1) {
+      const percentile = Math.round(((roiRank + 1) / gamesWithROI.length) * 100);
+      roiText = percentile <= 50
+        ? `Top ${percentile}% ROI in your collection`
+        : `ROI rank: #${roiRank + 1} of ${gamesWithROI.length}`;
+    } else {
+      roiText = `ROI: ${metrics.roi.toFixed(1)}`;
+    }
+  } else {
+    roiText = 'Not enough data for ROI';
+  }
+
+  return { price: priceText, hours: hoursText, rating: ratingText, costPerHour: costPerHourText, roi: roiText };
+}

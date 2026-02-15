@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown } from 'lucide-react';
 import { useGames } from './hooks/useGames';
 import { useAnalytics, GameWithMetrics } from './hooks/useAnalytics';
@@ -18,7 +18,7 @@ import { gameRepository } from './lib/storage';
 import { BASELINE_GAMES_2025 } from './data/baseline-games';
 import { useAuthContext } from '@/lib/AuthContext';
 import { useToast } from '@/components/Toast';
-import { getROIRating, getWeekStatsForOffset, getGamesPlayedInTimeRange, getCompletionProbability, getGameHealthDot, getRelativeTime, getDaysContext, getSessionMomentum, getValueTrajectory, getGameSmartOneLiner, getFranchiseInfo, getProgressPercent, getShelfLife, parseLocalDate, getCardRarity, getRelationshipStatus, getGameStreak, getHeroNumber, getCardFreshness, getGameSections, getCardBackData, getContextualWhisper, getLibraryRank, getCardMoodPulse, getProgressRingData } from './lib/calculations';
+import { getROIRating, getWeekStatsForOffset, getGamesPlayedInTimeRange, getCompletionProbability, getGameHealthDot, getRelativeTime, getDaysContext, getSessionMomentum, getValueTrajectory, getGameSmartOneLiner, getFranchiseInfo, getProgressPercent, getShelfLife, parseLocalDate, getCardRarity, getRelationshipStatus, getGameStreak, getHeroNumber, getCardFreshness, getGameSections, getCardBackData, getContextualWhisper, getLibraryRank, getCardMoodPulse, getProgressRingData, getStatPopoverData } from './lib/calculations';
 import { OnThisDayCard } from './components/OnThisDayCard';
 import { ActivityPulse } from './components/ActivityPulse';
 import { RandomPicker } from './components/RandomPicker';
@@ -763,6 +763,47 @@ function StatCard({ icon, label, value, accent }: { icon: React.ReactNode; label
 }
 
 // ============================================================
+// StatPopover — contextual tooltip for micro-stat interactions
+// ============================================================
+
+function StatPopover({ text, visible }: { text: string; visible: boolean }) {
+  if (!visible) return null;
+  return (
+    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-gray-800 border border-white/10 rounded-lg shadow-xl z-50 whitespace-nowrap text-[11px] text-white/70 pointer-events-none animate-fade-in">
+      {text}
+      <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-800" />
+    </div>
+  );
+}
+
+function useStatPopover() {
+  const [active, setActive] = useState<string | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const toggle = useCallback((stat: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setActive(prev => prev === stat ? null : stat);
+    // Auto-dismiss after 3 seconds
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => setActive(null), 3000);
+  }, []);
+
+  const close = useCallback(() => {
+    setActive(null);
+    if (timerRef.current) clearTimeout(timerRef.current);
+  }, []);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, []);
+
+  return { active, toggle, close };
+}
+
+// ============================================================
 // GameCardList — Poster + Compact card views with sections
 // ============================================================
 
@@ -797,6 +838,30 @@ function GameCardList({
 }: GameCardListProps) {
   const sections = useMemo(() => groupBySection ? getGameSections(allGames) : [], [allGames, groupBySection]);
 
+  // Track entering cards for animation (E17: Animated Card Transitions)
+  const prevGameIdsRef = useRef<Set<string>>(new Set());
+  const [enteringCards, setEnteringCards] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    const currentIds = new Set(games.map(g => g.id));
+    const prevIds = prevGameIdsRef.current;
+
+    if (prevIds.size > 0) {
+      const newCards = new Set<string>();
+      currentIds.forEach(id => {
+        if (!prevIds.has(id)) newCards.add(id);
+      });
+      if (newCards.size > 0) {
+        setEnteringCards(newCards);
+        const timer = setTimeout(() => setEnteringCards(new Set()), 350);
+        prevGameIdsRef.current = currentIds;
+        return () => clearTimeout(timer);
+      }
+    }
+
+    prevGameIdsRef.current = currentIds;
+  }, [games]);
+
   // Now Playing: all In Progress games, sorted by most recently played
   const nowPlayingGames = useMemo(() => {
     return games
@@ -813,10 +878,20 @@ function GameCardList({
   const nowPlayingIds = useMemo(() => new Set(nowPlayingGames.map(g => g.id)), [nowPlayingGames]);
 
   const renderCard = (game: GameWithMetrics, idx: number) => {
+    const isEntering = enteringCards.has(game.id);
+    const animClass = `game-card-animate${isEntering ? ' game-card-enter' : ''}`;
     if (cardViewMode === 'poster') {
-      return <PosterCard key={game.id} game={game} allGames={allGames} idx={idx} onClick={() => onCardClick(game)} onQuickLog={(h) => onQuickLog(game, h)} isInQueue={isInQueue(game.id)} sortBy={sortBy} />;
+      return (
+        <div key={game.id} className={animClass}>
+          <PosterCard game={game} allGames={allGames} idx={idx} onClick={() => onCardClick(game)} onQuickLog={(h) => onQuickLog(game, h)} isInQueue={isInQueue(game.id)} sortBy={sortBy} />
+        </div>
+      );
     }
-    return <CompactCard key={game.id} game={game} allGames={allGames} idx={idx} onClick={() => onCardClick(game)} onLogTime={() => onLogTime(game)} onToggleQueue={() => onToggleQueue(game)} onDelete={() => onDelete(game)} isInQueue={isInQueue(game.id)} sortBy={sortBy} />;
+    return (
+      <div key={game.id} className={animClass}>
+        <CompactCard game={game} allGames={allGames} idx={idx} onClick={() => onCardClick(game)} onLogTime={() => onLogTime(game)} onToggleQueue={() => onToggleQueue(game)} onDelete={() => onDelete(game)} isInQueue={isInQueue(game.id)} sortBy={sortBy} />
+      </div>
+    );
   };
 
   if (groupBySection && sections.length > 0) {
@@ -835,7 +910,9 @@ function GameCardList({
             </div>
             <div className="space-y-3">
               {nowPlayingGames.map(g => (
-                <NowPlayingCard key={g.id} game={g} allGames={allGames} onClick={() => onCardClick(g)} onQuickLog={(h) => onQuickLog(g, h)} />
+                <div key={g.id} className={`game-card-animate${enteringCards.has(g.id) ? ' game-card-enter' : ''}`}>
+                  <NowPlayingCard game={g} allGames={allGames} onClick={() => onCardClick(g)} onQuickLog={(h) => onQuickLog(g, h)} />
+                </div>
               ))}
             </div>
           </div>
@@ -876,7 +953,9 @@ function GameCardList({
           </div>
           <div className="space-y-3">
             {nowPlayingGames.map(g => (
-              <NowPlayingCard key={g.id} game={g} allGames={allGames} onClick={() => onCardClick(g)} onQuickLog={(h) => onQuickLog(g, h)} />
+              <div key={g.id} className={`game-card-animate${enteringCards.has(g.id) ? ' game-card-enter' : ''}`}>
+                <NowPlayingCard game={g} allGames={allGames} onClick={() => onCardClick(g)} onQuickLog={(h) => onQuickLog(g, h)} />
+              </div>
             ))}
           </div>
         </div>
