@@ -916,7 +916,7 @@ function GameCardList({
             <div className="space-y-3">
               {nowPlayingGames.map(g => (
                 <div key={g.id} className={`game-card-animate${enteringCards.has(g.id) ? ' game-card-enter' : ''}`}>
-                  <NowPlayingCard game={g} allGames={allGames} onClick={() => onCardClick(g)} onQuickLog={(h) => onQuickLog(g, h)} />
+                  <NowPlayingCard game={g} allGames={allGames} onClick={() => onCardClick(g)} onQuickLog={(h) => onQuickLog(g, h)} sortBy={sortBy} tintColor={gameColors.get(g.id)} />
                 </div>
               ))}
             </div>
@@ -989,63 +989,194 @@ function SectionIcon({ id }: { id: string }) {
 
 // --- Now Playing Card ---
 
-function NowPlayingCard({ game, allGames, onClick, onQuickLog }: {
+function NowPlayingCard({ game, allGames, onClick, onQuickLog, sortBy = 'hours', tintColor }: {
   game: GameWithMetrics;
   allGames: Game[];
   onClick: () => void;
   onQuickLog: (hours: number) => void;
+  sortBy?: string;
+  tintColor?: string;
 }) {
+  const [isFlipped, setIsFlipped] = useState(false);
+  const rarity = getCardRarity(game);
   const relationship = getRelationshipStatus(game, allGames);
   const streak = getGameStreak(game);
+  const heroNum = getHeroNumber(game);
+  const freshness = getCardFreshness(game);
+  const smartLine = getGameSmartOneLiner(game, allGames);
+  const momentum = getSessionMomentum(game);
+  const whisper = getContextualWhisper(game, allGames);
+  const libraryRank = getLibraryRank(game, allGames, sortBy);
+  const moodPulse = getCardMoodPulse(game);
+  const progressRing = getProgressRingData(game, allGames);
   const avgSession = game.playLogs && game.playLogs.length > 0
     ? Math.round(game.playLogs.reduce((s, l) => s + l.hours, 0) / game.playLogs.length * 10) / 10
     : 2;
 
-  return (
-    <div>
-      <div
-        onClick={onClick}
-        className="relative overflow-hidden rounded-xl border border-blue-500/20 now-playing-glow cursor-pointer"
-      >
-        {/* Banner image */}
-        {game.thumbnail && (
-          <div className="relative h-28 overflow-hidden">
-            <img src={game.thumbnail} alt={game.name} className="w-full h-full object-cover opacity-40 poster-reveal" loading="lazy" />
-            <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0f] via-[#0a0a0f]/60 to-transparent" />
-          </div>
-        )}
+  const handleFlip = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsFlipped(!isFlipped);
+  };
 
-        <div className={clsx('p-4', game.thumbnail ? '-mt-10 relative' : '')}>
-          <div className="flex items-center gap-2 mb-1">
-            <h3 className="text-lg font-bold text-white">{game.name}</h3>
-            <span className="text-[10px] px-2 py-0.5 rounded-full font-bold" style={{ color: relationship.color, backgroundColor: relationship.bgColor }}>
-              {relationship.label}
-            </span>
+  return (
+    <div className="card-flip-container">
+      <div className={clsx('card-flip-inner', isFlipped && 'flipped')}>
+        {/* === FRONT FACE === */}
+        <div
+          onClick={onClick}
+          className={clsx(
+            'card-flip-front overflow-hidden rounded-xl border cursor-pointer transition-all relative now-playing-glow',
+            rarity.borderClass || 'border-blue-500/20',
+          )}
+          style={{
+            opacity: freshness.opacity,
+            backgroundColor: relationship.cardTint || (tintColor ? `${tintColor}08` : undefined),
+            backgroundImage: relationship.cardTint && tintColor ? `linear-gradient(${relationship.cardTint}, ${tintColor}06)` : undefined,
+          }}
+        >
+          {/* Poster image */}
+          <div className="relative">
+            {game.thumbnail ? (
+              <div className="relative h-28 overflow-hidden">
+                <img
+                  src={game.thumbnail}
+                  alt={game.name}
+                  className="w-full h-full object-cover poster-reveal"
+                  loading="lazy"
+                  style={{ filter: `saturate(${freshness.saturation})` }}
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0f] via-[#0a0a0f]/40 to-transparent" />
+              </div>
+            ) : (
+              <div className="h-20 bg-gradient-to-r from-blue-900/10 to-purple-900/10 flex items-center justify-center">
+                <Gamepad2 size={28} className="text-white/10" />
+              </div>
+            )}
+
+            {/* Streak flame badge */}
             {streak.isActive && (
-              <span className="text-[10px] px-1.5 py-0.5 bg-orange-500/20 text-orange-400 rounded font-bold flex items-center gap-0.5 streak-flame">
+              <div className="absolute top-2 left-2 text-[10px] px-1.5 py-0.5 bg-black/60 backdrop-blur-sm text-orange-400 rounded font-bold flex items-center gap-0.5 streak-flame">
                 🔥 {streak.days}
+              </div>
+            )}
+
+            {/* Rarity badge */}
+            {rarity.tier !== 'common' && (
+              <div className="absolute top-2 right-2 text-[9px] px-1.5 py-0.5 bg-black/60 backdrop-blur-sm rounded font-bold uppercase tracking-wider"
+                style={{
+                  color: rarity.tier === 'legendary' ? '#fbbf24'
+                    : rarity.tier === 'epic' ? '#a855f7'
+                    : rarity.tier === 'rare' ? '#3b82f6'
+                    : '#22c55e',
+                }}
+              >
+                {rarity.label}
+              </div>
+            )}
+
+            {/* Library rank badge */}
+            {libraryRank.rank > 0 && (() => {
+              const pos: React.CSSProperties = streak.isActive ? { left: 52 } : rarity.tier === 'common' ? { right: 8 } : { left: 8 };
+              return (
+                <div
+                  className="absolute top-2 text-[9px] px-1.5 py-0.5 bg-black/60 backdrop-blur-sm rounded font-bold text-white/50"
+                  style={pos}
+                >
+                  {libraryRank.label}
+                </div>
+              );
+            })()}
+
+            {/* Hero number with progress ring */}
+            <div className="absolute bottom-2 right-3">
+              <ProgressRing progress={progressRing.progress} color={progressRing.color} size={44} strokeWidth={2}>
+                <div className="text-right">
+                  <div className="text-lg font-black leading-none" style={{ color: heroNum.color }}>{heroNum.value}</div>
+                </div>
+              </ProgressRing>
+              <div className="text-[9px] text-white/30 text-right -mt-0.5">{heroNum.label}</div>
+            </div>
+
+            {/* Name + Relationship overlay */}
+            <div className="absolute bottom-2 left-3 right-16">
+              <h3 className="text-white font-bold text-base leading-tight truncate">{game.name}</h3>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <span
+                  className="text-[10px] px-2 py-0.5 rounded-full font-bold"
+                  style={{ color: relationship.color, backgroundColor: relationship.bgColor }}
+                >
+                  {relationship.label}
+                </span>
+                {game.genre && <span className="text-[10px] text-white/30">{game.genre}</span>}
+              </div>
+            </div>
+          </div>
+
+          {/* Stats bar with momentum dots */}
+          <div className="px-3 py-2.5 flex items-center gap-3">
+            <div className="flex items-center gap-1 text-xs text-white/50">
+              <DollarSign size={10} className="text-white/30" />
+              <span>{game.acquiredFree ? 'Free' : `$${game.price}`}</span>
+            </div>
+            <div className="flex items-center gap-1 text-xs text-white/50">
+              <Clock size={10} className="text-white/30" />
+              <span>{game.totalHours}h</span>
+            </div>
+            <div className="flex items-center gap-0.5">
+              <RatingStars rating={game.rating} size={9} />
+            </div>
+            {game.totalHours > 0 && game.price > 0 && (
+              <span className={clsx('text-xs font-medium', getValueColor(game.metrics.valueRating))}>
+                ${game.metrics.costPerHour.toFixed(2)}/hr
               </span>
+            )}
+            <div className="flex-1" />
+            {momentum.length >= 2 && <MomentumDots sessions={momentum} />}
+            {game.platform && <span className="text-[9px] px-1.5 py-0.5 bg-white/5 rounded text-white/30">{game.platform}</span>}
+          </div>
+
+          {/* Smart one-liner + contextual whisper */}
+          <div className="px-3 pb-1 -mt-1 space-y-0.5">
+            {smartLine && (
+              <p className="text-[10px] text-white/25 italic truncate">{smartLine}</p>
+            )}
+            {whisper.text && whisper.text !== smartLine && (
+              <p className="text-[10px] text-white/20 italic truncate">{whisper.text}</p>
             )}
           </div>
 
-          <div className="flex items-center gap-4 mt-2">
-            <div className="text-center">
-              <div className="text-white/80 font-bold text-sm">{game.totalHours}h</div>
-              <div className="text-[9px] text-white/30">played</div>
-            </div>
-            <div className="text-center">
-              <RatingStars rating={game.rating} size={10} />
-              <div className="text-[9px] text-white/30 mt-0.5">{game.rating}/10</div>
-            </div>
-            <div className="flex-1" />
+          {/* Check-in button row */}
+          <div className="px-3 pb-2.5 pt-1">
             <button
               onClick={(e) => { e.stopPropagation(); onQuickLog(avgSession); }}
-              className="px-4 py-2 bg-blue-600/30 text-blue-300 rounded-lg text-xs font-bold active:bg-blue-600/50 transition-all flex items-center gap-1.5"
+              className="w-full px-4 py-2 bg-blue-600/20 text-blue-300 rounded-lg text-xs font-bold active:bg-blue-600/40 transition-all flex items-center justify-center gap-1.5 border border-blue-500/10"
             >
               <Clock size={12} /> Check In
             </button>
           </div>
+
+          {/* Mood pulse strip */}
+          {moodPulse.level !== 'never' && (
+            <div
+              className="h-[2px] mood-pulse-strip"
+              style={{ backgroundColor: moodPulse.color }}
+            />
+          )}
+
+          {/* Flip button */}
+          <button
+            onClick={handleFlip}
+            className="absolute bottom-[42px] right-2 w-5 h-5 rounded-full bg-white/5 flex items-center justify-center text-white/20 hover:text-white/50 hover:bg-white/10 transition-all z-10"
+            title="Flip card"
+          >
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M17 1l4 4-4 4" /><path d="M3 11V9a4 4 0 0 1 4-4h14" /><path d="M7 23l-4-4 4-4" /><path d="M21 13v2a4 4 0 0 1-4 4H3" />
+            </svg>
+          </button>
         </div>
+
+        {/* === BACK FACE === */}
+        <PosterCardBack game={game} allGames={allGames} onFlip={handleFlip} rarity={rarity} freshness={freshness} relationship={relationship} />
       </div>
     </div>
   );
