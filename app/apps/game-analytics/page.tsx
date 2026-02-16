@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown } from 'lucide-react';
+import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, Compass } from 'lucide-react';
 import { useGames } from './hooks/useGames';
 import { useAnalytics, GameWithMetrics } from './hooks/useAnalytics';
 import { useBudget } from './hooks/useBudget';
@@ -25,13 +25,14 @@ import { ActivityPulse } from './components/ActivityPulse';
 import { RandomPicker } from './components/RandomPicker';
 import { BulkWishlistModal } from './components/BulkWishlistModal';
 import { GameBottomSheet } from './components/GameBottomSheet';
+import { DiscoverTab } from './components/DiscoverTab';
 import { RatingStars } from './components/RatingStars';
 import { MomentumDots } from './components/MomentumDots';
 import { ProgressRing } from './components/ProgressRing';
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist';
-type TabMode = 'games' | 'timeline' | 'stats' | 'ai-coach' | 'up-next';
+type TabMode = 'games' | 'timeline' | 'stats' | 'ai-coach' | 'up-next' | 'discover';
 type CardViewMode = 'poster' | 'compact';
 
 function getValueColor(rating: string): string {
@@ -421,11 +422,12 @@ export default function GameAnalyticsPage() {
                 ))}
               </div>
 
-              {/* Second Row: AI Coach, Up Next */}
+              {/* Second Row: AI Coach, Up Next, Discover */}
               <div className="flex items-center gap-2">
                 {([
                   { id: 'ai-coach', label: 'AI Coach', icon: <MessageCircle size={14} /> },
                   { id: 'up-next', label: 'Up Next', icon: <ListOrdered size={14} /> },
+                  { id: 'discover', label: 'Discover', icon: <Compass size={14} /> },
                 ] as const).map((tab) => (
                   <button
                     key={tab.id}
@@ -649,6 +651,14 @@ export default function GameAnalyticsPage() {
                   handleOpenPlayLog(gameWithMetrics);
                 }
               }}
+            />
+          )}
+
+          {tabMode === 'discover' && (
+            <DiscoverTab
+              games={games}
+              userId={user?.uid ?? null}
+              onAddGame={addGame}
             />
           )}
         </div>

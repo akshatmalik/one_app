@@ -140,3 +140,46 @@ export interface GameRepository {
   update(id: string, updates: Partial<Game>): Promise<Game>;
   delete(id: string): Promise<void>;
 }
+
+// ── Game Recommendations ──────────────────────────────────────────
+
+export type RecommendationStatus = 'suggested' | 'interested' | 'wishlisted' | 'played' | 'dismissed';
+
+export interface GameRecommendation {
+  id: string;
+  userId: string;
+  gameName: string;
+  genre?: string;
+  platform?: string;
+  thumbnail?: string;
+  metacritic?: number;
+  rawgRating?: number;
+  releaseDate?: string;
+  aiReason: string;           // "Why you'd love this" — personalized to user's library
+  status: RecommendationStatus;
+  suggestedAt: string;
+  respondedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RecommendationRepository {
+  setUserId(userId: string): void;
+  getAll(): Promise<GameRecommendation[]>;
+  create(rec: Omit<GameRecommendation, 'id' | 'userId' | 'createdAt' | 'updatedAt'>): Promise<GameRecommendation>;
+  update(id: string, updates: Partial<GameRecommendation>): Promise<GameRecommendation>;
+  delete(id: string): Promise<void>;
+}
+
+export interface TasteProfile {
+  topGenres: string[];          // Ranked by hours × rating
+  avoidGenres: string[];        // Low ratings or high abandonment
+  platforms: string[];           // Platforms user plays on
+  avgSessionHours: number;       // Average session length
+  preferredGameLength: string;   // e.g., "20-40h"
+  priceRange: string;            // e.g., "$15-$40"
+  avgRating: number;
+  topGames: Array<{ name: string; rating: number; hours: number; genre?: string }>;
+  completionRate: number;
+  favoriteGenreDetails: Array<{ genre: string; avgRating: number; avgHours: number; count: number }>;
+}
