@@ -1,4 +1,4 @@
-import { Game, GameMetrics, AnalyticsSummary } from './types';
+import { Game, GameMetrics, AnalyticsSummary, TasteProfile } from './types';
 
 /**
  * Parse a YYYY-MM-DD date string as local time instead of UTC.
@@ -8532,4 +8532,102 @@ export function getStatPopoverData(game: Game, allGames: Game[]): StatPopoverDat
   }
 
   return { price: priceText, hours: hoursText, rating: ratingText, costPerHour: costPerHourText, roi: roiText };
+}
+
+// ── Taste Profile (for Discover recommendations) ──────────────────────
+
+export function buildTasteProfile(games: Game[]): TasteProfile {
+  const owned = games.filter(g => g.status !== 'Wishlist');
+  const played = owned.filter(g => getTotalHours(g) > 0);
+
+  // Genre analysis — weighted by hours × rating
+  const genreData: Record<string, { totalHours: number; totalRating: number; count: number; abandoned: number }> = {};
+  for (const game of owned) {
+    const genre = game.genre || 'Unknown';
+    if (!genreData[genre]) genreData[genre] = { totalHours: 0, totalRating: 0, count: 0, abandoned: 0 };
+    genreData[genre].totalHours += getTotalHours(game);
+    genreData[genre].totalRating += game.rating;
+    genreData[genre].count += 1;
+    if (game.status === 'Abandoned') genreData[genre].abandoned += 1;
+  }
+
+  const genreScores = Object.entries(genreData)
+    .filter(([g]) => g !== 'Unknown')
+    .map(([genre, data]) => ({
+      genre,
+      avgRating: data.count > 0 ? data.totalRating / data.count : 0,
+      avgHours: data.count > 0 ? data.totalHours / data.count : 0,
+      count: data.count,
+      score: (data.totalHours * (data.totalRating / Math.max(data.count, 1))),
+      abandonRate: data.count > 0 ? data.abandoned / data.count : 0,
+    }))
+    .sort((a, b) => b.score - a.score);
+
+  const topGenres = genreScores.slice(0, 5).map(g => g.genre);
+  const avoidGenres = genreScores
+    .filter(g => g.abandonRate > 0.4 || g.avgRating < 5)
+    .map(g => g.genre);
+
+  // Platforms
+  const platforms = [...new Set(owned.map(g => g.platform).filter(Boolean) as string[])];
+
+  // Session analysis
+  const allLogs = played.flatMap(g => g.playLogs || []);
+  const avgSessionHours = allLogs.length > 0
+    ? allLogs.reduce((sum, l) => sum + l.hours, 0) / allLogs.length
+    : played.length > 0 ? played.reduce((sum, g) => sum + getTotalHours(g), 0) / played.length : 2;
+
+  // Game length preference
+  const completedGames = owned.filter(g => g.status === 'Completed');
+  const avgCompletionHours = completedGames.length > 0
+    ? completedGames.reduce((sum, g) => sum + getTotalHours(g), 0) / completedGames.length
+    : 0;
+  let preferredGameLength = '10-30h';
+  if (avgCompletionHours > 60) preferredGameLength = '60h+';
+  else if (avgCompletionHours > 40) preferredGameLength = '40-60h';
+  else if (avgCompletionHours > 20) preferredGameLength = '20-40h';
+  else if (avgCompletionHours > 10) preferredGameLength = '10-20h';
+  else if (avgCompletionHours > 0) preferredGameLength = '<10h';
+
+  // Price range
+  const paidGames = owned.filter(g => g.price > 0);
+  const avgPrice = paidGames.length > 0
+    ? paidGames.reduce((sum, g) => sum + g.price, 0) / paidGames.length
+    : 0;
+  let priceRange = '$0-$20';
+  if (avgPrice > 50) priceRange = '$40-$70+';
+  else if (avgPrice > 30) priceRange = '$20-$50';
+  else if (avgPrice > 15) priceRange = '$15-$30';
+
+  // Top rated games
+  const topGames = [...played]
+    .sort((a, b) => b.rating - a.rating || getTotalHours(b) - getTotalHours(a))
+    .slice(0, 5)
+    .map(g => ({ name: g.name, rating: g.rating, hours: getTotalHours(g), genre: g.genre }));
+
+  const avgRating = played.length > 0
+    ? played.reduce((sum, g) => sum + g.rating, 0) / played.length
+    : 0;
+
+  const completionRate = owned.length > 0
+    ? (completedGames.length / owned.length) * 100
+    : 0;
+
+  return {
+    topGenres,
+    avoidGenres,
+    platforms,
+    avgSessionHours: Math.round(avgSessionHours * 10) / 10,
+    preferredGameLength,
+    priceRange,
+    avgRating: Math.round(avgRating * 10) / 10,
+    topGames,
+    completionRate: Math.round(completionRate),
+    favoriteGenreDetails: genreScores.slice(0, 5).map(g => ({
+      genre: g.genre,
+      avgRating: Math.round(g.avgRating * 10) / 10,
+      avgHours: Math.round(g.avgHours),
+      count: g.count,
+    })),
+  };
 }
