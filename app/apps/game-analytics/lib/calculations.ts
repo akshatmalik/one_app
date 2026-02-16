@@ -8631,3 +8631,141 @@ export function buildTasteProfile(games: Game[]): TasteProfile {
     })),
   };
 }
+
+// ── Discover Tab: Upcoming & Released Helpers ──────────────────────────────
+
+/**
+ * Build RAWG API filters from a taste profile for upcoming/released game discovery.
+ */
+export function buildUpcomingFilters(profile: TasteProfile): { genres: string[]; platforms: string[] } {
+  return {
+    genres: profile.topGenres.slice(0, 5),
+    platforms: profile.platforms,
+  };
+}
+
+/**
+ * Local heuristic scoring for an upcoming game against user's taste profile.
+ * Used as fallback when AI is unavailable.
+ * Returns score (0-10) and a short reason.
+ */
+export function scoreUpcomingMatch(
+  gameName: string,
+  gameGenre: string | undefined,
+  gameRating: number | undefined,
+  gameMetacritic: number | null | undefined,
+  profile: TasteProfile
+): { score: number; reason: string } {
+  let score = 5; // Base score
+  const reasons: string[] = [];
+
+  // Genre match
+  if (gameGenre) {
+    const genreLower = gameGenre.toLowerCase();
+    const topGenresLower = profile.topGenres.map(g => g.toLowerCase());
+    const avoidGenresLower = profile.avoidGenres.map(g => g.toLowerCase());
+
+    if (topGenresLower.some(g => genreLower.includes(g) || g.includes(genreLower))) {
+      score += 2;
+      reasons.push(`Matches your top genre preferences`);
+    }
+    if (avoidGenresLower.some(g => genreLower.includes(g) || g.includes(genreLower))) {
+      score -= 3;
+      reasons.push(`Genre you typically avoid`);
+    }
+  }
+
+  // Metacritic boost
+  if (gameMetacritic) {
+    if (gameMetacritic >= 85) {
+      score += 2;
+      reasons.push(`Critically acclaimed (MC ${gameMetacritic})`);
+    } else if (gameMetacritic >= 75) {
+      score += 1;
+      reasons.push(`Well reviewed (MC ${gameMetacritic})`);
+    }
+  }
+
+  // RAWG community rating boost
+  if (gameRating && gameRating >= 4.0) {
+    score += 1;
+    reasons.push(`Highly rated by community`);
+  }
+
+  score = Math.max(1, Math.min(10, score));
+  const reason = reasons.length > 0 ? reasons.join('. ') + '.' : 'Matches your general gaming profile.';
+
+  return { score, reason };
+}
+
+/**
+ * Categorize a released game recommendation into a display category.
+ */
+export function categorizeRecommendation(
+  gameName: string,
+  gameGenre: string | undefined,
+  gameMetacritic: number | null | undefined,
+  gameRating: number | undefined,
+  profile: TasteProfile,
+  library: Game[]
+): { category: 'hidden-gem' | 'popular-in-genre' | 'because-you-loved' | 'try-something-different' | 'general'; context?: string } {
+  const genreLower = (gameGenre || '').toLowerCase();
+  const topGenresLower = profile.topGenres.map(g => g.toLowerCase());
+
+  // "Try Something Different" — genre not in user's top genres
+  const isNewGenre = genreLower && !topGenresLower.some(g => genreLower.includes(g) || g.includes(genreLower));
+  if (isNewGenre && gameMetacritic && gameMetacritic >= 80) {
+    return { category: 'try-something-different' };
+  }
+
+  // "Because You Loved [Game]" — same genre as a top-rated game
+  const topRated = library
+    .filter(g => g.rating >= 8 && g.status !== 'Wishlist')
+    .sort((a, b) => b.rating - a.rating || getTotalHours(b) - getTotalHours(a));
+
+  if (topRated.length > 0 && genreLower) {
+    const matchingTop = topRated.find(g =>
+      g.genre && g.genre.toLowerCase().includes(genreLower) ||
+      genreLower.includes((g.genre || '').toLowerCase())
+    );
+    if (matchingTop) {
+      return { category: 'because-you-loved', context: matchingTop.name };
+    }
+  }
+
+  // "Hidden Gem" — high rating but not super popular (no metacritic means less mainstream)
+  if (gameRating && gameRating >= 4.0 && (!gameMetacritic || gameMetacritic < 80)) {
+    return { category: 'hidden-gem' };
+  }
+
+  // "Popular in Your Genre" — high metacritic, matches genre
+  if (gameMetacritic && gameMetacritic >= 75 && !isNewGenre) {
+    return { category: 'popular-in-genre' };
+  }
+
+  return { category: 'general' };
+}
+
+/**
+ * Calculate days until a release date. Returns null if date is invalid or in the past.
+ */
+export function getDaysUntilRelease(releaseDate: string | undefined): number | null {
+  if (!releaseDate) return null;
+  const release = new Date(releaseDate);
+  if (isNaN(release.getTime())) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  release.setHours(0, 0, 0, 0);
+  const diff = Math.ceil((release.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+  return diff > 0 ? diff : null;
+}
+
+/**
+ * Determine the release window for an upcoming game.
+ */
+export function getReleaseWindow(releaseDate: string | undefined): 'this-month' | 'next-few-months' | 'later' {
+  const days = getDaysUntilRelease(releaseDate);
+  if (days === null || days <= 30) return 'this-month';
+  if (days <= 90) return 'next-few-months';
+  return 'later';
+}
