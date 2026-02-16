@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { Sparkles, RefreshCw, Loader2, Bookmark, Eye, EyeOff, Undo2, Trash2 } from 'lucide-react';
+import { Sparkles, RefreshCw, Loader2, Bookmark, Eye, EyeOff, Undo2, Trash2, AlertTriangle, X, ChevronDown, ChevronUp } from 'lucide-react';
 import { Game } from '../lib/types';
 import { useRecommendations } from '../hooks/useRecommendations';
 import { TasteProfilePanel } from './TasteProfilePanel';
@@ -23,6 +23,7 @@ export function DiscoverTab({ games, userId, onAddGame }: DiscoverTabProps) {
     loading,
     generating,
     analyzing,
+    error,
     tasteProfile,
     autoProfile,
     profileOverrides,
@@ -41,6 +42,16 @@ export function DiscoverTab({ games, userId, onAddGame }: DiscoverTabProps) {
   const [userPrompt, setUserPrompt] = useState('');
   const [showDismissed, setShowDismissed] = useState(false);
   const [section, setSection] = useState<'recommendations' | 'interested'>('recommendations');
+  const [errorDismissed, setErrorDismissed] = useState(false);
+  const [errorExpanded, setErrorExpanded] = useState(false);
+
+  // Reset error dismissed state when a new error comes in
+  const [lastError, setLastError] = useState<Error | null>(null);
+  if (error && error !== lastError) {
+    setLastError(error);
+    setErrorDismissed(false);
+    setErrorExpanded(false);
+  }
 
   const handleGenerate = useCallback(() => {
     generate(userPrompt || undefined);
@@ -88,6 +99,39 @@ export function DiscoverTab({ games, userId, onAddGame }: DiscoverTabProps) {
 
   return (
     <div className="space-y-5">
+      {/* Error Banner */}
+      {error && !errorDismissed && (
+        <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 space-y-2">
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex items-start gap-2">
+              <AlertTriangle size={14} className="text-red-400 mt-0.5 shrink-0" />
+              <div className="text-xs text-red-300/80">
+                Something went wrong. Tap &quot;Details&quot; to see the full error.
+              </div>
+            </div>
+            <button
+              onClick={() => setErrorDismissed(true)}
+              className="text-red-400/50 hover:text-red-400 shrink-0"
+            >
+              <X size={14} />
+            </button>
+          </div>
+          <button
+            onClick={() => setErrorExpanded(!errorExpanded)}
+            className="flex items-center gap-1 text-[10px] text-red-400/50 hover:text-red-400/80 transition-colors"
+          >
+            {errorExpanded ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
+            {errorExpanded ? 'Hide' : 'Details'}
+          </button>
+          {errorExpanded && (
+            <pre className="text-[10px] text-red-300/60 bg-black/20 rounded-lg p-2 overflow-x-auto whitespace-pre-wrap break-all max-h-48 overflow-y-auto">
+              {error.message}
+              {error.stack && `\n\n${error.stack}`}
+            </pre>
+          )}
+        </div>
+      )}
+
       {/* Ask About a Game */}
       <AskAboutGame onAnalyze={analyzeGame} analyzing={analyzing} />
 

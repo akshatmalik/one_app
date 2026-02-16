@@ -69,7 +69,8 @@ export function useRecommendations(userId: string | null, games: Game[]) {
       const data = await recommendationRepository.getAll();
       setRecommendations(data);
     } catch (e) {
-      setError(e as Error);
+      const err = e instanceof Error ? e : new Error(String(e));
+      setError(err);
     } finally {
       setLoading(false);
     }
@@ -119,14 +120,15 @@ export function useRecommendations(userId: string | null, games: Game[]) {
     setError(null);
     try {
       const aiRecs = interestedNames.length > 0
-        ? await generateRefinedRecommendations(tasteProfile, existingGameNames, dismissedNames, interestedNames, userPrompt)
-        : await generateRecommendations(tasteProfile, existingGameNames, dismissedNames, interestedNames, userPrompt);
+        ? await generateRefinedRecommendations(tasteProfile, games, existingGameNames, dismissedNames, interestedNames, userPrompt)
+        : await generateRecommendations(tasteProfile, games, existingGameNames, dismissedNames, interestedNames, userPrompt);
 
       // Enrich with RAWG data and save each
       const saved = await Promise.all(aiRecs.map(enrichAndSave));
       setRecommendations(prev => [...saved, ...prev]);
     } catch (e) {
-      setError(e as Error);
+      const err = e instanceof Error ? e : new Error(String(e));
+      setError(err);
     } finally {
       setGenerating(false);
     }
@@ -135,12 +137,17 @@ export function useRecommendations(userId: string | null, games: Game[]) {
   // "Would I like this game?" analysis
   const analyzeGame = useCallback(async (gameName: string): Promise<GameAnalysis> => {
     setAnalyzing(true);
+    setError(null);
     try {
-      return await analyzeGameForUser(gameName, tasteProfile, existingGameNames, interestedNames);
+      return await analyzeGameForUser(gameName, tasteProfile, games, existingGameNames, interestedNames);
+    } catch (e) {
+      const err = e instanceof Error ? e : new Error(String(e));
+      setError(err);
+      return { wouldLike: false, confidence: 0, reason: err.message, concerns: '' };
     } finally {
       setAnalyzing(false);
     }
-  }, [tasteProfile, existingGameNames, interestedNames]);
+  }, [tasteProfile, games, existingGameNames, interestedNames]);
 
   // Update recommendation status
   const updateStatus = useCallback(async (id: string, status: RecommendationStatus) => {
