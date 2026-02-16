@@ -2,8 +2,9 @@
 
 import { getAI, getGenerativeModel, GoogleAIBackend } from 'firebase/ai';
 import { initializeApp, getApps } from 'firebase/app';
-import { TasteProfile, GameRecommendation, Game } from './types';
+import { TasteProfile, GameRecommendation, Game, RecommendationCategory } from './types';
 import { getTotalHours } from './calculations';
+import { RAWGGameData } from './rawg-api';
 
 const firebaseConfig = {
   apiKey: "AIzaSyBS3IVvszDrm_zjjXu8TATgs1H-FlegHtM",
@@ -300,5 +301,131 @@ Respond in this exact JSON format, nothing else:
     !existingGameNames.some(n => n.toLowerCase() === r.gameName.toLowerCase()) &&
     !dismissedNames.some(n => n.toLowerCase() === r.gameName.toLowerCase()) &&
     !interestedNames.some(n => n.toLowerCase() === r.gameName.toLowerCase())
+  );
+}
+
+// ── Upcoming Games Scoring ──────────────────────────────────────────────────
+
+export interface UpcomingGameScore {
+  gameName: string;
+  hypeScore: number;         // 1-10
+  reason: string;            // Personalized "why you'd be hyped for this"
+}
+
+/**
+ * Score a batch of upcoming games against the user's taste profile using AI.
+ * Returns personalized hype scores and reasons.
+ */
+export async function scoreUpcomingGames(
+  upcomingGames: Array<{ name: string; genre?: string; metacritic?: number | null; rating?: number; released?: string }>,
+  profile: TasteProfile,
+  games: Game[]
+): Promise<UpcomingGameScore[]> {
+  if (upcomingGames.length === 0) return [];
+
+  const model = getAIModel();
+
+  const profileContext = buildProfileContext(profile, games, [], []);
+
+  const gameList = upcomingGames.map(g => {
+    const parts = [g.name];
+    if (g.genre) parts.push(`genre: ${g.genre}`);
+    if (g.metacritic) parts.push(`MC: ${g.metacritic}`);
+    if (g.rating) parts.push(`rating: ${g.rating}/5`);
+    if (g.released) parts.push(`releasing: ${g.released}`);
+    return parts.join(' | ');
+  }).join('\n');
+
+  const prompt = `${profileContext}
+
+UPCOMING/UNRELEASED GAMES TO SCORE:
+${gameList}
+
+For each upcoming game, score how well it matches this gamer's taste profile on a scale of 1-10.
+Write a short personalized "why you'd be hyped" reason that references THEIR specific games, genres, and patterns.
+
+IMPORTANT:
+- Base scores on genre alignment, franchise connections, and play style compatibility
+- Reference specific games from their library in the reasons
+- Be honest — if it's not a good match, give it a low score
+- Score 8+ only for games that strongly match their demonstrated preferences
+
+Respond in this exact JSON format, nothing else:
+[
+  { "gameName": "Game Title", "hypeScore": 8, "reason": "Personalized reason referencing their library" }
+]`;
+
+  const result = await model.generateContent(prompt);
+  const text = result.response.text().trim();
+  const jsonMatch = text.match(/\[[\s\S]*\]/);
+  if (!jsonMatch) return [];
+
+  try {
+    return JSON.parse(jsonMatch[0]) as UpcomingGameScore[];
+  } catch {
+    return [];
+  }
+}
+
+// ── Categorized Released Recommendations ────────────────────────────────────
+
+export interface CategorizedRecommendation extends AIRecommendation {
+  category: RecommendationCategory;
+  categoryContext?: string; // e.g. "Elden Ring" for "Because You Loved..."
+}
+
+/**
+ * Generate recommendations with AI-assigned categories.
+ * Categories: hidden-gem, popular-in-genre, because-you-loved, try-something-different, general
+ */
+export async function generateCategorizedRecommendations(
+  profile: TasteProfile,
+  games: Game[],
+  existingGameNames: string[],
+  dismissedNames: string[],
+  interestedNames: string[],
+  userPrompt?: string,
+  count: number = 8
+): Promise<CategorizedRecommendation[]> {
+  const model = getAIModel();
+
+  const profileContext = buildProfileContext(profile, games, dismissedNames, interestedNames, userPrompt);
+
+  const topGames = games
+    .filter(g => g.rating >= 8 && g.status !== 'Wishlist')
+    .sort((a, b) => b.rating - a.rating)
+    .slice(0, 5)
+    .map(g => g.name);
+
+  const prompt = `${profileContext}
+
+Suggest exactly ${count} real games organized into these categories:
+
+1. "because-you-loved" (2-3 games) — Similar to their highest rated games (${topGames.join(', ')}). Include "categoryContext" with the specific game name it connects to.
+2. "hidden-gem" (2 games) — Lesser-known gems that match their taste but they likely haven't heard of.
+3. "popular-in-genre" (2 games) — Well-known, critically acclaimed games in their favorite genres they haven't played.
+4. "try-something-different" (1-2 games) — A genre they DON'T usually play but would likely enjoy based on their patterns.
+
+For each game, write a personalized "why you'd love this" reason referencing THEIR specific data.
+
+IMPORTANT:
+- Only suggest REAL games that actually exist and are ALREADY RELEASED
+- Do NOT suggest games already in their library, wishlist, or previously dismissed
+- Each suggestion must be a different game
+
+Respond in this exact JSON format, nothing else:
+[
+  { "gameName": "Game Title", "genre": "Genre", "platform": "Best Platform", "reason": "Personalized reason", "category": "because-you-loved", "categoryContext": "Elden Ring" }
+]`;
+
+  const result = await model.generateContent(prompt);
+  const text = result.response.text().trim();
+  const jsonMatch = text.match(/\[[\s\S]*\]/);
+  if (!jsonMatch) throw new Error('AI returned no recommendations. Response: ' + text.slice(0, 200));
+
+  const parsed = JSON.parse(jsonMatch[0]) as CategorizedRecommendation[];
+  return parsed.filter(r =>
+    !existingGameNames.some(n => n.toLowerCase() === r.gameName.toLowerCase()) &&
+    !dismissedNames.some(n => n.toLowerCase() === r.gameName.toLowerCase())
   );
 }

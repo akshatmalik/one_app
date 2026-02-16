@@ -143,7 +143,11 @@ export interface GameRepository {
 
 // ── Game Recommendations ──────────────────────────────────────────
 
-export type RecommendationStatus = 'suggested' | 'interested' | 'wishlisted' | 'played' | 'dismissed';
+export type RecommendationStatus = 'suggested' | 'interested' | 'watching' | 'wishlisted' | 'played' | 'dismissed';
+
+export type ReleaseWindow = 'this-month' | 'next-few-months' | 'later';
+
+export type RecommendationCategory = 'hidden-gem' | 'popular-in-genre' | 'because-you-loved' | 'try-something-different' | 'general';
 
 export interface GameRecommendation {
   id: string;
@@ -157,6 +161,11 @@ export interface GameRecommendation {
   releaseDate?: string;
   aiReason: string;           // "Why you'd love this" — personalized to user's library
   status: RecommendationStatus;
+  isUpcoming?: boolean;       // true for unreleased/upcoming games
+  releaseWindow?: ReleaseWindow; // Time bucket for upcoming games
+  hypeScore?: number;         // 1-10 AI-generated match score for upcoming games
+  recommendationCategory?: RecommendationCategory; // Category for released game recommendations
+  categoryContext?: string;   // e.g. "Because You Loved Elden Ring" — the specific game/context
   suggestedAt: string;
   respondedAt?: string;
   createdAt: string;

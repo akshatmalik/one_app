@@ -332,6 +332,167 @@ export async function browseRAWGGames(options: BrowseOptions): Promise<RAWGGameD
   }
 }
 
+// ── Upcoming & Released Game Discovery ──────────────────────────────────────
+
+const UPCOMING_CACHE_PREFIX = 'rawg_upcoming_';
+const UPCOMING_CACHE_EXPIRY = 24 * 60 * 60 * 1000; // 24 hours
+
+interface UpcomingCacheData {
+  games: RAWGGameData[];
+  timestamp: number;
+}
+
+function getUpcomingFromCache(key: string): RAWGGameData[] | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const cached = localStorage.getItem(`${UPCOMING_CACHE_PREFIX}${key}`);
+    if (!cached) return null;
+    const parsed: UpcomingCacheData = JSON.parse(cached);
+    if (Date.now() - parsed.timestamp < UPCOMING_CACHE_EXPIRY) {
+      return parsed.games;
+    }
+    localStorage.removeItem(`${UPCOMING_CACHE_PREFIX}${key}`);
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function saveUpcomingToCache(key: string, games: RAWGGameData[]): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(`${UPCOMING_CACHE_PREFIX}${key}`, JSON.stringify({
+      games,
+      timestamp: Date.now(),
+    }));
+  } catch {
+    // localStorage full — ignore
+  }
+}
+
+export interface UpcomingFilters {
+  genres: string[];     // App genre names (mapped to RAWG slugs internally)
+  platforms: string[];  // App platform names (mapped to RAWG IDs internally)
+}
+
+/**
+ * Fetch upcoming/unreleased games filtered by user's taste profile.
+ * Returns games in three time windows: this-month, next-few-months, later.
+ */
+export async function getUpcomingGames(
+  filters: UpcomingFilters,
+  ownedGameNames: string[]
+): Promise<{ thisMonth: RAWGGameData[]; nextFewMonths: RAWGGameData[]; later: RAWGGameData[] }> {
+  const today = new Date();
+  const todayStr = today.toISOString().slice(0, 10);
+
+  // Time windows
+  const oneMonthOut = new Date(today);
+  oneMonthOut.setMonth(oneMonthOut.getMonth() + 1);
+  const oneMonthStr = oneMonthOut.toISOString().slice(0, 10);
+
+  const threeMonthsOut = new Date(today);
+  threeMonthsOut.setMonth(threeMonthsOut.getMonth() + 3);
+  const threeMonthsStr = threeMonthsOut.toISOString().slice(0, 10);
+
+  const oneYearOut = new Date(today);
+  oneYearOut.setFullYear(oneYearOut.getFullYear() + 1);
+  const oneYearStr = oneYearOut.toISOString().slice(0, 10);
+
+  const genreSlugs = getRAWGGenreSlugs(filters.genres);
+  const platformIds = filters.platforms
+    .map(p => PLATFORM_TO_RAWG_ID[p])
+    .filter(Boolean)
+    .join(',');
+
+  const ownedLower = new Set(ownedGameNames.map(n => n.toLowerCase()));
+
+  const fetchWindow = async (dateRange: string, cacheKey: string): Promise<RAWGGameData[]> => {
+    const cached = getUpcomingFromCache(cacheKey);
+    if (cached) return cached.filter(g => !ownedLower.has(g.name.toLowerCase()));
+
+    const options: BrowseOptions = {
+      dates: dateRange,
+      ordering: '-added', // Most anticipated first
+      pageSize: 20,
+    };
+    if (genreSlugs) options.genres = genreSlugs;
+    if (platformIds) options.platforms = platformIds;
+
+    const results = await browseRAWGGames(options);
+    saveUpcomingToCache(cacheKey, results);
+    return results.filter(g => !ownedLower.has(g.name.toLowerCase()));
+  };
+
+  // Fetch all three windows (in sequence to respect rate limits)
+  const thisMonth = await fetchWindow(
+    `${todayStr},${oneMonthStr}`,
+    `this-month-${genreSlugs}-${platformIds}`
+  );
+
+  await new Promise(resolve => setTimeout(resolve, 200));
+
+  const nextFewMonths = await fetchWindow(
+    `${oneMonthStr},${threeMonthsStr}`,
+    `next-months-${genreSlugs}-${platformIds}`
+  );
+
+  await new Promise(resolve => setTimeout(resolve, 200));
+
+  const later = await fetchWindow(
+    `${threeMonthsStr},${oneYearStr}`,
+    `later-${genreSlugs}-${platformIds}`
+  );
+
+  return { thisMonth, nextFewMonths, later };
+}
+
+/**
+ * Fetch released games for recommendation categories.
+ * Returns high-quality released games in user's preferred genres (excluding owned).
+ */
+export async function getReleasedRecommendations(
+  filters: UpcomingFilters,
+  ownedGameNames: string[],
+  stretchGenre?: string
+): Promise<RAWGGameData[]> {
+  const today = new Date();
+  const todayStr = today.toISOString().slice(0, 10);
+  const fiveYearsAgo = new Date(today);
+  fiveYearsAgo.setFullYear(fiveYearsAgo.getFullYear() - 5);
+  const fiveYearsStr = fiveYearsAgo.toISOString().slice(0, 10);
+
+  const allGenres = [...filters.genres];
+  if (stretchGenre && !allGenres.includes(stretchGenre)) {
+    allGenres.push(stretchGenre);
+  }
+
+  const genreSlugs = getRAWGGenreSlugs(allGenres);
+  const platformIds = filters.platforms
+    .map(p => PLATFORM_TO_RAWG_ID[p])
+    .filter(Boolean)
+    .join(',');
+
+  const ownedLower = new Set(ownedGameNames.map(n => n.toLowerCase()));
+
+  const cacheKey = `released-${genreSlugs}-${platformIds}`;
+  const cached = getUpcomingFromCache(cacheKey);
+  if (cached) return cached.filter(g => !ownedLower.has(g.name.toLowerCase()));
+
+  const options: BrowseOptions = {
+    dates: `${fiveYearsStr},${todayStr}`,
+    metacritic: '70,100',
+    ordering: '-metacritic',
+    pageSize: 30,
+  };
+  if (genreSlugs) options.genres = genreSlugs;
+  if (platformIds) options.platforms = platformIds;
+
+  const results = await browseRAWGGames(options);
+  saveUpcomingToCache(cacheKey, results);
+  return results.filter(g => !ownedLower.has(g.name.toLowerCase()));
+}
+
 /**
  * Clear all RAWG caches (useful for debugging or forcing refresh)
  */
