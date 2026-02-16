@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Bookmark, Heart, Check, X, Star, ChevronDown, ChevronUp, Calendar, DollarSign, Eye, Clock, Flame, TrendingUp } from 'lucide-react';
+import { Bookmark, Heart, Check, X, Star, Eye, Clock, Flame, TrendingUp } from 'lucide-react';
 import { GameRecommendation, RecommendationCategory } from '../lib/types';
 import { getDaysUntilRelease } from '../lib/calculations';
 import clsx from 'clsx';

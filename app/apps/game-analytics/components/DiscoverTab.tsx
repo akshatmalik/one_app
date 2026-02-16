@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from 'react';
 import {
-  Sparkles, RefreshCw, Loader2, Bookmark, Eye, EyeOff, Undo2, Trash2,
+  Sparkles, Loader2, Bookmark, Eye, EyeOff, Undo2, Trash2,
   AlertTriangle, X, ChevronDown, ChevronUp, Clock, Rocket, Compass, Calendar,
 } from 'lucide-react';
 import { Game, GameRecommendation, RecommendationCategory } from '../lib/types';
@@ -61,7 +61,6 @@ export function DiscoverTab({ games, userId, onAddGame }: DiscoverTabProps) {
     markWishlisted,
     markPlayed,
     undoDismiss,
-    deleteRecommendation,
     upcomingSuggested,
     upcomingThisMonth,
     upcomingNextFewMonths,

@@ -3,18 +3,16 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Game, GameRecommendation, TasteProfile, RecommendationStatus } from '../lib/types';
 import { recommendationRepository } from '../lib/recommendation-storage';
-import { buildTasteProfile, buildUpcomingFilters, scoreUpcomingMatch, categorizeRecommendation, getReleaseWindow } from '../lib/calculations';
+import { buildTasteProfile, buildUpcomingFilters, scoreUpcomingMatch } from '../lib/calculations';
 import {
-  generateRecommendations,
   generateRefinedRecommendations,
   generateCategorizedRecommendations,
   analyzeGameForUser,
   scoreUpcomingGames,
   AIRecommendation,
   GameAnalysis,
-  CategorizedRecommendation,
 } from '../lib/ai-recommendation-service';
-import { searchRAWGGame, getUpcomingGames, getReleasedRecommendations, RAWGGameData } from '../lib/rawg-api';
+import { searchRAWGGame, getUpcomingGames } from '../lib/rawg-api';
 
 export function useRecommendations(userId: string | null, games: Game[]) {
   const [recommendations, setRecommendations] = useState<GameRecommendation[]>([]);
