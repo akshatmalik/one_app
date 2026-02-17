@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, Compass } from 'lucide-react';
+import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical } from 'lucide-react';
 import { useGames } from './hooks/useGames';
 import { useAnalytics, GameWithMetrics } from './hooks/useAnalytics';
 import { useBudget } from './hooks/useBudget';
@@ -19,7 +19,7 @@ import { gameRepository } from './lib/storage';
 import { BASELINE_GAMES_2025 } from './data/baseline-games';
 import { useAuthContext } from '@/lib/AuthContext';
 import { useToast } from '@/components/Toast';
-import { getROIRating, getWeekStatsForOffset, getGamesPlayedInTimeRange, getCompletionProbability, getGameHealthDot, getRelativeTime, getDaysContext, getSessionMomentum, getValueTrajectory, getGameSmartOneLiner, getFranchiseInfo, getProgressPercent, getShelfLife, parseLocalDate, getCardRarity, getRelationshipStatus, getGameStreak, getHeroNumber, getCardFreshness, getGameSections, getCardBackData, getContextualWhisper, getLibraryRank, getCardMoodPulse, getProgressRingData, getStatPopoverData } from './lib/calculations';
+import { getROIRating, getWeekStatsForOffset, getGamesPlayedInTimeRange, getCompletionProbability, getGameHealthDot, getRelativeTime, getDaysContext, getSessionMomentum, getValueTrajectory, getGameSmartOneLiner, getFranchiseInfo, getProgressPercent, getShelfLife, parseLocalDate, getCardRarity, getRelationshipStatus, getGameStreak, getHeroNumber, getCardFreshness, getGameSections, getCardBackData, getContextualWhisper, getLibraryRank, getCardMoodPulse, getProgressRingData, getStatPopoverData, getWeekRecapData, getSmartNudges, getGamingCreditScore, getRotationStats, getSpendingForecast, getSpendingByMonth } from './lib/calculations';
 import { OnThisDayCard } from './components/OnThisDayCard';
 import { ActivityPulse } from './components/ActivityPulse';
 import { RandomPicker } from './components/RandomPicker';
@@ -84,6 +84,57 @@ export default function GameAnalyticsPage() {
     if (typeof window === 'undefined') return false;
     return localStorage.getItem('ga-group-sections') === 'true';
   });
+  const [recapCollapsed, setRecapCollapsed] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem('ga-recap-collapsed') === 'true';
+  });
+  const [showCommandPalette, setShowCommandPalette] = useState(false);
+
+  // Week recap data for header strip
+  const weekRecap = useMemo(() => {
+    if (games.length === 0) return null;
+    return getWeekRecapData(games);
+  }, [games]);
+
+  // Smart nudges for the title subtitle
+  const smartNudges = useMemo(() => getSmartNudges(games), [games]);
+  const [nudgeIndex, setNudgeIndex] = useState(0);
+  // Rotate nudges every 8 seconds
+  useEffect(() => {
+    if (smartNudges.length <= 1) return;
+    const interval = setInterval(() => {
+      setNudgeIndex(prev => (prev + 1) % smartNudges.length);
+    }, 8000);
+    return () => clearInterval(interval);
+  }, [smartNudges.length]);
+
+  // Gaming credit score for stats grid
+  const creditScore = useMemo(() => {
+    if (games.length === 0) return null;
+    return getGamingCreditScore(games);
+  }, [games]);
+
+  // Rotation stats for highlights
+  const rotationStats = useMemo(() => {
+    if (games.length === 0) return null;
+    return getRotationStats(games);
+  }, [games]);
+
+  // This month's spending
+  const monthSpending = useMemo(() => {
+    const now = new Date();
+    const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const byMonth = getSpendingByMonth(games);
+    return byMonth[monthKey] || 0;
+  }, [games]);
+
+  // Spending forecast
+  const forecast = useMemo(() => {
+    if (games.length === 0) return null;
+    const year = new Date().getFullYear();
+    const currentBudget = budgets.find(b => b.year === year);
+    return getSpendingForecast(games, year, currentBudget?.yearlyBudget);
+  }, [games, budgets]);
 
   // Calculate week and month data for AI chat
   const weekData = useMemo(() => {
@@ -281,15 +332,27 @@ export default function GameAnalyticsPage() {
       {/* Header */}
       <div className="px-6 pt-8 pb-6 border-b border-white/5">
         <div className="max-w-6xl mx-auto">
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h1 className="text-3xl font-bold text-white tracking-tight">Games</h1>
-              <div className="flex items-center gap-3 mt-1">
-                <p className="text-white/40 text-sm">Track your library and analyze value</p>
-                {games.length > 0 && <ActivityPulse games={games} />}
+          {/* Title Row — Dynamic */}
+          <div className="flex items-center justify-between mb-4">
+            <div className="min-w-0 flex-1">
+              <h1 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">
+                {games.length > 0 ? (
+                  <>Your <span className="text-purple-400">{summary.totalGames}</span>-Game Collection</>
+                ) : (
+                  'Games'
+                )}
+              </h1>
+              <div className="flex items-center gap-3 mt-1 min-w-0">
+                {smartNudges.length > 0 ? (
+                  <p className="text-white/40 text-sm italic truncate transition-opacity duration-500">
+                    {smartNudges[nudgeIndex % smartNudges.length]?.text}
+                  </p>
+                ) : (
+                  <p className="text-white/40 text-sm">Track your library and analyze value</p>
+                )}
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-shrink-0">
               {games.length === 0 && (
                 <button
                   onClick={handleSeedData}
@@ -299,34 +362,197 @@ export default function GameAnalyticsPage() {
                   Load Samples
                 </button>
               )}
-              {games.filter(g => g.status !== 'Wishlist' && g.status !== 'Completed' && g.status !== 'Abandoned').length > 0 && (
+              {/* Command Palette */}
+              <div className="relative">
                 <button
-                  onClick={() => setShowRandomPicker(true)}
-                  className="flex items-center gap-2 px-3 py-2 bg-white/5 text-white/60 hover:text-purple-400 hover:bg-purple-500/10 rounded-lg transition-all text-sm font-medium"
-                  title="What should I play?"
+                  onClick={() => setShowCommandPalette(!showCommandPalette)}
+                  className="flex items-center gap-2 px-3 py-2 bg-white/5 text-white/60 hover:text-white/80 rounded-lg transition-all text-sm"
+                  title="More actions"
                 >
-                  <Sparkles size={16} />
+                  <MoreVertical size={16} />
                 </button>
-              )}
-              <button
-                onClick={() => setShowBulkWishlist(true)}
-                className="flex items-center gap-2 px-3 py-2 bg-white/5 text-white/60 hover:text-purple-400 hover:bg-purple-500/10 rounded-lg transition-all text-sm font-medium"
-                title="Bulk add to wishlist"
-              >
-                <Heart size={16} />
-                <span className="hidden sm:inline">Wishlist</span>
-              </button>
+                {showCommandPalette && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setShowCommandPalette(false)} />
+                    <div className="absolute right-0 top-full mt-1 z-50 bg-[#1a1a2e] border border-white/10 rounded-xl shadow-2xl py-1 min-w-[180px]">
+                      {games.filter(g => g.status !== 'Wishlist' && g.status !== 'Completed' && g.status !== 'Abandoned').length > 0 && (
+                        <button
+                          onClick={() => { setShowRandomPicker(true); setShowCommandPalette(false); }}
+                          className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white/70 hover:text-white hover:bg-white/5 transition-all"
+                        >
+                          <Sparkles size={14} /> Random Pick
+                        </button>
+                      )}
+                      <button
+                        onClick={() => { setShowBulkWishlist(true); setShowCommandPalette(false); }}
+                        className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white/70 hover:text-white hover:bg-white/5 transition-all"
+                      >
+                        <Heart size={14} /> Bulk Wishlist
+                      </button>
+                      {games.length === 0 && (
+                        <button
+                          onClick={() => { handleSeedData(); setShowCommandPalette(false); }}
+                          className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white/70 hover:text-white hover:bg-white/5 transition-all"
+                        >
+                          <Sparkles size={14} /> Load Samples
+                        </button>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
               <button
                 onClick={() => setIsFormOpen(true)}
                 className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-500 transition-all text-sm font-medium"
               >
                 <Plus size={16} />
-                Add Game
+                <span className="hidden sm:inline">Add Game</span>
               </button>
             </div>
           </div>
 
-          {/* Stats Overview — Collapsible */}
+          {/* Tier 1: This Week Recap Strip — Collapsible */}
+          {games.length > 0 && weekRecap && (
+            <div className="mb-4">
+              <button
+                onClick={() => {
+                  const next = !recapCollapsed;
+                  setRecapCollapsed(next);
+                  localStorage.setItem('ga-recap-collapsed', String(next));
+                }}
+                className="flex items-center gap-2 text-xs text-white/40 hover:text-white/60 transition-colors mb-2"
+              >
+                {recapCollapsed ? <ChevronDown size={12} /> : <ChevronUp size={12} />}
+                <span>{recapCollapsed ? 'Show recap' : 'This Week'}</span>
+              </button>
+
+              {recapCollapsed ? (
+                /* Collapsed: single-line Activity Pulse summary */
+                <div className="flex items-center gap-3 px-3 py-2 bg-white/[0.02] rounded-lg border border-white/5">
+                  <div className="relative flex items-center justify-center">
+                    <div
+                      className={clsx('w-2.5 h-2.5 rounded-full', {
+                        'animate-pulse': weekRecap.pulse.pulseSpeed === 'slow',
+                      })}
+                      style={{ backgroundColor: weekRecap.pulse.color }}
+                    />
+                    {weekRecap.pulse.pulseSpeed === 'fast' && (
+                      <div className="absolute w-2.5 h-2.5 rounded-full animate-ping" style={{ backgroundColor: weekRecap.pulse.color, opacity: 0.5 }} />
+                    )}
+                    {weekRecap.pulse.pulseSpeed === 'medium' && (
+                      <div className="absolute w-2.5 h-2.5 rounded-full animate-pulse" style={{ backgroundColor: weekRecap.pulse.color, opacity: 0.3 }} />
+                    )}
+                  </div>
+                  <span className="text-xs text-white/50">{weekRecap.pulse.level}</span>
+                  <span className="text-xs text-white/30">·</span>
+                  <span className="text-xs text-white/50">{weekRecap.thisWeek.totalHours.toFixed(1)}h this week</span>
+                  {weekRecap.streak > 0 && (
+                    <>
+                      <span className="text-xs text-white/30">·</span>
+                      <span className="text-xs text-orange-400/80">{weekRecap.streak}d streak</span>
+                    </>
+                  )}
+                </div>
+              ) : (
+                /* Expanded: full recap strip */
+                <div className="bg-gradient-to-r from-white/[0.03] to-white/[0.01] rounded-xl border border-white/5 p-4">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-4">
+                    {/* Activity Pulse */}
+                    <div className="flex items-center gap-3">
+                      <div className="relative flex items-center justify-center">
+                        <div
+                          className={clsx('w-3 h-3 rounded-full', {
+                            'animate-pulse': weekRecap.pulse.pulseSpeed === 'slow',
+                          })}
+                          style={{ backgroundColor: weekRecap.pulse.color }}
+                        />
+                        {weekRecap.pulse.pulseSpeed === 'fast' && (
+                          <div className="absolute w-3 h-3 rounded-full animate-ping" style={{ backgroundColor: weekRecap.pulse.color, opacity: 0.5 }} />
+                        )}
+                        {weekRecap.pulse.pulseSpeed === 'medium' && (
+                          <div className="absolute w-3 h-3 rounded-full animate-pulse" style={{ backgroundColor: weekRecap.pulse.color, opacity: 0.3 }} />
+                        )}
+                      </div>
+                      <div>
+                        <div className="text-sm font-medium text-white/80" style={{ color: weekRecap.pulse.color }}>
+                          {weekRecap.pulse.level}
+                        </div>
+                        <div className="text-[10px] text-white/30">{weekRecap.pulse.daysActive}d active this week</div>
+                      </div>
+                    </div>
+
+                    {/* Hours this week + delta */}
+                    <div>
+                      <div className="text-lg font-semibold text-white/90">
+                        {weekRecap.thisWeek.totalHours.toFixed(1)}h
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className="text-[10px] text-white/30">vs last week</span>
+                        {weekRecap.hoursDelta !== 0 && (
+                          <span className={clsx('text-[10px] font-medium flex items-center', weekRecap.hoursDelta > 0 ? 'text-emerald-400' : 'text-red-400')}>
+                            {weekRecap.hoursDelta > 0 ? <ArrowUpRight size={10} /> : <ArrowDownRight size={10} />}
+                            {Math.abs(weekRecap.hoursDelta).toFixed(1)}h
+                          </span>
+                        )}
+                        {weekRecap.hoursDelta === 0 && <span className="text-[10px] text-white/20"><Minus size={10} /></span>}
+                      </div>
+                    </div>
+
+                    {/* Games + Sessions */}
+                    <div>
+                      <div className="text-lg font-semibold text-white/90">
+                        {weekRecap.thisWeek.uniqueGames} <span className="text-xs text-white/30 font-normal">games</span>
+                      </div>
+                      <div className="text-[10px] text-white/30">
+                        {weekRecap.thisWeek.totalSessions} session{weekRecap.thisWeek.totalSessions !== 1 ? 's' : ''}
+                        {weekRecap.sessionsDelta !== 0 && (
+                          <span className={clsx('ml-1', weekRecap.sessionsDelta > 0 ? 'text-emerald-400/60' : 'text-red-400/60')}>
+                            ({weekRecap.sessionsDelta > 0 ? '+' : ''}{weekRecap.sessionsDelta})
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Streak */}
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        {weekRecap.streak > 0 && <Flame size={14} className="text-orange-400" />}
+                        <span className="text-lg font-semibold text-white/90">
+                          {weekRecap.streak > 0 ? `${weekRecap.streak}d` : '—'}
+                        </span>
+                      </div>
+                      <div className="text-[10px] text-white/30">
+                        {weekRecap.streak > 0 ? 'streak' : 'no streak'}
+                      </div>
+                    </div>
+
+                    {/* Top game this week */}
+                    {weekRecap.thisWeek.mostPlayedGame && (
+                      <div className="col-span-2 sm:col-span-1 flex items-center gap-2">
+                        {weekRecap.thisWeek.mostPlayedGame.thumbnail && (
+                          <img
+                            src={weekRecap.thisWeek.mostPlayedGame.thumbnail}
+                            alt=""
+                            className="w-8 h-8 rounded-md object-cover flex-shrink-0"
+                          />
+                        )}
+                        <div className="min-w-0">
+                          <div className="text-xs font-medium text-white/70 truncate">
+                            {weekRecap.thisWeek.mostPlayedGame.name}
+                          </div>
+                          <div className="text-[10px] text-white/30">
+                            {weekRecap.thisWeek.mostPlayedGame.hours.toFixed(1)}h this week
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Tier 2: Redesigned Stats Grid — Collapsible */}
           <div>
             <button
               onClick={() => {
@@ -336,42 +562,156 @@ export default function GameAnalyticsPage() {
               }}
               className="flex items-center gap-2 text-xs text-white/40 hover:text-white/60 transition-colors mb-2"
             >
-              {statsCollapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
-              <span>{statsCollapsed ? 'Show stats' : 'Hide stats'}</span>
+              {statsCollapsed ? <ChevronDown size={12} /> : <ChevronUp size={12} />}
+              <span>{statsCollapsed ? 'Show stats' : 'Stats'}</span>
             </button>
 
             {!statsCollapsed && (
               <>
-                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-                  <StatCard icon={<Gamepad2 size={16} />} label="Games" value={summary.totalGames} />
-                  <StatCard icon={<DollarSign size={16} />} label="Spent" value={`$${summary.totalSpent.toFixed(0)}`} />
-                  <StatCard icon={<Clock size={16} />} label="Hours" value={summary.totalHours.toFixed(0)} />
-                  <StatCard icon={<TrendingUp size={16} />} label="$/Hour" value={`$${summary.averageCostPerHour.toFixed(2)}`} />
-                  <StatCard icon={<Star size={16} />} label="Avg Rating" value={summary.averageRating.toFixed(1)} />
-                  <StatCard icon={<Eye size={16} />} label="Wishlist" value={summary.wishlistCount} accent />
-                </div>
-
-                {/* Highlights */}
-                {(summary.bestValue || summary.mostPlayed || summary.highestRated) && (
-                  <div className="mt-4 flex flex-wrap gap-3">
-                    {summary.bestValue && (
-                      <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 rounded-lg">
-                        <Trophy size={14} className="text-emerald-400" />
-                        <span className="text-xs text-white/60">Best Value:</span>
-                        <span className="text-xs text-emerald-400 font-medium">{summary.bestValue.name}</span>
-                        <span className="text-xs text-white/40">${summary.bestValue.costPerHour.toFixed(2)}/hr</span>
-                      </div>
-                    )}
-                    {summary.mostPlayed && (
-                      <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-500/10 rounded-lg">
-                        <Flame size={14} className="text-blue-400" />
-                        <span className="text-xs text-white/60">Most Played:</span>
-                        <span className="text-xs text-blue-400 font-medium">{summary.mostPlayed.name}</span>
-                        <span className="text-xs text-white/40">{summary.mostPlayed.hours}h</span>
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                  {/* Hours — with weekly/monthly context */}
+                  <div className="p-3 rounded-xl border bg-white/[0.02] border-white/5">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-white/40"><Clock size={16} /></span>
+                      <span className="text-xs text-white/40">Hours</span>
+                    </div>
+                    <div className="text-lg font-semibold text-white/90">{summary.totalHours.toFixed(0)}</div>
+                    {weekRecap && (
+                      <div className="text-[10px] text-white/30 mt-0.5">
+                        +{weekRecap.thisWeek.totalHours.toFixed(1)}h this week · {weekRecap.thisMonth.totalHours.toFixed(0)}h this month
                       </div>
                     )}
                   </div>
-                )}
+
+                  {/* Spent — with monthly context + forecast */}
+                  <div className="p-3 rounded-xl border bg-white/[0.02] border-white/5">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-white/40"><DollarSign size={16} /></span>
+                      <span className="text-xs text-white/40">Spent</span>
+                    </div>
+                    <div className="text-lg font-semibold text-white/90">${summary.totalSpent.toFixed(0)}</div>
+                    <div className="text-[10px] text-white/30 mt-0.5">
+                      ${monthSpending.toFixed(0)} this month
+                      {forecast && <> · ~${forecast.projectedAnnual.toFixed(0)} projected</>}
+                    </div>
+                  </div>
+
+                  {/* Collection — with status breakdown */}
+                  <div className="p-3 rounded-xl border bg-white/[0.02] border-white/5">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-white/40"><Gamepad2 size={16} /></span>
+                      <span className="text-xs text-white/40">Collection</span>
+                    </div>
+                    <div className="text-lg font-semibold text-white/90">{summary.totalGames}</div>
+                    <div className="text-[10px] text-white/30 mt-0.5">
+                      {summary.inProgressCount} active · {summary.completedCount} done · {summary.notStartedCount} backlog
+                    </div>
+                  </div>
+
+                  {/* Value — with trend */}
+                  <div className="p-3 rounded-xl border bg-white/[0.02] border-white/5">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-white/40"><TrendingUp size={16} /></span>
+                      <span className="text-xs text-white/40">Value</span>
+                    </div>
+                    <div className="text-lg font-semibold text-white/90">${summary.averageCostPerHour.toFixed(2)}<span className="text-xs text-white/30 font-normal">/hr</span></div>
+                    <div className="text-[10px] text-white/30 mt-0.5">
+                      {summary.averageCostPerHour <= 3.5 ? (
+                        <span className="text-emerald-400/60">Better than movies ($12/hr)</span>
+                      ) : summary.averageCostPerHour <= 5 ? (
+                        <span className="text-yellow-400/60">Fair — room to improve</span>
+                      ) : (
+                        <span className="text-red-400/60">Above average cost</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Completion — with recent */}
+                  <div className="p-3 rounded-xl border bg-white/[0.02] border-white/5">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-white/40"><Check size={16} /></span>
+                      <span className="text-xs text-white/40">Completion</span>
+                    </div>
+                    <div className="text-lg font-semibold text-white/90">{(summary.completionRate * 100).toFixed(0)}%</div>
+                    <div className="text-[10px] text-white/30 mt-0.5">
+                      {summary.completedCount} of {summary.ownedCount} owned
+                      {summary.abandonedCount > 0 && <> · {summary.abandonedCount} abandoned</>}
+                    </div>
+                  </div>
+
+                  {/* Gaming Score — credit score */}
+                  {creditScore ? (
+                    <div className="p-3 rounded-xl border bg-white/[0.02] border-white/5">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-white/40"><Shield size={16} /></span>
+                        <span className="text-xs text-white/40">Score</span>
+                      </div>
+                      <div className="text-lg font-semibold" style={{ color: creditScore.color }}>{creditScore.score}</div>
+                      <div className="text-[10px] text-white/30 mt-0.5">
+                        {creditScore.label}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-3 rounded-xl border bg-purple-500/10 border-purple-500/20">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-purple-400"><Eye size={16} /></span>
+                        <span className="text-xs text-purple-400/60">Wishlist</span>
+                      </div>
+                      <div className="text-lg font-semibold text-purple-400">{summary.wishlistCount}</div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Tier 3: Enhanced Highlights Row */}
+                <div className="mt-4 flex gap-3 overflow-x-auto pb-1 scrollbar-hide">
+                  {summary.bestValue && (
+                    <div className="flex-shrink-0 flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 rounded-lg">
+                      <Trophy size={14} className="text-emerald-400" />
+                      <span className="text-xs text-white/50">Best Value:</span>
+                      <span className="text-xs text-emerald-400 font-medium">{summary.bestValue.name}</span>
+                      <span className="text-xs text-white/30">${summary.bestValue.costPerHour.toFixed(2)}/hr</span>
+                    </div>
+                  )}
+                  {weekRecap?.thisWeek.mostPlayedGame && (
+                    <div className="flex-shrink-0 flex items-center gap-2 px-3 py-1.5 bg-blue-500/10 rounded-lg">
+                      <Flame size={14} className="text-blue-400" />
+                      <span className="text-xs text-white/50">Top This Week:</span>
+                      <span className="text-xs text-blue-400 font-medium">{weekRecap.thisWeek.mostPlayedGame.name}</span>
+                      <span className="text-xs text-white/30">{weekRecap.thisWeek.mostPlayedGame.hours.toFixed(1)}h</span>
+                    </div>
+                  )}
+                  {weekRecap && weekRecap.streak >= 3 && (
+                    <div className="flex-shrink-0 flex items-center gap-2 px-3 py-1.5 bg-orange-500/10 rounded-lg">
+                      <Flame size={14} className="text-orange-400" />
+                      <span className="text-xs text-white/50">Streak:</span>
+                      <span className="text-xs text-orange-400 font-medium">{weekRecap.streak} days</span>
+                    </div>
+                  )}
+                  {rotationStats && (
+                    <div className="flex-shrink-0 flex items-center gap-2 px-3 py-1.5 bg-purple-500/10 rounded-lg">
+                      <Target size={14} className="text-purple-400" />
+                      <span className="text-xs text-white/50">Rotation:</span>
+                      <span className="text-xs text-purple-400 font-medium">{rotationStats.rotationHealth}</span>
+                      <span className="text-xs text-white/30">{rotationStats.gamesInRotation} game{rotationStats.gamesInRotation !== 1 ? 's' : ''}</span>
+                    </div>
+                  )}
+                  {forecast && forecast.budgetAmount && (
+                    <div className="flex-shrink-0 flex items-center gap-2 px-3 py-1.5 bg-yellow-500/10 rounded-lg">
+                      <DollarSign size={14} className="text-yellow-400" />
+                      <span className="text-xs text-white/50">Budget:</span>
+                      <span className={clsx('text-xs font-medium', forecast.onTrack === 'under' ? 'text-emerald-400' : forecast.onTrack === 'close' ? 'text-yellow-400' : 'text-red-400')}>
+                        {Math.round((forecast.currentYearSpent / forecast.budgetAmount) * 100)}% used
+                      </span>
+                    </div>
+                  )}
+                  {summary.wishlistCount > 0 && creditScore && (
+                    <div className="flex-shrink-0 flex items-center gap-2 px-3 py-1.5 bg-purple-500/10 rounded-lg">
+                      <Eye size={14} className="text-purple-400" />
+                      <span className="text-xs text-white/50">Wishlist:</span>
+                      <span className="text-xs text-purple-400 font-medium">{summary.wishlistCount} games</span>
+                    </div>
+                  )}
+                </div>
               </>
             )}
           </div>
