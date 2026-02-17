@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, Compass } from 'lucide-react';
+import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical } from 'lucide-react';
 import { useGames } from './hooks/useGames';
 import { useAnalytics, GameWithMetrics } from './hooks/useAnalytics';
 import { useBudget } from './hooks/useBudget';
@@ -19,7 +19,7 @@ import { gameRepository } from './lib/storage';
 import { BASELINE_GAMES_2025 } from './data/baseline-games';
 import { useAuthContext } from '@/lib/AuthContext';
 import { useToast } from '@/components/Toast';
-import { getROIRating, getWeekStatsForOffset, getGamesPlayedInTimeRange, getCompletionProbability, getGameHealthDot, getRelativeTime, getDaysContext, getSessionMomentum, getValueTrajectory, getGameSmartOneLiner, getFranchiseInfo, getProgressPercent, getShelfLife, parseLocalDate, getCardRarity, getRelationshipStatus, getGameStreak, getHeroNumber, getCardFreshness, getGameSections, getCardBackData, getContextualWhisper, getLibraryRank, getCardMoodPulse, getProgressRingData, getStatPopoverData } from './lib/calculations';
+import { getROIRating, getWeekStatsForOffset, getGamesPlayedInTimeRange, getCompletionProbability, getGameHealthDot, getRelativeTime, getDaysContext, getSessionMomentum, getValueTrajectory, getGameSmartOneLiner, getFranchiseInfo, getProgressPercent, getShelfLife, parseLocalDate, getCardRarity, getRelationshipStatus, getGameStreak, getHeroNumber, getCardFreshness, getGameSections, getCardBackData, getContextualWhisper, getLibraryRank, getCardMoodPulse, getProgressRingData, getStatPopoverData, getWeekRecapData, getSmartNudges, getGamingCreditScore, getRotationStats, getSpendingForecast, getSpendingByMonth } from './lib/calculations';
 import { OnThisDayCard } from './components/OnThisDayCard';
 import { ActivityPulse } from './components/ActivityPulse';
 import { RandomPicker } from './components/RandomPicker';
@@ -84,6 +84,57 @@ export default function GameAnalyticsPage() {
     if (typeof window === 'undefined') return false;
     return localStorage.getItem('ga-group-sections') === 'true';
   });
+  const [recapCollapsed, setRecapCollapsed] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem('ga-recap-collapsed') === 'true';
+  });
+  const [showCommandPalette, setShowCommandPalette] = useState(false);
+
+  // Week recap data for header strip
+  const weekRecap = useMemo(() => {
+    if (games.length === 0) return null;
+    return getWeekRecapData(games);
+  }, [games]);
+
+  // Smart nudges for the title subtitle
+  const smartNudges = useMemo(() => getSmartNudges(games), [games]);
+  const [nudgeIndex, setNudgeIndex] = useState(0);
+  // Rotate nudges every 8 seconds
+  useEffect(() => {
+    if (smartNudges.length <= 1) return;
+    const interval = setInterval(() => {
+      setNudgeIndex(prev => (prev + 1) % smartNudges.length);
+    }, 8000);
+    return () => clearInterval(interval);
+  }, [smartNudges.length]);
+
+  // Gaming credit score for stats grid
+  const creditScore = useMemo(() => {
+    if (games.length === 0) return null;
+    return getGamingCreditScore(games);
+  }, [games]);
+
+  // Rotation stats for highlights
+  const rotationStats = useMemo(() => {
+    if (games.length === 0) return null;
+    return getRotationStats(games);
+  }, [games]);
+
+  // This month's spending
+  const monthSpending = useMemo(() => {
+    const now = new Date();
+    const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const byMonth = getSpendingByMonth(games);
+    return byMonth[monthKey] || 0;
+  }, [games]);
+
+  // Spending forecast
+  const forecast = useMemo(() => {
+    if (games.length === 0) return null;
+    const year = new Date().getFullYear();
+    const currentBudget = budgets.find(b => b.year === year);
+    return getSpendingForecast(games, year, currentBudget?.yearlyBudget);
+  }, [games, budgets]);
 
   // Calculate week and month data for AI chat
   const weekData = useMemo(() => {

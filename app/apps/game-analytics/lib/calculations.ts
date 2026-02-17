@@ -8769,3 +8769,130 @@ export function getReleaseWindow(releaseDate: string | undefined): 'this-month' 
   if (days <= 90) return 'next-few-months';
   return 'later';
 }
+
+// ============================================================
+// Smart Nudge — contextual rotating insight for the title row
+// ============================================================
+
+export interface SmartNudge {
+  text: string;
+  type: 'streak' | 'milestone' | 'neglect' | 'backlog' | 'value' | 'completion' | 'general';
+  priority: number; // Higher = more interesting
+}
+
+export function getSmartNudges(games: Game[]): SmartNudge[] {
+  const nudges: SmartNudge[] = [];
+  const owned = games.filter(g => g.status !== 'Wishlist');
+  if (owned.length === 0) return nudges;
+
+  // Streak nudge
+  const streak = getCurrentGamingStreak(games);
+  if (streak >= 3) {
+    nudges.push({ text: `${streak}-day streak — play today to keep it alive`, type: 'streak', priority: 90 });
+  } else if (streak === 0) {
+    const pulse = getActivityPulse(games);
+    if (pulse.lastPlayedDaysAgo > 7 && pulse.lastPlayedDaysAgo < Infinity) {
+      nudges.push({ text: `${pulse.lastPlayedDaysAgo} days since your last session`, type: 'neglect', priority: 70 });
+    }
+  }
+
+  // Century Club proximity
+  const almostCentury = owned.filter(g => {
+    const h = getTotalHours(g);
+    return h >= 80 && h < 100;
+  });
+  if (almostCentury.length > 0) {
+    const g = almostCentury[0];
+    const remaining = Math.ceil(100 - getTotalHours(g));
+    nudges.push({ text: `${g.name} is ${remaining}h from Century Club`, type: 'milestone', priority: 85 });
+  }
+
+  // Backlog growth
+  const notStarted = owned.filter(g => g.status === 'Not Started');
+  const completed = owned.filter(g => g.status === 'Completed');
+  if (notStarted.length > completed.length) {
+    nudges.push({
+      text: `${notStarted.length} unstarted games vs ${completed.length} completed — backlog growing`,
+      type: 'backlog',
+      priority: 60,
+    });
+  }
+
+  // Recent completion
+  const recentCompletions = owned.filter(g => {
+    if (g.status !== 'Completed' || !g.endDate) return false;
+    const daysSince = (Date.now() - parseLocalDate(g.endDate).getTime()) / (1000 * 60 * 60 * 24);
+    return daysSince <= 14;
+  });
+  if (recentCompletions.length > 0) {
+    nudges.push({
+      text: `You completed ${recentCompletions[0].name} recently — what's next?`,
+      type: 'completion',
+      priority: 75,
+    });
+  }
+
+  // Neglected games with good ratings
+  const neglected = owned.filter(g => {
+    if (g.status !== 'In Progress') return false;
+    const logs = g.playLogs || [];
+    if (logs.length === 0) return false;
+    const lastLog = logs[0]; // sorted desc
+    const daysSince = (Date.now() - parseLocalDate(lastLog.date).getTime()) / (1000 * 60 * 60 * 24);
+    return daysSince > 30 && g.rating >= 7;
+  });
+  if (neglected.length > 0) {
+    const g = neglected[0];
+    const lastLog = g.playLogs![0];
+    const daysSince = Math.floor((Date.now() - parseLocalDate(lastLog.date).getTime()) / (1000 * 60 * 60 * 24));
+    nudges.push({
+      text: `Haven't touched ${g.name} in ${daysSince} days — you rated it ${g.rating}/10`,
+      type: 'neglect',
+      priority: 65,
+    });
+  }
+
+  // Value insight
+  if (owned.length >= 5) {
+    const avgCph = owned.reduce((s, g) => s + (getTotalHours(g) > 0 ? g.price / getTotalHours(g) : 0), 0) / owned.filter(g => getTotalHours(g) > 0).length;
+    if (avgCph < 3.5) {
+      nudges.push({ text: `Your library averages $${avgCph.toFixed(2)}/hr — better than movies`, type: 'value', priority: 50 });
+    }
+  }
+
+  return nudges.sort((a, b) => b.priority - a.priority);
+}
+
+// ============================================================
+// Week Recap Data — compact summary for the header strip
+// ============================================================
+
+export interface WeekRecapData {
+  thisWeek: PeriodStats;
+  lastWeek: PeriodStats;
+  thisMonth: PeriodStats;
+  hoursDelta: number; // this week - last week
+  gamesDelta: number;
+  sessionsDelta: number;
+  streak: number;
+  pulse: ActivityPulseData;
+}
+
+export function getWeekRecapData(games: Game[]): WeekRecapData {
+  const thisWeek = getPeriodStats(games, 7);
+  const lastWeek = getLastWeekStats(games);
+  const thisMonth = getPeriodStats(games, 30);
+  const streak = getCurrentGamingStreak(games);
+  const pulse = getActivityPulse(games);
+
+  return {
+    thisWeek,
+    lastWeek,
+    thisMonth,
+    hoursDelta: thisWeek.totalHours - lastWeek.totalHours,
+    gamesDelta: thisWeek.uniqueGames - lastWeek.uniqueGames,
+    sessionsDelta: thisWeek.totalSessions - lastWeek.totalSessions,
+    streak,
+    pulse,
+  };
+}
