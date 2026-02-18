@@ -9613,3 +9613,142 @@ export function getFilmstripData(games: Game[]): FilmstripFrame[] {
     };
   });
 }
+
+// ============================================================
+// Gaming Calendar — heatmap-style month calendar
+// ============================================================
+
+export interface CalendarDay {
+  date: string;           // YYYY-MM-DD
+  dayOfMonth: number;
+  hours: number;
+  sessions: number;
+  games: { name: string; hours: number; thumbnail?: string }[];
+  intensity: number;      // 0-4 heat level
+  events: { type: 'purchase' | 'completion' | 'start'; gameName: string }[];
+}
+
+export interface CalendarMonth {
+  year: number;
+  month: number;
+  label: string;
+  days: (CalendarDay | null)[];  // 42 cells (6 weeks x 7 days), null for empty cells
+  totalHours: number;
+  totalSessions: number;
+  activeDays: number;
+  maxDayHours: number;
+}
+
+/**
+ * Build calendar data for a given month, with hours per day and event markers.
+ */
+export function getCalendarData(games: Game[], year: number, month: number): CalendarMonth {
+  const ownedGames = games.filter(g => g.status !== 'Wishlist');
+
+  // Pre-compute day data
+  const dayMap: Record<string, { hours: number; sessions: number; games: Record<string, { hours: number; thumbnail?: string }> }> = {};
+  const eventMap: Record<string, { type: 'purchase' | 'completion' | 'start'; gameName: string }[]> = {};
+
+  ownedGames.forEach(game => {
+    game.playLogs?.forEach(log => {
+      const mk = log.date.substring(0, 7);
+      if (mk === `${year}-${String(month).padStart(2, '0')}`) {
+        if (!dayMap[log.date]) dayMap[log.date] = { hours: 0, sessions: 0, games: {} };
+        dayMap[log.date].hours += log.hours;
+        dayMap[log.date].sessions++;
+        if (!dayMap[log.date].games[game.name]) dayMap[log.date].games[game.name] = { hours: 0, thumbnail: game.thumbnail };
+        dayMap[log.date].games[game.name].hours += log.hours;
+      }
+    });
+
+    // Events
+    const monthKey = `${year}-${String(month).padStart(2, '0')}`;
+    if (game.datePurchased?.substring(0, 7) === monthKey) {
+      const d = game.datePurchased;
+      if (!eventMap[d]) eventMap[d] = [];
+      eventMap[d].push({ type: 'purchase', gameName: game.name });
+    }
+    if (game.startDate?.substring(0, 7) === monthKey) {
+      const d = game.startDate;
+      if (!eventMap[d]) eventMap[d] = [];
+      eventMap[d].push({ type: 'start', gameName: game.name });
+    }
+    if (game.endDate?.substring(0, 7) === monthKey && game.status === 'Completed') {
+      const d = game.endDate;
+      if (!eventMap[d]) eventMap[d] = [];
+      eventMap[d].push({ type: 'completion', gameName: game.name });
+    }
+  });
+
+  // Find max hours in any day for intensity scaling
+  const maxHours = Math.max(1, ...Object.values(dayMap).map(d => d.hours));
+
+  // Build calendar grid
+  const firstDay = new Date(year, month - 1, 1);
+  const startDow = firstDay.getDay(); // 0=Sun
+  const daysInMonth = new Date(year, month, 0).getDate();
+
+  const days: (CalendarDay | null)[] = [];
+  let totalHours = 0;
+  let totalSessions = 0;
+  let activeDays = 0;
+
+  // Pad leading empty cells
+  for (let i = 0; i < startDow; i++) {
+    days.push(null);
+  }
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    const data = dayMap[dateStr];
+    const events = eventMap[dateStr] || [];
+    const hours = data?.hours || 0;
+    const sessions = data?.sessions || 0;
+
+    totalHours += hours;
+    totalSessions += sessions;
+    if (hours > 0) activeDays++;
+
+    // Intensity: 0 = no activity, 1-4 = quartiles
+    let intensity = 0;
+    if (hours > 0) {
+      const ratio = hours / maxHours;
+      if (ratio <= 0.25) intensity = 1;
+      else if (ratio <= 0.5) intensity = 2;
+      else if (ratio <= 0.75) intensity = 3;
+      else intensity = 4;
+    }
+
+    const gamesList = data
+      ? Object.entries(data.games)
+        .map(([name, g]) => ({ name, hours: Math.round(g.hours * 10) / 10, thumbnail: g.thumbnail }))
+        .sort((a, b) => b.hours - a.hours)
+      : [];
+
+    days.push({
+      date: dateStr,
+      dayOfMonth: d,
+      hours: Math.round(hours * 10) / 10,
+      sessions,
+      games: gamesList,
+      intensity,
+      events,
+    });
+  }
+
+  // Pad trailing empty cells to fill 6 weeks (42 cells)
+  while (days.length < 42) {
+    days.push(null);
+  }
+
+  return {
+    year,
+    month,
+    label: `${MONTH_LABELS[month - 1]} ${year}`,
+    days,
+    totalHours: Math.round(totalHours * 10) / 10,
+    totalSessions,
+    activeDays,
+    maxDayHours: Math.round(maxHours * 10) / 10,
+  };
+}
