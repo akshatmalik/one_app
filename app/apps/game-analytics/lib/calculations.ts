@@ -9176,3 +9176,440 @@ export function getRacingBarHighlights(frames: RacingBarFrame[]): RacingBarHighl
 
   return highlights;
 }
+
+// ============================================================
+// Activity Feed — reverse-chronological event stream
+// ============================================================
+
+export interface ActivityFeedEvent {
+  id: string;
+  date: string;
+  type: 'play' | 'purchase' | 'completion' | 'start' | 'abandon' | 'milestone';
+  gameId: string;
+  gameName: string;
+  thumbnail?: string;
+  description: string;
+  detail?: string;
+  hours?: number;
+  price?: number;
+  rating?: number;
+}
+
+/**
+ * Build a reverse-chronological activity feed from all game events.
+ * Returns events sorted newest-first, with a limit for pagination.
+ */
+export function getActivityFeed(games: Game[], limit = 50, offset = 0): { events: ActivityFeedEvent[]; total: number } {
+  const allEvents: ActivityFeedEvent[] = [];
+  const ownedGames = games.filter(g => g.status !== 'Wishlist');
+
+  ownedGames.forEach(game => {
+    // Play sessions
+    game.playLogs?.forEach(log => {
+      allEvents.push({
+        id: `play-${log.id}`,
+        date: log.date,
+        type: 'play',
+        gameId: game.id,
+        gameName: game.name,
+        thumbnail: game.thumbnail,
+        description: `Played ${game.name}`,
+        detail: log.notes || undefined,
+        hours: log.hours,
+      });
+    });
+
+    // Purchase
+    if (game.datePurchased) {
+      allEvents.push({
+        id: `purchase-${game.id}`,
+        date: game.datePurchased,
+        type: 'purchase',
+        gameId: game.id,
+        gameName: game.name,
+        thumbnail: game.thumbnail,
+        description: `Purchased ${game.name}`,
+        detail: game.purchaseSource || undefined,
+        price: game.price,
+      });
+    }
+
+    // Start
+    if (game.startDate) {
+      allEvents.push({
+        id: `start-${game.id}`,
+        date: game.startDate,
+        type: 'start',
+        gameId: game.id,
+        gameName: game.name,
+        thumbnail: game.thumbnail,
+        description: `Started playing ${game.name}`,
+      });
+    }
+
+    // Completion
+    if (game.endDate && game.status === 'Completed') {
+      allEvents.push({
+        id: `complete-${game.id}`,
+        date: game.endDate,
+        type: 'completion',
+        gameId: game.id,
+        gameName: game.name,
+        thumbnail: game.thumbnail,
+        description: `Completed ${game.name}!`,
+        detail: `${getTotalHours(game).toFixed(1)}h total`,
+        rating: game.rating,
+      });
+    }
+
+    // Abandon
+    if (game.endDate && game.status === 'Abandoned') {
+      allEvents.push({
+        id: `abandon-${game.id}`,
+        date: game.endDate,
+        type: 'abandon',
+        gameId: game.id,
+        gameName: game.name,
+        thumbnail: game.thumbnail,
+        description: `Abandoned ${game.name}`,
+        detail: `${getTotalHours(game).toFixed(1)}h played`,
+      });
+    }
+  });
+
+  // Sort newest first
+  allEvents.sort((a, b) => parseLocalDate(b.date).getTime() - parseLocalDate(a.date).getTime());
+
+  return {
+    events: allEvents.slice(offset, offset + limit),
+    total: allEvents.length,
+  };
+}
+
+// ============================================================
+// Genre Epochs — stacked area data showing genre dominance over time
+// ============================================================
+
+export interface GenreEpochPeriod {
+  period: string;
+  periodLabel: string;
+  totalHours: number;
+  bands: { genre: string; hours: number; percentage: number; color: string }[];
+}
+
+export interface GenreEra {
+  genre: string;
+  startPeriod: string;
+  endPeriod: string;
+  dominancePercent: number;
+}
+
+const GENRE_COLORS: Record<string, string> = {
+  'RPG': '#8b5cf6',
+  'Action': '#ef4444',
+  'Adventure': '#f97316',
+  'Sports': '#10b981',
+  'Strategy': '#3b82f6',
+  'Puzzle': '#eab308',
+  'Simulation': '#06b6d4',
+  'Horror': '#a855f7',
+  'Racing': '#ec4899',
+  'Shooter': '#f59e0b',
+  'Platformer': '#14b8a6',
+  'Fighting': '#e879f9',
+  'Indie': '#84cc16',
+  'Other': '#6b7280',
+};
+
+function getGenreColor(genre: string): string {
+  return GENRE_COLORS[genre] || GENRE_COLORS['Other'];
+}
+
+/**
+ * Build stacked area data showing genre share of hours over time.
+ */
+export function getGenreEpochsData(games: Game[]): { periods: GenreEpochPeriod[]; eras: GenreEra[] } {
+  const ownedGames = games.filter(g => g.status !== 'Wishlist');
+
+  // Collect hours by month by genre
+  const dataByMonth: Record<string, Record<string, number>> = {};
+  ownedGames.forEach(game => {
+    const genre = game.genre || 'Other';
+    game.playLogs?.forEach(log => {
+      const mk = log.date.substring(0, 7);
+      if (!dataByMonth[mk]) dataByMonth[mk] = {};
+      dataByMonth[mk][genre] = (dataByMonth[mk][genre] || 0) + log.hours;
+    });
+    // Attribute baseline hours if no logs
+    if (game.hours > 0 && (!game.playLogs || game.playLogs.length === 0)) {
+      const mk = (game.startDate || game.datePurchased || game.createdAt)?.substring(0, 7);
+      if (mk) {
+        if (!dataByMonth[mk]) dataByMonth[mk] = {};
+        dataByMonth[mk][genre] = (dataByMonth[mk][genre] || 0) + game.hours;
+      }
+    }
+  });
+
+  const sortedMonths = Object.keys(dataByMonth).sort();
+  if (sortedMonths.length === 0) return { periods: [], eras: [] };
+
+  // Collect all genres
+  const allGenres = new Set<string>();
+  Object.values(dataByMonth).forEach(monthData => {
+    Object.keys(monthData).forEach(g => allGenres.add(g));
+  });
+
+  // Build periods
+  const periods: GenreEpochPeriod[] = sortedMonths.map(mk => {
+    const [yr, mo] = mk.split('-').map(Number);
+    const monthData = dataByMonth[mk];
+    const totalHours = Object.values(monthData).reduce((s, h) => s + h, 0);
+
+    const bands = Array.from(allGenres)
+      .map(genre => ({
+        genre,
+        hours: monthData[genre] || 0,
+        percentage: totalHours > 0 ? ((monthData[genre] || 0) / totalHours) * 100 : 0,
+        color: getGenreColor(genre),
+      }))
+      .filter(b => b.hours > 0)
+      .sort((a, b) => b.hours - a.hours);
+
+    return {
+      period: mk,
+      periodLabel: `${MONTH_LABELS[mo - 1]} ${yr}`,
+      totalHours: Math.round(totalHours * 10) / 10,
+      bands,
+    };
+  });
+
+  // Detect eras: consecutive months where a genre has >50% share
+  const eras: GenreEra[] = [];
+  let currentEra: { genre: string; start: string; end: string; totalPercent: number; months: number } | null = null;
+
+  for (const period of periods) {
+    const dominant = period.bands[0];
+    if (dominant && dominant.percentage > 50) {
+      if (currentEra && currentEra.genre === dominant.genre) {
+        currentEra.end = period.period;
+        currentEra.totalPercent += dominant.percentage;
+        currentEra.months++;
+      } else {
+        if (currentEra && currentEra.months >= 2) {
+          eras.push({
+            genre: currentEra.genre,
+            startPeriod: currentEra.start,
+            endPeriod: currentEra.end,
+            dominancePercent: Math.round(currentEra.totalPercent / currentEra.months),
+          });
+        }
+        currentEra = { genre: dominant.genre, start: period.period, end: period.period, totalPercent: dominant.percentage, months: 1 };
+      }
+    } else {
+      if (currentEra && currentEra.months >= 2) {
+        eras.push({
+          genre: currentEra.genre,
+          startPeriod: currentEra.start,
+          endPeriod: currentEra.end,
+          dominancePercent: Math.round(currentEra.totalPercent / currentEra.months),
+        });
+      }
+      currentEra = null;
+    }
+  }
+  if (currentEra && currentEra.months >= 2) {
+    eras.push({
+      genre: currentEra.genre,
+      startPeriod: currentEra.start,
+      endPeriod: currentEra.end,
+      dominancePercent: Math.round(currentEra.totalPercent / currentEra.months),
+    });
+  }
+
+  return { periods, eras };
+}
+
+// ============================================================
+// Gaming Pulse — daily/weekly hours heartbeat line data
+// ============================================================
+
+export interface GamingPulsePoint {
+  date: string;
+  hours: number;
+  dominantGame: string;
+  dominantGameColor: string;
+}
+
+export interface GamingPulseAnnotation {
+  date: string;
+  type: 'start' | 'completion' | 'purchase' | 'drought_start' | 'drought_end';
+  label: string;
+  gameId?: string;
+}
+
+export interface GamingPulseDrought {
+  start: string;
+  end: string;
+  days: number;
+}
+
+/**
+ * Build heartbeat-style data: hours per day across the entire history.
+ */
+export function getGamingPulseData(games: Game[]): {
+  points: GamingPulsePoint[];
+  annotations: GamingPulseAnnotation[];
+  droughts: GamingPulseDrought[];
+} {
+  const ownedGames = games.filter(g => g.status !== 'Wishlist');
+
+  // Collect hours per day per game
+  const dayData: Record<string, Record<string, number>> = {}; // date -> { gameName: hours }
+  ownedGames.forEach(game => {
+    game.playLogs?.forEach(log => {
+      if (!dayData[log.date]) dayData[log.date] = {};
+      dayData[log.date][game.name] = (dayData[log.date][game.name] || 0) + log.hours;
+    });
+  });
+
+  const sortedDays = Object.keys(dayData).sort();
+  if (sortedDays.length === 0) return { points: [], annotations: [], droughts: [] };
+
+  // Build points
+  const points: GamingPulsePoint[] = sortedDays.map(date => {
+    const gamesPlayed = dayData[date];
+    const totalHours = Object.values(gamesPlayed).reduce((s, h) => s + h, 0);
+    const dominant = Object.entries(gamesPlayed).sort((a, b) => b[1] - a[1])[0];
+    const dominantGame = ownedGames.find(g => g.name === dominant[0]);
+
+    return {
+      date,
+      hours: Math.round(totalHours * 10) / 10,
+      dominantGame: dominant[0],
+      dominantGameColor: dominantGame ? getGameColor(dominantGame.id, 0) : '#8b5cf6',
+    };
+  });
+
+  // Build annotations from game events
+  const annotations: GamingPulseAnnotation[] = [];
+  ownedGames.forEach(game => {
+    if (game.startDate) {
+      annotations.push({ date: game.startDate, type: 'start', label: `Started ${game.name}`, gameId: game.id });
+    }
+    if (game.endDate && game.status === 'Completed') {
+      annotations.push({ date: game.endDate, type: 'completion', label: `Completed ${game.name}`, gameId: game.id });
+    }
+    if (game.datePurchased) {
+      annotations.push({ date: game.datePurchased, type: 'purchase', label: `Bought ${game.name}`, gameId: game.id });
+    }
+  });
+
+  // Detect droughts (7+ day gaps with no activity)
+  const droughts: GamingPulseDrought[] = [];
+  for (let i = 1; i < sortedDays.length; i++) {
+    const prev = parseLocalDate(sortedDays[i - 1]);
+    const curr = parseLocalDate(sortedDays[i]);
+    const gapDays = Math.round((curr.getTime() - prev.getTime()) / (1000 * 60 * 60 * 24));
+    if (gapDays >= 7) {
+      droughts.push({ start: sortedDays[i - 1], end: sortedDays[i], days: gapDays });
+    }
+  }
+
+  return { points, annotations, droughts };
+}
+
+// ============================================================
+// Filmstrip Timeline — month-by-month snapshot frames
+// ============================================================
+
+export interface FilmstripFrame {
+  period: string;
+  periodLabel: string;
+  heroThumbnail?: string;
+  heroGameName: string;
+  totalHours: number;
+  gameCount: number;
+  topGames: { name: string; hours: number; thumbnail?: string }[];
+  purchaseCount: number;
+  completionCount: number;
+  isCurrentMonth: boolean;
+}
+
+/**
+ * Build filmstrip frames: one per month, showing top games and key stats.
+ */
+export function getFilmstripData(games: Game[]): FilmstripFrame[] {
+  const ownedGames = games.filter(g => g.status !== 'Wishlist');
+
+  // Hours per game per month
+  const monthGameHours: Record<string, Record<string, number>> = {};
+  ownedGames.forEach(game => {
+    game.playLogs?.forEach(log => {
+      const mk = log.date.substring(0, 7);
+      if (!monthGameHours[mk]) monthGameHours[mk] = {};
+      monthGameHours[mk][game.id] = (monthGameHours[mk][game.id] || 0) + log.hours;
+    });
+  });
+
+  // Also include months with purchases/completions even if no play logs
+  ownedGames.forEach(game => {
+    if (game.datePurchased) {
+      const mk = game.datePurchased.substring(0, 7);
+      if (!monthGameHours[mk]) monthGameHours[mk] = {};
+    }
+    if (game.endDate) {
+      const mk = game.endDate.substring(0, 7);
+      if (!monthGameHours[mk]) monthGameHours[mk] = {};
+    }
+  });
+
+  const sortedMonths = Object.keys(monthGameHours).sort();
+  if (sortedMonths.length === 0) return [];
+
+  const now = new Date();
+  const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+  // Game lookup by id
+  const gameById = new Map(ownedGames.map(g => [g.id, g]));
+
+  return sortedMonths.map(mk => {
+    const [yr, mo] = mk.split('-').map(Number);
+    const gameHours = monthGameHours[mk] || {};
+
+    // Sort games by hours this month
+    const topEntries = Object.entries(gameHours)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5);
+
+    const topGames = topEntries.map(([gid, hours]) => {
+      const g = gameById.get(gid);
+      return { name: g?.name || 'Unknown', hours: Math.round(hours * 10) / 10, thumbnail: g?.thumbnail };
+    });
+
+    const totalHours = Object.values(gameHours).reduce((s, h) => s + h, 0);
+    const uniqueGames = new Set(Object.keys(gameHours).filter(gid => (gameHours[gid] || 0) > 0));
+
+    // Count purchases and completions this month
+    let purchaseCount = 0;
+    let completionCount = 0;
+    ownedGames.forEach(game => {
+      if (game.datePurchased?.substring(0, 7) === mk) purchaseCount++;
+      if (game.endDate?.substring(0, 7) === mk && game.status === 'Completed') completionCount++;
+    });
+
+    const hero = topGames[0];
+
+    return {
+      period: mk,
+      periodLabel: `${MONTH_LABELS[mo - 1]} ${yr}`,
+      heroThumbnail: hero?.thumbnail,
+      heroGameName: hero?.name || 'No activity',
+      totalHours: Math.round(totalHours * 10) / 10,
+      gameCount: uniqueGames.size,
+      topGames,
+      purchaseCount,
+      completionCount,
+      isCurrentMonth: mk === currentMonthKey,
+    };
+  });
+}
