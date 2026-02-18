@@ -2,12 +2,12 @@
 
 import { useState } from 'react';
 import { Clock, Check, ChevronDown } from 'lucide-react';
-import { Game } from '../lib/types';
+import { Game, SessionMood } from '../lib/types';
 import clsx from 'clsx';
 
 interface QuickCheckInProps {
   game: Game;
-  onLogTime: (hours: number) => void;
+  onLogTime: (hours: number, mood?: SessionMood) => void;
   onOpenFullLog: () => void;
 }
 
@@ -17,10 +17,11 @@ export function QuickCheckIn({ game, onLogTime, onOpenFullLog }: QuickCheckInPro
     : 2;
 
   const [hours, setHours] = useState(avgSession);
+  const [mood, setMood] = useState<SessionMood | undefined>();
   const [submitted, setSubmitted] = useState(false);
 
   const handleSubmit = () => {
-    onLogTime(hours);
+    onLogTime(hours, mood);
     setSubmitted(true);
     setTimeout(() => setSubmitted(false), 2000);
   };
@@ -73,6 +74,30 @@ export function QuickCheckIn({ game, onLogTime, onOpenFullLog }: QuickCheckInPro
           onChange={(e) => setHours(parseFloat(e.target.value))}
           className="w-full"
         />
+      </div>
+
+      {/* Mood — one-tap */}
+      <div className="flex gap-2 mb-4">
+        {([
+          { value: 'great' as SessionMood, label: '🔥', name: 'Great' },
+          { value: 'good' as SessionMood, label: '👍', name: 'Good' },
+          { value: 'meh' as SessionMood, label: '😐', name: 'Meh' },
+          { value: 'grind' as SessionMood, label: '💪', name: 'Grind' },
+        ]).map(opt => (
+          <button
+            key={opt.value}
+            onClick={() => setMood(mood === opt.value ? undefined : opt.value)}
+            className={clsx(
+              'flex-1 flex flex-col items-center gap-0.5 py-2 rounded-lg text-xs transition-all',
+              mood === opt.value
+                ? 'bg-purple-500/15 text-purple-400 border border-purple-500/20'
+                : 'bg-white/[0.02] text-white/30 border border-transparent',
+            )}
+          >
+            <span className="text-base">{opt.label}</span>
+            <span className="text-[9px]">{opt.name}</span>
+          </button>
+        ))}
       </div>
 
       {/* Actions */}

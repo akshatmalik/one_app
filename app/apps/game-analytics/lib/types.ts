@@ -4,11 +4,18 @@ export type PurchaseSource = 'Steam' | 'PlayStation' | 'Xbox' | 'Nintendo' | 'Ep
 
 export type SubscriptionSource = 'PS Plus' | 'Game Pass' | 'Epic Free' | 'Prime Gaming' | 'Humble Choice' | 'Other';
 
+export type SessionMood = 'great' | 'good' | 'meh' | 'grind';
+export type SessionContext = 'solo' | 'co-op' | 'online' | 'couch-co-op' | 'stream';
+export type SessionVibe = 'wind-down' | 'competitive' | 'exploration' | 'story' | 'achievement-hunting' | 'social';
+
 export interface PlayLog {
   id: string;
   date: string;
   hours: number;
   notes?: string;
+  mood?: SessionMood;
+  context?: SessionContext;
+  vibe?: SessionVibe;
 }
 
 export interface Game {

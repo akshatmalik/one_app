@@ -1,4 +1,4 @@
-import { Game, GameStatus, GameMetrics, AnalyticsSummary, TasteProfile } from './types';
+import { Game, GameStatus, GameMetrics, AnalyticsSummary, TasteProfile, SessionMood } from './types';
 
 /**
  * Parse a YYYY-MM-DD date string as local time instead of UTC.
@@ -9750,5 +9750,110 @@ export function getCalendarData(games: Game[], year: number, month: number): Cal
     totalSessions,
     activeDays,
     maxDayHours: Math.round(maxHours * 10) / 10,
+  };
+}
+
+// ============================================================
+// Mood Analysis — insights from session mood/context/vibe tags
+// ============================================================
+
+export interface MoodAnalysis {
+  moodDistribution: { mood: SessionMood; count: number; percent: number; avgHours: number }[];
+  bestMoodForRating: { mood: SessionMood; avgGameRating: number } | null;
+  longestSessionMood: { mood: SessionMood; hours: number; game: string } | null;
+  totalTaggedSessions: number;
+  totalSessions: number;
+  topGameByMood: Record<string, { game: string; hours: number }>;
+}
+
+/**
+ * Analyze mood patterns across all play sessions that have mood data.
+ */
+export function getMoodAnalysis(games: Game[]): MoodAnalysis {
+  const ownedGames = games.filter(g => g.status !== 'Wishlist');
+
+  let totalSessions = 0;
+  let totalTaggedSessions = 0;
+
+  const moodData: Record<SessionMood, { count: number; totalHours: number; sessions: { game: Game; hours: number }[] }> = {
+    great: { count: 0, totalHours: 0, sessions: [] },
+    good: { count: 0, totalHours: 0, sessions: [] },
+    meh: { count: 0, totalHours: 0, sessions: [] },
+    grind: { count: 0, totalHours: 0, sessions: [] },
+  };
+
+  ownedGames.forEach(game => {
+    game.playLogs?.forEach(log => {
+      totalSessions++;
+      if (log.mood) {
+        totalTaggedSessions++;
+        moodData[log.mood].count++;
+        moodData[log.mood].totalHours += log.hours;
+        moodData[log.mood].sessions.push({ game, hours: log.hours });
+      }
+    });
+  });
+
+  // Distribution
+  const moodDistribution = (['great', 'good', 'meh', 'grind'] as SessionMood[])
+    .filter(mood => moodData[mood].count > 0)
+    .map(mood => ({
+      mood,
+      count: moodData[mood].count,
+      percent: totalTaggedSessions > 0 ? Math.round((moodData[mood].count / totalTaggedSessions) * 100) : 0,
+      avgHours: moodData[mood].count > 0 ? Math.round((moodData[mood].totalHours / moodData[mood].count) * 10) / 10 : 0,
+    }));
+
+  // Best mood for high-rated games
+  let bestMoodForRating: MoodAnalysis['bestMoodForRating'] = null;
+  const moodRatings: Record<string, { totalRating: number; count: number }> = {};
+  ownedGames.forEach(game => {
+    game.playLogs?.forEach(log => {
+      if (log.mood && game.rating > 0) {
+        if (!moodRatings[log.mood]) moodRatings[log.mood] = { totalRating: 0, count: 0 };
+        moodRatings[log.mood].totalRating += game.rating;
+        moodRatings[log.mood].count++;
+      }
+    });
+  });
+  let bestAvg = 0;
+  for (const [mood, data] of Object.entries(moodRatings)) {
+    const avg = data.count > 0 ? data.totalRating / data.count : 0;
+    if (avg > bestAvg) {
+      bestAvg = avg;
+      bestMoodForRating = { mood: mood as SessionMood, avgGameRating: Math.round(avg * 10) / 10 };
+    }
+  }
+
+  // Longest session by mood
+  let longestSessionMood: MoodAnalysis['longestSessionMood'] = null;
+  for (const [mood, data] of Object.entries(moodData)) {
+    for (const session of data.sessions) {
+      if (!longestSessionMood || session.hours > longestSessionMood.hours) {
+        longestSessionMood = { mood: mood as SessionMood, hours: session.hours, game: session.game.name };
+      }
+    }
+  }
+
+  // Top game per mood
+  const topGameByMood: Record<string, { game: string; hours: number }> = {};
+  for (const [mood, data] of Object.entries(moodData)) {
+    const gameHours: Record<string, number> = {};
+    data.sessions.forEach(s => {
+      gameHours[s.game.name] = (gameHours[s.game.name] || 0) + s.hours;
+    });
+    const top = Object.entries(gameHours).sort((a, b) => b[1] - a[1])[0];
+    if (top) {
+      topGameByMood[mood] = { game: top[0], hours: Math.round(top[1] * 10) / 10 };
+    }
+  }
+
+  return {
+    moodDistribution,
+    bestMoodForRating,
+    longestSessionMood,
+    totalTaggedSessions,
+    totalSessions,
+    topGameByMood,
   };
 }
