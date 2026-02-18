@@ -1,4 +1,4 @@
-import { Game, GameMetrics, AnalyticsSummary, TasteProfile } from './types';
+import { Game, GameStatus, GameMetrics, AnalyticsSummary, TasteProfile } from './types';
 
 /**
  * Parse a YYYY-MM-DD date string as local time instead of UTC.
@@ -8895,4 +8895,284 @@ export function getWeekRecapData(games: Game[]): WeekRecapData {
     streak,
     pulse,
   };
+}
+
+// ============================================================
+// Racing Bar Chart Timeline — animated bar chart race of
+// cumulative hours per game over time
+// ============================================================
+
+export interface RacingBarEntry {
+  gameId: string;
+  gameName: string;
+  thumbnail?: string;
+  cumulativeHours: number;
+  hoursThisPeriod: number;
+  rank: number;
+  previousRank: number;
+  isNew: boolean;
+  status: GameStatus;
+  justCompleted: boolean;
+  color: string;
+  genre?: string;
+}
+
+export interface RacingBarFrame {
+  period: string;         // "2024-01"
+  periodLabel: string;    // "January 2024"
+  games: RacingBarEntry[];
+}
+
+export interface RacingBarHighlight {
+  period: string;
+  type: 'overtake' | 'new_entry' | 'milestone' | 'completion' | 'dominant_month';
+  description: string;
+  gameId: string;
+}
+
+const RACING_BAR_COLORS = [
+  '#8b5cf6', '#ec4899', '#f97316', '#06b6d4', '#10b981',
+  '#eab308', '#ef4444', '#6366f1', '#14b8a6', '#f59e0b',
+  '#a855f7', '#3b82f6', '#84cc16', '#e879f9', '#22d3ee',
+  '#fb923c', '#4ade80', '#f472b6', '#38bdf8', '#facc15',
+];
+
+/** Stable hash-based color for a game so the same game always gets the same color */
+function getGameColor(gameId: string, index: number): string {
+  let hash = 0;
+  for (let i = 0; i < gameId.length; i++) {
+    hash = ((hash << 5) - hash) + gameId.charCodeAt(i);
+    hash |= 0;
+  }
+  return RACING_BAR_COLORS[Math.abs(hash) % RACING_BAR_COLORS.length] || RACING_BAR_COLORS[index % RACING_BAR_COLORS.length];
+}
+
+const MONTH_LABELS = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
+
+/**
+ * Build the full array of frames for the racing bar chart.
+ * Each frame represents one month and contains cumulative hours for every game
+ * that has been played up to and including that month, sorted by hours desc.
+ */
+export function getRacingBarChartData(games: Game[]): RacingBarFrame[] {
+  // Only consider owned games with some activity
+  const ownedGames = games.filter(g => g.status !== 'Wishlist');
+  if (ownedGames.length === 0) return [];
+
+  // Collect all months where anything happened (play logs, purchases, starts, completions)
+  const monthSet = new Set<string>();
+  ownedGames.forEach(game => {
+    if (game.datePurchased) monthSet.add(game.datePurchased.substring(0, 7));
+    if (game.startDate) monthSet.add(game.startDate.substring(0, 7));
+    if (game.endDate) monthSet.add(game.endDate.substring(0, 7));
+    game.playLogs?.forEach(log => monthSet.add(log.date.substring(0, 7)));
+  });
+
+  if (monthSet.size === 0) return [];
+
+  const sortedMonths = Array.from(monthSet).sort();
+
+  // Fill in any gaps so the timeline is continuous
+  const allMonths: string[] = [];
+  const [startYear, startMonth] = sortedMonths[0].split('-').map(Number);
+  const [endYear, endMonth] = sortedMonths[sortedMonths.length - 1].split('-').map(Number);
+
+  let y = startYear;
+  let m = startMonth;
+  while (y < endYear || (y === endYear && m <= endMonth)) {
+    allMonths.push(`${y}-${String(m).padStart(2, '0')}`);
+    m++;
+    if (m > 12) { m = 1; y++; }
+  }
+
+  // Pre-compute per-game hours by month from play logs
+  const gameHoursByMonth: Record<string, Record<string, number>> = {};
+  ownedGames.forEach(game => {
+    const byMonth: Record<string, number> = {};
+    game.playLogs?.forEach(log => {
+      const mk = log.date.substring(0, 7);
+      byMonth[mk] = (byMonth[mk] || 0) + log.hours;
+    });
+    gameHoursByMonth[game.id] = byMonth;
+  });
+
+  // For games with baseline hours but no play logs, attribute baseline hours
+  // to the startDate or datePurchased month
+  const baselineMonth: Record<string, string> = {};
+  ownedGames.forEach(game => {
+    if (game.hours > 0 && (!game.playLogs || game.playLogs.length === 0)) {
+      const month = (game.startDate || game.datePurchased || game.createdAt)?.substring(0, 7);
+      if (month) baselineMonth[game.id] = month;
+    }
+  });
+
+  // Track which games have "appeared" (have any hours) and their completion status by month
+  const gameEndMonths: Record<string, string> = {};
+  ownedGames.forEach(game => {
+    if (game.endDate && game.status === 'Completed') {
+      gameEndMonths[game.id] = game.endDate.substring(0, 7);
+    }
+  });
+
+  // Build frames
+  const frames: RacingBarFrame[] = [];
+  const cumulativeHours: Record<string, number> = {};
+  let previousRanks: Record<string, number> = {};
+  const appearedGames = new Set<string>();
+
+  for (const monthKey of allMonths) {
+    const [yr, mo] = monthKey.split('-').map(Number);
+    const periodLabel = `${MONTH_LABELS[mo - 1]} ${yr}`;
+
+    // Add this month's hours for each game
+    ownedGames.forEach(game => {
+      const monthHours = gameHoursByMonth[game.id]?.[monthKey] || 0;
+      // Add baseline hours in the baseline month
+      const baseHours = baselineMonth[game.id] === monthKey ? game.hours : 0;
+      const added = monthHours + baseHours;
+
+      if (added > 0 || (cumulativeHours[game.id] || 0) > 0) {
+        cumulativeHours[game.id] = (cumulativeHours[game.id] || 0) + added;
+      }
+    });
+
+    // Build entries for games that have cumulative hours > 0
+    const entries: RacingBarEntry[] = [];
+    for (const game of ownedGames) {
+      const cumHours = cumulativeHours[game.id] || 0;
+      if (cumHours <= 0) continue;
+
+      const isNew = !appearedGames.has(game.id);
+      if (isNew) appearedGames.add(game.id);
+
+      const hoursThisPeriod = (gameHoursByMonth[game.id]?.[monthKey] || 0)
+        + (baselineMonth[game.id] === monthKey ? game.hours : 0);
+
+      entries.push({
+        gameId: game.id,
+        gameName: game.name,
+        thumbnail: game.thumbnail,
+        cumulativeHours: Math.round(cumHours * 10) / 10,
+        hoursThisPeriod: Math.round(hoursThisPeriod * 10) / 10,
+        rank: 0, // assigned below
+        previousRank: previousRanks[game.id] ?? -1,
+        isNew,
+        status: game.status,
+        justCompleted: gameEndMonths[game.id] === monthKey,
+        color: getGameColor(game.id, entries.length),
+        genre: game.genre,
+      });
+    }
+
+    // Sort by cumulative hours desc, then by name for stability
+    entries.sort((a, b) => b.cumulativeHours - a.cumulativeHours || a.gameName.localeCompare(b.gameName));
+
+    // Assign ranks
+    entries.forEach((entry, i) => {
+      entry.rank = i + 1;
+    });
+
+    // Record ranks for next frame's previousRank
+    const newRanks: Record<string, number> = {};
+    entries.forEach(e => { newRanks[e.gameId] = e.rank; });
+    previousRanks = newRanks;
+
+    frames.push({
+      period: monthKey,
+      periodLabel,
+      games: entries,
+    });
+  }
+
+  return frames;
+}
+
+/**
+ * Extract narrative highlights from racing bar frames for overlay text.
+ */
+export function getRacingBarHighlights(frames: RacingBarFrame[]): RacingBarHighlight[] {
+  const highlights: RacingBarHighlight[] = [];
+
+  for (let i = 1; i < frames.length; i++) {
+    const frame = frames[i];
+    const prevFrame = frames[i - 1];
+    const prevRankMap = new Map(prevFrame.games.map(g => [g.gameId, g.rank]));
+
+    for (const entry of frame.games) {
+      // New entry
+      if (entry.isNew) {
+        highlights.push({
+          period: frame.period,
+          type: 'new_entry',
+          description: `${entry.gameName} enters the chart`,
+          gameId: entry.gameId,
+        });
+      }
+
+      // Overtake for #1 spot
+      const prevRank = prevRankMap.get(entry.gameId);
+      if (entry.rank === 1 && prevRank !== undefined && prevRank > 1) {
+        const previousLeader = prevFrame.games.find(g => g.rank === 1);
+        highlights.push({
+          period: frame.period,
+          type: 'overtake',
+          description: `${entry.gameName} overtakes ${previousLeader?.gameName || 'the leader'} for #1`,
+          gameId: entry.gameId,
+        });
+      }
+
+      // Completion
+      if (entry.justCompleted) {
+        highlights.push({
+          period: frame.period,
+          type: 'completion',
+          description: `${entry.gameName} completed!`,
+          gameId: entry.gameId,
+        });
+      }
+
+      // Hour milestones
+      if (entry.cumulativeHours >= 100) {
+        const prevEntry = prevFrame.games.find(g => g.gameId === entry.gameId);
+        if (prevEntry && prevEntry.cumulativeHours < 100) {
+          highlights.push({
+            period: frame.period,
+            type: 'milestone',
+            description: `${entry.gameName} hits 100 hours!`,
+            gameId: entry.gameId,
+          });
+        }
+      }
+      if (entry.cumulativeHours >= 50) {
+        const prevEntry = prevFrame.games.find(g => g.gameId === entry.gameId);
+        if (prevEntry && prevEntry.cumulativeHours < 50) {
+          highlights.push({
+            period: frame.period,
+            type: 'milestone',
+            description: `${entry.gameName} reaches 50 hours`,
+            gameId: entry.gameId,
+          });
+        }
+      }
+    }
+
+    // Dominant month: game with most hoursThisPeriod
+    const activeGames = frame.games.filter(g => g.hoursThisPeriod > 0);
+    if (activeGames.length > 0) {
+      const dominant = activeGames.reduce((a, b) => a.hoursThisPeriod > b.hoursThisPeriod ? a : b);
+      if (dominant.hoursThisPeriod >= 15) {
+        highlights.push({
+          period: frame.period,
+          type: 'dominant_month',
+          description: `${dominant.gameName} dominates with ${dominant.hoursThisPeriod}h this month`,
+          gameId: dominant.gameId,
+        });
+      }
+    }
+  }
+
+  return highlights;
 }
