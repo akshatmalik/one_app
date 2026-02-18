@@ -9,6 +9,7 @@ import { QuickAddTimeModal } from './QuickAddTimeModal';
 import { WeekInReview } from './WeekInReview';
 import { MonthStoryMode } from './MonthStoryMode';
 import { generateMonthlyRecap, generateYearChapterTitles, generateMonthChapterTitles } from '../lib/ai-game-service';
+import { RacingBarChart } from './RacingBarChart';
 import clsx from 'clsx';
 
 interface TimelineViewProps {
@@ -457,6 +458,10 @@ export function TimelineView({ games, onLogTime, onQuickAddTime }: TimelineViewP
       )}
 
       <WeekInReview data={weekInReviewData} allGames={games} weekOffset={weekOffset} maxWeeksBack={maxWeeksBack} onWeekChange={handleWeekChange} />
+
+      {/* Racing Bar Chart — hero visualization */}
+      <RacingBarChart games={games} />
+
       <TimelinePeriodCards games={games} />
 
       {/* Game Journey Arcs */}
