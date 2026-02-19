@@ -9857,3 +9857,223 @@ export function getMoodAnalysis(games: Game[]): MoodAnalysis {
     topGameByMood,
   };
 }
+
+// ============================================================
+// Yearly Wrapped — extended year-in-review for story mode
+// ============================================================
+
+export interface YearlyWrappedData {
+  year: number;
+  hasData: boolean;
+
+  // Core stats
+  totalHours: number;
+  totalSessions: number;
+  totalSpent: number;
+  gamesAcquired: number;
+  gamesCompleted: number;
+  gamesStarted: number;
+  gamesAbandoned: number;
+  avgCostPerHour: number;
+  completionRate: number;
+
+  // Top games
+  top10Games: { name: string; hours: number; rating: number; thumbnail?: string }[];
+  gameOfTheYear: { name: string; hours: number; rating: number; thumbnail?: string } | null;
+
+  // Genre breakdown
+  genreBreakdown: { genre: string; hours: number; percent: number }[];
+  topGenre: string;
+
+  // Monthly trends
+  monthlyHours: { month: string; label: string; hours: number }[];
+  peakMonth: { month: string; label: string; hours: number } | null;
+
+  // Superlatives
+  fastestCompletion: { name: string; days: number } | null;
+  longestSession: { name: string; hours: number } | null;
+  biggestSurprise: { name: string; reason: string } | null;  // low price, high rating
+  bestValue: { name: string; costPerHour: number } | null;
+  worstValue: { name: string; costPerHour: number } | null;
+
+  // Personality
+  personalityType: string;
+
+  // Spending
+  totalSaved: number;
+  avgPurchasePrice: number;
+
+  // Comparative
+  hoursPerDay: number;
+  hoursPerWeek: number;
+}
+
+export function getYearlyWrappedData(games: Game[], year: number): YearlyWrappedData {
+  const yearStr = year.toString();
+  const ownedGames = games.filter(g => g.status !== 'Wishlist');
+
+  // Games acquired this year
+  const yearAcquired = ownedGames.filter(g => g.datePurchased?.startsWith(yearStr));
+  const gamesAcquired = yearAcquired.length;
+
+  // Games with activity this year (from play logs)
+  let totalHours = 0;
+  let totalSessions = 0;
+  const hoursByGame: Record<string, { hours: number; game: Game }> = {};
+  const hoursByGenre: Record<string, number> = {};
+  const hoursByMonth: Record<string, number> = {};
+  let longestSession: { name: string; hours: number } | null = null;
+
+  ownedGames.forEach(game => {
+    game.playLogs?.forEach(log => {
+      if (log.date.startsWith(yearStr)) {
+        totalHours += log.hours;
+        totalSessions++;
+
+        if (!hoursByGame[game.id]) hoursByGame[game.id] = { hours: 0, game };
+        hoursByGame[game.id].hours += log.hours;
+
+        if (game.genre) {
+          hoursByGenre[game.genre] = (hoursByGenre[game.genre] || 0) + log.hours;
+        }
+
+        const mk = log.date.substring(0, 7);
+        hoursByMonth[mk] = (hoursByMonth[mk] || 0) + log.hours;
+
+        if (!longestSession || log.hours > longestSession.hours) {
+          longestSession = { name: game.name, hours: log.hours };
+        }
+      }
+    });
+  });
+
+  const hasData = totalHours > 0 || gamesAcquired > 0;
+
+  // Completed, started, abandoned this year
+  const gamesCompleted = ownedGames.filter(g => g.status === 'Completed' && g.endDate?.startsWith(yearStr)).length;
+  const gamesStarted = ownedGames.filter(g => g.startDate?.startsWith(yearStr)).length;
+  const gamesAbandoned = ownedGames.filter(g => g.status === 'Abandoned' && g.endDate?.startsWith(yearStr)).length;
+
+  const totalSpent = yearAcquired.reduce((s, g) => s + g.price, 0);
+  const avgCostPerHour = totalHours > 0 ? totalSpent / totalHours : 0;
+  const completionRate = gamesStarted > 0 ? (gamesCompleted / gamesStarted) * 100 : 0;
+
+  // Top 10 games
+  const top10Games = Object.values(hoursByGame)
+    .sort((a, b) => b.hours - a.hours)
+    .slice(0, 10)
+    .map(entry => ({
+      name: entry.game.name,
+      hours: Math.round(entry.hours * 10) / 10,
+      rating: entry.game.rating,
+      thumbnail: entry.game.thumbnail,
+    }));
+
+  const gameOfTheYear = top10Games[0] || null;
+
+  // Genre breakdown
+  const totalGenreHours = Object.values(hoursByGenre).reduce((s, h) => s + h, 0) || 1;
+  const genreBreakdown = Object.entries(hoursByGenre)
+    .sort((a, b) => b[1] - a[1])
+    .map(([genre, hours]) => ({
+      genre,
+      hours: Math.round(hours * 10) / 10,
+      percent: Math.round((hours / totalGenreHours) * 100),
+    }));
+  const topGenre = genreBreakdown[0]?.genre || 'Unknown';
+
+  // Monthly trends
+  const monthlyHours: YearlyWrappedData['monthlyHours'] = [];
+  for (let m = 1; m <= 12; m++) {
+    const mk = `${year}-${String(m).padStart(2, '0')}`;
+    monthlyHours.push({
+      month: mk,
+      label: MONTH_LABELS[m - 1],
+      hours: Math.round((hoursByMonth[mk] || 0) * 10) / 10,
+    });
+  }
+  const peakMonth = monthlyHours.reduce((best, m) => m.hours > (best?.hours || 0) ? m : best, null as YearlyWrappedData['peakMonth']);
+
+  // Superlatives
+  let fastestCompletion: YearlyWrappedData['fastestCompletion'] = null;
+  ownedGames.forEach(game => {
+    if (game.status === 'Completed' && game.startDate && game.endDate && game.endDate.startsWith(yearStr)) {
+      const days = Math.round((parseLocalDate(game.endDate).getTime() - parseLocalDate(game.startDate).getTime()) / (1000 * 60 * 60 * 24));
+      if (!fastestCompletion || days < fastestCompletion.days) {
+        fastestCompletion = { name: game.name, days };
+      }
+    }
+  });
+
+  // Biggest surprise: cheap game with high rating
+  let biggestSurprise: YearlyWrappedData['biggestSurprise'] = null;
+  yearAcquired.forEach(game => {
+    if (game.price <= 20 && game.rating >= 8 && getTotalHours(game) >= 10) {
+      if (!biggestSurprise) {
+        biggestSurprise = { name: game.name, reason: `$${game.price} for a ${game.rating}/10 game` };
+      }
+    }
+  });
+
+  // Best/worst value from games played this year
+  let bestValue: YearlyWrappedData['bestValue'] = null;
+  let worstValue: YearlyWrappedData['worstValue'] = null;
+  Object.values(hoursByGame).forEach(({ hours, game }) => {
+    if (game.price > 0 && hours > 0) {
+      const cph = game.price / getTotalHours(game);
+      if (!bestValue || cph < bestValue.costPerHour) {
+        bestValue = { name: game.name, costPerHour: Math.round(cph * 100) / 100 };
+      }
+      if (!worstValue || cph > worstValue.costPerHour) {
+        worstValue = { name: game.name, costPerHour: Math.round(cph * 100) / 100 };
+      }
+    }
+  });
+
+  // Personality (simplified)
+  const personality = getGamingPersonality(ownedGames);
+
+  // Savings
+  const totalSaved = yearAcquired.reduce((s, g) => {
+    if (g.acquiredFree) return s + (g.originalPrice || 0);
+    if (g.originalPrice && g.originalPrice > g.price) return s + (g.originalPrice - g.price);
+    return s;
+  }, 0);
+
+  const avgPurchasePrice = gamesAcquired > 0 ? totalSpent / gamesAcquired : 0;
+
+  // Hours per day/week
+  const daysInYear = 365;
+  const hoursPerDay = totalHours / daysInYear;
+  const hoursPerWeek = totalHours / 52;
+
+  return {
+    year,
+    hasData,
+    totalHours: Math.round(totalHours * 10) / 10,
+    totalSessions,
+    totalSpent: Math.round(totalSpent * 100) / 100,
+    gamesAcquired,
+    gamesCompleted,
+    gamesStarted,
+    gamesAbandoned,
+    avgCostPerHour: Math.round(avgCostPerHour * 100) / 100,
+    completionRate: Math.round(completionRate),
+    top10Games,
+    gameOfTheYear,
+    genreBreakdown,
+    topGenre,
+    monthlyHours,
+    peakMonth,
+    fastestCompletion,
+    longestSession,
+    biggestSurprise,
+    bestValue,
+    worstValue,
+    personalityType: personality.type,
+    totalSaved: Math.round(totalSaved * 100) / 100,
+    avgPurchasePrice: Math.round(avgPurchasePrice * 100) / 100,
+    hoursPerDay: Math.round(hoursPerDay * 100) / 100,
+    hoursPerWeek: Math.round(hoursPerWeek * 10) / 10,
+  };
+}

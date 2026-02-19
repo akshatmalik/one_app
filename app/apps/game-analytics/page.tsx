@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical, Download } from 'lucide-react';
+import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical, Download, Gift } from 'lucide-react';
 import { useGames } from './hooks/useGames';
 import { useAnalytics, GameWithMetrics } from './hooks/useAnalytics';
 import { useBudget } from './hooks/useBudget';
@@ -30,6 +30,7 @@ import { RatingStars } from './components/RatingStars';
 import { MomentumDots } from './components/MomentumDots';
 import { ProgressRing } from './components/ProgressRing';
 import { ExportPanel } from './components/ExportPanel';
+import { YearlyWrapped } from './components/YearlyWrapped';
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist';
@@ -73,6 +74,7 @@ export default function GameAnalyticsPage() {
   const [showRandomPicker, setShowRandomPicker] = useState(false);
   const [showBulkWishlist, setShowBulkWishlist] = useState(false);
   const [showExport, setShowExport] = useState(false);
+  const [wrappedYear, setWrappedYear] = useState<number | null>(null);
   const [detailGame, setDetailGame] = useState<GameWithMetrics | null>(null);
   const [statsCollapsed, setStatsCollapsed] = useState(() => {
     if (typeof window === 'undefined') return false;
@@ -793,6 +795,14 @@ export default function GameAnalyticsPage() {
                 >
                   <Download size={14} />
                 </button>
+                {/* Yearly Wrapped button */}
+                <button
+                  onClick={() => setWrappedYear(new Date().getFullYear())}
+                  className="p-2.5 rounded-lg bg-white/[0.02] text-purple-400/50 hover:text-purple-400 transition-all"
+                  title="Yearly Wrapped"
+                >
+                  <Gift size={14} />
+                </button>
               </div>
             </div>
 
@@ -1046,6 +1056,15 @@ export default function GameAnalyticsPage() {
         <ExportPanel
           games={games}
           onClose={() => setShowExport(false)}
+        />
+      )}
+
+      {/* Yearly Wrapped */}
+      {wrappedYear && (
+        <YearlyWrapped
+          games={games}
+          year={wrappedYear}
+          onClose={() => setWrappedYear(null)}
         />
       )}
 
