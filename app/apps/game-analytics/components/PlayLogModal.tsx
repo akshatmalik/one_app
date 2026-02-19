@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { X, Plus, Trash2, Clock, Calendar, MessageSquare } from 'lucide-react';
-import { Game, PlayLog } from '../lib/types';
+import { Game, PlayLog, SessionMood, SessionVibe } from '../lib/types';
 import { parseLocalDate } from '../lib/calculations';
 import { v4 as uuidv4 } from 'uuid';
 import clsx from 'clsx';
@@ -25,7 +25,13 @@ function getLocalDateString(): string {
 export function PlayLogModal({ game, onSave, onClose }: PlayLogModalProps) {
   const [logs, setLogs] = useState<PlayLog[]>(game.playLogs || []);
   const [loading, setLoading] = useState(false);
-  const [newLog, setNewLog] = useState({
+  const [newLog, setNewLog] = useState<{
+    date: string;
+    hours: string;
+    notes: string;
+    mood?: SessionMood;
+    vibe?: SessionVibe;
+  }>({
     date: getLocalDateString(),
     hours: '1',
     notes: '',
@@ -40,6 +46,8 @@ export function PlayLogModal({ game, onSave, onClose }: PlayLogModalProps) {
       date: newLog.date,
       hours: hours,
       notes: newLog.notes || undefined,
+      mood: newLog.mood,
+      vibe: newLog.vibe,
     };
     setLogs([log, ...logs].sort((a, b) => parseLocalDate(b.date).getTime() - parseLocalDate(a.date).getTime()));
     setNewLog({
@@ -154,6 +162,62 @@ export function PlayLogModal({ game, onSave, onClose }: PlayLogModalProps) {
               <Plus size={16} />
             </button>
           </div>
+
+          {/* Mood & Vibe Tags */}
+          <div className="mt-3 space-y-2">
+            <div>
+              <label className="block text-[10px] text-white/30 mb-1.5">Mood (optional)</label>
+              <div className="flex gap-1.5">
+                {([
+                  { value: 'great', label: '🔥 Great', color: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/20' },
+                  { value: 'good', label: '👍 Good', color: 'bg-blue-500/15 text-blue-400 border-blue-500/20' },
+                  { value: 'meh', label: '😐 Meh', color: 'bg-yellow-500/15 text-yellow-400 border-yellow-500/20' },
+                  { value: 'grind', label: '💪 Grind', color: 'bg-orange-500/15 text-orange-400 border-orange-500/20' },
+                ] as const).map(opt => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setNewLog({ ...newLog, mood: newLog.mood === opt.value ? undefined : opt.value })}
+                    className={clsx(
+                      'px-2.5 py-1 rounded-lg text-[11px] font-medium border transition-all',
+                      newLog.mood === opt.value
+                        ? opt.color
+                        : 'bg-white/[0.02] text-white/30 border-white/5 hover:border-white/10',
+                    )}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <label className="block text-[10px] text-white/30 mb-1.5">Vibe (optional)</label>
+              <div className="flex gap-1.5 flex-wrap">
+                {([
+                  { value: 'wind-down', label: '🌙 Wind-down' },
+                  { value: 'competitive', label: '⚔️ Competitive' },
+                  { value: 'exploration', label: '🗺️ Exploration' },
+                  { value: 'story', label: '📖 Story' },
+                  { value: 'achievement-hunting', label: '🏆 Achievements' },
+                  { value: 'social', label: '👥 Social' },
+                ] as const).map(opt => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setNewLog({ ...newLog, vibe: newLog.vibe === opt.value ? undefined : opt.value })}
+                    className={clsx(
+                      'px-2.5 py-1 rounded-lg text-[11px] font-medium border transition-all',
+                      newLog.vibe === opt.value
+                        ? 'bg-purple-500/15 text-purple-400 border-purple-500/20'
+                        : 'bg-white/[0.02] text-white/30 border-white/5 hover:border-white/10',
+                    )}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Logs List */}
@@ -185,6 +249,26 @@ export function PlayLogModal({ game, onSave, onClose }: PlayLogModalProps) {
                       {log.hours}h
                     </span>
                   </div>
+                  {(log.mood || log.vibe) && (
+                    <div className="flex items-center gap-1.5 mt-1">
+                      {log.mood && (
+                        <span className={clsx(
+                          'text-[9px] px-1.5 py-0.5 rounded-full',
+                          log.mood === 'great' && 'bg-emerald-500/10 text-emerald-400',
+                          log.mood === 'good' && 'bg-blue-500/10 text-blue-400',
+                          log.mood === 'meh' && 'bg-yellow-500/10 text-yellow-400',
+                          log.mood === 'grind' && 'bg-orange-500/10 text-orange-400',
+                        )}>
+                          {log.mood === 'great' && '🔥'} {log.mood === 'good' && '👍'} {log.mood === 'meh' && '😐'} {log.mood === 'grind' && '💪'} {log.mood}
+                        </span>
+                      )}
+                      {log.vibe && (
+                        <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-purple-500/10 text-purple-400">
+                          {log.vibe}
+                        </span>
+                      )}
+                    </div>
+                  )}
                   {log.notes && (
                     <div className="flex items-start gap-2 mt-1.5">
                       <MessageSquare size={10} className="text-white/20 mt-0.5" />

@@ -9,6 +9,14 @@ import { QuickAddTimeModal } from './QuickAddTimeModal';
 import { WeekInReview } from './WeekInReview';
 import { MonthStoryMode } from './MonthStoryMode';
 import { generateMonthlyRecap, generateYearChapterTitles, generateMonthChapterTitles } from '../lib/ai-game-service';
+import { RacingBarChart } from './RacingBarChart';
+import { HoursRace } from './HoursRace';
+import { ActivityFeed } from './ActivityFeed';
+import { GenreEpochs } from './GenreEpochs';
+import { GamingPulse } from './GamingPulse';
+import { FilmstripTimeline } from './FilmstripTimeline';
+import { GamingCalendar } from './GamingCalendar';
+import { CumulativeHoursCounter } from './CumulativeHoursCounter';
 import clsx from 'clsx';
 
 interface TimelineViewProps {
@@ -457,6 +465,25 @@ export function TimelineView({ games, onLogTime, onQuickAddTime }: TimelineViewP
       )}
 
       <WeekInReview data={weekInReviewData} allGames={games} weekOffset={weekOffset} maxWeeksBack={maxWeeksBack} onWeekChange={handleWeekChange} />
+
+      {/* Hours Race — daily/monthly/lifetime racing bar chart */}
+      <HoursRace games={games} />
+
+      {/* Filmstrip — horizontal month snapshots */}
+      <FilmstripTimeline games={games} />
+
+      {/* Gaming Pulse + Genre Epochs side by side on larger screens */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <GamingPulse games={games} />
+        <GenreEpochs games={games} />
+      </div>
+
+      {/* Cumulative Hours Counter */}
+      <CumulativeHoursCounter games={games} />
+
+      {/* Gaming Calendar */}
+      <GamingCalendar games={games} />
+
       <TimelinePeriodCards games={games} />
 
       {/* Game Journey Arcs */}
@@ -696,6 +723,12 @@ export function TimelineView({ games, onLogTime, onQuickAddTime }: TimelineViewP
             </div>
           );
         })}
+      </div>
+
+      {/* Activity Feed */}
+      <div className="space-y-3">
+        <h3 className="text-sm font-medium text-white/50">Activity Feed</h3>
+        <ActivityFeed games={games} />
       </div>
 
       {showQuickAdd && onQuickAddTime && (
