@@ -10077,3 +10077,258 @@ export function getYearlyWrappedData(games: Game[], year: number): YearlyWrapped
     hoursPerWeek: Math.round(hoursPerWeek * 10) / 10,
   };
 }
+
+// ========== Cumulative Hours Counter ==========
+
+export type HoursCounterResolution = 'daily' | 'monthly' | 'yearly';
+
+export interface HoursCounterPoint {
+  label: string;         // "Feb 1", "Jan 2025", "2024"
+  period: string;        // ISO-ish key: "2025-02-01", "2025-02", "2025"
+  hours: number;         // Hours in this period
+  cumulative: number;    // Running total
+  sessions: number;      // Session count in this period
+  gamesPlayed: string[]; // Unique game names played
+  topGame?: string;      // Most played game in this period
+  topGameHours?: number;
+}
+
+export interface HoursCounterData {
+  resolution: HoursCounterResolution;
+  points: HoursCounterPoint[];
+  currentPeriodTotal: number;      // Current period's accumulated total
+  previousPeriodTotal: number;     // Previous period's final total for comparison
+  allTimeTotal: number;
+  trend: number;                   // % change vs previous period
+  avgPerPeriod: number;            // Average hours per period unit
+  bestPeriod: HoursCounterPoint | null;
+  currentStreak: number;           // Consecutive periods with activity
+  periodLabel: string;             // "February 2025", "2025", "All Time"
+}
+
+export function getCumulativeHoursCounter(
+  games: Game[],
+  resolution: HoursCounterResolution,
+  /** For daily: which month (0-11). For monthly: which year. Ignored for yearly. */
+  scopeValue?: number,
+  /** For daily: which year. Ignored otherwise. */
+  scopeYear?: number
+): HoursCounterData {
+  const now = new Date();
+  const currentYear = scopeYear ?? now.getFullYear();
+  const currentMonth = scopeValue ?? now.getMonth();
+
+  // Collect all play sessions with game context
+  const allSessions: { date: Date; hours: number; gameName: string }[] = [];
+  for (const game of games) {
+    if (game.status === 'Wishlist') continue;
+    const totalHrs = getTotalHours(game);
+    if (!game.playLogs || game.playLogs.length === 0) {
+      // Game with baseline hours but no logs — attribute to startDate or datePurchased
+      if (totalHrs > 0) {
+        const dateStr = game.startDate || game.datePurchased || game.createdAt;
+        if (dateStr) {
+          allSessions.push({ date: parseLocalDate(dateStr), hours: totalHrs, gameName: game.name });
+        }
+      }
+      continue;
+    }
+    for (const log of game.playLogs) {
+      allSessions.push({ date: parseLocalDate(log.date), hours: log.hours, gameName: game.name });
+    }
+    // If baseline hours exceed sum of logs, add the remainder to the first log date
+    const logSum = game.playLogs.reduce((s, l) => s + l.hours, 0);
+    if (game.hours > 0 && game.hours > logSum) {
+      const earliest = game.playLogs.reduce((min, l) =>
+        l.date < min ? l.date : min, game.playLogs[0].date);
+      allSessions.push({ date: parseLocalDate(earliest), hours: game.hours - logSum, gameName: game.name });
+    }
+  }
+
+  allSessions.sort((a, b) => a.date.getTime() - b.date.getTime());
+
+  const points: HoursCounterPoint[] = [];
+
+  if (resolution === 'daily') {
+    // Daily within a specific month
+    const year = currentYear;
+    const month = currentMonth;
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+    let cumulative = 0;
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dayKey = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      const daySessions = allSessions.filter(s => {
+        return s.date.getFullYear() === year && s.date.getMonth() === month && s.date.getDate() === d;
+      });
+      const hours = Math.round(daySessions.reduce((s, x) => s + x.hours, 0) * 100) / 100;
+      cumulative = Math.round((cumulative + hours) * 100) / 100;
+      const gameNames = [...new Set(daySessions.map(s => s.gameName))];
+      const gameHours = new Map<string, number>();
+      for (const s of daySessions) {
+        gameHours.set(s.gameName, (gameHours.get(s.gameName) || 0) + s.hours);
+      }
+      let topGame: string | undefined;
+      let topGameHours = 0;
+      for (const [name, h] of gameHours) {
+        if (h > topGameHours) { topGame = name; topGameHours = h; }
+      }
+
+      // Only include days up to today if current month
+      const isCurrentMonth = year === now.getFullYear() && month === now.getMonth();
+      if (isCurrentMonth && d > now.getDate()) break;
+
+      points.push({
+        label: `${monthNames[month]} ${d}`,
+        period: dayKey,
+        hours,
+        cumulative,
+        sessions: daySessions.length,
+        gamesPlayed: gameNames,
+        topGame,
+        topGameHours: topGameHours > 0 ? Math.round(topGameHours * 100) / 100 : undefined,
+      });
+    }
+
+    // Previous month for comparison
+    const prevMonth = month === 0 ? 11 : month - 1;
+    const prevYear = month === 0 ? year - 1 : year;
+    const prevMonthSessions = allSessions.filter(s =>
+      s.date.getFullYear() === prevYear && s.date.getMonth() === prevMonth
+    );
+    const prevTotal = Math.round(prevMonthSessions.reduce((s, x) => s + x.hours, 0) * 100) / 100;
+    const currentTotal = cumulative;
+    const fullMonthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'];
+
+    return buildCounterResult(points, resolution, currentTotal, prevTotal, allSessions,
+      `${fullMonthNames[month]} ${year}`);
+
+  } else if (resolution === 'monthly') {
+    // Monthly within a specific year
+    const year = scopeValue ?? currentYear;
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+    let cumulative = 0;
+    for (let m = 0; m < 12; m++) {
+      const monthKey = `${year}-${String(m + 1).padStart(2, '0')}`;
+      const monthSessions = allSessions.filter(s =>
+        s.date.getFullYear() === year && s.date.getMonth() === m
+      );
+      const hours = Math.round(monthSessions.reduce((s, x) => s + x.hours, 0) * 100) / 100;
+      cumulative = Math.round((cumulative + hours) * 100) / 100;
+      const gameNames = [...new Set(monthSessions.map(s => s.gameName))];
+      const gameHours = new Map<string, number>();
+      for (const s of monthSessions) {
+        gameHours.set(s.gameName, (gameHours.get(s.gameName) || 0) + s.hours);
+      }
+      let topGame: string | undefined;
+      let topGameHours = 0;
+      for (const [name, h] of gameHours) {
+        if (h > topGameHours) { topGame = name; topGameHours = h; }
+      }
+
+      // Only include months up to current if current year
+      if (year === now.getFullYear() && m > now.getMonth()) break;
+
+      points.push({
+        label: `${monthNames[m]} ${year}`,
+        period: monthKey,
+        hours,
+        cumulative,
+        sessions: monthSessions.length,
+        gamesPlayed: gameNames,
+        topGame,
+        topGameHours: topGameHours > 0 ? Math.round(topGameHours * 100) / 100 : undefined,
+      });
+    }
+
+    // Previous year for comparison
+    const prevYearSessions = allSessions.filter(s => s.date.getFullYear() === year - 1);
+    const prevTotal = Math.round(prevYearSessions.reduce((s, x) => s + x.hours, 0) * 100) / 100;
+    const currentTotal = cumulative;
+
+    return buildCounterResult(points, resolution, currentTotal, prevTotal, allSessions,
+      `${year}`);
+
+  } else {
+    // Yearly — all time
+    const yearSet = new Set<number>();
+    for (const s of allSessions) yearSet.add(s.date.getFullYear());
+    const years = [...yearSet].sort((a, b) => a - b);
+
+    let cumulative = 0;
+    for (const year of years) {
+      const yearSessions = allSessions.filter(s => s.date.getFullYear() === year);
+      const hours = Math.round(yearSessions.reduce((s, x) => s + x.hours, 0) * 100) / 100;
+      cumulative = Math.round((cumulative + hours) * 100) / 100;
+      const gameNames = [...new Set(yearSessions.map(s => s.gameName))];
+      const gameHours = new Map<string, number>();
+      for (const s of yearSessions) {
+        gameHours.set(s.gameName, (gameHours.get(s.gameName) || 0) + s.hours);
+      }
+      let topGame: string | undefined;
+      let topGameHours = 0;
+      for (const [name, h] of gameHours) {
+        if (h > topGameHours) { topGame = name; topGameHours = h; }
+      }
+
+      points.push({
+        label: `${year}`,
+        period: `${year}`,
+        hours,
+        cumulative,
+        sessions: yearSessions.length,
+        gamesPlayed: gameNames,
+        topGame,
+        topGameHours: topGameHours > 0 ? Math.round(topGameHours * 100) / 100 : undefined,
+      });
+    }
+
+    const lastYear = points.length >= 2 ? points[points.length - 2].hours : 0;
+    const currentTotal = points.length > 0 ? points[points.length - 1].hours : 0;
+
+    return buildCounterResult(points, resolution, currentTotal, lastYear, allSessions, 'All Time');
+  }
+}
+
+function buildCounterResult(
+  points: HoursCounterPoint[],
+  resolution: HoursCounterResolution,
+  currentPeriodTotal: number,
+  previousPeriodTotal: number,
+  allSessions: { date: Date; hours: number }[],
+  periodLabel: string
+): HoursCounterData {
+  const allTimeTotal = Math.round(allSessions.reduce((s, x) => s + x.hours, 0) * 100) / 100;
+  const trend = previousPeriodTotal > 0
+    ? Math.round(((currentPeriodTotal - previousPeriodTotal) / previousPeriodTotal) * 100)
+    : 0;
+  const avgPerPeriod = points.length > 0
+    ? Math.round((points.reduce((s, p) => s + p.hours, 0) / points.length) * 100) / 100
+    : 0;
+  const bestPeriod = points.length > 0
+    ? points.reduce((best, p) => p.hours > best.hours ? p : best, points[0])
+    : null;
+
+  // Count consecutive periods with activity from the end
+  let currentStreak = 0;
+  for (let i = points.length - 1; i >= 0; i--) {
+    if (points[i].hours > 0) currentStreak++;
+    else break;
+  }
+
+  return {
+    resolution,
+    points,
+    currentPeriodTotal,
+    previousPeriodTotal,
+    allTimeTotal,
+    trend,
+    avgPerPeriod,
+    bestPeriod,
+    currentStreak,
+    periodLabel,
+  };
+}

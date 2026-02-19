@@ -15,6 +15,7 @@ import { GenreEpochs } from './GenreEpochs';
 import { GamingPulse } from './GamingPulse';
 import { FilmstripTimeline } from './FilmstripTimeline';
 import { GamingCalendar } from './GamingCalendar';
+import { CumulativeHoursCounter } from './CumulativeHoursCounter';
 import clsx from 'clsx';
 
 interface TimelineViewProps {
@@ -475,6 +476,9 @@ export function TimelineView({ games, onLogTime, onQuickAddTime }: TimelineViewP
         <GamingPulse games={games} />
         <GenreEpochs games={games} />
       </div>
+
+      {/* Cumulative Hours Counter */}
+      <CumulativeHoursCounter games={games} />
 
       {/* Gaming Calendar */}
       <GamingCalendar games={games} />
