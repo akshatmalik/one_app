@@ -141,15 +141,27 @@ export function CumulativeHoursCounter({ games, className }: CumulativeHoursCoun
         {/* Period Navigation */}
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
-            {canGoBack && (
-              <button onClick={goBack} className="p-1 rounded text-white/30 hover:text-white/60 transition-colors">
-                <ChevronLeft size={14} />
+            {resolution !== 'yearly' && (
+              <button
+                onClick={goBack}
+                className="p-1.5 rounded text-white/30 hover:text-white/60 hover:bg-white/5 transition-colors"
+              >
+                <ChevronLeft size={16} />
               </button>
             )}
-            <span className="text-xs font-medium text-white/70">{data.periodLabel}</span>
-            {canGoForward && (
-              <button onClick={goForward} className="p-1 rounded text-white/30 hover:text-white/60 transition-colors">
-                <ChevronRight size={14} />
+            <span className="text-xs font-medium text-white/70 min-w-[120px] text-center">{data.periodLabel}</span>
+            {resolution !== 'yearly' && (
+              <button
+                onClick={goForward}
+                disabled={!canGoForward}
+                className={clsx(
+                  'p-1.5 rounded transition-colors',
+                  canGoForward
+                    ? 'text-white/30 hover:text-white/60 hover:bg-white/5'
+                    : 'text-white/10 cursor-not-allowed'
+                )}
+              >
+                <ChevronRight size={16} />
               </button>
             )}
           </div>

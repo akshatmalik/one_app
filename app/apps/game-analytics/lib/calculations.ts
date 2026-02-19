@@ -9177,6 +9177,142 @@ export function getRacingBarHighlights(frames: RacingBarFrame[]): RacingBarHighl
   return highlights;
 }
 
+export type RacingBarScope = 'daily' | 'monthly' | 'lifetime';
+
+/**
+ * Generate racing bar frames at any granularity:
+ * - 'daily': frames are individual days within a given month/year.
+ *            Cumulative hours are WITHIN that month (reset each month).
+ * - 'monthly': frames are months across all time (same as getRacingBarChartData).
+ * - 'lifetime': frames are months with cumulative hours across ALL time.
+ */
+export function getScopedRacingBarData(
+  games: Game[],
+  scope: RacingBarScope,
+  scopeMonth?: number, // 0-11, for daily scope
+  scopeYear?: number,  // for daily scope
+): RacingBarFrame[] {
+  if (scope === 'monthly' || scope === 'lifetime') {
+    // Reuse existing monthly logic — it's already lifetime cumulative
+    return getRacingBarChartData(games);
+  }
+
+  // Daily scope: build day-by-day frames within a specific month
+  const now = new Date();
+  const year = scopeYear ?? now.getFullYear();
+  const month = scopeMonth ?? now.getMonth();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const isCurrentMonth = year === now.getFullYear() && month === now.getMonth();
+  const maxDay = isCurrentMonth ? now.getDate() : daysInMonth;
+
+  const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'];
+
+  // Collect all play sessions for this month mapped to game
+  const ownedGames = games.filter(g => g.status !== 'Wishlist');
+  const gameMap = new Map<string, Game>();
+  for (const g of ownedGames) gameMap.set(g.id, g);
+
+  // Build a map: gameId -> day -> hours for this month
+  const dailyHours = new Map<string, Map<number, number>>();
+  for (const game of ownedGames) {
+    if (game.playLogs && game.playLogs.length > 0) {
+      for (const log of game.playLogs) {
+        const d = parseLocalDate(log.date);
+        if (d.getFullYear() === year && d.getMonth() === month) {
+          if (!dailyHours.has(game.id)) dailyHours.set(game.id, new Map());
+          const dayMap = dailyHours.get(game.id)!;
+          dayMap.set(d.getDate(), (dayMap.get(d.getDate()) || 0) + log.hours);
+        }
+      }
+    } else if (getTotalHours(game) > 0) {
+      // Attribute baseline hours to start date if within this month
+      const dateStr = game.startDate || game.datePurchased || game.createdAt;
+      if (dateStr) {
+        const d = parseLocalDate(dateStr);
+        if (d.getFullYear() === year && d.getMonth() === month) {
+          if (!dailyHours.has(game.id)) dailyHours.set(game.id, new Map());
+          const dayMap = dailyHours.get(game.id)!;
+          dayMap.set(d.getDate(), (dayMap.get(d.getDate()) || 0) + getTotalHours(game));
+        }
+      }
+    }
+  }
+
+  // Only include games that have activity this month
+  const activeGameIds = [...dailyHours.keys()];
+  if (activeGameIds.length === 0) return [];
+
+  // Assign colors
+  const colorMap = new Map<string, string>();
+  activeGameIds.forEach((id, i) => {
+    colorMap.set(id, RACING_BAR_COLORS[i % RACING_BAR_COLORS.length]);
+  });
+
+  const frames: RacingBarFrame[] = [];
+  const cumulative = new Map<string, number>();
+  let previousRanks = new Map<string, number>();
+  const seenGames = new Set<string>();
+
+  for (let day = 1; day <= maxDay; day++) {
+    const entries: RacingBarEntry[] = [];
+
+    for (const gameId of activeGameIds) {
+      const dayMap = dailyHours.get(gameId)!;
+      const hoursToday = dayMap.get(day) || 0;
+      const prevCum = cumulative.get(gameId) || 0;
+      const newCum = Math.round((prevCum + hoursToday) * 100) / 100;
+      cumulative.set(gameId, newCum);
+
+      if (newCum <= 0) continue;
+
+      const game = gameMap.get(gameId)!;
+      const isNew = !seenGames.has(gameId);
+      seenGames.add(gameId);
+
+      // Check if completed on this day
+      let justCompleted = false;
+      if (game.endDate) {
+        const endD = parseLocalDate(game.endDate);
+        justCompleted = endD.getFullYear() === year && endD.getMonth() === month && endD.getDate() === day;
+      }
+
+      entries.push({
+        gameId,
+        gameName: game.name,
+        thumbnail: game.thumbnail,
+        cumulativeHours: newCum,
+        hoursThisPeriod: hoursToday,
+        rank: 0,
+        previousRank: previousRanks.get(gameId) || 0,
+        isNew,
+        status: game.status as GameStatus,
+        justCompleted,
+        color: colorMap.get(gameId) || RACING_BAR_COLORS[0],
+        genre: game.genre,
+      });
+    }
+
+    // Sort by cumulative hours desc, assign ranks
+    entries.sort((a, b) => b.cumulativeHours - a.cumulativeHours);
+    entries.forEach((e, i) => { e.rank = i + 1; });
+
+    const dayStr = String(day).padStart(2, '0');
+    const monthStr = String(month + 1).padStart(2, '0');
+
+    frames.push({
+      period: `${year}-${monthStr}-${dayStr}`,
+      periodLabel: `${monthNames[month]} ${day}, ${year}`,
+      games: entries,
+    });
+
+    // Store ranks for next frame
+    previousRanks = new Map(entries.map(e => [e.gameId, e.rank]));
+  }
+
+  return frames;
+}
+
 // ============================================================
 // Activity Feed — reverse-chronological event stream
 // ============================================================
