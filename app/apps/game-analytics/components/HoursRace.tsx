@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState, useEffect, useCallback, useRef } from 'react';
-import { Play, Pause, SkipBack, SkipForward, ChevronFirst, ChevronLast, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, ChevronFirst, ChevronLast, ChevronLeft, ChevronRight, Clock } from 'lucide-react';
 import { Game } from '../lib/types';
 import {
   getScopedRacingBarData,
@@ -20,16 +20,16 @@ interface HoursRaceProps {
 
 const SPEED_OPTIONS = [0.5, 1, 2, 3] as const;
 
-const SCOPE_CONFIG: Record<RacingBarScope, { label: string; color: string }> = {
-  daily: { label: 'Daily', color: 'cyan' },
-  monthly: { label: 'Monthly', color: 'purple' },
-  lifetime: { label: 'Lifetime', color: 'amber' },
+const SCOPE_CONFIG: Record<RacingBarScope, { label: string }> = {
+  month: { label: 'Month' },
+  year: { label: 'Year' },
+  alltime: { label: 'All Time' },
 };
 
 export function HoursRace({ games, maxBars = 10, className }: HoursRaceProps) {
   const now = new Date();
-  const [scope, setScope] = useState<RacingBarScope>('daily');
-  const [scopeMonth, setScopeMonth] = useState(now.getMonth() > 0 ? now.getMonth() - 1 : 11); // Default: last month
+  const [scope, setScope] = useState<RacingBarScope>('month');
+  const [scopeMonth, setScopeMonth] = useState(now.getMonth() > 0 ? now.getMonth() - 1 : 11);
   const [scopeYear, setScopeYear] = useState(now.getMonth() > 0 ? now.getFullYear() : now.getFullYear() - 1);
   const [currentFrameIndex, setCurrentFrameIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -71,7 +71,7 @@ export function HoursRace({ games, maxBars = 10, className }: HoursRaceProps) {
     return max || 1;
   }, [frames]);
 
-  // Playback
+  // Playback — faster for year/alltime since there are more frames
   const advanceFrame = useCallback(() => {
     setCurrentFrameIndex(prev => {
       if (prev >= frames.length - 1) {
@@ -84,7 +84,7 @@ export function HoursRace({ games, maxBars = 10, className }: HoursRaceProps) {
 
   useEffect(() => {
     if (isPlaying) {
-      const baseInterval = scope === 'daily' ? 800 : 1500;
+      const baseInterval = scope === 'month' ? 800 : scope === 'year' ? 200 : 100;
       const interval = baseInterval / playbackSpeed;
       animationRef.current = setTimeout(advanceFrame, interval);
     }
@@ -102,19 +102,20 @@ export function HoursRace({ games, maxBars = 10, className }: HoursRaceProps) {
     }
   };
 
-  // Month/year navigation for daily scope
-  const canGoForward = scope === 'daily'
-    ? !(scopeYear === now.getFullYear() && scopeMonth >= now.getMonth())
-    : false;
+  // Navigation for month scope
+  const canGoForwardMonth = !(scopeYear === now.getFullYear() && scopeMonth >= now.getMonth());
+  const canGoForwardYear = scopeYear < now.getFullYear();
 
-  const goBack = () => {
+  const goBackMonth = () => {
     if (scopeMonth === 0) { setScopeMonth(11); setScopeYear(y => y - 1); }
     else setScopeMonth(m => m - 1);
   };
-  const goForward = () => {
+  const goForwardMonth = () => {
     if (scopeMonth === 11) { setScopeMonth(0); setScopeYear(y => y + 1); }
     else setScopeMonth(m => m + 1);
   };
+  const goBackYear = () => setScopeYear(y => y - 1);
+  const goForwardYear = () => setScopeYear(y => y + 1);
 
   const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
     'July', 'August', 'September', 'October', 'November', 'December'];
@@ -123,8 +124,10 @@ export function HoursRace({ games, maxBars = 10, className }: HoursRaceProps) {
     return (
       <div className={clsx('p-6 bg-white/[0.02] border border-white/5 rounded-2xl text-center', className)}>
         <p className="text-white/30 text-sm">
-          {scope === 'daily'
+          {scope === 'month'
             ? `No gaming activity in ${monthNames[scopeMonth]} ${scopeYear}`
+            : scope === 'year'
+            ? `No gaming activity in ${scopeYear}`
             : 'Log play sessions to see games race!'}
         </p>
       </div>
@@ -140,7 +143,7 @@ export function HoursRace({ games, maxBars = 10, className }: HoursRaceProps) {
     || currentHighlights.find(h => h.type === 'dominant_month')
     || null;
 
-  const accentColor = scope === 'daily' ? 'cyan' : scope === 'monthly' ? 'purple' : 'amber';
+  const accentColor = scope === 'month' ? 'cyan' : scope === 'year' ? 'purple' : 'amber';
 
   return (
     <div className={clsx('p-4 sm:p-6 bg-white/[0.02] border border-white/5 rounded-2xl', className)}>
@@ -149,15 +152,22 @@ export function HoursRace({ games, maxBars = 10, className }: HoursRaceProps) {
         <h3 className="text-sm font-medium text-white/50">Hours Race</h3>
 
         <div className="flex items-center gap-1 bg-white/[0.04] rounded-lg p-0.5">
-          {(['daily', 'monthly', 'lifetime'] as RacingBarScope[]).map(s => (
+          {(['month', 'year', 'alltime'] as RacingBarScope[]).map(s => (
             <button
               key={s}
-              onClick={() => setScope(s)}
+              onClick={() => {
+                setScope(s);
+                if (s === 'month') {
+                  setScopeMonth(now.getMonth() > 0 ? now.getMonth() - 1 : 11);
+                  setScopeYear(now.getMonth() > 0 ? now.getFullYear() : now.getFullYear() - 1);
+                }
+                if (s === 'year') setScopeYear(now.getFullYear());
+              }}
               className={clsx(
                 'px-2.5 py-1 rounded-md text-[10px] font-medium transition-all',
                 scope === s
-                  ? s === 'daily' ? 'bg-cyan-500/20 text-cyan-400'
-                  : s === 'monthly' ? 'bg-purple-500/20 text-purple-400'
+                  ? s === 'month' ? 'bg-cyan-500/20 text-cyan-400'
+                  : s === 'year' ? 'bg-purple-500/20 text-purple-400'
                   : 'bg-amber-500/20 text-amber-400'
                   : 'text-white/30 hover:text-white/60'
               )}
@@ -168,45 +178,65 @@ export function HoursRace({ games, maxBars = 10, className }: HoursRaceProps) {
         </div>
       </div>
 
-      {/* Period navigation for daily scope */}
-      {scope === 'daily' && (
+      {/* Period navigation for month scope */}
+      {scope === 'month' && (
         <div className="flex items-center justify-center gap-3 mb-3">
-          <button
-            onClick={goBack}
-            className="p-1.5 rounded text-white/30 hover:text-white/60 hover:bg-white/5 transition-colors"
-          >
+          <button onClick={goBackMonth} className="p-1.5 rounded text-white/30 hover:text-white/60 hover:bg-white/5 transition-colors">
             <ChevronLeft size={16} />
           </button>
           <span className="text-xs font-medium text-white/70 min-w-[140px] text-center">
             {monthNames[scopeMonth]} {scopeYear}
           </span>
           <button
-            onClick={goForward}
-            disabled={!canGoForward}
-            className={clsx(
-              'p-1.5 rounded transition-colors',
-              canGoForward
-                ? 'text-white/30 hover:text-white/60 hover:bg-white/5'
-                : 'text-white/10 cursor-not-allowed'
-            )}
+            onClick={goForwardMonth}
+            disabled={!canGoForwardMonth}
+            className={clsx('p-1.5 rounded transition-colors', canGoForwardMonth ? 'text-white/30 hover:text-white/60 hover:bg-white/5' : 'text-white/10 cursor-not-allowed')}
           >
             <ChevronRight size={16} />
           </button>
         </div>
       )}
 
-      {/* Current frame label */}
+      {/* Period navigation for year scope */}
+      {scope === 'year' && (
+        <div className="flex items-center justify-center gap-3 mb-3">
+          <button onClick={goBackYear} className="p-1.5 rounded text-white/30 hover:text-white/60 hover:bg-white/5 transition-colors">
+            <ChevronLeft size={16} />
+          </button>
+          <span className="text-xs font-medium text-white/70 min-w-[60px] text-center">
+            {scopeYear}
+          </span>
+          <button
+            onClick={goForwardYear}
+            disabled={!canGoForwardYear}
+            className={clsx('p-1.5 rounded transition-colors', canGoForwardYear ? 'text-white/30 hover:text-white/60 hover:bg-white/5' : 'text-white/10 cursor-not-allowed')}
+          >
+            <ChevronRight size={16} />
+          </button>
+        </div>
+      )}
+
+      {/* Current frame label + total hours in top-right */}
       {currentFrame && (
         <div className="flex items-center justify-between mb-2">
           <div className={clsx(
             'text-sm font-semibold',
             accentColor === 'cyan' ? 'text-cyan-400/80' : accentColor === 'purple' ? 'text-purple-400/80' : 'text-amber-400/80'
           )}>
-            {scope === 'daily' ? `Day ${currentFrameIndex + 1}` : currentFrame.periodLabel}
+            {currentFrame.periodLabel}
           </div>
-          {scope === 'daily' && (
-            <div className="text-xs text-white/40">{currentFrame.periodLabel}</div>
-          )}
+          <div className="flex items-center gap-1.5">
+            <Clock size={12} className="text-white/20" />
+            <span className={clsx(
+              'text-sm font-bold tabular-nums',
+              accentColor === 'cyan' ? 'text-cyan-400' : accentColor === 'purple' ? 'text-purple-400' : 'text-amber-400'
+            )}>
+              {currentFrame.totalHours.toFixed(1)}h
+            </span>
+            {scope !== 'month' && (
+              <span className="text-[9px] text-white/20">30d</span>
+            )}
+          </div>
         </div>
       )}
 
@@ -241,7 +271,7 @@ export function HoursRace({ games, maxBars = 10, className }: HoursRaceProps) {
           return (
             <div
               key={entry.gameId}
-              className="flex items-center gap-2 transition-all duration-500 ease-in-out"
+              className="flex items-center gap-2 transition-all duration-300 ease-in-out"
               style={{
                 opacity: entry.isNew ? 0.9 : 1,
                 animation: entry.isNew ? 'cardSlideUp 0.4s ease-out' : undefined,
@@ -276,8 +306,7 @@ export function HoursRace({ games, maxBars = 10, className }: HoursRaceProps) {
                 <div className="relative h-5 bg-white/[0.03] rounded overflow-hidden">
                   <div
                     className={clsx(
-                      'absolute inset-y-0 left-0 rounded transition-all ease-in-out',
-                      scope === 'daily' ? 'duration-500' : 'duration-700',
+                      'absolute inset-y-0 left-0 rounded transition-all duration-300 ease-in-out',
                       isActive && 'racing-bar-active',
                     )}
                     style={{

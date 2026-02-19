@@ -101,10 +101,13 @@ export function FilmstripTimeline({ games, className }: FilmstripTimelineProps) 
   const frames = useMemo(() => getFilmstripData(games), [games]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [centerIndex, setCenterIndex] = useState(-1);
+  const hasScrolledRef = useRef(false);
 
-  // Scroll to the current month (or last frame) on mount
+  // Scroll to the current month (or last frame) on mount ONLY
   useEffect(() => {
+    if (hasScrolledRef.current) return;
     if (scrollRef.current && frames.length > 0) {
+      hasScrolledRef.current = true;
       const currentIdx = frames.findIndex(f => f.isCurrentMonth);
       const targetIdx = currentIdx >= 0 ? currentIdx : frames.length - 1;
       const cardWidth = 220; // approximate width + gap

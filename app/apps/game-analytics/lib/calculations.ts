@@ -8921,6 +8921,7 @@ export interface RacingBarFrame {
   period: string;         // "2024-01"
   periodLabel: string;    // "January 2024"
   games: RacingBarEntry[];
+  totalHours: number;     // Total hours across all games in this frame
 }
 
 export interface RacingBarHighlight {
@@ -9084,6 +9085,7 @@ export function getRacingBarChartData(games: Game[]): RacingBarFrame[] {
       period: monthKey,
       periodLabel,
       games: entries,
+      totalHours: Math.round(entries.reduce((s, e) => s + e.cumulativeHours, 0) * 10) / 10,
     });
   }
 
@@ -9177,137 +9179,208 @@ export function getRacingBarHighlights(frames: RacingBarFrame[]): RacingBarHighl
   return highlights;
 }
 
-export type RacingBarScope = 'daily' | 'monthly' | 'lifetime';
+export type RacingBarScope = 'month' | 'year' | 'alltime';
 
 /**
- * Generate racing bar frames at any granularity:
- * - 'daily': frames are individual days within a given month/year.
- *            Cumulative hours are WITHIN that month (reset each month).
- * - 'monthly': frames are months across all time (same as getRacingBarChartData).
- * - 'lifetime': frames are months with cumulative hours across ALL time.
+ * Generate racing bar frames — ALWAYS daily granularity.
+ * - 'month': one frame per day within a month, cumulative hours within that month.
+ * - 'year': one frame per day across a year, rolling 30-day window per game.
+ * - 'alltime': one frame per day across entire history, rolling 30-day window per game.
  */
 export function getScopedRacingBarData(
   games: Game[],
   scope: RacingBarScope,
-  scopeMonth?: number, // 0-11, for daily scope
-  scopeYear?: number,  // for daily scope
+  scopeMonth?: number, // 0-11, for month scope
+  scopeYear?: number,  // for month/year scope
 ): RacingBarFrame[] {
-  if (scope === 'monthly' || scope === 'lifetime') {
-    // Reuse existing monthly logic — it's already lifetime cumulative
-    return getRacingBarChartData(games);
-  }
-
-  // Daily scope: build day-by-day frames within a specific month
   const now = new Date();
-  const year = scopeYear ?? now.getFullYear();
-  const month = scopeMonth ?? now.getMonth();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const isCurrentMonth = year === now.getFullYear() && month === now.getMonth();
-  const maxDay = isCurrentMonth ? now.getDate() : daysInMonth;
-
-  const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December'];
-
-  // Collect all play sessions for this month mapped to game
   const ownedGames = games.filter(g => g.status !== 'Wishlist');
   const gameMap = new Map<string, Game>();
   for (const g of ownedGames) gameMap.set(g.id, g);
 
-  // Build a map: gameId -> day -> hours for this month
-  const dailyHours = new Map<string, Map<number, number>>();
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const fullMonthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'];
+
+  // Build a unified map: gameId -> dateKey("YYYY-MM-DD") -> hours
+  const gameDailyMap = new Map<string, Map<string, number>>();
   for (const game of ownedGames) {
     if (game.playLogs && game.playLogs.length > 0) {
       for (const log of game.playLogs) {
-        const d = parseLocalDate(log.date);
-        if (d.getFullYear() === year && d.getMonth() === month) {
-          if (!dailyHours.has(game.id)) dailyHours.set(game.id, new Map());
-          const dayMap = dailyHours.get(game.id)!;
-          dayMap.set(d.getDate(), (dayMap.get(d.getDate()) || 0) + log.hours);
-        }
+        const dateKey = log.date.substring(0, 10); // YYYY-MM-DD
+        if (!gameDailyMap.has(game.id)) gameDailyMap.set(game.id, new Map());
+        const dm = gameDailyMap.get(game.id)!;
+        dm.set(dateKey, (dm.get(dateKey) || 0) + log.hours);
       }
     } else if (getTotalHours(game) > 0) {
-      // Attribute baseline hours to start date if within this month
       const dateStr = game.startDate || game.datePurchased || game.createdAt;
       if (dateStr) {
-        const d = parseLocalDate(dateStr);
-        if (d.getFullYear() === year && d.getMonth() === month) {
-          if (!dailyHours.has(game.id)) dailyHours.set(game.id, new Map());
-          const dayMap = dailyHours.get(game.id)!;
-          dayMap.set(d.getDate(), (dayMap.get(d.getDate()) || 0) + getTotalHours(game));
-        }
+        const dateKey = dateStr.substring(0, 10);
+        if (!gameDailyMap.has(game.id)) gameDailyMap.set(game.id, new Map());
+        const dm = gameDailyMap.get(game.id)!;
+        dm.set(dateKey, (dm.get(dateKey) || 0) + getTotalHours(game));
       }
     }
   }
 
-  // Only include games that have activity this month
-  const activeGameIds = [...dailyHours.keys()];
-  if (activeGameIds.length === 0) return [];
+  if (gameDailyMap.size === 0) return [];
 
-  // Assign colors
+  // Assign stable colors
+  const allGameIds = [...gameDailyMap.keys()];
   const colorMap = new Map<string, string>();
-  activeGameIds.forEach((id, i) => {
-    colorMap.set(id, RACING_BAR_COLORS[i % RACING_BAR_COLORS.length]);
-  });
+  allGameIds.forEach((id, i) => colorMap.set(id, RACING_BAR_COLORS[i % RACING_BAR_COLORS.length]));
 
+  // Determine date range for frames
+  let startDate: Date;
+  let endDate: Date;
+
+  if (scope === 'month') {
+    const year = scopeYear ?? now.getFullYear();
+    const month = scopeMonth ?? now.getMonth();
+    startDate = new Date(year, month, 1);
+    const isCurrentMonth = year === now.getFullYear() && month === now.getMonth();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    endDate = isCurrentMonth ? now : new Date(year, month, daysInMonth);
+  } else if (scope === 'year') {
+    const year = scopeYear ?? now.getFullYear();
+    startDate = new Date(year, 0, 1);
+    endDate = year === now.getFullYear() ? now : new Date(year, 11, 31);
+  } else {
+    // All time: find earliest date across all games
+    let earliest = now;
+    for (const dm of gameDailyMap.values()) {
+      for (const dk of dm.keys()) {
+        const d = parseLocalDate(dk);
+        if (d < earliest) earliest = d;
+      }
+    }
+    startDate = earliest;
+    endDate = now;
+  }
+
+  // Helper: date to key
+  const toKey = (d: Date) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
+
+  // Helper: format date for label
+  const formatLabel = (d: Date) =>
+    `${monthNames[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+
+  const ROLLING_WINDOW = 30;
   const frames: RacingBarFrame[] = [];
-  const cumulative = new Map<string, number>();
   let previousRanks = new Map<string, number>();
   const seenGames = new Set<string>();
 
-  for (let day = 1; day <= maxDay; day++) {
+  // For month scope: track cumulative per game
+  const cumulativeMonth = new Map<string, number>();
+
+  // For year/alltime: maintain a sliding window of last 30 days' daily totals per game
+  // We'll use a queue of the last ROLLING_WINDOW date keys
+  const windowQueue: string[] = [];
+
+  // Iterate day by day
+  const current = new Date(startDate);
+  while (current <= endDate) {
+    const dateKey = toKey(current);
     const entries: RacingBarEntry[] = [];
 
-    for (const gameId of activeGameIds) {
-      const dayMap = dailyHours.get(gameId)!;
-      const hoursToday = dayMap.get(day) || 0;
-      const prevCum = cumulative.get(gameId) || 0;
-      const newCum = Math.round((prevCum + hoursToday) * 100) / 100;
-      cumulative.set(gameId, newCum);
+    if (scope === 'month') {
+      // Month: simple cumulative within the month
+      for (const gameId of allGameIds) {
+        const dm = gameDailyMap.get(gameId)!;
+        const hoursToday = dm.get(dateKey) || 0;
+        const prevCum = cumulativeMonth.get(gameId) || 0;
+        const newCum = Math.round((prevCum + hoursToday) * 100) / 100;
+        cumulativeMonth.set(gameId, newCum);
 
-      if (newCum <= 0) continue;
+        if (newCum <= 0) continue;
 
-      const game = gameMap.get(gameId)!;
-      const isNew = !seenGames.has(gameId);
-      seenGames.add(gameId);
+        const game = gameMap.get(gameId)!;
+        const isNew = !seenGames.has(gameId);
+        if (newCum > 0) seenGames.add(gameId);
 
-      // Check if completed on this day
-      let justCompleted = false;
-      if (game.endDate) {
-        const endD = parseLocalDate(game.endDate);
-        justCompleted = endD.getFullYear() === year && endD.getMonth() === month && endD.getDate() === day;
+        let justCompleted = false;
+        if (game.endDate && game.endDate.substring(0, 10) === dateKey) justCompleted = true;
+
+        entries.push({
+          gameId,
+          gameName: game.name,
+          thumbnail: game.thumbnail,
+          cumulativeHours: newCum,
+          hoursThisPeriod: hoursToday,
+          rank: 0,
+          previousRank: previousRanks.get(gameId) || 0,
+          isNew,
+          status: game.status as GameStatus,
+          justCompleted,
+          color: colorMap.get(gameId) || RACING_BAR_COLORS[0],
+          genre: game.genre,
+        });
       }
+    } else {
+      // Year / All Time: rolling 30-day window
+      windowQueue.push(dateKey);
+      // Remove dates older than 30 days
+      while (windowQueue.length > ROLLING_WINDOW) windowQueue.shift();
 
-      entries.push({
-        gameId,
-        gameName: game.name,
-        thumbnail: game.thumbnail,
-        cumulativeHours: newCum,
-        hoursThisPeriod: hoursToday,
-        rank: 0,
-        previousRank: previousRanks.get(gameId) || 0,
-        isNew,
-        status: game.status as GameStatus,
-        justCompleted,
-        color: colorMap.get(gameId) || RACING_BAR_COLORS[0],
-        genre: game.genre,
-      });
+      for (const gameId of allGameIds) {
+        const dm = gameDailyMap.get(gameId)!;
+        // Sum hours in the rolling window
+        let windowHours = 0;
+        for (const wdk of windowQueue) {
+          windowHours += dm.get(wdk) || 0;
+        }
+        windowHours = Math.round(windowHours * 100) / 100;
+        const hoursToday = dm.get(dateKey) || 0;
+
+        if (windowHours <= 0) continue;
+
+        const game = gameMap.get(gameId)!;
+        const isNew = !seenGames.has(gameId);
+        if (windowHours > 0) seenGames.add(gameId);
+
+        let justCompleted = false;
+        if (game.endDate && game.endDate.substring(0, 10) === dateKey) justCompleted = true;
+
+        entries.push({
+          gameId,
+          gameName: game.name,
+          thumbnail: game.thumbnail,
+          cumulativeHours: windowHours, // rolling 30d total
+          hoursThisPeriod: hoursToday,
+          rank: 0,
+          previousRank: previousRanks.get(gameId) || 0,
+          isNew,
+          status: game.status as GameStatus,
+          justCompleted,
+          color: colorMap.get(gameId) || RACING_BAR_COLORS[0],
+          genre: game.genre,
+        });
+      }
     }
 
-    // Sort by cumulative hours desc, assign ranks
+    // Sort and assign ranks
     entries.sort((a, b) => b.cumulativeHours - a.cumulativeHours);
     entries.forEach((e, i) => { e.rank = i + 1; });
 
-    const dayStr = String(day).padStart(2, '0');
-    const monthStr = String(month + 1).padStart(2, '0');
+    const totalHours = Math.round(entries.reduce((s, e) => s + e.cumulativeHours, 0) * 10) / 10;
 
     frames.push({
-      period: `${year}-${monthStr}-${dayStr}`,
-      periodLabel: `${monthNames[month]} ${day}, ${year}`,
+      period: dateKey,
+      periodLabel: formatLabel(current),
       games: entries,
+      totalHours,
     });
 
-    // Store ranks for next frame
     previousRanks = new Map(entries.map(e => [e.gameId, e.rank]));
+
+    // Advance one day
+    current.setDate(current.getDate() + 1);
   }
 
   return frames;
