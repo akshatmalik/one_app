@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Game, GameRecommendation, TasteProfile, RecommendationStatus } from '../lib/types';
 import { recommendationRepository } from '../lib/recommendation-storage';
+import { profileRepository } from '../lib/profile-storage';
 import { buildTasteProfile, buildUpcomingFilters, scoreUpcomingMatch } from '../lib/calculations';
 import {
   generateRefinedRecommendations,
@@ -38,37 +39,29 @@ export function useRecommendations(userId: string | null, games: Game[]) {
     platforms: profileOverrides.platforms || autoProfile.platforms,
   }), [autoProfile, profileOverrides]);
 
-  // Set user ID on repository
+  // Set user ID on repositories
   useEffect(() => {
     recommendationRepository.setUserId(userId || '');
+    profileRepository.setUserId(userId || '');
   }, [userId]);
 
-  // Load profile overrides from localStorage
+  // Load profile overrides from storage (localStorage or Firestore depending on auth)
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const key = `game-analytics-taste-overrides-${userId || 'local-user'}`;
-    const saved = localStorage.getItem(key);
-    if (saved) {
-      try { setProfileOverrides(JSON.parse(saved)); } catch { /* ignore */ }
-    }
+    profileRepository.load().then(saved => {
+      if (saved) setProfileOverrides(saved);
+    }).catch(() => { /* ignore */ });
   }, [userId]);
 
   // Save profile overrides
   const updateProfileOverrides = useCallback((overrides: Partial<TasteProfile>) => {
     setProfileOverrides(overrides);
-    if (typeof window !== 'undefined') {
-      const key = `game-analytics-taste-overrides-${userId || 'local-user'}`;
-      localStorage.setItem(key, JSON.stringify(overrides));
-    }
-  }, [userId]);
+    profileRepository.save(overrides).catch(() => { /* ignore */ });
+  }, []);
 
   const resetProfileOverrides = useCallback(() => {
     setProfileOverrides({});
-    if (typeof window !== 'undefined') {
-      const key = `game-analytics-taste-overrides-${userId || 'local-user'}`;
-      localStorage.removeItem(key);
-    }
-  }, [userId]);
+    profileRepository.clear().catch(() => { /* ignore */ });
+  }, []);
 
   // Load saved recommendations
   const refresh = useCallback(async () => {
