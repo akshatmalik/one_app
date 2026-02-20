@@ -8,6 +8,7 @@ import { useBudget } from './hooks/useBudget';
 import { useGameThumbnails } from './hooks/useGameThumbnails';
 import { useGameQueue } from './hooks/useGameQueue';
 import { useGameColors } from './hooks/useGameColors';
+import { useGameQuips } from './hooks/useGameQuips';
 import { GameForm } from './components/GameForm';
 import { PlayLogModal } from './components/PlayLogModal';
 import { TimelineView } from './components/TimelineView';
@@ -26,6 +27,7 @@ import { RandomPicker } from './components/RandomPicker';
 import { BulkWishlistModal } from './components/BulkWishlistModal';
 import { GameBottomSheet } from './components/GameBottomSheet';
 import { DiscoverTab } from './components/DiscoverTab';
+import { LeaderboardTab } from './components/LeaderboardTab';
 import { RatingStars } from './components/RatingStars';
 import { MomentumDots } from './components/MomentumDots';
 import { ProgressRing } from './components/ProgressRing';
@@ -34,7 +36,7 @@ import { YearlyWrapped } from './components/YearlyWrapped';
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist';
-type TabMode = 'games' | 'timeline' | 'stats' | 'ai-coach' | 'up-next' | 'discover';
+type TabMode = 'games' | 'timeline' | 'stats' | 'ai-coach' | 'up-next' | 'discover' | 'leaderboard';
 type CardViewMode = 'poster' | 'compact';
 
 function getValueColor(rating: string): string {
@@ -55,6 +57,7 @@ export default function GameAnalyticsPage() {
   const { budgets, setBudget } = useBudget(user?.uid ?? null);
   const { loading: thumbnailsLoading, fetchedCount } = useGameThumbnails(games, updateGame);
   const gameColors = useGameColors(games);
+  const { quips: gameQuips } = useGameQuips(games, user?.uid ?? null);
   const {
     queuedGames,
     availableGames,
@@ -766,12 +769,13 @@ export default function GameAnalyticsPage() {
                 ))}
               </div>
 
-              {/* Second Row: AI Coach, Up Next, Discover, Export */}
+              {/* Second Row: AI Coach, Up Next, Discover, Leaderboard, Export */}
               <div className="flex items-center gap-2">
                 {([
                   { id: 'ai-coach', label: 'AI Coach', icon: <MessageCircle size={14} /> },
                   { id: 'up-next', label: 'Up Next', icon: <ListOrdered size={14} /> },
                   { id: 'discover', label: 'Discover', icon: <Compass size={14} /> },
+                  { id: 'leaderboard', label: 'Ranks', icon: <Trophy size={14} /> },
                 ] as const).map((tab) => (
                   <button
                     key={tab.id}
@@ -910,6 +914,7 @@ export default function GameAnalyticsPage() {
                   isInQueue={isInQueue}
                   sortBy={sortBy}
                   gameColors={gameColors}
+                  gameQuips={gameQuips}
                 />
               )}
             </>
@@ -1020,6 +1025,10 @@ export default function GameAnalyticsPage() {
               userId={user?.uid ?? null}
               onAddGame={addGame}
             />
+          )}
+
+          {tabMode === 'leaderboard' && (
+            <LeaderboardTab gamesWithMetrics={gamesWithMetrics} />
           )}
         </div>
       </div>
@@ -1211,6 +1220,7 @@ interface GameCardListProps {
   isInQueue: (id: string) => boolean;
   sortBy?: string;
   gameColors: Map<string, string>;
+  gameQuips?: Record<string, { quip: string }>;
 }
 
 function GameCardList({
@@ -1227,6 +1237,7 @@ function GameCardList({
   isInQueue,
   sortBy = 'hours',
   gameColors,
+  gameQuips = {},
 }: GameCardListProps) {
   const sections = useMemo(() => groupBySection ? getGameSections(allGames) : [], [allGames, groupBySection]);
 
@@ -1275,13 +1286,13 @@ function GameCardList({
     if (cardViewMode === 'poster') {
       return (
         <div key={game.id} className={animClass}>
-          <PosterCard game={game} allGames={allGames} idx={idx} onClick={() => onCardClick(game)} onQuickLog={(h) => onQuickLog(game, h)} isInQueue={isInQueue(game.id)} sortBy={sortBy} tintColor={gameColors.get(game.id)} />
+          <PosterCard game={game} allGames={allGames} idx={idx} onClick={() => onCardClick(game)} onQuickLog={(h) => onQuickLog(game, h)} isInQueue={isInQueue(game.id)} sortBy={sortBy} tintColor={gameColors.get(game.id)} aiQuip={gameQuips[game.id]?.quip} />
         </div>
       );
     }
     return (
       <div key={game.id} className={animClass}>
-        <CompactCard game={game} allGames={allGames} idx={idx} onClick={() => onCardClick(game)} onLogTime={() => onLogTime(game)} onToggleQueue={() => onToggleQueue(game)} onDelete={() => onDelete(game)} isInQueue={isInQueue(game.id)} sortBy={sortBy} tintColor={gameColors.get(game.id)} />
+        <CompactCard game={game} allGames={allGames} idx={idx} onClick={() => onCardClick(game)} onLogTime={() => onLogTime(game)} onToggleQueue={() => onToggleQueue(game)} onDelete={() => onDelete(game)} isInQueue={isInQueue(game.id)} sortBy={sortBy} tintColor={gameColors.get(game.id)} aiQuip={gameQuips[game.id]?.quip} />
       </div>
     );
   };
@@ -1571,7 +1582,7 @@ function NowPlayingCard({ game, allGames, onClick, onQuickLog, sortBy = 'hours',
 
 // --- Poster Card ---
 
-function PosterCard({ game, allGames, idx, onClick, onQuickLog, isInQueue, sortBy = 'hours', tintColor }: {
+function PosterCard({ game, allGames, idx, onClick, onQuickLog, isInQueue, sortBy = 'hours', tintColor, aiQuip }: {
   game: GameWithMetrics;
   allGames: Game[];
   idx: number;
@@ -1580,6 +1591,7 @@ function PosterCard({ game, allGames, idx, onClick, onQuickLog, isInQueue, sortB
   isInQueue: boolean;
   sortBy?: string;
   tintColor?: string;
+  aiQuip?: string;
 }) {
   const [isFlipped, setIsFlipped] = useState(false);
   const rarity = getCardRarity(game);
@@ -1853,7 +1865,7 @@ function PosterCardBack({ game, allGames, onFlip, rarity, freshness, relationshi
 
 // --- Compact Card (original layout, fixed) ---
 
-function CompactCard({ game, allGames, idx, onClick, onLogTime, onToggleQueue, onDelete, isInQueue, sortBy = 'hours', tintColor }: {
+function CompactCard({ game, allGames, idx, onClick, onLogTime, onToggleQueue, onDelete, isInQueue, sortBy = 'hours', tintColor, aiQuip }: {
   game: GameWithMetrics;
   allGames: Game[];
   idx: number;
@@ -1864,6 +1876,7 @@ function CompactCard({ game, allGames, idx, onClick, onLogTime, onToggleQueue, o
   isInQueue: boolean;
   sortBy?: string;
   tintColor?: string;
+  aiQuip?: string;
 }) {
   const [isFlipped, setIsFlipped] = useState(false);
   const rarity = getCardRarity(game);
@@ -2043,14 +2056,16 @@ function CompactCard({ game, allGames, idx, onClick, onLogTime, onToggleQueue, o
             </div>
           )}
 
-          {/* Row 4: Smart one-liner + whisper */}
+          {/* Row 4: Smart one-liner + AI quip / contextual whisper */}
           <div className="mb-2 space-y-0.5">
             {smartLine && (
               <p className="text-[10px] text-white/25 italic truncate">{smartLine}</p>
             )}
-            {whisper.text && whisper.text !== smartLine && (
+            {aiQuip ? (
+              <p className="text-[10px] text-purple-300/30 italic truncate">{aiQuip}</p>
+            ) : (whisper.text && whisper.text !== smartLine && (
               <p className="text-[10px] text-white/20 italic truncate">{whisper.text}</p>
-            )}
+            ))}
           </div>
 
           {/* Row 5: Action buttons — always visible */}

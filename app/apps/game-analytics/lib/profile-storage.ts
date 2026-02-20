@@ -2,10 +2,11 @@
 
 import { TasteProfile } from './types';
 import { getFirebaseDb, isFirebaseConfigured } from '@/lib/firebase';
-import { doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, deleteField } from 'firebase/firestore';
 
 const STORAGE_KEY = 'game-analytics-taste-overrides';
-const COLLECTION_NAME = 'tasteProfileOverrides';
+// Stored as a field on the user entity: users/{userId}.tasteProfileOverrides
+const USERS_COLLECTION = 'users';
 
 export interface ProfileRepository {
   setUserId(userId: string): void;
@@ -14,24 +15,22 @@ export interface ProfileRepository {
   clear(): Promise<void>;
 }
 
-// Firebase — stores one document per user: tasteProfileOverrides/{userId}
+// Firebase — reads/writes tasteProfileOverrides field on users/{userId} document
 class FirebaseProfileRepository implements ProfileRepository {
   private userId: string = '';
 
   private get db() { return getFirebaseDb(); }
+  private get userRef() { return doc(this.db, USERS_COLLECTION, this.userId); }
 
   setUserId(userId: string): void { this.userId = userId; }
 
   async load(): Promise<Partial<TasteProfile> | null> {
     if (!this.userId) return null;
     try {
-      const snap = await getDoc(doc(this.db, COLLECTION_NAME, this.userId));
+      const snap = await getDoc(this.userRef);
       if (!snap.exists()) return null;
-      const data = snap.data();
-      // Strip Firestore metadata fields before returning
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { userId: _uid, savedAt: _at, ...overrides } = data as Record<string, unknown>;
-      return overrides as Partial<TasteProfile>;
+      const data = snap.data() as Record<string, unknown>;
+      return (data.tasteProfileOverrides as Partial<TasteProfile>) || null;
     } catch {
       return null;
     }
@@ -39,16 +38,21 @@ class FirebaseProfileRepository implements ProfileRepository {
 
   async save(overrides: Partial<TasteProfile>): Promise<void> {
     if (!this.userId) return;
-    await setDoc(doc(this.db, COLLECTION_NAME, this.userId), {
-      ...overrides,
+    // merge: true so we don't clobber other fields on the user document
+    await setDoc(this.userRef, {
+      tasteProfileOverrides: overrides,
       userId: this.userId,
-      savedAt: new Date().toISOString(),
-    });
+      updatedAt: new Date().toISOString(),
+    }, { merge: true });
   }
 
   async clear(): Promise<void> {
     if (!this.userId) return;
-    await deleteDoc(doc(this.db, COLLECTION_NAME, this.userId));
+    try {
+      await updateDoc(this.userRef, { tasteProfileOverrides: deleteField() });
+    } catch {
+      // Document may not exist yet — no-op is fine
+    }
   }
 }
 
