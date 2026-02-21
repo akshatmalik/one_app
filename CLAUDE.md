@@ -19,6 +19,7 @@ This document provides comprehensive guidance for AI assistants working with the
 13. [Card Redesign & Detail Panel Overhaul](#card-redesign--detail-panel-overhaul-approved)
 14. [Card Info Enhancements](#card-info-enhancements-approved)
 15. [Stats Overhaul Plan](#stats-overhaul-plan-approved)
+16. [Immersive Experience & Deep Insights Plan](#immersive-experience--deep-insights-plan-approved)
 
 ---
 
@@ -2251,6 +2252,338 @@ getIfYouStoppedToday(games) → { totalHours, totalSpent, costPerHour, completed
 
 ---
 
+## Immersive Experience & Deep Insights Plan (Approved)
+
+10 features across 5 areas: Timeline (weather system, plot twists, story arc), Up Next (chemistry score, queue shame), Cards (parallel universe, shelf life expiry), Recaps (Oscar awards), General (fortune cookie, game eulogies). Approved 2026-02-21.
+
+**Philosophy**: These features make the app feel *alive*. Weather systems, fortune cookies, and eulogies transform cold data into emotional storytelling. Every feature is data-driven — never random, always grounded in your actual gaming behavior.
+
+---
+
+### 1. Timeline Weather System
+**Area: Timeline**
+
+Overlay a weather metaphor on each month in the timeline. The weather is calculated from gaming activity intensity, spending, and completions for that month.
+
+**Weather Conditions**:
+
+| Condition | Icon | Criteria |
+|-----------|------|----------|
+| **Scorching** | Sun with heat waves | 40+ hours gaming in the month |
+| **Sunny** | Sun | 20-40 hours, active gaming |
+| **Partly Cloudy** | Sun + cloud | 10-20 hours, moderate activity |
+| **Cloudy** | Cloud | 5-10 hours, light gaming |
+| **Drought** | Cracked earth | Under 5 hours, barely any gaming |
+| **Rainy** | Rain cloud with $ | Heavy spending month (top 25% of monthly spend) |
+| **Stormy** | Thunderstorm | High spend AND low hours (bad value month) |
+| **Rainbow** | Rainbow | 2+ game completions in the month |
+| **Snowy** | Snowflake | No activity at all (frozen/hibernating) |
+
+Displayed as a small weather icon strip on each month header in the timeline. Hovering/tapping shows a tooltip: "July 2025 — Scorching (42.5 hours across 6 games)." The timeline becomes instantly readable at a glance — you *feel* the seasons before reading a single number.
+
+**Temperature bar**: Subtle gradient strip below the weather icon, from cool blue (low activity) to hot red (high activity), proportional to hours played relative to your monthly average.
+
+**Files**: `getTimelineWeather(games, year, month)` in calculations.ts, weather icon rendering in `TimelineView.tsx` month headers.
+
+---
+
+### 2. "Plot Twist" Markers on Timeline
+**Area: Timeline**
+
+Auto-detect and highlight dramatic behavioral shifts as cinematic "plot twist" markers pinned to the timeline. These are NOT milestones (achievements) — they capture *dramatic changes* in behavior.
+
+**Plot Twist Types**:
+
+| Twist | Detection Logic | Example |
+|-------|----------------|---------|
+| **Genre Breakthrough** | First time playing a genre you've never touched | "First indie game in 8 months" |
+| **Binge Event** | 3x your average weekly hours in a single week | "45 hours in one week — 3x your normal" |
+| **The Drought Breaks** | First session after 14+ day gap | "Back after 21 days of silence" |
+| **Attention Shift** | Abandoned longest-running active game for a new one | "Ghosted Elden Ring for Astro Bot" |
+| **Speed Record** | Fastest completion ever (or top 3) | "Completed in 4 days — your fastest ever" |
+| **Rating Extreme** | First 10/10 rating, or lowest rating ever given | "Your first perfect 10" |
+| **Spending Spike** | Single-day spend 3x your average purchase | "Dropped $180 in one day" |
+| **Marathon Session** | Longest single session ever (or top 3) | "8.5 hour session — a new personal record" |
+| **Completion Streak** | 3+ completions in 30 days | "3 games completed in 3 weeks" |
+| **The Comeback** | Returned to a game after 60+ day gap | "Picked up Zelda after 73 days" |
+
+**Visual**: Bold banner card in the timeline with a cracked/torn paper aesthetic, disrupting the chronological flow. Plot twist icon (twisted arrow or film clapper). Color-coded by type (red for dramatic, gold for achievements, blue for behavior shifts).
+
+**Files**: `getPlotTwists(games)` in calculations.ts, `components/PlotTwistCard.tsx`, integrated into `TimelineView.tsx` event rendering.
+
+---
+
+### 3. Game Chemistry Score on Up Next
+**Area: Up Next**
+
+For every game in the queue, calculate a real-time "Chemistry" percentage — how well does this game match your *current* state?
+
+**Chemistry Factors** (weighted):
+
+| Factor | Weight | Logic |
+|--------|--------|-------|
+| **Genre Craving** | 30% | Days since you last played this genre × historical rating for genre. Long gaps + high genre rating = strong craving |
+| **Session Fit** | 20% | Your current avg session length vs this game's expected session type. Marathon gamer + quick game = low fit |
+| **Seasonal Match** | 15% | Your historical genre preferences for this time of year (from seasonal genre drift) |
+| **Queue Freshness** | 15% | Recently added games get a boost; old queue items decay |
+| **Mood Momentum** | 10% | If you've been playing similar games recently, similar ones get boosted (momentum) or penalized (fatigue, after 3+ of same genre) |
+| **Completion Likelihood** | 10% | Your historical completion rate for this genre/price bracket |
+
+**Display**: Large percentage badge on each queue card: "92% Chemistry". Color-coded: green (80%+), yellow (50-79%), red (<50%). Sorting option: "Sort by Chemistry" to auto-prioritize. One-line justification: "High craving for RPGs + matches your weekend session length."
+
+**Files**: `getGameChemistry(game, allGames, queueGames)` in calculations.ts, displayed in `UpNextTab.tsx` on `QueueGameCard`.
+
+---
+
+### 4. Queue Shame Timer on Up Next
+**Area: Up Next**
+
+Each game in the Up Next queue gets a visible "waiting" counter with escalating sass based on how long it's been queued without being started.
+
+**Shame Tiers**:
+
+| Days Queued | Tier | Visual | Message Style |
+|-------------|------|--------|---------------|
+| 0-7 | **Fresh** | Bright, clean, excited | "Just added!" / "Day 3 — the honeymoon phase" |
+| 8-30 | **Waiting** | Slight fade, patient | "Day 15 — still patiently waiting..." / "2 weeks. Any day now, right?" |
+| 31-60 | **Impatient** | Arms-crossed energy, dusty | "Day 42 — starting to think you forgot about me" |
+| 61-90 | **Neglected** | Wilted, desaturated | "Day 73 — if you started me when you queued me, you'd be done by now" |
+| 90+ | **Abandoned** | Full guilt mode, grey | "Day 112 — I've been here longer than some of your completed games took" |
+
+**Sass Generator**: Each tier has 5-8 rotating messages that change daily. Messages are contextual when possible: "You've completed 2 other games since queuing me" or "3 games were added to the queue after me and played first."
+
+**Action Prompts**: Games past 60 days get a subtle "Start Now" or "Remove from Queue" prompt. Not aggressive — just honest.
+
+**Visual**: Small timer badge on each queue card showing days. Color shifts from green → yellow → orange → red → grey as time passes.
+
+**Files**: `getQueueShameData(game, allGames)` in calculations.ts, shame display in `UpNextTab.tsx` / `QueueGameCard.tsx`.
+
+---
+
+### 5. "Parallel Universe" Impact Score on Cards
+**Area: Game Cards / Detail Panel**
+
+Show what your entire library stats would look like if a specific game didn't exist. Surfaces each game's *gravitational pull* on your overall numbers.
+
+**Impact Metrics Calculated**:
+
+| Metric | What It Shows |
+|--------|--------------|
+| **Avg $/hr delta** | "Without this game, your avg $/hr changes from $1.80 to $3.40" |
+| **Completion rate delta** | "Your completion rate drops from 45% to 42%" |
+| **Total hours delta** | "You'd lose 12% of your total gaming hours" |
+| **Avg rating delta** | "Your avg rating drops from 7.2 to 6.9" |
+| **Library rank shift** | "3 other games would change value tier without this game pulling the average" |
+
+**Impact Score**: Single composite score from -100 to +100. Positive = this game makes your library look better (high hours, good value, strong rating). Negative = dragging stats down (expensive, low hours, low rating).
+
+**Display Locations**:
+- **Card back** (card flip): Compact impact score with one-line summary
+- **Bottom sheet / detail panel**: Full "Parallel Universe" section with all deltas
+- **Fun stat**: "Top 3 Library Carriers" and "Top 3 Library Anchors" in FunStatsPanel
+
+**Files**: `getParallelUniverseImpact(game, allGames)` in calculations.ts, display in card back data and `GameBottomSheet.tsx`, summary in `FunStatsPanel.tsx`.
+
+---
+
+### 6. Shelf Life Expiry Date on Cards
+**Area: Game Cards**
+
+Every unstarted or in-progress-but-stalled game gets a predicted "expiry date" — the date by which, statistically, you'll never play/return to it.
+
+**Expiry Calculation**:
+
+| Game State | Expiry Logic |
+|------------|-------------|
+| **Not Started** | Based on your historical median time between purchase and first play. If 80% of your games get started within 30 days, a game at day 28 is "expiring soon." |
+| **In Progress (stalled)** | Based on your historical gap-before-abandonment pattern. If you typically abandon games after a 21-day gap, a game at 18 days without a session is close to expiry. |
+| **Wishlist** | Based on your wishlist-to-purchase conversion rate. If 50% of wishlist games are bought within 60 days, remaining ones are "expiring" from interest. |
+
+**Expiry Tiers**:
+
+| Status | Visual | Criteria |
+|--------|--------|----------|
+| **Fresh** | Green, vibrant | Well within typical start window |
+| **Ripening** | Yellow | 50-75% of typical window elapsed |
+| **Expiring Soon** | Orange, pulsing | 75-100% of window — "Play me before it's too late" |
+| **Expired** | Red stamp, desaturated | Past your historical point of no return |
+| **Miraculously Alive** | Purple, sparkle | Past expiry but still getting sessions (defied the odds!) |
+
+**Display**: Small "Exp: Mar 15" label on cards for at-risk games. Expired games get a subtle "EXPIRED" stamp overlay on the thumbnail. Tapping shows the reasoning: "You've never started a game that sat unplayed for more than 45 days. This one is at day 41."
+
+**Files**: `getShelfLifeExpiry(game, allGames)` in calculations.ts, expiry badge rendering in `page.tsx` game cards.
+
+---
+
+### 7. Daily Gaming Fortune Cookie
+**Area: General (Games tab header)**
+
+A daily rotating, data-driven prediction/observation that changes every 24 hours. Grounded in actual patterns — never random.
+
+**Fortune Categories**:
+
+| Category | Example | Data Source |
+|----------|---------|------------|
+| **Play Prediction** | "73% chance you play Elden Ring tonight" | Day-of-week play patterns per game |
+| **Genre Craving** | "You haven't touched an indie game in 34 days — historically, you're due" | Genre gap analysis |
+| **Completion Forecast** | "Your next completion is likely Astro Bot (82% probability)" | Completion probability + hours invested |
+| **Purchase Prediction** | "Based on your pattern, you'll buy a new game within 5 days" | Purchase rhythm analysis |
+| **Anniversary** | "Today marks exactly 1 year since your biggest gaming day ever (14.2 hours)" | Historical date matching |
+| **Streak Alert** | "If you play tonight, you'll hit a 7-day streak — your longest this year" | Streak tracking |
+| **Value Milestone** | "3 more hours on Zelda and it hits Excellent value ($0.99/hr)" | Value tier proximity |
+| **Behavioral Insight** | "You tend to start new games on Fridays — and it IS Friday" | Purchase/start patterns |
+
+**Implementation**:
+- Generate fortune pool from all categories each day (seeded by date for consistency)
+- Pick the highest-priority/most-relevant fortune
+- Cache in localStorage with date key (same fortune all day)
+- Dismissible, appears as a subtle card below the header
+- Small crystal ball or fortune cookie icon
+
+**Files**: `getDailyFortune(games)` in calculations.ts, `components/FortuneCookie.tsx`, rendered in `page.tsx` header area.
+
+---
+
+### 8. Oscar-Style Awards Ceremony in Recaps
+**Area: Monthly & Weekly Recaps**
+
+A dedicated recap screen styled as an awards ceremony with funny, hyper-specific categories.
+
+**Award Categories**:
+
+| Award | Criteria | Humor |
+|-------|----------|-------|
+| **Best Picture** | Highest-rated game of the period | "The one that moved you" |
+| **Best Supporting Game** | 2nd most played game | "Always the bridesmaid, never the bride" |
+| **Best Short Film** | Highest-rated game under 5 total hours | "Proof that size doesn't matter" |
+| **Biggest Plot Twist** | Game whose play pattern changed most dramatically | "Nobody saw this coming" |
+| **Lifetime Achievement** | Oldest game in library that was still played this period | "Still going strong after all this time" |
+| **Best Comeback** | Game with longest gap between sessions that was returned to | "The prodigal game returns" |
+| **Worst Bang for Buck** | Highest cost-per-hour game played this period | "Congratulations, you played yourself" |
+| **The Sleeper Hit** | Game played way more than initial sessions predicted | "Under the radar, over the top" |
+| **Most Likely to Be Abandoned** | In-progress game with steepest session length decline | "We're all thinking it" |
+| **Iron Man Award** | Longest single session of the period | "Did you even eat?" |
+
+**Visual**: Gold/black Oscar theme. Each award has an envelope animation (tap to reveal winner). Trophy icon per category. Game thumbnail as the "winner photo." One witty line per winner explaining why they won.
+
+**Screen Structure** (in story mode):
+- Title card: "The [Month/Week] Awards" with date
+- Awards presented one at a time with tap-to-reveal
+- Summary card at end showing all winners
+
+**Files**: `getOscarAwards(games, startDate, endDate)` in calculations.ts, `components/story-screens/OscarAwardsScreen.tsx` for week recap, `components/month-screens/MonthAwardsScreen.tsx` for month recap. Integrated into `WeekStoryMode.tsx` and `MonthStoryMode.tsx` screen lists.
+
+---
+
+### 9. Story Arc Detection on Timeline
+**Area: Timeline**
+
+Auto-detect a literary narrative structure from your gaming data and overlay it on the timeline as a visual arc.
+
+**Five-Act Structure Detection**:
+
+| Act | Detection Logic | Label |
+|-----|----------------|-------|
+| **Act 1: Setup** | First 1-2 months of the year or start of data — baseline gaming rhythm | "The beginning" |
+| **Rising Action** | Months where hours/games/spending are increasing month-over-month | "Things heat up" |
+| **Climax** | The peak month — highest hours OR most completions OR biggest spend (whichever is most dramatic) | "The peak" |
+| **Falling Action** | Months where activity decreases from the peak | "The wind-down" |
+| **Resolution** | Final months where activity stabilizes or the current state | "Where things stand" |
+
+**Scope**: Can be calculated per-year or across all-time data. If mid-year, show the current act: "You're in Rising Action — things are building."
+
+**Visual**: A subtle dramatic arc line (SVG path) rendered above the monthly timeline, with dots at each month and the arc peaking at the climax month. Each act is labeled. The current month gets a "You are here" marker. Color gradient from cool (setup) to warm (climax) back to cool (resolution).
+
+**Narrative Summary**: One-sentence summary: "Your 2025 gaming story peaked in July with 127 hours, hit a drought in September, then found a second wind in November."
+
+**Files**: `getStoryArc(games, year?)` in calculations.ts, `components/StoryArcOverlay.tsx` rendered in `TimelineView.tsx`.
+
+---
+
+### 10. Game Eulogy Generator
+**Area: Cards / Detail Panel / Fun Stats**
+
+Every abandoned game gets an auto-generated eulogy — a dramatic paragraph built entirely from data (no AI needed). Plus a "Graveyard" view collecting all eulogies.
+
+**Narrative Voice Styles** (chosen based on data):
+
+| Voice | When Used | Tone |
+|-------|-----------|------|
+| **Tragic** | High price ($40+), low hours (<5h) | Solemn, regretful, dramatic |
+| **Peaceful** | Decent hours (10+), moved on naturally | Warm, accepting, grateful |
+| **Dramatic** | Abandoned mid-streak for another game | Betrayal narrative, jealousy |
+| **Comic** | Very cheap or free, barely played | Shrug energy, deadpan humor |
+| **Epic** | Many hours (30+) but still abandoned | Fallen hero, unfinished quest |
+
+**Eulogy Template Elements**:
+- Opening: How the game was acquired (price, date, source)
+- Middle: The relationship arc (sessions, peak, decline)
+- Turning point: What happened (new game started? gap grew? rating dropped?)
+- Epitaph: Final stats as a memorial inscription
+- Legacy: Impact on overall library stats
+
+**Example** (Tragic voice):
+> *"Here lies Starfield. Acquired September 3, 2024 for $70 — full price, no hesitation. Three sessions in two days, a whirlwind romance that burned bright. Then silence. 12 hours of memories, a 5/10 rating, and a cost-per-hour we dare not speak aloud. Replaced in your heart by Elden Ring just 4 days later. Survived by 47 other games that got the attention it deserved. Rest in peace. Cost: $5.83/hr. Gone but not refunded."*
+
+**Graveyard View**: Accessible from FunStatsPanel or as a section in the timeline. Dark background, candlelight aesthetic. Tombstone-styled cards for each abandoned game. Scrollable memorial wall. Stats at the top: "Total games laid to rest: 12. Total investment lost: $340. Average lifespan: 8.3 hours."
+
+**Files**: `generateGameEulogy(game, allGames)` in calculations.ts, `components/GameGraveyard.tsx`, tombstone card rendering. Integrated into `FunStatsPanel.tsx` and optionally the detail panel.
+
+---
+
+### Implementation Order
+
+| # | Feature | Area | Effort | Dependencies |
+|---|---------|------|--------|-------------|
+| 1 | Timeline Weather System | Timeline | Low | None |
+| 2 | Plot Twist Markers | Timeline | Medium | None |
+| 3 | Game Chemistry Score | Up Next | Medium | Existing seasonal/genre data |
+| 4 | Queue Shame Timer | Up Next | Low | None |
+| 5 | Parallel Universe Impact | Cards/Stats | Medium | None |
+| 6 | Shelf Life Expiry Date | Cards | Medium | Historical pattern analysis |
+| 7 | Daily Fortune Cookie | General | Medium | Multiple existing calculations |
+| 8 | Oscar Awards Ceremony | Recaps | Medium | Week/Month recap infrastructure |
+| 9 | Story Arc Detection | Timeline | Medium | Monthly aggregation |
+| 10 | Game Eulogy Generator | Cards/Stats | Medium | None |
+
+### New Calculation Functions Needed
+
+```
+getTimelineWeather(games, year, month) → { condition, icon, temperature, tooltip, intensity }
+getPlotTwists(games) → { date, type, title, description, severity, gameIds }[]
+getGameChemistry(game, allGames, queueGames) → { score, factors: { craving, sessionFit, seasonal, freshness, momentum, completionLikelihood }, justification }
+getQueueShameData(game, allGames) → { daysQueued, tier, message, gamesCompletedSince, gamesAddedAfter }
+getParallelUniverseImpact(game, allGames) → { impactScore, deltas: { avgCostPerHour, completionRate, totalHours, avgRating }, label, summary }
+getShelfLifeExpiry(game, allGames) → { expiryDate, daysRemaining, tier, reasoning, medianWindow }
+getDailyFortune(games) → { text, category, icon, priority, dataPoint }
+getOscarAwards(games, startDate, endDate) → { awards: { category, winner, reasoning, nominees }[] }
+getStoryArc(games, year?) → { acts: { label, months, description }[], climaxMonth, currentAct, narrative }
+generateGameEulogy(game, allGames) → { voice, text, epitaph, stats, replacedBy? }
+```
+
+### New Components Needed
+
+```
+components/StoryArcOverlay.tsx       — SVG narrative arc above timeline
+components/PlotTwistCard.tsx         — Dramatic plot twist banner for timeline
+components/FortuneCookie.tsx         — Daily fortune display in header
+components/GameGraveyard.tsx         — Memorial wall for abandoned games
+components/story-screens/OscarAwardsScreen.tsx  — Awards ceremony for week recap
+components/month-screens/MonthOscarScreen.tsx    — Awards ceremony for month recap
+```
+
+### New CSS Needed
+
+```
+weather-icon-pulse     — Subtle pulse for active weather conditions
+plot-twist-crack       — Cracked/torn paper effect for plot twist cards
+tombstone-glow         — Soft candlelight glow for graveyard tombstones
+envelope-reveal        — Oscar envelope opening animation
+fortune-fade           — Gentle fade-in for daily fortune cookie
+```
+
+---
+
 ## Resources
 
 - **Next.js Docs**: https://nextjs.org/docs
@@ -2262,6 +2595,14 @@ getIfYouStoppedToday(games) → { totalHours, totalSpent, costPerHour, completed
 ---
 
 ## Changelog
+
+### 2026-02-21 (v2.5.0)
+- Added Immersive Experience & Deep Insights Plan: 10 features across 5 areas
+- Timeline: Weather system (9 conditions based on monthly activity), Plot twist markers (10 twist types for dramatic behavioral shifts), Story arc detection (5-act narrative structure overlay)
+- Up Next: Game chemistry score (6-factor real-time match percentage), Queue shame timer (5 escalating tiers with contextual sass)
+- Cards: Parallel universe impact score (what-if-removed analysis), Shelf life expiry dates (predicted point of no return)
+- Recaps: Oscar-style awards ceremony (10 funny award categories with envelope reveals)
+- General: Daily fortune cookie (8 data-driven prediction categories), Game eulogy generator (5 narrative voices for abandoned games with graveyard view)
 
 ### 2026-02-14 (v2.4.0)
 - Added Card Info Enhancements plan: 6 features (card flip, AI whisper, momentum sparkline, library rank, progress ring, mood pulse)
@@ -2305,6 +2646,6 @@ getIfYouStoppedToday(games) → { totalHours, totalSpent, costPerHour, completed
 
 ---
 
-**Last Updated**: 2026-02-14
-**Version**: 2.4.0
+**Last Updated**: 2026-02-21
+**Version**: 2.5.0
 **Maintained by**: AI assistants and contributors
