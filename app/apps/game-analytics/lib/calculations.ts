@@ -10541,3 +10541,1133 @@ function buildCounterResult(
     periodLabel,
   };
 }
+
+// =============================================================================
+// IMMERSIVE EXPERIENCE & DEEP INSIGHTS PLAN (v2.5.0)
+// 10 new features: Timeline Weather, Plot Twists, Game Chemistry,
+// Queue Shame, Parallel Universe, Shelf Life Expiry, Daily Fortune,
+// Oscar Awards, Story Arc, Game Eulogy
+// =============================================================================
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 1. TIMELINE WEATHER SYSTEM
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type WeatherCondition =
+  | 'blizzard' | 'storm' | 'rain' | 'drizzle' | 'overcast'
+  | 'partly_cloudy' | 'clear' | 'sunny' | 'scorching';
+
+export interface TimelineWeather {
+  condition: WeatherCondition;
+  icon: string;
+  label: string;
+  temperature: number;    // 0–100 intensity score
+  tooltip: string;
+  color: string;
+}
+
+export function getTimelineWeather(games: Game[], year: number, month: number): TimelineWeather {
+  // Sum hours played in this month from playLogs
+  const monthKey = `${year}-${String(month).padStart(2, '0')}`;
+  let totalHours = 0;
+  let sessionCount = 0;
+  for (const game of games) {
+    for (const log of game.playLogs ?? []) {
+      if (log.date.startsWith(monthKey)) {
+        totalHours += log.hours;
+        sessionCount += 1;
+      }
+    }
+  }
+
+  if (totalHours === 0) {
+    return { condition: 'blizzard', icon: '❄️', label: 'Blizzard', temperature: 0, tooltip: 'Zero activity — a complete gaming winter', color: '#94a3b8' };
+  }
+  if (totalHours < 3) {
+    return { condition: 'storm', icon: '🌩️', label: 'Storm', temperature: 8, tooltip: `${totalHours.toFixed(1)}h — barely a flicker of activity`, color: '#64748b' };
+  }
+  if (totalHours < 8) {
+    return { condition: 'rain', icon: '🌧️', label: 'Rain', temperature: 20, tooltip: `${totalHours.toFixed(1)}h — light but present`, color: '#60a5fa' };
+  }
+  if (totalHours < 15) {
+    return { condition: 'drizzle', icon: '🌦️', label: 'Drizzle', temperature: 35, tooltip: `${totalHours.toFixed(1)}h — occasional sessions`, color: '#7dd3fc' };
+  }
+  if (totalHours < 22) {
+    return { condition: 'overcast', icon: '☁️', label: 'Overcast', temperature: 48, tooltip: `${totalHours.toFixed(1)}h — steady but not exciting`, color: '#a5b4fc' };
+  }
+  if (totalHours < 32) {
+    return { condition: 'partly_cloudy', icon: '⛅', label: 'Partly Cloudy', temperature: 60, tooltip: `${totalHours.toFixed(1)}h — a healthy month`, color: '#c4b5fd' };
+  }
+  if (totalHours < 50) {
+    return { condition: 'clear', icon: '🌤️', label: 'Clear', temperature: 72, tooltip: `${totalHours.toFixed(1)}h — solid gaming month`, color: '#fbbf24' };
+  }
+  if (totalHours < 75) {
+    return { condition: 'sunny', icon: '☀️', label: 'Sunny', temperature: 85, tooltip: `${totalHours.toFixed(1)}h — excellent month`, color: '#f59e0b' };
+  }
+  return { condition: 'scorching', icon: '🔥', label: 'Scorching', temperature: 100, tooltip: `${totalHours.toFixed(1)}h — legendary gaming month`, color: '#ef4444' };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 2. PLOT TWIST MARKERS
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type PlotTwistType =
+  | 'genre_switch' | 'spending_spike' | 'sudden_abandonment' | 'comeback'
+  | 'completion_streak' | 'gaming_drought' | 'price_leap' | 'free_spree'
+  | 'franchise_obsession' | 'session_marathon';
+
+export interface PlotTwist {
+  id: string;
+  date: string;          // YYYY-MM or YYYY-MM-DD
+  type: PlotTwistType;
+  title: string;
+  description: string;
+  severity: 'minor' | 'major' | 'epic';
+  gameIds: string[];
+  icon: string;
+}
+
+export function getPlotTwists(games: Game[]): PlotTwist[] {
+  const twists: PlotTwist[] = [];
+
+  // Build monthly data
+  const monthlyData: Record<string, { hours: number; sessions: number; games: Set<string>; genres: Set<string>; spent: number; completed: string[]; abandoned: string[] }> = {};
+  for (const game of games) {
+    for (const log of game.playLogs ?? []) {
+      const mk = log.date.substring(0, 7);
+      if (!monthlyData[mk]) monthlyData[mk] = { hours: 0, sessions: 0, games: new Set(), genres: new Set(), spent: 0, completed: [], abandoned: [] };
+      monthlyData[mk].hours += log.hours;
+      monthlyData[mk].sessions += 1;
+      monthlyData[mk].games.add(game.id);
+      if (game.genre) monthlyData[mk].genres.add(game.genre);
+    }
+    if (game.endDate) {
+      const mk = game.endDate.substring(0, 7);
+      if (!monthlyData[mk]) monthlyData[mk] = { hours: 0, sessions: 0, games: new Set(), genres: new Set(), spent: 0, completed: [], abandoned: [] };
+      if (game.status === 'Completed') monthlyData[mk].completed.push(game.id);
+      if (game.status === 'Abandoned') monthlyData[mk].abandoned.push(game.id);
+    }
+    if (game.datePurchased && game.status !== 'Wishlist') {
+      const mk = game.datePurchased.substring(0, 7);
+      if (!monthlyData[mk]) monthlyData[mk] = { hours: 0, sessions: 0, games: new Set(), genres: new Set(), spent: 0, completed: [], abandoned: [] };
+      monthlyData[mk].spent += game.price;
+    }
+  }
+
+  const months = Object.keys(monthlyData).sort();
+  const avgHours = months.length > 0 ? months.reduce((s, m) => s + monthlyData[m].hours, 0) / months.length : 0;
+
+  // Detect drought → comeback
+  for (let i = 1; i < months.length; i++) {
+    const prev = monthlyData[months[i - 1]];
+    const cur = monthlyData[months[i]];
+    if (prev.hours < 2 && cur.hours > avgHours * 1.5 && cur.hours > 10) {
+      twists.push({
+        id: `comeback-${months[i]}`,
+        date: months[i],
+        type: 'comeback',
+        title: '🎮 The Comeback',
+        description: `After a quiet ${months[i - 1].substring(5, 7) === months[i].substring(5, 7) ? 'period' : 'month'}, you roared back with ${cur.hours.toFixed(0)}h`,
+        severity: cur.hours > avgHours * 2.5 ? 'epic' : 'major',
+        gameIds: [...cur.games],
+        icon: '🏆',
+      });
+    }
+  }
+
+  // Detect spending spikes
+  const avgSpent = months.reduce((s, m) => s + monthlyData[m].spent, 0) / (months.length || 1);
+  for (const month of months) {
+    const d = monthlyData[month];
+    if (d.spent > avgSpent * 3 && d.spent > 50) {
+      twists.push({
+        id: `spending-${month}`,
+        date: month,
+        type: 'spending_spike',
+        title: '💸 Big Spender Month',
+        description: `Dropped $${d.spent.toFixed(0)} — ${(d.spent / (avgSpent || 1)).toFixed(1)}x your average`,
+        severity: d.spent > avgSpent * 5 ? 'epic' : 'major',
+        gameIds: [],
+        icon: '💸',
+      });
+    }
+  }
+
+  // Detect completion streaks (2+ completions in one month)
+  for (const month of months) {
+    const d = monthlyData[month];
+    if (d.completed.length >= 2) {
+      twists.push({
+        id: `completion-streak-${month}`,
+        date: month,
+        type: 'completion_streak',
+        title: '✅ Finisher Mode Activated',
+        description: `Completed ${d.completed.length} games in a single month`,
+        severity: d.completed.length >= 4 ? 'epic' : d.completed.length >= 3 ? 'major' : 'minor',
+        gameIds: d.completed,
+        icon: '🏅',
+      });
+    }
+  }
+
+  // Detect sudden abandonment clusters
+  for (const month of months) {
+    const d = monthlyData[month];
+    if (d.abandoned.length >= 2) {
+      twists.push({
+        id: `abandonment-${month}`,
+        date: month,
+        type: 'sudden_abandonment',
+        title: '💀 Mass Extinction Event',
+        description: `Abandoned ${d.abandoned.length} games in one month`,
+        severity: d.abandoned.length >= 3 ? 'epic' : 'major',
+        gameIds: d.abandoned,
+        icon: '🪦',
+      });
+    }
+  }
+
+  // Detect gaming drought (hours < 1 after active period)
+  for (let i = 2; i < months.length; i++) {
+    const prevPrev = monthlyData[months[i - 2]];
+    const cur = monthlyData[months[i]];
+    if (prevPrev.hours > 15 && cur.hours < 2) {
+      twists.push({
+        id: `drought-${months[i]}`,
+        date: months[i],
+        type: 'gaming_drought',
+        title: '🏜️ The Great Drought',
+        description: `Went from ${prevPrev.hours.toFixed(0)}h to ${cur.hours.toFixed(1)}h — life happened`,
+        severity: prevPrev.hours > 40 ? 'epic' : 'major',
+        gameIds: [],
+        icon: '🏜️',
+      });
+    }
+  }
+
+  // Detect marathon sessions
+  for (const game of games) {
+    for (const log of game.playLogs ?? []) {
+      if (log.hours >= 8) {
+        twists.push({
+          id: `marathon-${log.id}`,
+          date: log.date,
+          type: 'session_marathon',
+          title: `⚡ ${log.hours}h Marathon`,
+          description: `${game.name} — a ${log.hours}h single session. Did you even eat?`,
+          severity: log.hours >= 12 ? 'epic' : log.hours >= 10 ? 'major' : 'minor',
+          gameIds: [game.id],
+          icon: '⚡',
+        });
+      }
+    }
+  }
+
+  // Franchise obsession (3+ games in same franchise played in 60 days)
+  const franchises = new Map<string, { games: Game[]; ids: string[] }>();
+  for (const game of games) {
+    if (game.franchise && getTotalHours(game) > 0) {
+      const f = franchises.get(game.franchise) || { games: [], ids: [] };
+      f.games.push(game);
+      f.ids.push(game.id);
+      franchises.set(game.franchise, f);
+    }
+  }
+  for (const [franchise, data] of franchises) {
+    if (data.games.length >= 3) {
+      const totalFranchiseHours = data.games.reduce((s, g) => s + getTotalHours(g), 0);
+      twists.push({
+        id: `franchise-${franchise}`,
+        date: data.games[0].startDate || data.games[0].datePurchased || '',
+        type: 'franchise_obsession',
+        title: `🎯 ${franchise} Obsession`,
+        description: `${data.games.length} games, ${totalFranchiseHours.toFixed(0)}h deep in the ${franchise} universe`,
+        severity: data.games.length >= 5 ? 'epic' : 'major',
+        gameIds: data.ids,
+        icon: '🎯',
+      });
+    }
+  }
+
+  return twists.sort((a, b) => b.date.localeCompare(a.date)).slice(0, 20);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 3. GAME CHEMISTRY SCORE (for Up Next tab)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface ChemistryFactors {
+  craving: number;             // 0-100: genre/platform match with recent play patterns
+  sessionFit: number;          // 0-100: avg session length vs available play time context
+  seasonal: number;            // 0-100: genre typical for this time of year
+  freshness: number;           // 0-100: how long since any session (fresh = high)
+  momentum: number;            // 0-100: recent session trend (increasing hours)
+  completionLikelihood: number; // 0-100: based on your genre completion rate
+}
+
+export interface GameChemistryResult {
+  score: number;               // 0-100 composite
+  grade: 'S' | 'A' | 'B' | 'C' | 'D';
+  factors: ChemistryFactors;
+  justification: string;
+  topFactor: keyof ChemistryFactors;
+}
+
+export function getGameChemistry(game: Game, allGames: Game[]): GameChemistryResult {
+  const playedGames = allGames.filter(g => getTotalHours(g) > 0);
+
+  // Craving: how much you've been playing this genre/platform recently
+  let craving = 50;
+  if (game.genre) {
+    const last30Days = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const recentGenreHours = allGames
+      .filter(g => g.genre === game.genre)
+      .flatMap(g => g.playLogs ?? [])
+      .filter(l => parseLocalDate(l.date) >= last30Days)
+      .reduce((s, l) => s + l.hours, 0);
+    const totalGenreHours = allGames
+      .filter(g => g.genre === game.genre)
+      .reduce((s, g) => s + getTotalHours(g), 0);
+    // High craving if genre recently active
+    craving = Math.min(100, recentGenreHours > 5 ? 80 + recentGenreHours : 40 + recentGenreHours * 4);
+  }
+
+  // Session fit: compare game's average session vs overall average
+  let sessionFit = 60;
+  const gameSessions = (game.playLogs ?? []).map(l => l.hours);
+  const allSessions = allGames.flatMap(g => g.playLogs ?? []).map(l => l.hours);
+  if (gameSessions.length > 0 && allSessions.length > 0) {
+    const gameAvg = gameSessions.reduce((s, h) => s + h, 0) / gameSessions.length;
+    const overallAvg = allSessions.reduce((s, h) => s + h, 0) / allSessions.length;
+    const ratio = gameAvg / (overallAvg || 1);
+    sessionFit = ratio >= 0.75 && ratio <= 1.5 ? 80 : ratio > 1.5 ? 65 : 55;
+  }
+
+  // Seasonal: genre popularity by current month
+  const currentMonth = new Date().getMonth(); // 0-11
+  const isSummer = currentMonth >= 5 && currentMonth <= 8;
+  const isWinter = currentMonth === 11 || currentMonth <= 1;
+  const genre = (game.genre || '').toLowerCase();
+  let seasonal = 55;
+  if (isWinter && (genre.includes('rpg') || genre.includes('adventure') || genre.includes('story'))) seasonal = 85;
+  if (isSummer && (genre.includes('sport') || genre.includes('racing') || genre.includes('action'))) seasonal = 85;
+  if (isSummer && genre.includes('rpg')) seasonal = 35; // long games harder in summer
+
+  // Freshness: inverse of days since last session (not started = very fresh)
+  let freshness = 80;
+  const logs = (game.playLogs ?? []).sort((a, b) => b.date.localeCompare(a.date));
+  if (logs.length > 0) {
+    const daysSince = Math.floor((Date.now() - parseLocalDate(logs[0].date).getTime()) / (24 * 60 * 60 * 1000));
+    freshness = Math.max(10, Math.min(90, 100 - daysSince * 2));
+  }
+
+  // Momentum: are sessions trending up or down?
+  let momentum = 50;
+  if (gameSessions.length >= 3) {
+    const lastHalf = gameSessions.slice(-Math.ceil(gameSessions.length / 2));
+    const firstHalf = gameSessions.slice(0, Math.floor(gameSessions.length / 2));
+    const lastAvg = lastHalf.reduce((s, h) => s + h, 0) / lastHalf.length;
+    const firstAvg = firstHalf.reduce((s, h) => s + h, 0) / firstHalf.length;
+    momentum = lastAvg > firstAvg ? Math.min(90, 50 + (lastAvg - firstAvg) * 10) : Math.max(20, 50 - (firstAvg - lastAvg) * 5);
+  }
+
+  // Completion likelihood: genre completion rate in your library
+  let completionLikelihood = 50;
+  if (game.genre) {
+    const sameGenre = playedGames.filter(g => g.genre === game.genre);
+    if (sameGenre.length > 0) {
+      const rate = sameGenre.filter(g => g.status === 'Completed').length / sameGenre.length;
+      completionLikelihood = Math.round(rate * 100);
+    }
+  }
+
+  const factors: ChemistryFactors = { craving, sessionFit, seasonal, freshness, momentum, completionLikelihood };
+  const weights = { craving: 0.25, sessionFit: 0.15, seasonal: 0.1, freshness: 0.2, momentum: 0.15, completionLikelihood: 0.15 };
+  const score = Math.round(
+    Object.entries(factors).reduce((s, [k, v]) => s + v * (weights[k as keyof ChemistryFactors] || 0), 0)
+  );
+
+  const topFactor = (Object.entries(factors) as [keyof ChemistryFactors, number][])
+    .sort((a, b) => b[1] - a[1])[0][0];
+
+  const grade: GameChemistryResult['grade'] = score >= 85 ? 'S' : score >= 70 ? 'A' : score >= 55 ? 'B' : score >= 40 ? 'C' : 'D';
+
+  const justifications: Record<keyof ChemistryFactors, string> = {
+    craving: 'Strong genre craving right now',
+    sessionFit: 'Session length matches your rhythm',
+    seasonal: 'Perfect for this time of year',
+    freshness: 'Fresh start energy',
+    momentum: 'Building great momentum',
+    completionLikelihood: 'High chance you\'ll finish this one',
+  };
+
+  return { score, grade, factors, justification: justifications[topFactor], topFactor };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 4. QUEUE SHAME TIMER
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type QueueShameTier = 'fresh' | 'warming' | 'getting_awkward' | 'embarrassing' | 'hall_of_shame';
+
+export interface QueueShameData {
+  daysQueued: number;
+  tier: QueueShameTier;
+  tierLabel: string;
+  message: string;
+  gamesCompletedSince: number;   // completed games after this was queued
+  gamesAddedAfter: number;       // games added to queue after this one
+  icon: string;
+  color: string;
+}
+
+export function getQueueShameData(game: Game, allGames: Game[]): QueueShameData | null {
+  // Only applies to queued (Not Started / Wishlist) games with a queue position
+  if (game.queuePosition == null) return null;
+  if (game.status === 'In Progress' || game.status === 'Completed' || game.status === 'Abandoned') return null;
+
+  // Use datePurchased or createdAt as when it was added
+  const addedDate = parseLocalDate(game.datePurchased || game.createdAt);
+  const now = new Date();
+  const daysQueued = Math.floor((now.getTime() - addedDate.getTime()) / (24 * 60 * 60 * 1000));
+
+  // Games completed since this game was purchased
+  const gamesCompletedSince = allGames.filter(g => {
+    if (g.status !== 'Completed' || !g.endDate) return false;
+    return parseLocalDate(g.endDate) >= addedDate;
+  }).length;
+
+  // Games added to queue after this one (lower queue position number = higher priority)
+  const gamesAddedAfter = allGames.filter(g =>
+    g.queuePosition != null &&
+    g.queuePosition > (game.queuePosition ?? 0) &&
+    g.id !== game.id
+  ).length;
+
+  let tier: QueueShameTier;
+  let tierLabel: string;
+  let message: string;
+  let icon: string;
+  let color: string;
+
+  if (daysQueued <= 14) {
+    tier = 'fresh'; tierLabel = 'Fresh'; icon = '✨'; color = '#34d399';
+    message = 'Just arrived. Still new and shiny.';
+  } else if (daysQueued <= 45) {
+    tier = 'warming'; tierLabel = 'Warming Up'; icon = '⏳'; color = '#fbbf24';
+    message = `${daysQueued} days waiting. Getting comfortable on the shelf.`;
+  } else if (daysQueued <= 90) {
+    tier = 'getting_awkward'; tierLabel = 'Getting Awkward'; icon = '😬'; color = '#f97316';
+    message = `${daysQueued} days. You've completed ${gamesCompletedSince} other games since buying this.`;
+  } else if (daysQueued <= 180) {
+    tier = 'embarrassing'; tierLabel = 'Embarrassing'; icon = '😳'; color = '#ef4444';
+    message = `${daysQueued} days collecting dust. What are you waiting for?`;
+  } else {
+    tier = 'hall_of_shame'; tierLabel = 'Hall of Shame'; icon = '🏛️'; color = '#9333ea';
+    const months = Math.floor(daysQueued / 30);
+    message = `${months} months. ${gamesCompletedSince} games completed instead. This is the backlog life.`;
+  }
+
+  return { daysQueued, tier, tierLabel, message, gamesCompletedSince, gamesAddedAfter, icon, color };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 5. PARALLEL UNIVERSE IMPACT SCORE
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface ParallelUniverseData {
+  impactScore: number;    // 0-100: how much this game distorts your stats
+  label: string;
+  summary: string;
+  deltas: {
+    avgCostPerHour: number;    // change if this game removed (positive = would improve)
+    completionRate: number;    // change in %
+    totalHours: number;        // hours that would be lost
+    avgRating: number;         // rating change
+  };
+  isAnchor: boolean;           // true if game's removal hurts stats
+  isBallast: boolean;          // true if game's removal improves stats
+}
+
+export function getParallelUniverseImpact(game: Game, allGames: Game[]): ParallelUniverseData {
+  const withGame = allGames;
+  const withoutGame = allGames.filter(g => g.id !== game.id);
+
+  const calcStats = (gs: Game[]) => {
+    const owned = gs.filter(g => g.status !== 'Wishlist');
+    const played = owned.filter(g => getTotalHours(g) > 0);
+    const completed = owned.filter(g => g.status === 'Completed');
+    const paidGames = played.filter(g => !g.acquiredFree && g.price > 0 && getTotalHours(g) >= 2);
+    const avgCph = paidGames.length > 0
+      ? paidGames.reduce((s, g) => s + g.price / getTotalHours(g), 0) / paidGames.length
+      : 0;
+    const compRate = owned.length > 0 ? (completed.length / owned.length) * 100 : 0;
+    const totalHours = owned.reduce((s, g) => s + getTotalHours(g), 0);
+    const ratedPlayed = played.filter(g => g.rating > 0);
+    const avgRating = ratedPlayed.length > 0
+      ? ratedPlayed.reduce((s, g) => s + g.rating, 0) / ratedPlayed.length
+      : 0;
+    return { avgCph, compRate, totalHours, avgRating };
+  };
+
+  const with_ = calcStats(withGame);
+  const without_ = calcStats(withoutGame);
+
+  const deltas = {
+    avgCostPerHour: Math.round((without_.avgCph - with_.avgCph) * 100) / 100,
+    completionRate: Math.round((without_.compRate - with_.compRate) * 10) / 10,
+    totalHours: Math.round((with_.totalHours - without_.totalHours) * 10) / 10,
+    avgRating: Math.round((without_.avgRating - with_.avgRating) * 10) / 10,
+  };
+
+  // Impact score: how dramatically does removing this game change stats?
+  const impactScore = Math.min(100, Math.round(
+    Math.abs(deltas.avgCostPerHour) * 10 +
+    Math.abs(deltas.completionRate) * 2 +
+    (deltas.totalHours / (with_.totalHours || 1)) * 50 +
+    Math.abs(deltas.avgRating) * 15
+  ));
+
+  const gameHours = getTotalHours(game);
+  const gameCph = game.price > 0 && gameHours > 0 ? game.price / gameHours : 0;
+  const isAnchor = gameCph < with_.avgCph && game.rating >= 7 && gameHours > 20; // good game
+  const isBallast = gameCph > with_.avgCph * 1.5 && gameHours < 5; // dragging stats down
+
+  let label: string;
+  let summary: string;
+
+  if (isAnchor) {
+    label = '⚓ Library Anchor';
+    summary = `Removing ${game.name} would hurt your stats — it's one of your best investments`;
+  } else if (isBallast) {
+    label = '🪨 Ballast Weight';
+    summary = `${game.name} drags your cost-per-hour up. Without it, your avg would be $${Math.abs(deltas.avgCostPerHour).toFixed(2)}/hr cheaper`;
+  } else if (impactScore > 50) {
+    label = '🌊 High Impact';
+    summary = `${game.name} significantly shapes your gaming profile`;
+  } else {
+    label = '💧 Low Impact';
+    summary = `${game.name} blends into your library — its presence barely moves the needle`;
+  }
+
+  return { impactScore, label, summary, deltas, isAnchor, isBallast };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 6. SHELF LIFE EXPIRY DATE
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type ShelfLifeTier = 'thriving' | 'stable' | 'at_risk' | 'critical' | 'expired';
+
+export interface ShelfLifeExpiryData {
+  expiryDate: Date | null;    // predicted "point of no return"
+  daysRemaining: number | null;
+  tier: ShelfLifeTier;
+  tierLabel: string;
+  reasoning: string;
+  medianWindow: number;       // median days other similar games got played before abandonment
+  urgencyColor: string;
+}
+
+export function getShelfLifeExpiry(game: Game, allGames: Game[]): ShelfLifeExpiryData {
+  // Already completed or abandoned — no expiry
+  if (game.status === 'Completed') {
+    return { expiryDate: null, daysRemaining: null, tier: 'thriving', tierLabel: 'Completed', reasoning: 'Already finished — no expiry risk', medianWindow: 0, urgencyColor: '#34d399' };
+  }
+  if (game.status === 'Abandoned') {
+    return { expiryDate: null, daysRemaining: null, tier: 'expired', tierLabel: 'Expired', reasoning: 'Already abandoned', medianWindow: 0, urgencyColor: '#6b7280' };
+  }
+
+  // Calculate median active window for abandoned games in your library
+  const abandonedGames = allGames.filter(g => g.status === 'Abandoned' && g.startDate && g.endDate);
+  let medianWindow = 45; // default assumption
+  if (abandonedGames.length >= 3) {
+    const windows = abandonedGames.map(g => {
+      const start = parseLocalDate(g.startDate!);
+      const end = parseLocalDate(g.endDate!);
+      return Math.floor((end.getTime() - start.getTime()) / (24 * 60 * 60 * 1000));
+    }).sort((a, b) => a - b);
+    medianWindow = windows[Math.floor(windows.length / 2)];
+  }
+
+  const now = new Date();
+  const logs = (game.playLogs ?? []).sort((a, b) => b.date.localeCompare(a.date));
+  const lastPlayDate = logs.length > 0 ? parseLocalDate(logs[0].date) : null;
+  const startDate = game.startDate ? parseLocalDate(game.startDate) : lastPlayDate;
+
+  // Not started yet
+  if (game.status === 'Not Started' || (!startDate && !lastPlayDate)) {
+    const purchaseDate = game.datePurchased ? parseLocalDate(game.datePurchased) : null;
+    if (purchaseDate) {
+      const daysSincePurchase = Math.floor((now.getTime() - purchaseDate.getTime()) / (24 * 60 * 60 * 1000));
+      if (daysSincePurchase > 180) {
+        return { expiryDate: null, daysRemaining: 0, tier: 'critical', tierLabel: 'Critical', reasoning: `Unstarted for ${daysSincePurchase} days — interest may be fading fast`, medianWindow, urgencyColor: '#ef4444' };
+      }
+      if (daysSincePurchase > 90) {
+        return { expiryDate: null, daysRemaining: 30, tier: 'at_risk', tierLabel: 'At Risk', reasoning: `Unstarted for ${daysSincePurchase} days`, medianWindow, urgencyColor: '#f97316' };
+      }
+    }
+    return { expiryDate: null, daysRemaining: null, tier: 'stable', tierLabel: 'Stable', reasoning: 'Not started yet — still in the grace period', medianWindow, urgencyColor: '#fbbf24' };
+  }
+
+  // In Progress — check last play recency
+  const daysSincePlay = lastPlayDate ? Math.floor((now.getTime() - lastPlayDate.getTime()) / (24 * 60 * 60 * 1000)) : 999;
+
+  const expiryDate = lastPlayDate ? new Date(lastPlayDate.getTime() + medianWindow * 24 * 60 * 60 * 1000) : null;
+  const daysRemaining = expiryDate ? Math.floor((expiryDate.getTime() - now.getTime()) / (24 * 60 * 60 * 1000)) : null;
+
+  if (daysSincePlay < 7) {
+    return { expiryDate, daysRemaining, tier: 'thriving', tierLabel: 'Thriving', reasoning: `Played ${daysSincePlay} days ago — very active`, medianWindow, urgencyColor: '#34d399' };
+  }
+  if (daysSincePlay < 21) {
+    return { expiryDate, daysRemaining, tier: 'stable', tierLabel: 'Stable', reasoning: `Last played ${daysSincePlay} days ago — taking a break`, medianWindow, urgencyColor: '#86efac' };
+  }
+  if (daysSincePlay < 45) {
+    return { expiryDate, daysRemaining, tier: 'at_risk', tierLabel: 'At Risk', reasoning: `${daysSincePlay} days without a session — interest cooling`, medianWindow, urgencyColor: '#fbbf24' };
+  }
+  if (daysSincePlay < 90) {
+    return { expiryDate, daysRemaining, tier: 'critical', tierLabel: 'Critical', reasoning: `${daysSincePlay} days of silence — on the verge of abandonment`, medianWindow, urgencyColor: '#ef4444' };
+  }
+
+  return { expiryDate: null, daysRemaining: 0, tier: 'expired', tierLabel: 'Shelf Expired', reasoning: `${daysSincePlay} days since last session — this game is in limbo`, medianWindow, urgencyColor: '#9333ea' };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 7. DAILY FORTUNE COOKIE
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type FortuneCategory =
+  | 'spending' | 'time' | 'completion' | 'backlog' | 'value'
+  | 'streak' | 'genre' | 'prediction';
+
+export interface DailyFortune {
+  text: string;
+  category: FortuneCategory;
+  icon: string;
+  dataPoint: string;   // the concrete stat it's referencing
+}
+
+export function getDailyFortune(games: Game[]): DailyFortune {
+  const today = new Date();
+  const seed = today.getFullYear() * 10000 + (today.getMonth() + 1) * 100 + today.getDate();
+
+  const ownedGames = games.filter(g => g.status !== 'Wishlist');
+  const playedGames = ownedGames.filter(g => getTotalHours(g) > 0);
+  const inProgress = ownedGames.filter(g => g.status === 'In Progress');
+  const completedGames = ownedGames.filter(g => g.status === 'Completed');
+  const notStarted = ownedGames.filter(g => g.status === 'Not Started');
+
+  const fortunes: DailyFortune[] = [];
+
+  // Backlog fortunes
+  if (notStarted.length > 0) {
+    const oldest = notStarted.sort((a, b) => (a.datePurchased || '').localeCompare(b.datePurchased || ''))[0];
+    const daysSince = oldest.datePurchased
+      ? Math.floor((Date.now() - parseLocalDate(oldest.datePurchased).getTime()) / (24 * 60 * 60 * 1000))
+      : null;
+    if (daysSince && daysSince > 30) {
+      fortunes.push({
+        text: `Your oldest unstarted game has been waiting ${daysSince} days. Today might be the day.`,
+        category: 'backlog', icon: '🗄️',
+        dataPoint: `${oldest.name} — ${daysSince}d unplayed`,
+      });
+    }
+  }
+
+  // Value fortunes
+  const paidPlayed = playedGames.filter(g => !g.acquiredFree && g.price > 0 && getTotalHours(g) >= 2);
+  if (paidPlayed.length > 0) {
+    paidPlayed.sort((a, b) => (a.price / getTotalHours(a)) - (b.price / getTotalHours(b)));
+    const bestValue = paidPlayed[0];
+    const cph = bestValue.price / getTotalHours(bestValue);
+    fortunes.push({
+      text: `${bestValue.name} costs $${cph.toFixed(2)}/hr. That's cheaper than a cup of coffee per hour of joy.`,
+      category: 'value', icon: '💎',
+      dataPoint: `$${cph.toFixed(2)}/hr`,
+    });
+  }
+
+  // Streak fortunes
+  const streak = getCurrentGamingStreak(games);
+  if (streak > 0) {
+    fortunes.push({
+      text: streak >= 7
+        ? `You're on a ${streak}-day streak. The momentum is real. Keep it going.`
+        : `${streak} days in a row. You're building a streak — don't break it today.`,
+      category: 'streak', icon: '🔥',
+      dataPoint: `${streak}-day streak`,
+    });
+  }
+
+  // Completion fortunes
+  if (completedGames.length > 0) {
+    fortunes.push({
+      text: `You've completed ${completedGames.length} games. That's ${completedGames.length} stories fully told.`,
+      category: 'completion', icon: '✅',
+      dataPoint: `${completedGames.length} completions`,
+    });
+  }
+
+  // Time fortunes
+  const totalHours = ownedGames.reduce((s, g) => s + getTotalHours(g), 0);
+  if (totalHours > 100) {
+    fortunes.push({
+      text: `${totalHours.toFixed(0)} hours logged. That's ${(totalHours / 24).toFixed(1)} full days of gaming.`,
+      category: 'time', icon: '⏰',
+      dataPoint: `${totalHours.toFixed(0)}h total`,
+    });
+  }
+
+  // Prediction fortune
+  if (inProgress.length > 0) {
+    const game = inProgress[Math.floor(inProgress.length / 2)];
+    fortunes.push({
+      text: `${game.name} is calling. Even 30 minutes today keeps the story alive.`,
+      category: 'prediction', icon: '🔮',
+      dataPoint: game.name,
+    });
+  }
+
+  // Genre fortune
+  const genreHours: Record<string, number> = {};
+  for (const g of playedGames) {
+    if (g.genre) genreHours[g.genre] = (genreHours[g.genre] || 0) + getTotalHours(g);
+  }
+  const topGenre = Object.entries(genreHours).sort((a, b) => b[1] - a[1])[0];
+  if (topGenre) {
+    fortunes.push({
+      text: `${topGenre[1].toFixed(0)} hours in ${topGenre[0]} games. Your genre loyalty is undeniable.`,
+      category: 'genre', icon: '🎭',
+      dataPoint: `${topGenre[0]}: ${topGenre[1].toFixed(0)}h`,
+    });
+  }
+
+  // Spending fortune
+  const totalSpent = ownedGames.filter(g => !g.acquiredFree).reduce((s, g) => s + g.price, 0);
+  if (totalSpent > 100) {
+    const overallCph = totalHours > 0 ? totalSpent / totalHours : 0;
+    fortunes.push({
+      text: `$${totalSpent.toFixed(0)} spent, $${overallCph.toFixed(2)}/hr on average. ${overallCph < 3 ? 'Outstanding value.' : overallCph < 6 ? 'Pretty reasonable.' : 'Room to improve.'}`,
+      category: 'spending', icon: '💰',
+      dataPoint: `$${overallCph.toFixed(2)}/hr`,
+    });
+  }
+
+  if (fortunes.length === 0) {
+    return {
+      text: 'Every great collection starts with the first game. Keep playing.',
+      category: 'prediction', icon: '🎮',
+      dataPoint: 'Your journey begins',
+    };
+  }
+
+  // Deterministic daily pick
+  const pick = fortunes[seed % fortunes.length];
+  return pick;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 8. OSCAR AWARDS CEREMONY
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type OscarCategory =
+  | 'best_picture' | 'best_supporting' | 'best_short_film' | 'biggest_plot_twist'
+  | 'lifetime_achievement' | 'best_comeback' | 'worst_bang_for_buck'
+  | 'sleeper_hit' | 'most_likely_abandoned' | 'iron_man';
+
+export interface OscarNominee {
+  gameId: string;
+  gameName: string;
+  thumbnail?: string;
+  reason: string;
+  stat?: string;
+}
+
+export interface OscarAward {
+  category: OscarCategory;
+  categoryLabel: string;
+  tagline: string;
+  winner: OscarNominee;
+  nominees: OscarNominee[];
+  icon: string;
+}
+
+export interface OscarAwardsData {
+  awards: OscarAward[];
+  periodLabel: string;
+}
+
+export function getOscarAwards(games: Game[], startDate: Date, endDate: Date): OscarAwardsData {
+  const periodGames = games.filter(game => {
+    const hasActivity = (game.playLogs ?? []).some(l => {
+      const d = parseLocalDate(l.date);
+      return d >= startDate && d <= endDate;
+    });
+    const purchased = game.datePurchased && parseLocalDate(game.datePurchased) >= startDate && parseLocalDate(game.datePurchased) <= endDate;
+    return hasActivity || purchased;
+  });
+
+  const getHoursInPeriod = (game: Game) =>
+    (game.playLogs ?? [])
+      .filter(l => { const d = parseLocalDate(l.date); return d >= startDate && d <= endDate; })
+      .reduce((s, l) => s + l.hours, 0);
+
+  const getSessionsInPeriod = (game: Game) =>
+    (game.playLogs ?? []).filter(l => { const d = parseLocalDate(l.date); return d >= startDate && d <= endDate; });
+
+  const awards: OscarAward[] = [];
+
+  // Best Picture — highest rated game played in period
+  const ratedInPeriod = periodGames.filter(g => g.rating > 0 && getHoursInPeriod(g) > 0)
+    .sort((a, b) => b.rating - a.rating);
+  if (ratedInPeriod.length > 0) {
+    awards.push({
+      category: 'best_picture',
+      categoryLabel: 'Best Picture',
+      tagline: 'The one that moved you',
+      icon: '🏆',
+      winner: { gameId: ratedInPeriod[0].id, gameName: ratedInPeriod[0].name, thumbnail: ratedInPeriod[0].thumbnail, reason: `Rated ${ratedInPeriod[0].rating}/10`, stat: `${ratedInPeriod[0].rating}/10` },
+      nominees: ratedInPeriod.slice(1, 3).map(g => ({ gameId: g.id, gameName: g.name, thumbnail: g.thumbnail, reason: `${g.rating}/10`, stat: `${g.rating}/10` })),
+    });
+  }
+
+  // Best Supporting — 2nd most played game in period
+  const byHours = periodGames.filter(g => getHoursInPeriod(g) > 0).sort((a, b) => getHoursInPeriod(b) - getHoursInPeriod(a));
+  if (byHours.length >= 2) {
+    const supporting = byHours[1];
+    const supportingHours = getHoursInPeriod(supporting);
+    awards.push({
+      category: 'best_supporting',
+      categoryLabel: 'Best Supporting Game',
+      tagline: 'Always the bridesmaid, never the bride',
+      icon: '🥈',
+      winner: { gameId: supporting.id, gameName: supporting.name, thumbnail: supporting.thumbnail, reason: `${supportingHours.toFixed(1)}h — reliably there`, stat: `${supportingHours.toFixed(1)}h` },
+      nominees: byHours.slice(2, 4).map(g => ({ gameId: g.id, gameName: g.name, thumbnail: g.thumbnail, reason: `${getHoursInPeriod(g).toFixed(1)}h` })),
+    });
+  }
+
+  // Best Short Film — highest rated game under 5 total hours
+  const shortGames = periodGames.filter(g => getTotalHours(g) <= 5 && g.rating > 0 && getHoursInPeriod(g) > 0)
+    .sort((a, b) => b.rating - a.rating);
+  if (shortGames.length > 0) {
+    awards.push({
+      category: 'best_short_film',
+      categoryLabel: 'Best Short Film',
+      tagline: "Proof that size doesn't matter",
+      icon: '🎬',
+      winner: { gameId: shortGames[0].id, gameName: shortGames[0].name, thumbnail: shortGames[0].thumbnail, reason: `${getTotalHours(shortGames[0]).toFixed(1)}h, ${shortGames[0].rating}/10`, stat: `${shortGames[0].rating}/10` },
+      nominees: shortGames.slice(1, 3).map(g => ({ gameId: g.id, gameName: g.name, thumbnail: g.thumbnail, reason: `${getTotalHours(g).toFixed(1)}h, ${g.rating}/10` })),
+    });
+  }
+
+  // Iron Man — longest single session in period
+  const sessionsWithGame: { session: { hours: number; date: string }; game: Game }[] = [];
+  for (const game of periodGames) {
+    for (const l of game.playLogs ?? []) {
+      const d = parseLocalDate(l.date);
+      if (d >= startDate && d <= endDate) sessionsWithGame.push({ session: l, game });
+    }
+  }
+  sessionsWithGame.sort((a, b) => b.session.hours - a.session.hours);
+  if (sessionsWithGame.length > 0) {
+    const { session, game } = sessionsWithGame[0];
+    awards.push({
+      category: 'iron_man',
+      categoryLabel: 'Iron Man Award',
+      tagline: 'Did you even eat?',
+      icon: '⚡',
+      winner: { gameId: game.id, gameName: game.name, thumbnail: game.thumbnail, reason: `${session.hours}h in one sitting`, stat: `${session.hours}h session` },
+      nominees: sessionsWithGame.slice(1, 3).map(s => ({ gameId: s.game.id, gameName: s.game.name, thumbnail: s.game.thumbnail, reason: `${s.session.hours}h session` })),
+    });
+  }
+
+  // Worst Bang for Buck — highest cost-per-hour game played in period
+  const cphInPeriod = periodGames
+    .filter(g => !g.acquiredFree && g.price > 0 && getHoursInPeriod(g) > 0)
+    .map(g => ({ game: g, cph: g.price / getHoursInPeriod(g) }))
+    .sort((a, b) => b.cph - a.cph);
+  if (cphInPeriod.length > 0) {
+    const worst = cphInPeriod[0];
+    awards.push({
+      category: 'worst_bang_for_buck',
+      categoryLabel: 'Worst Bang for Buck',
+      tagline: 'Congratulations, you played yourself',
+      icon: '💸',
+      winner: { gameId: worst.game.id, gameName: worst.game.name, thumbnail: worst.game.thumbnail, reason: `$${worst.cph.toFixed(2)}/hr this period`, stat: `$${worst.cph.toFixed(2)}/hr` },
+      nominees: cphInPeriod.slice(1, 3).map(x => ({ gameId: x.game.id, gameName: x.game.name, thumbnail: x.game.thumbnail, reason: `$${x.cph.toFixed(2)}/hr` })),
+    });
+  }
+
+  // Most Likely to Be Abandoned — In Progress with steepest session decline
+  const inProgressInPeriod = periodGames.filter(g => g.status === 'In Progress' && (g.playLogs ?? []).length >= 2);
+  if (inProgressInPeriod.length > 0) {
+    const withDecline = inProgressInPeriod.map(g => {
+      const periodSessions = getSessionsInPeriod(g);
+      if (periodSessions.length < 2) return { game: g, decline: 0 };
+      const sorted = periodSessions.sort((a, b) => a.date.localeCompare(b.date));
+      const firstHalf = sorted.slice(0, Math.ceil(sorted.length / 2)).reduce((s, l) => s + l.hours, 0) / Math.ceil(sorted.length / 2);
+      const secondHalf = sorted.slice(-Math.floor(sorted.length / 2)).reduce((s, l) => s + l.hours, 0) / Math.floor(sorted.length / 2);
+      return { game: g, decline: firstHalf - secondHalf };
+    }).sort((a, b) => b.decline - a.decline);
+
+    if (withDecline[0]?.decline > 0) {
+      const { game: g, decline } = withDecline[0];
+      awards.push({
+        category: 'most_likely_abandoned',
+        categoryLabel: 'Most Likely to Be Abandoned',
+        tagline: "We're all thinking it",
+        icon: '⚠️',
+        winner: { gameId: g.id, gameName: g.name, thumbnail: g.thumbnail, reason: `Sessions declining by ${decline.toFixed(1)}h avg`, stat: `-${decline.toFixed(1)}h/session` },
+        nominees: withDecline.slice(1, 3).map(x => ({ gameId: x.game.id, gameName: x.game.name, thumbnail: x.game.thumbnail, reason: `${x.decline.toFixed(1)}h decline` })),
+      });
+    }
+  }
+
+  // Lifetime Achievement — oldest game still played in period
+  const withPurchaseDate = periodGames
+    .filter(g => g.datePurchased && getHoursInPeriod(g) > 0)
+    .sort((a, b) => (a.datePurchased || '').localeCompare(b.datePurchased || ''));
+  if (withPurchaseDate.length > 0) {
+    const oldest = withPurchaseDate[0];
+    const daysOld = oldest.datePurchased
+      ? Math.floor((Date.now() - parseLocalDate(oldest.datePurchased).getTime()) / (24 * 60 * 60 * 1000))
+      : 0;
+    awards.push({
+      category: 'lifetime_achievement',
+      categoryLabel: 'Lifetime Achievement',
+      tagline: 'Still going strong after all this time',
+      icon: '👴',
+      winner: { gameId: oldest.id, gameName: oldest.name, thumbnail: oldest.thumbnail, reason: `${daysOld} days old, still going`, stat: `${daysOld}d old` },
+      nominees: withPurchaseDate.slice(1, 3).map(g => ({
+        gameId: g.id, gameName: g.name, thumbnail: g.thumbnail,
+        reason: `${Math.floor((Date.now() - parseLocalDate(g.datePurchased!).getTime()) / (24 * 60 * 60 * 1000))}d old`,
+      })),
+    });
+  }
+
+  const periodLabel = `${startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+
+  return { awards, periodLabel };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 9. STORY ARC DETECTION
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type StoryActType = 'setup' | 'rising' | 'climax' | 'falling' | 'resolution';
+
+export interface StoryAct {
+  type: StoryActType;
+  label: string;
+  months: string[];          // YYYY-MM month keys
+  description: string;
+  icon: string;
+  color: string;
+}
+
+export interface StoryArcData {
+  acts: StoryAct[];
+  climaxMonth: string | null;
+  currentAct: StoryActType;
+  narrative: string;
+  yearLabel: string;
+  hasEnoughData: boolean;
+}
+
+export function getStoryArc(games: Game[], year?: number): StoryArcData {
+  const targetYear = year ?? new Date().getFullYear();
+
+  // Build monthly hours for the target year
+  const monthlyHours: Record<string, number> = {};
+  for (const game of games) {
+    for (const log of game.playLogs ?? []) {
+      if (!log.date.startsWith(`${targetYear}-`)) continue;
+      const mk = log.date.substring(0, 7);
+      monthlyHours[mk] = (monthlyHours[mk] || 0) + log.hours;
+    }
+  }
+
+  const months = Object.keys(monthlyHours).sort();
+
+  if (months.length < 3) {
+    return {
+      acts: [],
+      climaxMonth: null,
+      currentAct: 'setup',
+      narrative: 'Not enough data yet to detect a story arc. Keep playing!',
+      yearLabel: `${targetYear}`,
+      hasEnoughData: false,
+    };
+  }
+
+  const hours = months.map(m => monthlyHours[m]);
+  const maxHours = Math.max(...hours);
+  const climaxIdx = hours.indexOf(maxHours);
+  const climaxMonth = months[climaxIdx];
+
+  // Classify each month
+  const acts: StoryAct[] = [];
+  let currentActType: StoryActType = 'setup';
+
+  // Simple 5-act classification
+  if (months.length === 1) {
+    acts.push({ type: 'setup', label: 'The Beginning', months: [months[0]], description: 'The gaming year begins', icon: '📖', color: '#60a5fa' });
+  } else {
+    // Setup: first 1-2 months or below-average months before rising action
+    const avg = hours.reduce((s, h) => s + h, 0) / hours.length;
+    const setupMonths: string[] = [];
+    const risingMonths: string[] = [];
+    const climaxMonths: string[] = [climaxMonth];
+    const fallingMonths: string[] = [];
+    const resolutionMonths: string[] = [];
+
+    months.forEach((m, i) => {
+      if (i === climaxIdx) return; // skip climax
+      const h = hours[i];
+      if (i < climaxIdx) {
+        if (i === 0 || h < avg * 0.7) setupMonths.push(m);
+        else risingMonths.push(m);
+      } else {
+        // after climax
+        const distFromEnd = months.length - 1 - i;
+        if (distFromEnd <= 1) resolutionMonths.push(m);
+        else fallingMonths.push(m);
+      }
+    });
+
+    if (setupMonths.length > 0) {
+      acts.push({ type: 'setup', label: 'Act I: Setup', months: setupMonths, description: 'Establishing the baseline gaming rhythm', icon: '📖', color: '#60a5fa' });
+    }
+    if (risingMonths.length > 0) {
+      acts.push({ type: 'rising', label: 'Act II: Rising Action', months: risingMonths, description: 'Activity building — things are heating up', icon: '📈', color: '#a78bfa' });
+    }
+    acts.push({ type: 'climax', label: 'Act III: Climax', months: climaxMonths, description: `The peak — ${maxHours.toFixed(0)}h in ${climaxMonth}`, icon: '🌟', color: '#f59e0b' });
+    if (fallingMonths.length > 0) {
+      acts.push({ type: 'falling', label: 'Act IV: Falling Action', months: fallingMonths, description: 'The wind-down after the peak', icon: '📉', color: '#f97316' });
+    }
+    if (resolutionMonths.length > 0) {
+      acts.push({ type: 'resolution', label: 'Act V: Resolution', months: resolutionMonths, description: 'Where things stand now', icon: '🎭', color: '#34d399' });
+    }
+  }
+
+  // Determine current act
+  const currentMonth = new Date().toISOString().substring(0, 7);
+  const currentActObj = acts.find(a => a.months.includes(currentMonth)) || acts[acts.length - 1];
+  currentActType = currentActObj?.type ?? 'setup';
+
+  // Build narrative
+  const climaxData = monthlyHours[climaxMonth] ?? maxHours;
+  const climaxMonthName = new Date(parseInt(climaxMonth.split('-')[0]), parseInt(climaxMonth.split('-')[1]) - 1).toLocaleDateString('en-US', { month: 'long' });
+  const narrative = `Your ${targetYear} gaming story peaked in ${climaxMonthName} with ${climaxData.toFixed(0)}h. ${currentActType === 'rising' ? 'Things are still building — the best is yet to come.' : currentActType === 'climax' ? 'You\'re at the peak right now.' : currentActType === 'falling' ? 'Activity is winding down after the peak.' : currentActType === 'resolution' ? 'The year is finding its conclusion.' : 'The story is just beginning.'}`;
+
+  return { acts, climaxMonth, currentAct: currentActType, narrative, yearLabel: `${targetYear}`, hasEnoughData: true };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 10. GAME EULOGY GENERATOR
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type EulogyVoice = 'tragic' | 'peaceful' | 'dramatic' | 'comic' | 'epic';
+
+export interface GameEulogyData {
+  voice: EulogyVoice;
+  text: string;
+  epitaph: string;
+  stats: {
+    totalHours: number;
+    price: number;
+    costPerHour: number;
+    sessions: number;
+    rating: number;
+    daysOwned: number;
+    replacedBy?: string;
+  };
+  replacedBy?: string;
+}
+
+export function generateGameEulogy(game: Game, allGames: Game[]): GameEulogyData | null {
+  if (game.status !== 'Abandoned') return null;
+
+  const totalHours = getTotalHours(game);
+  const price = game.price;
+  const costPerHour = totalHours > 0 && price > 0 ? price / totalHours : 0;
+  const sessions = (game.playLogs ?? []).length;
+  const daysOwned = game.datePurchased
+    ? Math.floor((Date.now() - parseLocalDate(game.datePurchased).getTime()) / (24 * 60 * 60 * 1000))
+    : 0;
+
+  // Determine what game was started around the same time of abandonment
+  let replacedBy: string | undefined;
+  if (game.endDate) {
+    const abandonDate = parseLocalDate(game.endDate);
+    const startedAfter = allGames
+      .filter(g => g.id !== game.id && g.startDate)
+      .map(g => ({ game: g, startDate: parseLocalDate(g.startDate!) }))
+      .filter(x => Math.abs(x.startDate.getTime() - abandonDate.getTime()) < 7 * 24 * 60 * 60 * 1000)
+      .sort((a, b) => Math.abs(a.startDate.getTime() - abandonDate.getTime()) - Math.abs(b.startDate.getTime() - abandonDate.getTime()));
+    if (startedAfter.length > 0) replacedBy = startedAfter[0].game.name;
+  }
+
+  // Determine voice
+  let voice: EulogyVoice;
+  if (price >= 40 && totalHours < 5) {
+    voice = 'tragic';
+  } else if (totalHours >= 30) {
+    voice = 'epic';
+  } else if (replacedBy) {
+    voice = 'dramatic';
+  } else if (price <= 5 || game.acquiredFree) {
+    voice = 'comic';
+  } else {
+    voice = 'peaceful';
+  }
+
+  // Build eulogy text
+  const acquiredText = game.acquiredFree
+    ? `acquired for free${game.subscriptionSource ? ` via ${game.subscriptionSource}` : ''}`
+    : `acquired for $${price.toFixed(0)}`;
+  const dateText = game.datePurchased
+    ? `on ${parseLocalDate(game.datePurchased).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`
+    : 'at some point';
+  const sessionText = sessions === 0 ? 'never played' : sessions === 1 ? 'one lone session' : `${sessions} sessions`;
+  const hoursText = totalHours === 0 ? 'zero hours' : `${totalHours.toFixed(1)} hours`;
+
+  let text: string;
+
+  switch (voice) {
+    case 'tragic':
+      text = `Here lies ${game.name}. ${acquiredText.charAt(0).toUpperCase() + acquiredText.slice(1)} ${dateText}. The hope was immense — ${sessionText}, ${hoursText} of memories.${replacedBy ? ` Replaced in your heart by ${replacedBy} just days later.` : ''} Cost per hour: $${costPerHour.toFixed(2)}. A tragedy measured in dollars. ${game.rating > 0 ? `Rated ${game.rating}/10 in its brief time.` : 'Never even rated — perhaps mercy.'} Rest in piece.`;
+      break;
+    case 'epic':
+      text = `Here lies ${game.name}, fallen hero of a ${hoursText} odyssey. What began ${dateText} became an epic — ${sessions} sessions, ${hoursText} invested. But even the mightiest quests go unfinished.${replacedBy ? ` The call of ${replacedBy} proved irresistible.` : ''} The world it built still lingers. Not a failure — an unfinished masterwork. Rest in power.`;
+      break;
+    case 'dramatic':
+      text = `${game.name} never saw it coming. Purchased ${dateText}, ${sessionText} shared together — then ${replacedBy} walked in.${replacedBy ? ` Three days later, ${game.name} was gone, replaced like it never mattered.` : ''} ${hoursText} of shared history, abandoned. The betrayal is real. ${costPerHour > 0 ? `$${costPerHour.toFixed(2)}/hr of regret.` : ''} Goodbye.`;
+      break;
+    case 'comic':
+      text = `${game.name}. It was free. It was there. You played ${hoursText} across ${sessionText}. ${totalHours < 1 ? 'It tried.' : 'It had its moments.'} Nobody paid $${price} — so really, who lost? Not you. Godspeed, little game. The shelf claims another.`;
+      break;
+    case 'peaceful':
+    default:
+      text = `${game.name} served its purpose. ${acquiredText.charAt(0).toUpperCase() + acquiredText.slice(1)} ${dateText}, played across ${sessionText} for ${hoursText}. ${game.rating > 0 ? `A solid ${game.rating}/10` : 'Unrated but experienced'}. It wasn't the right time, or the right game — and that's okay. Some journeys end before the credits. Thanks for the time.`;
+  }
+
+  const epitaph = `${game.name} | ${acquiredText} | ${hoursText} played | ${game.rating > 0 ? `${game.rating}/10` : 'Unrated'} | $${costPerHour > 0 ? costPerHour.toFixed(2) + '/hr' : 'N/A'}`;
+
+  return {
+    voice,
+    text,
+    epitaph,
+    stats: { totalHours, price, costPerHour, sessions, rating: game.rating, daysOwned, replacedBy },
+    replacedBy,
+  };
+}
+
+// Utility: get all abandoned games with eulogies
+export function getGameGraveyardData(games: Game[]): { game: Game; eulogy: GameEulogyData }[] {
+  return games
+    .filter(g => g.status === 'Abandoned')
+    .map(g => ({ game: g, eulogy: generateGameEulogy(g, games)! }))
+    .filter(x => x.eulogy !== null)
+    .sort((a, b) => (b.game.datePurchased || '').localeCompare(a.game.datePurchased || ''));
+}
