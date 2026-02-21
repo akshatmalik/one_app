@@ -22,9 +22,21 @@ function getLocalDateString(): string {
   return `${year}-${month}-${day}`;
 }
 
+const NOTE_PROMPTS = [
+  'What happened in the story?',
+  'Any frustrating moments?',
+  'Close to completing anything?',
+  'What surprised you?',
+  'How was the session overall?',
+  'Any cool discoveries?',
+  'Making good progress?',
+];
+
 export function PlayLogModal({ game, onSave, onClose }: PlayLogModalProps) {
   const [logs, setLogs] = useState<PlayLog[]>(game.playLogs || []);
   const [loading, setLoading] = useState(false);
+  const [notesExpanded, setNotesExpanded] = useState(false);
+  const [notesPromptIndex] = useState(() => Math.floor(Math.random() * NOTE_PROMPTS.length));
   const [newLog, setNewLog] = useState<{
     date: string;
     hours: string;
@@ -77,6 +89,7 @@ export function PlayLogModal({ game, onSave, onClose }: PlayLogModalProps) {
   // parseLocalDate imported from calculations
 
   return (
+    <>
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-[#12121a] border border-white/5 rounded-2xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
@@ -146,13 +159,16 @@ export function PlayLogModal({ game, onSave, onClose }: PlayLogModalProps) {
             </div>
             <div className="flex-1">
               <label className="block text-[10px] text-white/30 mb-1">Notes (optional)</label>
-              <input
-                type="text"
-                value={newLog.notes}
-                onChange={e => setNewLog({ ...newLog, notes: e.target.value })}
-                placeholder="What did you do?"
-                className="w-full px-2 py-2 bg-white/[0.03] border border-white/5 text-white rounded-lg text-xs focus:outline-none focus:bg-white/[0.05] focus:border-white/10 transition-all placeholder:text-white/20"
-              />
+              <button
+                type="button"
+                onClick={() => setNotesExpanded(true)}
+                className="w-full px-2 py-2 bg-white/[0.03] border border-white/5 text-left rounded-lg text-xs transition-all hover:bg-white/[0.05] hover:border-white/10"
+              >
+                {newLog.notes
+                  ? <span className="text-white/70 line-clamp-1">{newLog.notes}</span>
+                  : <span className="text-white/20">Add thoughts...</span>
+                }
+              </button>
             </div>
             <button
               onClick={addLog}
@@ -306,5 +322,52 @@ export function PlayLogModal({ game, onSave, onClose }: PlayLogModalProps) {
         </div>
       </div>
     </div>
+
+    {/* Notes bottom sheet */}
+    {notesExpanded && (
+      <div className="fixed inset-0 z-[60] flex flex-col justify-end">
+        <div
+          className="absolute inset-0 bg-black/50"
+          onClick={() => setNotesExpanded(false)}
+        />
+        <div className="relative bg-[#12121a] border-t border-white/10 rounded-t-2xl p-4 pb-8 animate-bottom-sheet-up">
+          <div className="w-10 h-1 bg-white/20 rounded-full mx-auto mb-4" />
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-sm font-medium text-white/70">Session Notes</span>
+            <button
+              onClick={() => setNotesExpanded(false)}
+              className="text-white/30 hover:text-white/60 hover:bg-white/5 rounded-lg p-1.5 transition-all"
+            >
+              <X size={16} />
+            </button>
+          </div>
+          <textarea
+            autoFocus
+            value={newLog.notes}
+            onChange={e => setNewLog({ ...newLog, notes: e.target.value })}
+            placeholder={NOTE_PROMPTS[notesPromptIndex]}
+            rows={6}
+            className="w-full px-3 py-3 bg-white/[0.03] border border-white/5 text-white rounded-xl text-sm focus:outline-none focus:bg-white/[0.05] focus:border-purple-500/20 transition-all placeholder:text-white/20 resize-none leading-relaxed"
+          />
+          <div className="flex gap-3 mt-3">
+            {newLog.notes && (
+              <button
+                onClick={() => setNewLog({ ...newLog, notes: '' })}
+                className="px-4 py-2.5 bg-white/5 text-white/40 rounded-lg text-sm hover:bg-white/10 hover:text-white/60 transition-all"
+              >
+                Clear
+              </button>
+            )}
+            <button
+              onClick={() => setNotesExpanded(false)}
+              className="flex-1 px-4 py-2.5 bg-purple-600 text-white rounded-lg text-sm font-medium hover:bg-purple-500 transition-all"
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }
