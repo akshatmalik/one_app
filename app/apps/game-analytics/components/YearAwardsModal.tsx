@@ -186,50 +186,42 @@ export function YearAwardsModal({ year, allGames, rawGames, updateGame, onClose 
   return (
     <AnimatePresence>
       <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4"
-        onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+        initial={{ opacity: 0, y: 24 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: 24 }}
+        transition={{ type: 'spring', damping: 28, stiffness: 280 }}
+        className="fixed inset-0 z-50 bg-[#0a0a0f] flex flex-col"
       >
-        <motion.div
-          initial={{ y: '100%', opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          exit={{ y: '100%', opacity: 0 }}
-          transition={{ type: 'spring', damping: 28, stiffness: 280 }}
-          className="w-full sm:max-w-lg bg-[#0a0a0f] border-t sm:border border-amber-500/20 sm:rounded-2xl overflow-hidden flex flex-col max-h-[90dvh] sm:max-h-[92dvh]"
-        >
-          {/* Header */}
-          <div className="flex items-center justify-between p-4 border-b border-white/5 shrink-0">
-            <div className="flex items-center gap-2">
-              <Trophy size={16} className="text-amber-400" />
-              <span className="font-bold text-white text-sm">The {year} Awards</span>
-              <span className="text-[10px] px-2 py-0.5 bg-amber-500/15 text-amber-400 rounded-full font-bold">Year-End</span>
-            </div>
-            <button onClick={onClose} className="w-7 h-7 rounded-full bg-white/5 flex items-center justify-center text-white/40 hover:text-white/70">
-              <X size={14} />
-            </button>
+        {/* Sticky header */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-white/5 shrink-0 bg-[#0a0a0f]">
+          <div className="flex items-center gap-2">
+            <Trophy size={16} className="text-amber-400" />
+            <span className="font-bold text-white text-sm">The {year} Awards</span>
+            <span className="text-[10px] px-2 py-0.5 bg-amber-500/15 text-amber-400 rounded-full font-bold">Year-End</span>
           </div>
+          <button onClick={onClose} className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-white/40 active:bg-white/10">
+            <X size={16} />
+          </button>
+        </div>
 
-          {/* Scrollable content */}
-          <div className="overflow-y-auto flex-1 min-h-0 py-4 overscroll-contain">
-            <GamingAwardsScreen
-              periodType="year"
-              periodKey={periodKey}
-              periodLabel={periodLabel}
-              ceremonyTitle={`The ${year} Gaming Ceremony`}
-              categories={categories}
-              existingPicks={existingPicks}
-              onPick={(catId, game) => setLocalPicks(p => ({ ...p, [catId]: game.id }))}
-              contextBanner={quarterlyWinners.length > 0
-                ? `Quarterly champions of ${year}: ${[...new Set(quarterlyWinners.map(w => w.gameName))].join(', ')}`
-                : undefined}
-              contextWinners={quarterlyWinners.slice(0, 8)}
-              allGames={rawGames}
-              updateGame={updateGame}
-            />
-          </div>
-        </motion.div>
+        {/* Scrollable content — full remaining height */}
+        <div className="flex-1 overflow-y-auto overscroll-contain">
+          <GamingAwardsScreen
+            periodType="year"
+            periodKey={periodKey}
+            periodLabel={periodLabel}
+            ceremonyTitle={`The ${year} Gaming Ceremony`}
+            categories={categories}
+            existingPicks={existingPicks}
+            onPick={(catId, game) => setLocalPicks(p => ({ ...p, [catId]: game.id }))}
+            contextBanner={quarterlyWinners.length > 0
+              ? `Quarterly champions of ${year}: ${[...new Set(quarterlyWinners.map(w => w.gameName))].join(', ')}`
+              : undefined}
+            contextWinners={quarterlyWinners.slice(0, 8)}
+            allGames={rawGames}
+            updateGame={updateGame}
+          />
+        </div>
       </motion.div>
     </AnimatePresence>
   );
