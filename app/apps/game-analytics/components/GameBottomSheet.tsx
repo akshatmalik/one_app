@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useRef, useEffect } from 'react';
-import { X, Clock, Star, ChevronDown, ChevronUp, ListPlus, Check, Heart, Edit3, Trash2, Gamepad2 } from 'lucide-react';
+import { X, Clock, Star, ChevronDown, ChevronUp, ListPlus, Check, Heart, Edit3, Trash2, Gamepad2, Trophy } from 'lucide-react';
 import { Game } from '../lib/types';
 import { GameWithMetrics } from '../hooks/useAnalytics';
 import {
@@ -258,6 +258,46 @@ export function GameBottomSheet({
           {biography && (
             <div className="px-5 pb-4">
               <p className="text-sm text-white/45 leading-relaxed italic">{biography}</p>
+            </div>
+          )}
+
+          {/* Awards Won */}
+          {game.awards && game.awards.length > 0 && (
+            <div className="px-5 pb-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Trophy size={13} className="text-amber-400 shrink-0" />
+                <span className="text-sm font-medium text-white/70">Awards Won</span>
+                <span className="text-[10px] px-1.5 py-0.5 bg-amber-500/15 text-amber-400 rounded-full font-bold ml-auto">
+                  {game.awards.length}
+                </span>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                {game.awards
+                  .slice()
+                  .sort((a, b) => b.awardedAt.localeCompare(a.awardedAt))
+                  .map((award) => {
+                    const tierColor =
+                      award.periodType === 'year'    ? { text: 'text-amber-400',  bg: 'bg-amber-500/10',  badge: 'bg-amber-500/20 text-amber-300' } :
+                      award.periodType === 'quarter' ? { text: 'text-purple-400', bg: 'bg-purple-500/10', badge: 'bg-purple-500/20 text-purple-300' } :
+                      award.periodType === 'month'   ? { text: 'text-yellow-400', bg: 'bg-yellow-500/10', badge: 'bg-yellow-500/20 text-yellow-300' } :
+                                                       { text: 'text-blue-400',   bg: 'bg-blue-500/10',   badge: 'bg-blue-500/20 text-blue-300' };
+                    return (
+                      <div
+                        key={award.id}
+                        className={clsx('flex items-center gap-3 px-3 py-2.5 rounded-xl border border-white/5', tierColor.bg)}
+                      >
+                        <span className="text-lg shrink-0">{award.categoryIcon}</span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-semibold text-white/80 leading-tight">{award.categoryLabel}</p>
+                          <p className="text-[10px] text-white/30 mt-0.5">{award.periodLabel}</p>
+                        </div>
+                        <span className={clsx('text-[9px] px-1.5 py-0.5 rounded font-bold uppercase shrink-0', tierColor.badge)}>
+                          {award.periodType}
+                        </span>
+                      </div>
+                    );
+                  })}
+              </div>
             </div>
           )}
 

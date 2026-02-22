@@ -51,6 +51,14 @@ const TIER_STYLES: Record<AwardPeriodType, { accent: string; bg: string; border:
   year:    { accent: 'text-amber-300',  bg: 'from-amber-500/10 to-orange-500/10',  border: 'border-amber-500/20',  badge: 'bg-amber-500/20 text-amber-300' },
 };
 
+/** Glow box-shadow for selected nominee cards, per tier */
+const TIER_GLOW: Record<AwardPeriodType, { shadow: string; ring: string }> = {
+  week:    { shadow: '0 0 0 2px #60a5fa, 0 0 14px rgba(96,165,250,0.35)',   ring: '#60a5fa' },
+  month:   { shadow: '0 0 0 2px #fbbf24, 0 0 14px rgba(251,191,36,0.35)',   ring: '#fbbf24' },
+  quarter: { shadow: '0 0 0 2px #c084fc, 0 0 14px rgba(192,132,252,0.35)', ring: '#c084fc' },
+  year:    { shadow: '0 0 0 2px #f59e0b, 0 0 14px rgba(245,158,11,0.35)',   ring: '#f59e0b' },
+};
+
 // ── Main component ───────────────────────────────────────────────
 
 export function GamingAwardsScreen({
@@ -179,6 +187,29 @@ export function GamingAwardsScreen({
     onPick(categoryDef.id, nominee.game, oldGameId);
   };
 
+  const handleClearPick = async (categoryDef: AwardCategoryDef) => {
+    const oldGameId = picks[categoryDef.id] ?? null;
+    if (!oldGameId) return;
+
+    // Optimistic UI — remove this category from local picks
+    setPicks(prev => {
+      const next = { ...prev };
+      delete next[categoryDef.id];
+      return next;
+    });
+
+    const games = allGamesRef.current;
+    const doUpdate = updateGameRef.current;
+    const oldGame = games.find(g => g.id === oldGameId);
+    if (oldGame) {
+      await doUpdate(oldGameId, {
+        awards: (oldGame.awards || []).filter(
+          a => !(a.category === categoryDef.id && a.periodKey === periodKey)
+        ),
+      });
+    }
+  };
+
   const totalPicked = Object.keys(picks).length;
   const totalCategories = categories.length;
 
@@ -271,6 +302,7 @@ export function GamingAwardsScreen({
                 {cat.nominees.map((nominee) => {
                   const isPicked = pickedId === nominee.game.id;
                   const gamePitch = pitch?.[nominee.game.name];
+                  const glow = TIER_GLOW[periodType];
 
                   return (
                     <motion.button
@@ -280,9 +312,10 @@ export function GamingAwardsScreen({
                       className={clsx(
                         'shrink-0 w-32 rounded-xl border transition-all text-left overflow-hidden',
                         isPicked
-                          ? clsx('border-2', style.border.replace('border-', 'border-').replace('/20', '/60'), `bg-gradient-to-b ${style.bg}`)
+                          ? clsx('border-2', style.border.replace('/20', '/70'), `bg-gradient-to-b ${style.bg}`)
                           : 'border-white/8 bg-white/3 hover:bg-white/6',
                       )}
+                      style={isPicked ? { boxShadow: glow.shadow } : undefined}
                     >
                       {/* Thumbnail */}
                       <div className="relative h-20 bg-white/3">
@@ -299,13 +332,14 @@ export function GamingAwardsScreen({
                           </div>
                         )}
                         {isPicked && (
-                          <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
+                          <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
                             <motion.div
                               initial={{ scale: 0 }}
                               animate={{ scale: 1 }}
-                              className="text-2xl"
+                              className="flex flex-col items-center gap-0.5"
                             >
-                              {cat.icon}
+                              <span className="text-2xl">{cat.icon}</span>
+                              <span className="text-[9px] font-bold text-white/90 bg-black/50 px-1.5 py-0.5 rounded">WINNER</span>
                             </motion.div>
                           </div>
                         )}
@@ -321,8 +355,13 @@ export function GamingAwardsScreen({
                         <p className={clsx('text-[11px] font-bold leading-tight truncate', isPicked ? 'text-white' : 'text-white/70')}>
                           {nominee.game.name}
                         </p>
-                        <p className="text-[9px] text-white/35 mt-0.5 truncate">{nominee.reasonLine}</p>
-                        {gamePitch && (
+                        {isPicked && (
+                          <p className="text-[9px] font-bold mt-0.5" style={{ color: glow.ring }}>✓ Selected</p>
+                        )}
+                        {!isPicked && (
+                          <p className="text-[9px] text-white/35 mt-0.5 truncate">{nominee.reasonLine}</p>
+                        )}
+                        {gamePitch && !isPicked && (
                           <p className="text-[9px] text-white/40 italic mt-1 leading-tight line-clamp-2">{gamePitch}</p>
                         )}
                       </div>
@@ -332,6 +371,29 @@ export function GamingAwardsScreen({
 
                 {cat.nominees.length === 0 && (
                   <div className="text-xs text-white/20 italic py-2">No nominees for this period</div>
+                )}
+
+                {/* None / Clear selection card */}
+                {cat.nominees.length > 0 && (
+                  <motion.button
+                    onClick={() => handleClearPick(cat)}
+                    whileTap={{ scale: 0.95 }}
+                    disabled={!pickedId}
+                    className={clsx(
+                      'shrink-0 w-24 rounded-xl border transition-all text-left overflow-hidden',
+                      pickedId
+                        ? 'border-white/10 bg-white/[0.025] hover:border-red-500/40 hover:bg-red-500/5 cursor-pointer'
+                        : 'border-white/5 bg-white/[0.01] opacity-35 cursor-not-allowed',
+                    )}
+                  >
+                    <div className="h-20 flex items-center justify-center">
+                      <span className="text-2xl opacity-50">✕</span>
+                    </div>
+                    <div className="p-2">
+                      <p className="text-[11px] font-bold text-white/40">None</p>
+                      <p className="text-[9px] text-white/20 mt-0.5">Clear pick</p>
+                    </div>
+                  </motion.button>
                 )}
               </div>
             </motion.div>
