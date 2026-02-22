@@ -138,34 +138,42 @@ export function GamingAwardsScreen({
       periodLabel,
     };
 
+    const newAward: GameAward = {
+      id: uuidv4(),
+      ...awardData,
+      awardedAt: new Date().toISOString(),
+    };
+
     // Persist directly via refs (avoids useAwards re-render cascade)
     const games = allGamesRef.current;
     const doUpdate = updateGameRef.current;
 
-    // Strip award from old winner if switching
+    const matchesSlot = (a: GameAward) =>
+      a.category === awardData.category && a.periodKey === awardData.periodKey;
+
     if (oldGameId && oldGameId !== newGameId) {
+      // Switching winner: strip from old, give to new (two updates)
       const oldGame = games.find(g => g.id === oldGameId);
       if (oldGame) {
         await doUpdate(oldGameId, {
-          awards: (oldGame.awards || []).filter(
-            a => !(a.category === awardData.category && a.periodKey === awardData.periodKey)
-          ),
+          awards: (oldGame.awards || []).filter(a => !matchesSlot(a)),
         });
       }
-    }
 
-    // Give award to new winner
-    const newGame = games.find(g => g.id === newGameId);
-    if (newGame) {
-      const newAward: GameAward = {
-        id: uuidv4(),
-        ...awardData,
-        awardedAt: new Date().toISOString(),
-      };
-      const filtered = (newGame.awards || []).filter(
-        a => !(a.category === awardData.category && a.periodKey === awardData.periodKey)
-      );
-      await doUpdate(newGameId, { awards: [...filtered, newAward] });
+      // Re-read ref to get fresh state after first update
+      const freshGames = allGamesRef.current;
+      const newGame = freshGames.find(g => g.id === newGameId);
+      if (newGame) {
+        const filtered = (newGame.awards || []).filter(a => !matchesSlot(a));
+        await doUpdate(newGameId, { awards: [...filtered, newAward] });
+      }
+    } else {
+      // First pick or re-picking same game: single update
+      const newGame = games.find(g => g.id === newGameId);
+      if (newGame) {
+        const filtered = (newGame.awards || []).filter(a => !matchesSlot(a));
+        await doUpdate(newGameId, { awards: [...filtered, newAward] });
+      }
     }
 
     onPick(categoryDef.id, nominee.game, oldGameId);
