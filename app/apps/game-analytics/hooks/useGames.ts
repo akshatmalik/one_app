@@ -33,7 +33,7 @@ export function useGames(userId: string | null) {
   const addGame = async (gameData: Omit<Game, 'id' | 'userId' | 'createdAt' | 'updatedAt'>) => {
     try {
       const newGame = await gameRepository.create(gameData);
-      await refresh();
+      setGames(prev => [...prev, newGame]);
       return newGame;
     } catch (e) {
       setError(e as Error);
@@ -44,7 +44,9 @@ export function useGames(userId: string | null) {
   const updateGame = async (id: string, updates: Partial<Game>) => {
     try {
       const updated = await gameRepository.update(id, updates);
-      await refresh();
+      // Optimistic local update — avoids refresh() which sets loading=true
+      // and unmounts the entire UI tree (including modals like AwardsHub).
+      setGames(prev => prev.map(g => (g.id === id ? updated : g)));
       return updated;
     } catch (e) {
       setError(e as Error);
@@ -55,7 +57,7 @@ export function useGames(userId: string | null) {
   const deleteGame = async (id: string) => {
     try {
       await gameRepository.delete(id);
-      await refresh();
+      setGames(prev => prev.filter(g => g.id !== id));
     } catch (e) {
       setError(e as Error);
       throw e;

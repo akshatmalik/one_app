@@ -34,7 +34,7 @@ import { ProgressRing } from './components/ProgressRing';
 import { ExportPanel } from './components/ExportPanel';
 import { YearlyWrapped } from './components/YearlyWrapped';
 import { FortuneCookie } from './components/FortuneCookie';
-import { YearAwardsModal } from './components/YearAwardsModal';
+import { AwardsHub } from './components/AwardsHub';
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist';
@@ -80,7 +80,7 @@ export default function GameAnalyticsPage() {
   const [showBulkWishlist, setShowBulkWishlist] = useState(false);
   const [showExport, setShowExport] = useState(false);
   const [wrappedYear, setWrappedYear] = useState<number | null>(null);
-  const [yearAwardsYear, setYearAwardsYear] = useState<number | null>(null);
+  const [showAwardsHub, setShowAwardsHub] = useState(false);
   const [detailGame, setDetailGame] = useState<GameWithMetrics | null>(null);
   const [statsCollapsed, setStatsCollapsed] = useState(() => {
     if (typeof window === 'undefined') return false;
@@ -805,7 +805,7 @@ export default function GameAnalyticsPage() {
                   className="flex-1 flex items-center justify-center py-2.5 rounded-lg bg-white/[0.02] text-purple-400/50 hover:text-purple-400 transition-all">
                   <Gift size={16} />
                 </button>
-                <button onClick={() => setYearAwardsYear(new Date().getFullYear())} title={`${new Date().getFullYear()} Awards`}
+                <button onClick={() => setShowAwardsHub(true)} title="Awards Hub"
                   className="flex-1 flex items-center justify-center py-2.5 rounded-lg bg-white/[0.02] text-amber-400/50 hover:text-amber-400 transition-all">
                   <Star size={16} />
                 </button>
@@ -1081,14 +1081,13 @@ export default function GameAnalyticsPage() {
         />
       )}
 
-      {/* Year Awards Modal */}
-      {yearAwardsYear && (
-        <YearAwardsModal
-          year={yearAwardsYear}
+      {/* Awards Hub */}
+      {showAwardsHub && (
+        <AwardsHub
           allGames={gamesWithMetrics}
           rawGames={games}
           updateGame={updateGame}
-          onClose={() => setYearAwardsYear(null)}
+          onClose={() => setShowAwardsHub(false)}
         />
       )}
 

@@ -8,7 +8,7 @@ import { TimelinePeriodCards } from './TimelinePeriodCards';
 import { QuickAddTimeModal } from './QuickAddTimeModal';
 import { WeekInReview } from './WeekInReview';
 import { MonthStoryMode } from './MonthStoryMode';
-import { QuarterAwardsModal } from './QuarterAwardsModal';
+import { AwardsHub } from './AwardsHub';
 import { GameWithMetrics } from '../hooks/useAnalytics';
 import { generateMonthlyRecap, generateYearChapterTitles, generateMonthChapterTitles } from '../lib/ai-game-service';
 import { RacingBarChart } from './RacingBarChart';
@@ -52,7 +52,7 @@ export function TimelineView({ games, gamesWithMetrics, updateGame, onLogTime, o
   const [monthChapterTitles, setMonthChapterTitles] = useState<Record<string, string>>({});
   const [expandedJourneys, setExpandedJourneys] = useState<Set<string>>(new Set());
   const [monthRecapKey, setMonthRecapKey] = useState<string | null>(null);
-  const [quarterAwardsKey, setQuarterAwardsKey] = useState<{ year: number; quarter: number } | null>(null);
+  const [awardsHubConfig, setAwardsHubConfig] = useState<{ tab: 'quarter'; periodKey: string } | null>(null);
 
   const maxWeeksBack = useMemo(() => {
     return Math.max(1, getAvailableWeeksCount(games));
@@ -484,15 +484,15 @@ export function TimelineView({ games, gamesWithMetrics, updateGame, onLogTime, o
         />
       )}
 
-      {/* Quarter Awards Modal */}
-      {quarterAwardsKey && updateGame && (
-        <QuarterAwardsModal
-          year={quarterAwardsKey.year}
-          quarter={quarterAwardsKey.quarter}
+      {/* Awards Hub */}
+      {awardsHubConfig && updateGame && (
+        <AwardsHub
           allGames={gamesWithMetrics || (games as GameWithMetrics[])}
           rawGames={games}
           updateGame={updateGame}
-          onClose={() => setQuarterAwardsKey(null)}
+          onClose={() => setAwardsHubConfig(null)}
+          initialTab={awardsHubConfig.tab}
+          initialPeriodKey={awardsHubConfig.periodKey}
         />
       )}
 
@@ -644,7 +644,7 @@ export function TimelineView({ games, gamesWithMetrics, updateGame, onLogTime, o
                     <div className="flex-1 h-px bg-purple-500/10" />
                     {updateGame && (
                       <button
-                        onClick={() => setQuarterAwardsKey({ year: qYear, quarter: qNum })}
+                        onClick={() => setAwardsHubConfig({ tab: 'quarter', periodKey: `${qYear}-Q${qNum}` })}
                         className="flex items-center gap-1 text-[10px] px-2 py-1 rounded-full bg-purple-500/15 text-purple-300 hover:bg-purple-500/25 transition-colors font-semibold shrink-0"
                       >
                         🏆 {quarter} Awards
