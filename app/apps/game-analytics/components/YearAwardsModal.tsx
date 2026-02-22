@@ -197,8 +197,7 @@ export function YearAwardsModal({ year, allGames, rawGames, updateGame, onClose 
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: '100%', opacity: 0 }}
           transition={{ type: 'spring', damping: 28, stiffness: 280 }}
-          className="w-full sm:max-w-lg bg-[#0a0a0f] border-t sm:border border-amber-500/20 sm:rounded-2xl overflow-hidden flex flex-col"
-          style={{ maxHeight: '94vh' }}
+          className="w-full sm:max-w-lg bg-[#0a0a0f] border-t sm:border border-amber-500/20 sm:rounded-2xl overflow-hidden flex flex-col max-h-[90dvh] sm:max-h-[92dvh]"
         >
           {/* Header */}
           <div className="flex items-center justify-between p-4 border-b border-white/5 shrink-0">
@@ -213,7 +212,7 @@ export function YearAwardsModal({ year, allGames, rawGames, updateGame, onClose 
           </div>
 
           {/* Scrollable content */}
-          <div className="overflow-y-auto flex-1 py-4">
+          <div className="overflow-y-auto flex-1 min-h-0 py-4 overscroll-contain">
             <GamingAwardsScreen
               periodType="year"
               periodKey={periodKey}

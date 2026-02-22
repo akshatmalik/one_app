@@ -225,7 +225,7 @@ export function GamingAwardsScreen({
               <p className="text-[10px] text-white/30 mb-2.5 ml-7">{cat.description}</p>
 
               {/* Nominees — horizontal scroll */}
-              <div className="flex gap-2.5 overflow-x-auto pb-1 -mx-4 px-4" style={{ scrollbarWidth: 'none' }}>
+              <div className="flex gap-2.5 overflow-x-auto pb-2 overscroll-x-contain" style={{ scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' } as React.CSSProperties}>
                 {cat.nominees.map((nominee) => {
                   const isPicked = pickedId === nominee.game.id;
                   const gamePitch = pitch?.[nominee.game.name];
