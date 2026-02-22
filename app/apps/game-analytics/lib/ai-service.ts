@@ -2,7 +2,7 @@
 
 import { getAI, getGenerativeModel, GoogleAIBackend } from 'firebase/ai';
 import { initializeApp, getApps } from 'firebase/app';
-import { WeekInReviewData, MonthInReviewData } from './calculations';
+import { WeekInReviewData, MonthInReviewData, OscarAward } from './calculations';
 import { Game } from './types';
 
 const firebaseConfig = {
@@ -289,6 +289,59 @@ export async function generateMonthBlurbs(
     acc[type] = result;
     return acc;
   }, {} as Record<MonthAIBlurbType, AIBlurbResult>);
+}
+
+/**
+ * Generate dramatic narrator-style blurbs for each Oscar award category in one batch call.
+ * Returns a map of category id → dramatic description string.
+ * Falls back to empty object on failure (template descriptions are shown instead).
+ */
+export async function generateOscarAwardBlurbs(
+  awards: OscarAward[],
+  periodLabel: string,
+): Promise<Record<string, string>> {
+  if (awards.length === 0) return {};
+
+  const model = getAIModel();
+
+  const categoriesStr = awards
+    .map(a => {
+      const allNominees = [a.winner, ...a.nominees];
+      const nomineeStr = allNominees
+        .map(n => `${n.gameName} [${n.stat ?? n.reason}]`)
+        .join(', ');
+      return `"${a.category}": ${a.categoryLabel} — "${a.tagline}" — nominees: ${nomineeStr}`;
+    })
+    .join('\n');
+
+  const categoryIds = awards.map(a => `"${a.category}": "2-3 sentence dramatic intro"`).join(',\n  ');
+
+  const prompt = `You are a theatrical awards ceremony host narrating a gaming recap for ${periodLabel}.
+
+For each award category below, write exactly 2-3 sentences of dramatic narrator-style introduction. Build suspense, name the specific nominees, and make the listener feel the weight of the moment. Be specific to the data — no generic filler phrases.
+
+Categories:
+${categoriesStr}
+
+Respond with ONLY valid JSON (no markdown, no code fences):
+{
+  ${categoryIds}
+}`;
+
+  try {
+    const result = await model.generateContent(prompt);
+    const raw = result.response.text().trim();
+    const jsonStr = raw.replace(/^```[a-z]*\n?/i, '').replace(/\n?```$/i, '').trim();
+    const parsed = JSON.parse(jsonStr);
+    // Validate it's an object with string values
+    if (typeof parsed === 'object' && parsed !== null) {
+      return parsed as Record<string, string>;
+    }
+    return {};
+  } catch (e) {
+    console.error('Oscar award blurbs error:', e);
+    return {};
+  }
 }
 
 /**

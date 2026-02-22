@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, ChevronLeft, ChevronRight } from 'lucide-react';
-import { WeekInReviewData, getSharpInsight, getWeekAwards, getIgnoredGames, getFranchiseCheckIns, getHistoricalEchoes, getMomentumData, getRatingParadox } from '../lib/calculations';
+import { WeekInReviewData, getSharpInsight, getWeekAwards, getIgnoredGames, getFranchiseCheckIns, getHistoricalEchoes, getMomentumData, getRatingParadox, getOscarAwards, generateAwardDescriptionTemplate } from '../lib/calculations';
 import { Game } from '../lib/types';
 import { OpeningScreen } from './story-screens/OpeningScreen';
 import { TotalHoursScreen } from './story-screens/TotalHoursScreen';
@@ -21,7 +21,9 @@ import { BestValueScreen } from './story-screens/BestValueScreen';
 import { ActivityPulseScreen } from './story-screens/ActivityPulseScreen';
 import { AIBlurbScreen } from './story-screens/AIBlurbScreen';
 import { GuildFreeScreen } from './story-screens/GuildFreeScreen';
-import { WeekAwardsScreen } from './story-screens/WeekAwardsScreen';
+import { AwardIntroScreen } from './story-screens/AwardIntroScreen';
+import { SingleAwardScreen } from './story-screens/SingleAwardScreen';
+import { OscarSummaryScreen } from './story-screens/OscarSummaryScreen';
 import { SharpInsightScreen } from './story-screens/SharpInsightScreen';
 import { YouIgnoredScreen } from './story-screens/YouIgnoredScreen';
 import { FranchiseCheckInScreen } from './story-screens/FranchiseCheckInScreen';
@@ -34,8 +36,9 @@ import { VibeCheckScreen } from './story-screens/VibeCheckScreen';
 import { WeekVsWeekScreen } from './story-screens/WeekVsWeekScreen';
 import { AwardsSummaryCard, AwardPickInfo } from './story-screens/AwardsSummaryCard';
 import { AwardsHub } from './AwardsHub';
-import { generateMultipleBlurbs, AIBlurbType, AIBlurbResult } from '../lib/ai-service';
+import { generateMultipleBlurbs, AIBlurbType, AIBlurbResult, generateOscarAwardBlurbs } from '../lib/ai-service';
 import { useAwards, awardWeekKey, awardWeekLabel } from '../hooks/useAwards';
+import { weekPeriodKey } from '../lib/oscar-storage';
 import { GameWithMetrics } from '../hooks/useAnalytics';
 
 interface WeekStoryModeProps {
@@ -54,6 +57,13 @@ export function WeekStoryMode({ data, allGames, onClose, prefetchedBlurbs, isLoa
   const [aiBlurbs, setAiBlurbs] = useState<Partial<Record<AIBlurbType, AIBlurbResult>>>(prefetchedBlurbs || {});
   const [isLoadingAI, setIsLoadingAI] = useState(isLoadingPrefetch ?? true);
   const [showAwardsHub, setShowAwardsHub] = useState(false);
+  const [oscarBlurbs, setOscarBlurbs] = useState<Record<string, string>>({});
+  const [isLoadingOscarBlurbs, setIsLoadingOscarBlurbs] = useState(true);
+
+  // Refs for stable navigation callbacks (allows passing goToNext into screens before totalScreens is known)
+  const currentScreenRef = useRef(0);
+  const totalScreensRef = useRef(0);
+  useEffect(() => { currentScreenRef.current = currentScreen; }, [currentScreen]);
 
   // Pre-compute data for new screens
   const sharpInsight = useMemo(() => getSharpInsight(data, allGames), [data, allGames]);
@@ -64,6 +74,36 @@ export function WeekStoryMode({ data, allGames, onClose, prefetchedBlurbs, isLoa
   const momentumData = useMemo(() => getMomentumData(allGames, data), [allGames, data]);
   const ratingParadox = useMemo(() => getRatingParadox(data, allGames), [data, allGames]);
   const hotTake = useMemo(() => getHotTake(data), [data]);
+
+  // Oscar awards for this week
+  const oscarData = useMemo(() => {
+    if (!data.weekStart || !data.weekEnd) return { awards: [], periodLabel: '' };
+    return getOscarAwards(allGames, new Date(data.weekStart), new Date(data.weekEnd));
+  }, [allGames, data.weekStart, data.weekEnd]);
+
+  // Stable period key for Oscar votes
+  const oscarPeriodKey = useMemo(
+    () => weekPeriodKey(new Date(data.weekStart)),
+    [data.weekStart],
+  );
+
+  // Stable navigation callbacks using refs — defined before screens so they can be passed as props
+  const goToNext = useCallback(() => {
+    const cur = currentScreenRef.current;
+    const total = totalScreensRef.current;
+    if (cur < total - 1) {
+      setDirection(1);
+      setCurrentScreen(cur + 1);
+    }
+  }, []);
+
+  const goToPrevious = useCallback(() => {
+    const cur = currentScreenRef.current;
+    if (cur > 0) {
+      setDirection(-1);
+      setCurrentScreen(cur - 1);
+    }
+  }, []);
 
   // Awards summary data — replaces the 3 broken interactive award screens
   const weekAwardPeriodKey = useMemo(() => awardWeekKey(data.weekStart), [data.weekStart]);
@@ -120,6 +160,28 @@ export function WeekStoryMode({ data, allGames, onClose, prefetchedBlurbs, isLoa
 
     loadAIBlurbs();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Load Oscar award blurbs (dramatic narrator descriptions per category)
+  useEffect(() => {
+    if (oscarData.awards.length === 0) {
+      setIsLoadingOscarBlurbs(false);
+      return;
+    }
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const blurbs = await generateOscarAwardBlurbs(oscarData.awards, oscarData.periodLabel);
+        if (!cancelled) setOscarBlurbs(blurbs);
+      } catch {
+        // Template descriptions serve as fallback — no action needed
+      } finally {
+        if (!cancelled) setIsLoadingOscarBlurbs(false);
+      }
+    };
+    load();
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ─── 5-ACT FLOW ────────────────────────────────────────────
@@ -185,7 +247,32 @@ export function WeekStoryMode({ data, allGames, onClose, prefetchedBlurbs, isLoa
     <MomentumReadScreen key="momentum" momentum={momentumData} />,
 
     // ─── ACT 5: WRAP-UP ───
-    weekAwards.length > 0 ? <WeekAwardsScreen key="awards" data={data} /> : null,
+    // Oscar ceremony: intro + one screen per award + summary
+    oscarData.awards.length > 0 ? (
+      <AwardIntroScreen key="oscar-intro" data={oscarData} periodType="week" />
+    ) : null,
+    ...oscarData.awards.map((award, i) => (
+      <SingleAwardScreen
+        key={`oscar-${award.category}`}
+        award={award}
+        awardIndex={i}
+        totalAwards={oscarData.awards.length}
+        periodType="week"
+        periodKey={oscarPeriodKey}
+        templateBlurb={generateAwardDescriptionTemplate(award)}
+        aiBlurb={oscarBlurbs[award.category]}
+        isLoadingAiBlurb={isLoadingOscarBlurbs}
+        onAdvance={goToNext}
+      />
+    )),
+    oscarData.awards.length > 1 ? (
+      <OscarSummaryScreen
+        key="oscar-summary"
+        data={oscarData}
+        periodKey={oscarPeriodKey}
+        periodType="week"
+      />
+    ) : null,
     data.gamesPlayed.length > 0 ? (
       <AwardsSummaryCard
         key="awards-summary"
@@ -211,22 +298,9 @@ export function WeekStoryMode({ data, allGames, onClose, prefetchedBlurbs, isLoa
     <ClosingScreen key="closing" data={data} />,
   ].filter(Boolean);
 
+  // Keep totalScreensRef up-to-date so stable goToNext/goToPrevious work correctly
+  totalScreensRef.current = screens.length;
   const totalScreens = screens.length;
-
-  // Navigation handlers
-  const goToNext = useCallback(() => {
-    if (currentScreen < totalScreens - 1) {
-      setDirection(1);
-      setCurrentScreen(prev => prev + 1);
-    }
-  }, [currentScreen, totalScreens]);
-
-  const goToPrevious = useCallback(() => {
-    if (currentScreen > 0) {
-      setDirection(-1);
-      setCurrentScreen(prev => prev - 1);
-    }
-  }, [currentScreen]);
 
   // Keyboard navigation
   useEffect(() => {
@@ -244,7 +318,7 @@ export function WeekStoryMode({ data, allGames, onClose, prefetchedBlurbs, isLoa
 
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [currentScreen, totalScreens, goToNext, goToPrevious, onClose]);
+  }, [goToNext, goToPrevious, onClose]);
 
   // Click navigation - left/right halves
   const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {

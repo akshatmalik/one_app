@@ -11450,6 +11450,49 @@ export function getOscarAwards(games: Game[], startDate: Date, endDate: Date): O
   return { awards, periodLabel };
 }
 
+/**
+ * Generate a template-based description for a single Oscar award category.
+ * Shown immediately while AI blurb loads.
+ */
+export function generateAwardDescriptionTemplate(award: OscarAward): string {
+  const allNominees = [award.winner, ...award.nominees];
+  const names = allNominees.map(n => n.gameName);
+  const nameList =
+    names.length === 1
+      ? names[0]
+      : names.length === 2
+        ? `${names[0]} and ${names[1]}`
+        : `${names.slice(0, -1).join(', ')}, and ${names[names.length - 1]}`;
+
+  const templates: Partial<Record<OscarCategory, string>> = {
+    best_picture:
+      `${names.length} title${names.length !== 1 ? 's' : ''} earned your highest ratings this period. Between ${nameList}, only one can claim the honour of your most-loved game.`,
+    best_supporting:
+      `Behind every great gaming run is a reliable sidekick. ${nameList} — none led the hour count, but each showed up when it mattered.`,
+    best_short_film:
+      `Proof that greatness comes in small packages. ${nameList} delivered an outsized impression despite their brief runtime.`,
+    iron_man:
+      `Someone refused to put the controller down. ${nameList} — one of these sessions redefined what a sitting looks like. Did you even eat?`,
+    worst_bang_for_buck:
+      `Not every investment pays dividends. ${nameList} cost the most per hour this period. The envelope may be uncomfortable to open — but the data doesn't lie.`,
+    most_likely_abandoned:
+      `The warning signs are there. Session lengths are trending down and engagement is fading. ${nameList} — one is on borrowed time.`,
+    lifetime_achievement:
+      `Longevity deserves recognition. ${nameList} have been in the collection the longest and are still earning playtime. A testament to staying power.`,
+    best_comeback:
+      `Written off, then resurrected. ${nameList} defied a long gap between sessions and came back swinging — a return nobody quite expected.`,
+    biggest_plot_twist:
+      `The data threw a curveball. ${nameList} — one of these games defied every expectation in the most dramatic fashion possible.`,
+    sleeper_hit:
+      `Flying under the radar, then quietly dominating. ${nameList} accumulated far more hours than anyone predicted at the start of this period.`,
+  };
+
+  return (
+    templates[award.category] ??
+    `${award.tagline}. ${nameList} — ${names.length} contender${names.length !== 1 ? 's' : ''} vying for this award.`
+  );
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // 9. STORY ARC DETECTION
 // ─────────────────────────────────────────────────────────────────────────────
