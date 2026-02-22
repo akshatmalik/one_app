@@ -20,7 +20,7 @@ import { gameRepository } from './lib/storage';
 import { BASELINE_GAMES_2025 } from './data/baseline-games';
 import { useAuthContext } from '@/lib/AuthContext';
 import { useToast } from '@/components/Toast';
-import { getROIRating, getWeekStatsForOffset, getGamesPlayedInTimeRange, getCompletionProbability, getGameHealthDot, getRelativeTime, getDaysContext, getSessionMomentum, getValueTrajectory, getGameSmartOneLiner, getFranchiseInfo, getProgressPercent, getShelfLife, parseLocalDate, getCardRarity, getRelationshipStatus, getGameStreak, getHeroNumber, getCardFreshness, getGameSections, getCardBackData, getContextualWhisper, getLibraryRank, getCardMoodPulse, getProgressRingData, getStatPopoverData, getWeekRecapData, getSmartNudges, getGamingCreditScore, getRotationStats, getSpendingForecast, getSpendingByMonth } from './lib/calculations';
+import { getROIRating, getWeekStatsForOffset, getGamesPlayedInTimeRange, getCompletionProbability, getGameHealthDot, getRelativeTime, getDaysContext, getSessionMomentum, getValueTrajectory, getGameSmartOneLiner, getFranchiseInfo, getProgressPercent, getShelfLife, parseLocalDate, getCardRarity, getRelationshipStatus, getGameStreak, getHeroNumber, getCardFreshness, getGameSections, getCardBackData, getContextualWhisper, getLibraryRank, getCardMoodPulse, getProgressRingData, getStatPopoverData, getWeekRecapData, getSmartNudges, getGamingCreditScore, getRotationStats, getSpendingForecast, getSpendingByMonth, getShelfLifeExpiry } from './lib/calculations';
 import { OnThisDayCard } from './components/OnThisDayCard';
 import { ActivityPulse } from './components/ActivityPulse';
 import { RandomPicker } from './components/RandomPicker';
@@ -33,6 +33,8 @@ import { MomentumDots } from './components/MomentumDots';
 import { ProgressRing } from './components/ProgressRing';
 import { ExportPanel } from './components/ExportPanel';
 import { YearlyWrapped } from './components/YearlyWrapped';
+import { FortuneCookie } from './components/FortuneCookie';
+import { YearAwardsModal } from './components/YearAwardsModal';
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist';
@@ -78,6 +80,7 @@ export default function GameAnalyticsPage() {
   const [showBulkWishlist, setShowBulkWishlist] = useState(false);
   const [showExport, setShowExport] = useState(false);
   const [wrappedYear, setWrappedYear] = useState<number | null>(null);
+  const [yearAwardsYear, setYearAwardsYear] = useState<number | null>(null);
   const [detailGame, setDetailGame] = useState<GameWithMetrics | null>(null);
   const [statsCollapsed, setStatsCollapsed] = useState(() => {
     if (typeof window === 'undefined') return false;
@@ -742,70 +745,69 @@ export default function GameAnalyticsPage() {
           {/* On This Day */}
           {games.length > 0 && <OnThisDayCard games={games} />}
 
+          {/* Daily Fortune Cookie */}
+          {games.length > 0 && <div className="mb-4"><FortuneCookie games={games} /></div>}
+
           {/* Tab Navigation */}
           <div className="space-y-4 mb-6">
-            {/* Tabs - Two Rows */}
-            <div className="space-y-2">
-              {/* First Row: Games, Timeline, Stats */}
-              <div className="flex items-center gap-2">
+            {/* Tabs - Two icon-only rows */}
+            <div className="space-y-1.5">
+              {/* Row 1: Games, Timeline, Stats, AI Coach */}
+              <div className="flex items-center gap-1.5">
                 {([
-                  { id: 'games', label: 'Games', icon: <List size={14} /> },
-                  { id: 'timeline', label: 'Timeline', icon: <Calendar size={14} /> },
-                  { id: 'stats', label: 'Stats', icon: <BarChart3 size={14} /> },
+                  { id: 'games',    icon: <List size={16} />,          title: 'Games' },
+                  { id: 'timeline', icon: <Calendar size={16} />,      title: 'Timeline' },
+                  { id: 'stats',    icon: <BarChart3 size={16} />,     title: 'Stats' },
+                  { id: 'ai-coach', icon: <MessageCircle size={16} />, title: 'AI Coach' },
                 ] as const).map((tab) => (
                   <button
                     key={tab.id}
                     onClick={() => setTabMode(tab.id)}
+                    title={tab.title}
                     className={clsx(
-                      'flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all',
+                      'flex-1 flex items-center justify-center py-2.5 rounded-lg transition-all',
                       tabMode === tab.id
                         ? 'bg-white/10 text-white'
                         : 'bg-white/[0.02] text-white/40 hover:text-white/60'
                     )}
                   >
                     {tab.icon}
-                    {tab.label}
                   </button>
                 ))}
               </div>
 
-              {/* Second Row: AI Coach, Up Next, Discover, Leaderboard, Export */}
-              <div className="flex items-center gap-2">
+              {/* Row 2: Up Next, Discover, Leaderboard + utilities */}
+              <div className="flex items-center gap-1.5">
                 {([
-                  { id: 'ai-coach', label: 'AI Coach', icon: <MessageCircle size={14} /> },
-                  { id: 'up-next', label: 'Up Next', icon: <ListOrdered size={14} /> },
-                  { id: 'discover', label: 'Discover', icon: <Compass size={14} /> },
-                  { id: 'leaderboard', label: 'Ranks', icon: <Trophy size={14} /> },
+                  { id: 'up-next',     icon: <ListOrdered size={16} />, title: 'Up Next' },
+                  { id: 'discover',    icon: <Compass size={16} />,     title: 'Discover' },
+                  { id: 'leaderboard', icon: <Trophy size={16} />,      title: 'Ranks' },
                 ] as const).map((tab) => (
                   <button
                     key={tab.id}
                     onClick={() => setTabMode(tab.id)}
+                    title={tab.title}
                     className={clsx(
-                      'flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all',
+                      'flex-1 flex items-center justify-center py-2.5 rounded-lg transition-all',
                       tabMode === tab.id
                         ? 'bg-white/10 text-white'
                         : 'bg-white/[0.02] text-white/40 hover:text-white/60'
                     )}
                   >
                     {tab.icon}
-                    {tab.label}
                   </button>
                 ))}
-                {/* Export button */}
-                <button
-                  onClick={() => setShowExport(true)}
-                  className="p-2.5 rounded-lg bg-white/[0.02] text-white/30 hover:text-white/60 transition-all"
-                  title="Export data"
-                >
-                  <Download size={14} />
+                <button onClick={() => setShowExport(true)} title="Export data"
+                  className="flex-1 flex items-center justify-center py-2.5 rounded-lg bg-white/[0.02] text-white/30 hover:text-white/60 transition-all">
+                  <Download size={16} />
                 </button>
-                {/* Yearly Wrapped button */}
-                <button
-                  onClick={() => setWrappedYear(new Date().getFullYear())}
-                  className="p-2.5 rounded-lg bg-white/[0.02] text-purple-400/50 hover:text-purple-400 transition-all"
-                  title="Yearly Wrapped"
-                >
-                  <Gift size={14} />
+                <button onClick={() => setWrappedYear(new Date().getFullYear())} title="Yearly Wrapped"
+                  className="flex-1 flex items-center justify-center py-2.5 rounded-lg bg-white/[0.02] text-purple-400/50 hover:text-purple-400 transition-all">
+                  <Gift size={16} />
+                </button>
+                <button onClick={() => setYearAwardsYear(new Date().getFullYear())} title={`${new Date().getFullYear()} Awards`}
+                  className="flex-1 flex items-center justify-center py-2.5 rounded-lg bg-white/[0.02] text-amber-400/50 hover:text-amber-400 transition-all">
+                  <Star size={16} />
                 </button>
               </div>
             </div>
@@ -923,6 +925,8 @@ export default function GameAnalyticsPage() {
           {tabMode === 'timeline' && (
             <TimelineView
               games={games}
+              gamesWithMetrics={gamesWithMetrics}
+              updateGame={updateGame}
               onLogTime={(game) => {
                 const gameWithMetrics = gamesWithMetrics.find(g => g.id === game.id);
                 if (gameWithMetrics) {
@@ -1074,6 +1078,17 @@ export default function GameAnalyticsPage() {
           games={games}
           year={wrappedYear}
           onClose={() => setWrappedYear(null)}
+        />
+      )}
+
+      {/* Year Awards Modal */}
+      {yearAwardsYear && (
+        <YearAwardsModal
+          year={yearAwardsYear}
+          allGames={gamesWithMetrics}
+          rawGames={games}
+          updateGame={updateGame}
+          onClose={() => setYearAwardsYear(null)}
         />
       )}
 
@@ -1407,6 +1422,7 @@ function NowPlayingCard({ game, allGames, onClick, onQuickLog, sortBy = 'hours',
   const libraryRank = getLibraryRank(game, allGames, sortBy);
   const moodPulse = getCardMoodPulse(game);
   const progressRing = getProgressRingData(game, allGames);
+  const shelfExpiry = getShelfLifeExpiry(game, allGames);
   const avgSession = game.playLogs && game.playLogs.length > 0
     ? Math.round(game.playLogs.reduce((s, l) => s + l.hours, 0) / game.playLogs.length * 10) / 10
     : 2;
@@ -1472,7 +1488,14 @@ function NowPlayingCard({ game, allGames, onClick, onQuickLog, sortBy = 'hours',
               </div>
             )}
 
-            {/* Library rank badge */}
+            {/* Trophy count badge */}
+            {(game.awards || []).length > 0 && (
+              <div className="absolute bottom-2 left-2 text-[9px] px-1.5 py-0.5 bg-black/60 backdrop-blur-sm rounded font-bold text-amber-400 z-10">
+                🏆 {(game.awards || []).length}
+              </div>
+            )}
+
+                        {/* Library rank badge */}
             {libraryRank.rank > 0 && (() => {
               const pos: React.CSSProperties = streak.isActive ? { left: 52 } : rarity.tier === 'common' ? { right: 8 } : { left: 8 };
               return (
@@ -1498,7 +1521,7 @@ function NowPlayingCard({ game, allGames, onClick, onQuickLog, sortBy = 'hours',
             {/* Name + Relationship overlay */}
             <div className="absolute bottom-2 left-3 right-16">
               <h3 className="text-white font-bold text-base leading-tight truncate">{game.name}</h3>
-              <div className="flex items-center gap-1.5 mt-0.5">
+              <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                 <span
                   className="text-[10px] px-2 py-0.5 rounded-full font-bold"
                   style={{ color: relationship.color, backgroundColor: relationship.bgColor }}
@@ -1506,6 +1529,18 @@ function NowPlayingCard({ game, allGames, onClick, onQuickLog, sortBy = 'hours',
                   {relationship.label}
                 </span>
                 {game.genre && <span className="text-[10px] text-white/30">{game.genre}</span>}
+                {(shelfExpiry.tier === 'at_risk' || shelfExpiry.tier === 'critical' || shelfExpiry.tier === 'expired') && (
+                  <span
+                    className="text-[9px] px-1.5 py-0.5 rounded font-bold"
+                    style={{
+                      color: shelfExpiry.tier === 'expired' ? '#ef4444' : shelfExpiry.tier === 'critical' ? '#f97316' : '#eab308',
+                      backgroundColor: shelfExpiry.tier === 'expired' ? '#ef444420' : shelfExpiry.tier === 'critical' ? '#f9731620' : '#eab30820',
+                    }}
+                    title={shelfExpiry.reasoning}
+                  >
+                    {shelfExpiry.tier === 'expired' ? '⌛ Expired' : `⏳ Exp ${shelfExpiry.daysRemaining}d`}
+                  </span>
+                )}
               </div>
             </div>
           </div>
@@ -1605,6 +1640,7 @@ function PosterCard({ game, allGames, idx, onClick, onQuickLog, isInQueue, sortB
   const libraryRank = getLibraryRank(game, allGames, sortBy);
   const moodPulse = getCardMoodPulse(game);
   const progressRing = getProgressRingData(game, allGames);
+  const shelfExpiry = getShelfLifeExpiry(game, allGames);
 
   const handleFlip = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -1670,6 +1706,13 @@ function PosterCard({ game, allGames, idx, onClick, onQuickLog, isInQueue, sortB
               </div>
             )}
 
+            {/* Trophy count badge */}
+            {(game.awards || []).length > 0 && (
+              <div className="absolute bottom-2 left-2 text-[9px] px-1.5 py-0.5 bg-black/60 backdrop-blur-sm rounded font-bold text-amber-400 z-10">
+                🏆 {(game.awards || []).length}
+              </div>
+            )}
+
             {/* Library rank badge — positioned to avoid overlap */}
             {libraryRank.rank > 0 && (() => {
               const pos: React.CSSProperties = streak.isActive ? { left: 52 } : rarity.tier === 'common' ? { right: 8 } : { left: 8 };
@@ -1696,7 +1739,7 @@ function PosterCard({ game, allGames, idx, onClick, onQuickLog, isInQueue, sortB
             {/* Name + Relationship overlay */}
             <div className="absolute bottom-2 left-3 right-16">
               <h3 className="text-white font-bold text-base leading-tight truncate">{game.name}</h3>
-              <div className="flex items-center gap-1.5 mt-0.5">
+              <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                 <span
                   className="text-[10px] px-2 py-0.5 rounded-full font-bold"
                   style={{ color: relationship.color, backgroundColor: relationship.bgColor }}
@@ -1704,6 +1747,18 @@ function PosterCard({ game, allGames, idx, onClick, onQuickLog, isInQueue, sortB
                   {relationship.label}
                 </span>
                 {game.genre && <span className="text-[10px] text-white/30">{game.genre}</span>}
+                {(shelfExpiry.tier === 'at_risk' || shelfExpiry.tier === 'critical' || shelfExpiry.tier === 'expired') && (
+                  <span
+                    className="text-[9px] px-1.5 py-0.5 rounded font-bold"
+                    style={{
+                      color: shelfExpiry.tier === 'expired' ? '#ef4444' : shelfExpiry.tier === 'critical' ? '#f97316' : '#eab308',
+                      backgroundColor: shelfExpiry.tier === 'expired' ? '#ef444420' : shelfExpiry.tier === 'critical' ? '#f9731620' : '#eab30820',
+                    }}
+                    title={shelfExpiry.reasoning}
+                  >
+                    {shelfExpiry.tier === 'expired' ? '⌛ Expired' : `⏳ Exp ${shelfExpiry.daysRemaining}d`}
+                  </span>
+                )}
               </div>
             </div>
           </div>
@@ -1851,12 +1906,41 @@ function PosterCardBack({ game, allGames, onFlip, rarity, freshness, relationshi
 
       {/* Quick verdicts */}
       {backData.verdicts.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 mt-auto pt-2">
+        <div className="flex flex-wrap gap-1.5 pt-2">
           {backData.verdicts.map((v, i) => (
             <span key={i} className="text-[9px] px-2 py-0.5 rounded-full bg-white/5 font-medium" style={{ color: v.color }}>
               {v.category}: {v.verdict}
             </span>
           ))}
+        </div>
+      )}
+
+      {/* Trophy shelf */}
+      {(game.awards || []).length > 0 && (
+        <div className="mt-3 pt-2 border-t border-white/5">
+          <p className="text-[9px] text-white/25 font-bold uppercase tracking-wider mb-1.5">🏆 Award Cabinet</p>
+          {(['week', 'month', 'quarter', 'year'] as const).map(tier => {
+            const tierAwards = (game.awards || []).filter(a => a.periodType === tier);
+            if (tierAwards.length === 0) return null;
+            return (
+              <div key={tier} className="mb-1.5">
+                <p className="text-[8px] text-white/20 uppercase tracking-wider mb-0.5">
+                  {tier === 'week' ? '📅 Weekly' : tier === 'month' ? '📆 Monthly' : tier === 'quarter' ? '🗓 Quarterly' : '🏆 Yearly'}
+                </p>
+                <div className="flex flex-wrap gap-1">
+                  {tierAwards.map((a, i) => (
+                    <span key={i} title={`${a.categoryLabel} — ${a.periodLabel}`}
+                      className="text-[9px] px-1.5 py-0.5 bg-white/5 rounded flex items-center gap-0.5"
+                      style={{ color: tier === 'year' ? '#fbbf24' : tier === 'quarter' ? '#a855f7' : tier === 'month' ? '#facc15' : '#60a5fa' }}
+                    >
+                      <span>{a.categoryIcon}</span>
+                      <span className="text-white/40">{a.periodLabel.length > 10 ? a.periodLabel.slice(0, 10) + '…' : a.periodLabel}</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
@@ -1884,6 +1968,7 @@ function CompactCard({ game, allGames, idx, onClick, onLogTime, onToggleQueue, o
   const streak = getGameStreak(game);
   const heroNum = getHeroNumber(game);
   const freshness = getCardFreshness(game);
+  const shelfExpiry = getShelfLifeExpiry(game, allGames);
   const daysCtx = getDaysContext(game);
   const franchise = getFranchiseInfo(game, allGames);
   const smartLine = getGameSmartOneLiner(game, allGames);
@@ -1956,10 +2041,29 @@ function CompactCard({ game, allGames, idx, onClick, onLogTime, onToggleQueue, o
                 >
                   {relationship.label}
                 </span>
+                {/* Shelf life expiry badge */}
+                {(shelfExpiry.tier === 'at_risk' || shelfExpiry.tier === 'critical' || shelfExpiry.tier === 'expired') && (
+                  <span
+                    className="text-[9px] px-1.5 py-0.5 rounded font-bold shrink-0"
+                    style={{
+                      color: shelfExpiry.tier === 'expired' ? '#ef4444' : shelfExpiry.tier === 'critical' ? '#f97316' : '#eab308',
+                      backgroundColor: shelfExpiry.tier === 'expired' ? '#ef444420' : shelfExpiry.tier === 'critical' ? '#f9731620' : '#eab30820',
+                    }}
+                    title={shelfExpiry.reasoning}
+                  >
+                    {shelfExpiry.tier === 'expired' ? '⌛ Expired' : `⏳ Exp ${shelfExpiry.daysRemaining}d`}
+                  </span>
+                )}
                 {/* Library rank badge */}
                 {libraryRank.rank > 0 && (
                   <span className="text-[9px] px-1.5 py-0.5 bg-white/5 rounded text-white/35 font-medium shrink-0">
                     {libraryRank.label}
+                  </span>
+                )}
+                {/* Trophy badge */}
+                {(game.awards || []).length > 0 && (
+                  <span className="text-[9px] px-1.5 py-0.5 bg-amber-500/10 rounded font-bold text-amber-400 shrink-0">
+                    🏆 {(game.awards || []).length}
                   </span>
                 )}
               </div>
@@ -2205,12 +2309,41 @@ function CompactCardBack({ game, allGames, onFlip, rarity, freshness, relationsh
 
       {/* Quick verdicts */}
       {backData.verdicts.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 mt-auto pt-2">
+        <div className="flex flex-wrap gap-1.5 pt-2">
           {backData.verdicts.map((v, i) => (
             <span key={i} className="text-[9px] px-2 py-0.5 rounded-full bg-white/5 font-medium" style={{ color: v.color }}>
               {v.category}: {v.verdict}
             </span>
           ))}
+        </div>
+      )}
+
+      {/* Trophy shelf */}
+      {(game.awards || []).length > 0 && (
+        <div className="mt-3 pt-2 border-t border-white/5">
+          <p className="text-[9px] text-white/25 font-bold uppercase tracking-wider mb-1.5">🏆 Award Cabinet</p>
+          {(['week', 'month', 'quarter', 'year'] as const).map(tier => {
+            const tierAwards = (game.awards || []).filter(a => a.periodType === tier);
+            if (tierAwards.length === 0) return null;
+            return (
+              <div key={tier} className="mb-1.5">
+                <p className="text-[8px] text-white/20 uppercase tracking-wider mb-0.5">
+                  {tier === 'week' ? '📅 Weekly' : tier === 'month' ? '📆 Monthly' : tier === 'quarter' ? '🗓 Quarterly' : '🏆 Yearly'}
+                </p>
+                <div className="flex flex-wrap gap-1">
+                  {tierAwards.map((a, i) => (
+                    <span key={i} title={`${a.categoryLabel} — ${a.periodLabel}`}
+                      className="text-[9px] px-1.5 py-0.5 bg-white/5 rounded flex items-center gap-0.5"
+                      style={{ color: tier === 'year' ? '#fbbf24' : tier === 'quarter' ? '#a855f7' : tier === 'month' ? '#facc15' : '#60a5fa' }}
+                    >
+                      <span>{a.categoryIcon}</span>
+                      <span className="text-white/40">{a.periodLabel.length > 10 ? a.periodLabel.slice(0, 10) + '…' : a.periodLabel}</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

@@ -3,11 +3,13 @@
 import { useMemo, useState, useEffect } from 'react';
 import { Calendar, Clock, Gamepad2, DollarSign, Play, CheckCircle, XCircle, Plus, Flame, TrendingUp, TrendingDown, Sparkles, ChevronDown, ChevronUp } from 'lucide-react';
 import { Game, PlayLog } from '../lib/types';
-import { getAllPlayLogs, getWeekStatsForOffset, getAvailableWeeksCount, getTotalHours, getMonthlyVibe, getTimelineMilestones, getMonthlyComparison, getStreakSegments, getGameJourneyArc, getCumulativeHoursAtDate, getMonthInReviewData, parseLocalDate } from '../lib/calculations';
+import { getAllPlayLogs, getWeekStatsForOffset, getAvailableWeeksCount, getTotalHours, getMonthlyVibe, getTimelineMilestones, getMonthlyComparison, getStreakSegments, getGameJourneyArc, getCumulativeHoursAtDate, getMonthInReviewData, parseLocalDate, getTimelineWeather, getPlotTwists, getStoryArc } from '../lib/calculations';
 import { TimelinePeriodCards } from './TimelinePeriodCards';
 import { QuickAddTimeModal } from './QuickAddTimeModal';
 import { WeekInReview } from './WeekInReview';
 import { MonthStoryMode } from './MonthStoryMode';
+import { QuarterAwardsModal } from './QuarterAwardsModal';
+import { GameWithMetrics } from '../hooks/useAnalytics';
 import { generateMonthlyRecap, generateYearChapterTitles, generateMonthChapterTitles } from '../lib/ai-game-service';
 import { RacingBarChart } from './RacingBarChart';
 import { HoursRace } from './HoursRace';
@@ -17,10 +19,13 @@ import { GamingPulse } from './GamingPulse';
 import { FilmstripTimeline } from './FilmstripTimeline';
 import { GamingCalendar } from './GamingCalendar';
 import { CumulativeHoursCounter } from './CumulativeHoursCounter';
+import { StoryArcOverlay } from './StoryArcOverlay';
 import clsx from 'clsx';
 
 interface TimelineViewProps {
   games: Game[];
+  gamesWithMetrics?: GameWithMetrics[];
+  updateGame?: (id: string, updates: Partial<Game>) => Promise<Game>;
   onLogTime?: (game: Game) => void;
   onQuickAddTime?: (gameId: string, playLog: PlayLog) => Promise<void>;
 }
@@ -39,7 +44,7 @@ type TimelineEvent = {
   milestoneColor?: string;
 };
 
-export function TimelineView({ games, onLogTime, onQuickAddTime }: TimelineViewProps) {
+export function TimelineView({ games, gamesWithMetrics, updateGame, onLogTime, onQuickAddTime }: TimelineViewProps) {
   const [showQuickAdd, setShowQuickAdd] = useState(false);
   const [weekOffset, setWeekOffset] = useState(0);
   const [aiRecaps, setAiRecaps] = useState<Record<string, string>>({});
@@ -47,6 +52,7 @@ export function TimelineView({ games, onLogTime, onQuickAddTime }: TimelineViewP
   const [monthChapterTitles, setMonthChapterTitles] = useState<Record<string, string>>({});
   const [expandedJourneys, setExpandedJourneys] = useState<Set<string>>(new Set());
   const [monthRecapKey, setMonthRecapKey] = useState<string | null>(null);
+  const [quarterAwardsKey, setQuarterAwardsKey] = useState<{ year: number; quarter: number } | null>(null);
 
   const maxWeeksBack = useMemo(() => {
     return Math.max(1, getAvailableWeeksCount(games));
@@ -150,6 +156,19 @@ export function TimelineView({ games, onLogTime, onQuickAddTime }: TimelineViewP
     });
     return streaks;
   }, [groupedEvents]);
+
+  // Timeline weather per month
+  const monthWeather = useMemo(() => {
+    const weather: Record<string, ReturnType<typeof getTimelineWeather>> = {};
+    monthKeys.forEach(mk => {
+      const [y, m] = mk.split('-');
+      weather[mk] = getTimelineWeather(games, parseInt(y), parseInt(m));
+    });
+    return weather;
+  }, [games, monthKeys]);
+
+  // Plot twists (dramatic behavioral events)
+  const plotTwists = useMemo(() => getPlotTwists(games), [games]);
 
   // Game journey arcs (for completed/abandoned games)
   const journeyArcs = useMemo(() => {
@@ -428,7 +447,7 @@ export function TimelineView({ games, onLogTime, onQuickAddTime }: TimelineViewP
   if (events.length === 0) {
     return (
       <div className="space-y-6">
-        <WeekInReview data={weekInReviewData} allGames={games} weekOffset={weekOffset} maxWeeksBack={maxWeeksBack} onWeekChange={handleWeekChange} />
+        <WeekInReview data={weekInReviewData} allGames={games} weekOffset={weekOffset} maxWeeksBack={maxWeeksBack} onWeekChange={handleWeekChange} updateGame={updateGame} />
         <TimelinePeriodCards games={games} />
         {onQuickAddTime && (
           <div className="flex justify-end mb-4">
@@ -461,10 +480,23 @@ export function TimelineView({ games, onLogTime, onQuickAddTime }: TimelineViewP
           allGames={games}
           onClose={() => setMonthRecapKey(null)}
           monthTitle={monthChapterTitles[monthRecapKey]}
+          updateGame={updateGame}
         />
       )}
 
-      <WeekInReview data={weekInReviewData} allGames={games} weekOffset={weekOffset} maxWeeksBack={maxWeeksBack} onWeekChange={handleWeekChange} />
+      {/* Quarter Awards Modal */}
+      {quarterAwardsKey && updateGame && (
+        <QuarterAwardsModal
+          year={quarterAwardsKey.year}
+          quarter={quarterAwardsKey.quarter}
+          allGames={gamesWithMetrics || (games as GameWithMetrics[])}
+          rawGames={games}
+          updateGame={updateGame}
+          onClose={() => setQuarterAwardsKey(null)}
+        />
+      )}
+
+      <WeekInReview data={weekInReviewData} allGames={games} weekOffset={weekOffset} maxWeeksBack={maxWeeksBack} onWeekChange={handleWeekChange} updateGame={updateGame} />
 
       {/* Hours Race — daily/monthly/lifetime racing bar chart */}
       <HoursRace games={games} />
@@ -485,6 +517,38 @@ export function TimelineView({ games, onLogTime, onQuickAddTime }: TimelineViewP
       <GamingCalendar games={games} />
 
       <TimelinePeriodCards games={games} />
+
+      {/* Story Arc — yearly narrative structure */}
+      <StoryArcOverlay games={games} />
+
+      {/* Plot Twists — dramatic behavioral events */}
+      {plotTwists.length > 0 && (
+        <div className="space-y-2">
+          <h3 className="text-xs font-semibold text-white/30 uppercase tracking-widest flex items-center gap-2">
+            <span>⚡</span> Plot Twists
+          </h3>
+          <div className="space-y-1.5">
+            {plotTwists.slice(0, 5).map(twist => (
+              <div
+                key={twist.id}
+                className={clsx(
+                  'flex items-center gap-3 px-3 py-2.5 rounded-xl border',
+                  twist.severity === 'epic' ? 'bg-yellow-500/5 border-yellow-500/15' :
+                  twist.severity === 'major' ? 'bg-purple-500/5 border-purple-500/15' :
+                  'bg-white/[0.02] border-white/5',
+                )}
+              >
+                <span className="text-xl shrink-0">{twist.icon}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs font-bold text-white/70">{twist.title}</div>
+                  <div className="text-[10px] text-white/35">{twist.description}</div>
+                </div>
+                <div className="text-[9px] text-white/20 shrink-0">{twist.date}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Game Journey Arcs */}
       {journeyArcs.length > 0 && (
@@ -552,6 +616,7 @@ export function TimelineView({ games, onLogTime, onQuickAddTime }: TimelineViewP
         {monthKeys.map((monthKey, monthIdx) => {
           const monthEvents = groupedEvents[monthKey];
           const vibe = monthVibes[monthKey];
+          const weather = monthWeather[monthKey];
           const comparison = monthComparisons[monthKey];
           const streaks = monthStreaks[monthKey];
           const thumbs = monthThumbnails[monthKey];
@@ -568,14 +633,26 @@ export function TimelineView({ games, onLogTime, onQuickAddTime }: TimelineViewP
           return (
             <div key={monthKey} className="card-enter" style={{ animationDelay: `${monthIdx * 80}ms` }}>
               {/* Quarter chapter title */}
-              {showChapterTitle && (
-                <div className="flex items-center gap-3 mb-4 pb-2">
-                  <Sparkles size={14} className="text-purple-400" />
-                  <span className="text-sm font-semibold text-purple-400">{chapterTitles[quarter]}</span>
-                  <span className="text-[10px] text-white/20">{quarter}</span>
-                  <div className="flex-1 h-px bg-purple-500/10" />
-                </div>
-              )}
+              {showChapterTitle && (() => {
+                const qYear = parseInt(monthKey.split('-')[0]);
+                const qNum = parseInt(quarter.replace('Q', ''));
+                return (
+                  <div className="flex items-center gap-3 mb-4 pb-2">
+                    <Sparkles size={14} className="text-purple-400" />
+                    <span className="text-sm font-semibold text-purple-400">{chapterTitles[quarter]}</span>
+                    <span className="text-[10px] text-white/20">{quarter}</span>
+                    <div className="flex-1 h-px bg-purple-500/10" />
+                    {updateGame && (
+                      <button
+                        onClick={() => setQuarterAwardsKey({ year: qYear, quarter: qNum })}
+                        className="flex items-center gap-1 text-[10px] px-2 py-1 rounded-full bg-purple-500/15 text-purple-300 hover:bg-purple-500/25 transition-colors font-semibold shrink-0"
+                      >
+                        🏆 {quarter} Awards
+                      </button>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* Month chapter title */}
               {monthChapterTitles[monthKey] && (
@@ -590,6 +667,16 @@ export function TimelineView({ games, onLogTime, onQuickAddTime }: TimelineViewP
               <div className="mb-4">
                 <div className="flex items-center gap-3 mb-2">
                   <h3 className="text-lg font-semibold text-white">{formatMonth(monthKey)}</h3>
+                  {/* Weather badge */}
+                  {weather && (
+                    <span
+                      title={weather.tooltip}
+                      className="text-base cursor-default select-none"
+                      style={{ filter: `drop-shadow(0 0 4px ${weather.color}60)` }}
+                    >
+                      {weather.icon}
+                    </span>
+                  )}
                   {/* Vibe tag */}
                   {vibe && (
                     <span className="text-[10px] px-2.5 py-1 rounded-full font-medium vibe-pulse" style={{ color: vibe.color, backgroundColor: `${vibe.color}15`, borderColor: `${vibe.color}20` }}>

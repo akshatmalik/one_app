@@ -134,7 +134,7 @@ export function GameBottomSheet({
       {/* Sheet */}
       <div
         ref={sheetRef}
-        className="relative bg-[#0e0e16] rounded-t-2xl max-h-[92vh] overflow-hidden animate-bottom-sheet-up flex flex-col"
+        className="relative bg-[#0e0e16] rounded-t-2xl max-h-[90dvh] overflow-hidden animate-bottom-sheet-up flex flex-col"
         onClick={(e) => e.stopPropagation()}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
@@ -146,7 +146,7 @@ export function GameBottomSheet({
         </div>
 
         {/* Scrollable content */}
-        <div className="overflow-y-auto flex-1 pb-24">
+        <div className="overflow-y-auto flex-1 min-h-0 pb-24 overscroll-contain">
           {/* Hero */}
           <div className="relative">
             {game.thumbnail ? (

@@ -474,6 +474,7 @@ export function UpNextTab({
                       position={index + 1}
                       isHero={isHero}
                       estimatedHoursAway={estimatedHours}
+                      allGames={allGames}
                       onRemove={() => onRemoveFromQueue(game.id)}
                       onLogTime={onLogTime ? () => onLogTime(game) : undefined}
                     />

@@ -394,3 +394,77 @@ function buildChatContext(context: {
 
   return contextText;
 }
+
+// ── GAMING AWARDS NARRATIVE ────────────────────────────────────────
+
+export interface AwardCeremonyNarrative {
+  opening: string;
+  /** pitches[categoryId][gameName] = one-line campaign pitch */
+  pitches: Record<string, Record<string, string>>;
+}
+
+export interface AwardNomineeInput {
+  name: string;
+  hours: number;
+  rating: number;
+  genre?: string;
+  weeklyWins?: number;   // how many weekly awards this game already has this month/quarter
+  monthlyWins?: number;  // how many monthly awards this game already has this quarter/year
+}
+
+/**
+ * Generate AI ceremony opening + per-nominee pitches for an awards ceremony.
+ * Used for week, month, quarter, and year award ceremonies.
+ */
+export async function generateAwardNarrative(context: {
+  periodLabel: string;
+  periodType: 'week' | 'month' | 'quarter' | 'year';
+  nominees: AwardNomineeInput[];
+  categories: Array<{ id: string; label: string }>;
+  priorContext?: string; // e.g. "Elden Ring won Game of the Week twice this month"
+}): Promise<AwardCeremonyNarrative> {
+  const model = getAIModel();
+
+  const gamesStr = context.nominees
+    .map(g => [
+      `${g.name} (${g.hours.toFixed(1)}h, rated ${g.rating}/10${g.genre ? ', ' + g.genre : ''})`,
+      g.weeklyWins ? `${g.weeklyWins} weekly win(s)` : '',
+      g.monthlyWins ? `${g.monthlyWins} monthly win(s)` : '',
+    ].filter(Boolean).join(' — '))
+    .join('\n');
+
+  const categoriesStr = context.categories.map(c => `"${c.id}": "${c.label}"`).join(', ');
+  const nomineeNames = context.nominees.map(g => g.name);
+
+  const prompt = `You are a witty, slightly dramatic gaming awards host presenting the ${context.periodLabel} ceremony.
+
+Games in contention:
+${gamesStr}
+
+Award categories: ${categoriesStr}
+${context.priorContext ? `\nStory so far: ${context.priorContext}` : ''}
+
+Respond with ONLY valid JSON (no markdown, no code fences) in exactly this structure:
+{
+  "opening": "2-3 sentence ceremony opening. Reference specific games and hours. Build narrative tension — mention if any game is going for a sweep. Casual-dramatic tone.",
+  "pitches": {
+    ${context.categories.map(c =>
+      `"${c.id}": {${nomineeNames.map(n => `"${n}": "1-sentence campaign pitch"`).join(', ')}}`
+    ).join(',\n    ')}
+  }
+}
+
+Pitch rules: each pitch is exactly 1 sentence, specific to that game's data, no generic praise.`;
+
+  try {
+    const result = await model.generateContent(prompt);
+    const raw = result.response.text().trim();
+    // Strip markdown fences if present
+    const jsonStr = raw.replace(/^```[a-z]*\n?/i, '').replace(/\n?```$/i, '').trim();
+    const parsed = JSON.parse(jsonStr);
+    return { opening: parsed.opening || '', pitches: parsed.pitches || {} };
+  } catch (e) {
+    console.error('Award narrative error:', e);
+    return { opening: '', pitches: {} };
+  }
+}

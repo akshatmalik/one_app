@@ -4,7 +4,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical, X, CheckCircle2, PlayCircle, Calendar, XCircle, Clock, TrendingDown, Zap } from 'lucide-react';
 import { GameWithMetrics } from '../hooks/useAnalytics';
-import { getShelfLife, getOneHourProjection, getEstimatedHoursToReach, parseLocalDate } from '../lib/calculations';
+import { getShelfLife, getOneHourProjection, getEstimatedHoursToReach, parseLocalDate, getGameChemistry, getQueueShameData } from '../lib/calculations';
 import { Game } from '../lib/types';
 import clsx from 'clsx';
 
@@ -13,11 +13,12 @@ interface QueueGameCardProps {
   position: number;
   isHero?: boolean; // Position 1 with In Progress = hero card
   estimatedHoursAway?: number;
+  allGames?: Game[];
   onRemove: () => void;
   onLogTime?: () => void;
 }
 
-export function QueueGameCard({ game, position, isHero, estimatedHoursAway, onRemove, onLogTime }: QueueGameCardProps) {
+export function QueueGameCard({ game, position, isHero, estimatedHoursAway, allGames = [], onRemove, onLogTime }: QueueGameCardProps) {
   const {
     attributes,
     listeners,
@@ -34,6 +35,8 @@ export function QueueGameCard({ game, position, isHero, estimatedHoursAway, onRe
 
   const shelfLife = getShelfLife(game);
   const oneHourProjection = isHero ? getOneHourProjection(game) : null;
+  const chemistry = allGames.length > 0 ? getGameChemistry(game, allGames) : null;
+  const shameData = allGames.length > 0 ? getQueueShameData(game, allGames) : null;
 
   // Calculate days playing
   const getDaysPlaying = () => {
@@ -223,6 +226,22 @@ export function QueueGameCard({ game, position, isHero, estimatedHoursAway, onRe
             </div>
           )}
 
+          {/* Chemistry Score (hero card) */}
+          {chemistry && (
+            <div className="mt-2 flex items-center gap-2 px-3 py-2 bg-pink-500/5 border border-pink-500/10 rounded-lg">
+              <span className="text-lg shrink-0">
+                {chemistry.grade === 'S' ? '⭐' : chemistry.grade === 'A' ? '🔥' : chemistry.grade === 'B' ? '✨' : '💡'}
+              </span>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-white/60 font-medium">Chemistry</span>
+                  <span className="text-xs font-bold text-pink-300">Grade {chemistry.grade} — {chemistry.score}%</span>
+                </div>
+                <p className="text-[10px] text-white/30">{chemistry.justification}</p>
+              </div>
+            </div>
+          )}
+
           {/* Log Time button */}
           {onLogTime && (
             <button
@@ -318,6 +337,30 @@ export function QueueGameCard({ game, position, isHero, estimatedHoursAway, onRe
             </>
           )}
         </div>
+
+        {/* Chemistry + Shame line */}
+        {(chemistry || shameData) && (
+          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+            {chemistry && (
+              <span
+                className="text-[10px] px-1.5 py-0.5 rounded font-bold"
+                style={{ color: chemistry.grade === 'S' ? '#f59e0b' : chemistry.grade === 'A' ? '#ec4899' : chemistry.grade === 'B' ? '#8b5cf6' : '#6b7280', backgroundColor: chemistry.grade === 'S' ? '#f59e0b15' : chemistry.grade === 'A' ? '#ec489915' : chemistry.grade === 'B' ? '#8b5cf615' : '#6b728015' }}
+                title={chemistry.justification}
+              >
+                ⚗️ {chemistry.grade} chem
+              </span>
+            )}
+            {shameData && shameData.tier !== 'fresh' && (
+              <span
+                className="text-[10px] px-1.5 py-0.5 rounded font-bold"
+                style={{ color: shameData.color, backgroundColor: `${shameData.color}15` }}
+                title={shameData.message}
+              >
+                {shameData.icon} {shameData.tierLabel}
+              </span>
+            )}
+          </div>
+        )}
 
         {/* Stats line */}
         <div className="flex items-center gap-2 mt-0.5">

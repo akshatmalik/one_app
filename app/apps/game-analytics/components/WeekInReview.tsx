@@ -15,9 +15,10 @@ interface WeekInReviewProps {
   weekOffset: number;
   maxWeeksBack: number;
   onWeekChange: (offset: number) => void;
+  updateGame?: (id: string, updates: Partial<Game>) => Promise<Game>;
 }
 
-export function WeekInReview({ data, allGames, weekOffset, maxWeeksBack, onWeekChange }: WeekInReviewProps) {
+export function WeekInReview({ data, allGames, weekOffset, maxWeeksBack, onWeekChange, updateGame }: WeekInReviewProps) {
   const [showStory, setShowStory] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
   const [aiBlurbs, setAiBlurbs] = useState<Partial<Record<AIBlurbType, AIBlurbResult>>>({});
@@ -155,6 +156,7 @@ export function WeekInReview({ data, allGames, weekOffset, maxWeeksBack, onWeekC
           prefetchedBlurbs={aiBlurbs}
           isLoadingPrefetch={isLoadingAI}
           weekTitle={weekTitle}
+          updateGame={updateGame}
         />
       )}
 
