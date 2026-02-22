@@ -34,6 +34,7 @@ import { ProgressRing } from './components/ProgressRing';
 import { ExportPanel } from './components/ExportPanel';
 import { YearlyWrapped } from './components/YearlyWrapped';
 import { FortuneCookie } from './components/FortuneCookie';
+import { YearAwardsModal } from './components/YearAwardsModal';
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist';
@@ -79,6 +80,7 @@ export default function GameAnalyticsPage() {
   const [showBulkWishlist, setShowBulkWishlist] = useState(false);
   const [showExport, setShowExport] = useState(false);
   const [wrappedYear, setWrappedYear] = useState<number | null>(null);
+  const [yearAwardsYear, setYearAwardsYear] = useState<number | null>(null);
   const [detailGame, setDetailGame] = useState<GameWithMetrics | null>(null);
   const [statsCollapsed, setStatsCollapsed] = useState(() => {
     if (typeof window === 'undefined') return false;
@@ -811,6 +813,14 @@ export default function GameAnalyticsPage() {
                 >
                   <Gift size={14} />
                 </button>
+                {/* Year Awards button */}
+                <button
+                  onClick={() => setYearAwardsYear(new Date().getFullYear())}
+                  className="p-2.5 rounded-lg bg-white/[0.02] text-amber-400/50 hover:text-amber-400 transition-all"
+                  title={`${new Date().getFullYear()} Awards`}
+                >
+                  <Trophy size={14} />
+                </button>
               </div>
             </div>
 
@@ -927,6 +937,8 @@ export default function GameAnalyticsPage() {
           {tabMode === 'timeline' && (
             <TimelineView
               games={games}
+              gamesWithMetrics={gamesWithMetrics}
+              updateGame={updateGame}
               onLogTime={(game) => {
                 const gameWithMetrics = gamesWithMetrics.find(g => g.id === game.id);
                 if (gameWithMetrics) {
@@ -1078,6 +1090,17 @@ export default function GameAnalyticsPage() {
           games={games}
           year={wrappedYear}
           onClose={() => setWrappedYear(null)}
+        />
+      )}
+
+      {/* Year Awards Modal */}
+      {yearAwardsYear && (
+        <YearAwardsModal
+          year={yearAwardsYear}
+          allGames={gamesWithMetrics}
+          rawGames={games}
+          updateGame={updateGame}
+          onClose={() => setYearAwardsYear(null)}
         />
       )}
 
@@ -1477,7 +1500,14 @@ function NowPlayingCard({ game, allGames, onClick, onQuickLog, sortBy = 'hours',
               </div>
             )}
 
-            {/* Library rank badge */}
+            {/* Trophy count badge */}
+            {(game.awards || []).length > 0 && (
+              <div className="absolute bottom-2 left-2 text-[9px] px-1.5 py-0.5 bg-black/60 backdrop-blur-sm rounded font-bold text-amber-400 z-10">
+                🏆 {(game.awards || []).length}
+              </div>
+            )}
+
+                        {/* Library rank badge */}
             {libraryRank.rank > 0 && (() => {
               const pos: React.CSSProperties = streak.isActive ? { left: 52 } : rarity.tier === 'common' ? { right: 8 } : { left: 8 };
               return (
@@ -1688,6 +1718,13 @@ function PosterCard({ game, allGames, idx, onClick, onQuickLog, isInQueue, sortB
               </div>
             )}
 
+            {/* Trophy count badge */}
+            {(game.awards || []).length > 0 && (
+              <div className="absolute bottom-2 left-2 text-[9px] px-1.5 py-0.5 bg-black/60 backdrop-blur-sm rounded font-bold text-amber-400 z-10">
+                🏆 {(game.awards || []).length}
+              </div>
+            )}
+
             {/* Library rank badge — positioned to avoid overlap */}
             {libraryRank.rank > 0 && (() => {
               const pos: React.CSSProperties = streak.isActive ? { left: 52 } : rarity.tier === 'common' ? { right: 8 } : { left: 8 };
@@ -1881,12 +1918,41 @@ function PosterCardBack({ game, allGames, onFlip, rarity, freshness, relationshi
 
       {/* Quick verdicts */}
       {backData.verdicts.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 mt-auto pt-2">
+        <div className="flex flex-wrap gap-1.5 pt-2">
           {backData.verdicts.map((v, i) => (
             <span key={i} className="text-[9px] px-2 py-0.5 rounded-full bg-white/5 font-medium" style={{ color: v.color }}>
               {v.category}: {v.verdict}
             </span>
           ))}
+        </div>
+      )}
+
+      {/* Trophy shelf */}
+      {(game.awards || []).length > 0 && (
+        <div className="mt-3 pt-2 border-t border-white/5">
+          <p className="text-[9px] text-white/25 font-bold uppercase tracking-wider mb-1.5">🏆 Award Cabinet</p>
+          {(['week', 'month', 'quarter', 'year'] as const).map(tier => {
+            const tierAwards = (game.awards || []).filter(a => a.periodType === tier);
+            if (tierAwards.length === 0) return null;
+            return (
+              <div key={tier} className="mb-1.5">
+                <p className="text-[8px] text-white/20 uppercase tracking-wider mb-0.5">
+                  {tier === 'week' ? '📅 Weekly' : tier === 'month' ? '📆 Monthly' : tier === 'quarter' ? '🗓 Quarterly' : '🏆 Yearly'}
+                </p>
+                <div className="flex flex-wrap gap-1">
+                  {tierAwards.map((a, i) => (
+                    <span key={i} title={`${a.categoryLabel} — ${a.periodLabel}`}
+                      className="text-[9px] px-1.5 py-0.5 bg-white/5 rounded flex items-center gap-0.5"
+                      style={{ color: tier === 'year' ? '#fbbf24' : tier === 'quarter' ? '#a855f7' : tier === 'month' ? '#facc15' : '#60a5fa' }}
+                    >
+                      <span>{a.categoryIcon}</span>
+                      <span className="text-white/40">{a.periodLabel.length > 10 ? a.periodLabel.slice(0, 10) + '…' : a.periodLabel}</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
@@ -2004,6 +2070,12 @@ function CompactCard({ game, allGames, idx, onClick, onLogTime, onToggleQueue, o
                 {libraryRank.rank > 0 && (
                   <span className="text-[9px] px-1.5 py-0.5 bg-white/5 rounded text-white/35 font-medium shrink-0">
                     {libraryRank.label}
+                  </span>
+                )}
+                {/* Trophy badge */}
+                {(game.awards || []).length > 0 && (
+                  <span className="text-[9px] px-1.5 py-0.5 bg-amber-500/10 rounded font-bold text-amber-400 shrink-0">
+                    🏆 {(game.awards || []).length}
                   </span>
                 )}
               </div>
@@ -2249,12 +2321,41 @@ function CompactCardBack({ game, allGames, onFlip, rarity, freshness, relationsh
 
       {/* Quick verdicts */}
       {backData.verdicts.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 mt-auto pt-2">
+        <div className="flex flex-wrap gap-1.5 pt-2">
           {backData.verdicts.map((v, i) => (
             <span key={i} className="text-[9px] px-2 py-0.5 rounded-full bg-white/5 font-medium" style={{ color: v.color }}>
               {v.category}: {v.verdict}
             </span>
           ))}
+        </div>
+      )}
+
+      {/* Trophy shelf */}
+      {(game.awards || []).length > 0 && (
+        <div className="mt-3 pt-2 border-t border-white/5">
+          <p className="text-[9px] text-white/25 font-bold uppercase tracking-wider mb-1.5">🏆 Award Cabinet</p>
+          {(['week', 'month', 'quarter', 'year'] as const).map(tier => {
+            const tierAwards = (game.awards || []).filter(a => a.periodType === tier);
+            if (tierAwards.length === 0) return null;
+            return (
+              <div key={tier} className="mb-1.5">
+                <p className="text-[8px] text-white/20 uppercase tracking-wider mb-0.5">
+                  {tier === 'week' ? '📅 Weekly' : tier === 'month' ? '📆 Monthly' : tier === 'quarter' ? '🗓 Quarterly' : '🏆 Yearly'}
+                </p>
+                <div className="flex flex-wrap gap-1">
+                  {tierAwards.map((a, i) => (
+                    <span key={i} title={`${a.categoryLabel} — ${a.periodLabel}`}
+                      className="text-[9px] px-1.5 py-0.5 bg-white/5 rounded flex items-center gap-0.5"
+                      style={{ color: tier === 'year' ? '#fbbf24' : tier === 'quarter' ? '#a855f7' : tier === 'month' ? '#facc15' : '#60a5fa' }}
+                    >
+                      <span>{a.categoryIcon}</span>
+                      <span className="text-white/40">{a.periodLabel.length > 10 ? a.periodLabel.slice(0, 10) + '…' : a.periodLabel}</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

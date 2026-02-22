@@ -3,11 +3,13 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, ChevronLeft, ChevronRight } from 'lucide-react';
-import { MonthInReviewData, getMonthGrade, getMonthHotTake, getMonthAwards, getMonthMoodArc, getOscarAwards } from '../lib/calculations';
+import { MonthInReviewData, getMonthGrade, getMonthHotTake, getMonthAwards, getMonthMoodArc, getOscarAwards, parseLocalDate } from '../lib/calculations';
 import { OscarAwardsScreen } from './story-screens/OscarAwardsScreen';
 import { monthPeriodKey } from '../lib/oscar-storage';
 import { Game } from '../lib/types';
 import { generateMonthBlurbs, MonthAIBlurbType, AIBlurbResult } from '../lib/ai-service';
+import { GamingAwardsScreen, AwardCategoryDef } from './GamingAwardsScreen';
+import { useAwards, awardMonthKey, awardMonthLabel } from '../hooks/useAwards';
 
 // Screen imports
 import { MonthTitleScreen } from './story-screens/MonthTitleScreen';
@@ -36,9 +38,10 @@ interface MonthStoryModeProps {
   allGames: Game[];
   onClose: () => void;
   monthTitle?: string;
+  updateGame?: (id: string, updates: Partial<Game>) => Promise<Game>;
 }
 
-export function MonthStoryMode({ data, allGames, onClose, monthTitle }: MonthStoryModeProps) {
+export function MonthStoryMode({ data, allGames, onClose, monthTitle, updateGame }: MonthStoryModeProps) {
   const [currentScreen, setCurrentScreen] = useState(0);
   const [direction, setDirection] = useState(0);
   const [aiBlurbs, setAiBlurbs] = useState<Partial<Record<MonthAIBlurbType, AIBlurbResult>>>({});
@@ -55,6 +58,71 @@ export function MonthStoryMode({ data, allGames, onClose, monthTitle }: MonthSto
     return getOscarAwards(allGames, start, end);
   }, [allGames, data.year, data.month]);
   const monthPKey = useMemo(() => monthPeriodKey(data.year, data.month), [data.year, data.month]);
+
+  // Interactive month awards
+  const monthAwardPeriodKey = useMemo(() => awardMonthKey(new Date(data.year, data.month - 1, 1)), [data.year, data.month]);
+  const monthAwardPeriodLabel = useMemo(() => awardMonthLabel(data.year, data.month), [data.year, data.month]);
+  const { getPicksForPeriod } = useAwards(allGames, updateGame || (async (id, u) => allGames.find(g => g.id === id) as Game));
+  const monthExistingPicks = useMemo(() => getPicksForPeriod('month', monthAwardPeriodKey), [getPicksForPeriod, monthAwardPeriodKey]);
+
+  // Weekly award winners from this month (for context banner)
+  const weeklyWinnersThisMonth = useMemo(() => {
+    const result: Array<{ label: string; gameName: string; icon: string }> = [];
+    for (const g of allGames) {
+      for (const a of (g.awards || [])) {
+        if (a.periodType === 'week' && a.periodKey.startsWith(`${data.year}-W`)) {
+          // Check if this week falls in the month
+          const weekDate = new Date(data.year, data.month - 1, 1);
+          result.push({ label: a.categoryLabel, gameName: g.name, icon: a.categoryIcon });
+        }
+      }
+    }
+    return result.slice(0, 8);
+  }, [allGames, data.year, data.month]);
+
+  const monthAwardCategories: AwardCategoryDef[] = useMemo(() => {
+    const nominees = data.gamesPlayed.map(gp => ({
+      game: gp.game,
+      reasonLine: `${gp.hours.toFixed(1)}h this month · ${gp.sessions} session${gp.sessions !== 1 ? 's' : ''}`,
+      isHighlight: weeklyWinnersThisMonth.some(w => w.gameName === gp.game.name),
+    }));
+    // Best session nominees — pick games with longest sessions this month
+    const sessionNominees = nominees.map(n => {
+      const mStart = new Date(data.year, data.month - 1, 1);
+      const mEnd = new Date(data.year, data.month, 0, 23, 59, 59);
+      const bestSession = Math.max(
+        0,
+        ...(n.game.playLogs || [])
+          .filter(l => { const d = parseLocalDate(l.date); return d >= mStart && d <= mEnd; })
+          .map(l => l.hours)
+      );
+      return { ...n, reasonLine: bestSession > 0 ? `Best session: ${bestSession.toFixed(1)}h` : n.reasonLine };
+    }).sort((a, b) => parseFloat(b.reasonLine) - parseFloat(a.reasonLine));
+    // Comeback nominees — games with 7+ day gap in sessions
+    const comebackNominees = nominees.filter(n => {
+      const logs = (n.game.playLogs || []).sort((a, b) => a.date.localeCompare(b.date));
+      for (let i = 1; i < logs.length; i++) {
+        const gap = (parseLocalDate(logs[i].date).getTime() - parseLocalDate(logs[i - 1].date).getTime()) / 86400000;
+        if (gap >= 7) return true;
+      }
+      return false;
+    });
+    return [
+      { id: 'game_of_month', label: 'Game of the Month', icon: '🏅', description: 'Your overall pick for the month.', nominees },
+      { id: 'best_session_month', label: 'Best Session', icon: '⚡', description: 'Which game hosted your best single session?', nominees: sessionNominees },
+      { id: 'the_comeback', label: 'The Comeback', icon: '🔄', description: 'A game you returned to after a break.', nominees: comebackNominees.length > 0 ? comebackNominees : nominees },
+      { id: 'best_value_month', label: 'Best Value', icon: '💰', description: 'Most for your money or time this month.', nominees: [...nominees].sort((a, b) => {
+        const totalA = (a.game.playLogs || []).reduce((s, l) => s + l.hours, 0) + a.game.hours;
+        const totalB = (b.game.playLogs || []).reduce((s, l) => s + l.hours, 0) + b.game.hours;
+        const cphA = totalA > 0 && a.game.price > 0 ? a.game.price / totalA : 999;
+        const cphB = totalB > 0 && b.game.price > 0 ? b.game.price / totalB : 999;
+        return cphA - cphB;
+      }) },
+      { id: 'underdog_month', label: 'The Underdog', icon: '🎲', description: 'Surprised you. Exceeded expectations.', nominees },
+      { id: 'disappointment_month', label: 'Disappointment of the Month', icon: '😤', description: "It let you down. Didn't live up to the hype.", nominees },
+      { id: 'ai_wild_card', label: 'AI Wild Card', icon: '🤖', description: "AI's surprise pick — a category and game you might not expect.", nominees, isAICategory: true },
+    ];
+  }, [data, weeklyWinnersThisMonth]);
 
   // Generate AI blurbs on mount
   useEffect(() => {
@@ -140,6 +208,22 @@ export function MonthStoryMode({ data, allGames, onClose, monthTitle }: MonthSto
         periodYear={data.year}
         periodMonth={data.month}
         periodKeyOverride={monthPKey}
+      />
+    ) : null,
+    data.gamesPlayed.length > 0 ? (
+      <GamingAwardsScreen
+        key="month-golden-awards"
+        periodType="month"
+        periodKey={monthAwardPeriodKey}
+        periodLabel={monthAwardPeriodLabel}
+        ceremonyTitle={`${monthAwardPeriodLabel} — Awards Night`}
+        categories={monthAwardCategories}
+        existingPicks={monthExistingPicks}
+        onPick={(_catId, _game, _oldId) => {}}
+        contextBanner={weeklyWinnersThisMonth.length > 0 ? `Weekly MVPs this month: ${[...new Set(weeklyWinnersThisMonth.map(w => w.gameName))].join(', ')}` : undefined}
+        contextWinners={weeklyWinnersThisMonth}
+        allGames={allGames}
+        updateGame={updateGame || (async (id) => allGames.find(g => g.id === id) as Game)}
       />
     ) : null,
     <MonthPersonalityScreen key="personality" data={data} allGames={allGames} />,

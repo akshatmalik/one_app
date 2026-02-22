@@ -1,5 +1,20 @@
 export type GameStatus = 'Not Started' | 'In Progress' | 'Completed' | 'Wishlist' | 'Abandoned';
 
+// ── Gaming Awards ──────────────────────────────────────────────
+
+export type AwardPeriodType = 'week' | 'month' | 'quarter' | 'year';
+
+export interface GameAward {
+  id: string;
+  category: string;       // e.g. 'game_of_week' | 'best_session' | 'disappointment_month'
+  categoryLabel: string;  // e.g. 'Game of the Week'
+  categoryIcon: string;   // e.g. '🎮'
+  periodType: AwardPeriodType;
+  periodKey: string;      // e.g. '2026-W07' | '2026-02' | '2026-Q1' | '2026'
+  periodLabel: string;    // e.g. 'Feb 10–16' | 'February 2026' | 'Q1 2026' | '2026'
+  awardedAt: string;      // ISO date
+}
+
 export type PurchaseSource = 'Steam' | 'PlayStation' | 'Xbox' | 'Nintendo' | 'Epic' | 'GOG' | 'Physical' | 'Other';
 
 export type SubscriptionSource = 'PS Plus' | 'Game Pass' | 'Epic Free' | 'Prime Gaming' | 'Humble Choice' | 'Other';
@@ -41,6 +56,7 @@ export interface Game {
   endDate?: string; // When you finished/stopped
   playLogs?: PlayLog[]; // Individual play sessions
   thumbnail?: string; // Game thumbnail URL from RAWG API
+  awards?: GameAward[]; // User-given awards across all tiers
   isSpecial?: boolean; // Exceptional games the user loved despite any flaws
   queuePosition?: number; // Position in "Up Next" queue (1 = next to play, 2 = after that, etc.)
   createdAt: string;

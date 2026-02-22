@@ -8,6 +8,8 @@ import { TimelinePeriodCards } from './TimelinePeriodCards';
 import { QuickAddTimeModal } from './QuickAddTimeModal';
 import { WeekInReview } from './WeekInReview';
 import { MonthStoryMode } from './MonthStoryMode';
+import { QuarterAwardsModal } from './QuarterAwardsModal';
+import { GameWithMetrics } from '../hooks/useAnalytics';
 import { generateMonthlyRecap, generateYearChapterTitles, generateMonthChapterTitles } from '../lib/ai-game-service';
 import { RacingBarChart } from './RacingBarChart';
 import { HoursRace } from './HoursRace';
@@ -22,6 +24,8 @@ import clsx from 'clsx';
 
 interface TimelineViewProps {
   games: Game[];
+  gamesWithMetrics?: GameWithMetrics[];
+  updateGame?: (id: string, updates: Partial<Game>) => Promise<Game>;
   onLogTime?: (game: Game) => void;
   onQuickAddTime?: (gameId: string, playLog: PlayLog) => Promise<void>;
 }
@@ -40,7 +44,7 @@ type TimelineEvent = {
   milestoneColor?: string;
 };
 
-export function TimelineView({ games, onLogTime, onQuickAddTime }: TimelineViewProps) {
+export function TimelineView({ games, gamesWithMetrics, updateGame, onLogTime, onQuickAddTime }: TimelineViewProps) {
   const [showQuickAdd, setShowQuickAdd] = useState(false);
   const [weekOffset, setWeekOffset] = useState(0);
   const [aiRecaps, setAiRecaps] = useState<Record<string, string>>({});
@@ -48,6 +52,7 @@ export function TimelineView({ games, onLogTime, onQuickAddTime }: TimelineViewP
   const [monthChapterTitles, setMonthChapterTitles] = useState<Record<string, string>>({});
   const [expandedJourneys, setExpandedJourneys] = useState<Set<string>>(new Set());
   const [monthRecapKey, setMonthRecapKey] = useState<string | null>(null);
+  const [quarterAwardsKey, setQuarterAwardsKey] = useState<{ year: number; quarter: number } | null>(null);
 
   const maxWeeksBack = useMemo(() => {
     return Math.max(1, getAvailableWeeksCount(games));
@@ -442,7 +447,7 @@ export function TimelineView({ games, onLogTime, onQuickAddTime }: TimelineViewP
   if (events.length === 0) {
     return (
       <div className="space-y-6">
-        <WeekInReview data={weekInReviewData} allGames={games} weekOffset={weekOffset} maxWeeksBack={maxWeeksBack} onWeekChange={handleWeekChange} />
+        <WeekInReview data={weekInReviewData} allGames={games} weekOffset={weekOffset} maxWeeksBack={maxWeeksBack} onWeekChange={handleWeekChange} updateGame={updateGame} />
         <TimelinePeriodCards games={games} />
         {onQuickAddTime && (
           <div className="flex justify-end mb-4">
@@ -475,10 +480,23 @@ export function TimelineView({ games, onLogTime, onQuickAddTime }: TimelineViewP
           allGames={games}
           onClose={() => setMonthRecapKey(null)}
           monthTitle={monthChapterTitles[monthRecapKey]}
+          updateGame={updateGame}
         />
       )}
 
-      <WeekInReview data={weekInReviewData} allGames={games} weekOffset={weekOffset} maxWeeksBack={maxWeeksBack} onWeekChange={handleWeekChange} />
+      {/* Quarter Awards Modal */}
+      {quarterAwardsKey && updateGame && (
+        <QuarterAwardsModal
+          year={quarterAwardsKey.year}
+          quarter={quarterAwardsKey.quarter}
+          allGames={gamesWithMetrics || (games as GameWithMetrics[])}
+          rawGames={games}
+          updateGame={updateGame}
+          onClose={() => setQuarterAwardsKey(null)}
+        />
+      )}
+
+      <WeekInReview data={weekInReviewData} allGames={games} weekOffset={weekOffset} maxWeeksBack={maxWeeksBack} onWeekChange={handleWeekChange} updateGame={updateGame} />
 
       {/* Hours Race — daily/monthly/lifetime racing bar chart */}
       <HoursRace games={games} />
@@ -615,14 +633,26 @@ export function TimelineView({ games, onLogTime, onQuickAddTime }: TimelineViewP
           return (
             <div key={monthKey} className="card-enter" style={{ animationDelay: `${monthIdx * 80}ms` }}>
               {/* Quarter chapter title */}
-              {showChapterTitle && (
-                <div className="flex items-center gap-3 mb-4 pb-2">
-                  <Sparkles size={14} className="text-purple-400" />
-                  <span className="text-sm font-semibold text-purple-400">{chapterTitles[quarter]}</span>
-                  <span className="text-[10px] text-white/20">{quarter}</span>
-                  <div className="flex-1 h-px bg-purple-500/10" />
-                </div>
-              )}
+              {showChapterTitle && (() => {
+                const qYear = parseInt(monthKey.split('-')[0]);
+                const qNum = parseInt(quarter.replace('Q', ''));
+                return (
+                  <div className="flex items-center gap-3 mb-4 pb-2">
+                    <Sparkles size={14} className="text-purple-400" />
+                    <span className="text-sm font-semibold text-purple-400">{chapterTitles[quarter]}</span>
+                    <span className="text-[10px] text-white/20">{quarter}</span>
+                    <div className="flex-1 h-px bg-purple-500/10" />
+                    {updateGame && (
+                      <button
+                        onClick={() => setQuarterAwardsKey({ year: qYear, quarter: qNum })}
+                        className="flex items-center gap-1 text-[10px] px-2 py-1 rounded-full bg-purple-500/15 text-purple-300 hover:bg-purple-500/25 transition-colors font-semibold shrink-0"
+                      >
+                        🏆 {quarter} Awards
+                      </button>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* Month chapter title */}
               {monthChapterTitles[monthKey] && (
