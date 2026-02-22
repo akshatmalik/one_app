@@ -32,12 +32,11 @@ import { RatingParadoxScreen } from './story-screens/RatingParadoxScreen';
 import { HotTakeScreen, getHotTake } from './story-screens/HotTakeScreen';
 import { VibeCheckScreen } from './story-screens/VibeCheckScreen';
 import { WeekVsWeekScreen } from './story-screens/WeekVsWeekScreen';
-import { OscarAwardsScreen } from './story-screens/OscarAwardsScreen';
-import { getOscarAwards } from '../lib/calculations';
-import { weekPeriodKey } from '../lib/oscar-storage';
+import { AwardsSummaryCard, AwardPickInfo } from './story-screens/AwardsSummaryCard';
+import { AwardsHub } from './AwardsHub';
 import { generateMultipleBlurbs, AIBlurbType, AIBlurbResult } from '../lib/ai-service';
-import { GamingAwardsScreen, AwardCategoryDef } from './GamingAwardsScreen';
 import { useAwards, awardWeekKey, awardWeekLabel } from '../hooks/useAwards';
+import { GameWithMetrics } from '../hooks/useAnalytics';
 
 interface WeekStoryModeProps {
   data: WeekInReviewData;
@@ -54,6 +53,7 @@ export function WeekStoryMode({ data, allGames, onClose, prefetchedBlurbs, isLoa
   const [direction, setDirection] = useState(0);
   const [aiBlurbs, setAiBlurbs] = useState<Partial<Record<AIBlurbType, AIBlurbResult>>>(prefetchedBlurbs || {});
   const [isLoadingAI, setIsLoadingAI] = useState(isLoadingPrefetch ?? true);
+  const [showAwardsHub, setShowAwardsHub] = useState(false);
 
   // Pre-compute data for new screens
   const sharpInsight = useMemo(() => getSharpInsight(data, allGames), [data, allGames]);
@@ -64,49 +64,34 @@ export function WeekStoryMode({ data, allGames, onClose, prefetchedBlurbs, isLoa
   const momentumData = useMemo(() => getMomentumData(allGames, data), [allGames, data]);
   const ratingParadox = useMemo(() => getRatingParadox(data, allGames), [data, allGames]);
   const hotTake = useMemo(() => getHotTake(data), [data]);
-  const weekOscars = useMemo(() => getOscarAwards(allGames, data.weekStart, data.weekEnd), [allGames, data.weekStart, data.weekEnd]);
-  const weekPKey = useMemo(() => weekPeriodKey(data.weekStart), [data.weekStart]);
 
-  // Interactive Golden Controller awards
+  // Awards summary data — replaces the 3 broken interactive award screens
   const weekAwardPeriodKey = useMemo(() => awardWeekKey(data.weekStart), [data.weekStart]);
   const weekAwardPeriodLabel = useMemo(() => awardWeekLabel(data.weekStart, data.weekEnd), [data.weekStart, data.weekEnd]);
-  const { getPicksForPeriod } = useAwards(allGames, updateGame || (async (id, u) => allGames.find(g => g.id === id) as Game));
+  const { getPicksForPeriod } = useAwards(allGames, updateGame || (async (id: string) => allGames.find(g => g.id === id) as Game));
   const weekExistingPicks = useMemo(() => getPicksForPeriod('week', weekAwardPeriodKey), [getPicksForPeriod, weekAwardPeriodKey]);
 
-  const weekAwardCategories: AwardCategoryDef[] = useMemo(() => {
-    const nominees = data.gamesPlayed.map(gp => ({
-      game: gp.game,
-      reasonLine: `${gp.hours.toFixed(1)}h this week · ${gp.sessions} session${gp.sessions !== 1 ? 's' : ''}`,
-    }));
-    return [
-      {
-        id: 'game_of_week',
-        label: 'Game of the Week',
-        icon: '🎮',
-        description: 'Your MVP. The game that owned this week.',
-        nominees,
-      },
-      {
-        id: 'best_session',
-        label: 'Best Session',
-        icon: '⚡',
-        description: 'Which game hosted your best single session?',
-        nominees: nominees.map(n => {
-          const best = data.longestSession?.game.id === n.game.id
-            ? `Best session: ${data.longestSession?.hours.toFixed(1)}h`
-            : n.reasonLine;
-          return { ...n, reasonLine: best };
-        }),
-      },
-      {
-        id: 'guilty_pleasure',
-        label: 'Guilty Pleasure',
-        icon: '😏',
-        description: 'The one you kept going back to even if you won\'t brag about it.',
-        nominees,
-      },
-    ];
-  }, [data]);
+  // Build AwardsSummaryCard pick info
+  const WEEK_CATEGORIES = [
+    { id: 'game_of_week', label: 'Game of the Week', icon: '🎮' },
+    { id: 'best_session', label: 'Best Session', icon: '⚡' },
+    { id: 'guilty_pleasure', label: 'Guilty Pleasure', icon: '😏' },
+  ];
+
+  const awardPickInfos: AwardPickInfo[] = useMemo(() => {
+    return WEEK_CATEGORIES.map(cat => {
+      const pickedGameId = weekExistingPicks[cat.id];
+      const pickedGame = pickedGameId ? allGames.find(g => g.id === pickedGameId) : undefined;
+      return {
+        categoryId: cat.id,
+        categoryLabel: cat.label,
+        categoryIcon: cat.icon,
+        gameId: pickedGame?.id,
+        gameName: pickedGame?.name,
+        gameThumbnail: pickedGame?.thumbnail,
+      };
+    });
+  }, [weekExistingPicks, allGames]);
 
   // Use prefetched blurbs if available, otherwise generate them
   useEffect(() => {
@@ -201,28 +186,14 @@ export function WeekStoryMode({ data, allGames, onClose, prefetchedBlurbs, isLoa
 
     // ─── ACT 5: WRAP-UP ───
     weekAwards.length > 0 ? <WeekAwardsScreen key="awards" data={data} /> : null,
-    data.gamesPlayed.length > 0 && updateGame ? (
-      <GamingAwardsScreen
-        key="golden-controller"
+    data.gamesPlayed.length > 0 ? (
+      <AwardsSummaryCard
+        key="awards-summary"
         periodType="week"
-        periodKey={weekAwardPeriodKey}
         periodLabel={weekAwardPeriodLabel}
-        ceremonyTitle="The Golden Controller"
-        categories={weekAwardCategories}
-        existingPicks={weekExistingPicks}
-        onPick={(_catId, _game, _oldId) => {}}
-        allGames={allGames}
-        updateGame={updateGame}
-      />
-    ) : null,
-    weekOscars.awards.length > 0 ? (
-      <OscarAwardsScreen
-        key="oscar-awards"
-        data={weekOscars}
-        allPlayedGames={data.gamesPlayed.map(gp => gp.game)}
-        periodType="week"
-        periodYear={data.weekStart.getFullYear()}
-        periodKeyOverride={weekPKey}
+        picks={awardPickInfos}
+        totalCategories={3}
+        onOpenAwardsHub={() => setShowAwardsHub(true)}
       />
     ) : null,
 
@@ -400,6 +371,18 @@ export function WeekStoryMode({ data, allGames, onClose, prefetchedBlurbs, isLoa
       <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-40 text-white/30 text-xs">
         {currentScreen + 1} / {totalScreens}
       </div>
+
+      {/* Awards Hub modal — opens on top of story mode */}
+      {showAwardsHub && updateGame && (
+        <AwardsHub
+          allGames={(allGames as unknown) as GameWithMetrics[]}
+          rawGames={allGames}
+          updateGame={updateGame}
+          onClose={() => setShowAwardsHub(false)}
+          initialTab="week"
+          initialPeriodKey={weekAwardPeriodKey}
+        />
+      )}
     </div>
   );
 }
