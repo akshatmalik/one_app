@@ -35,8 +35,10 @@ import {
   getDeadZone,
   getFinishingSprintScore,
   getReturnRate,
+  getParallelUniverseImpact,
 } from '../lib/calculations';
 import { GameListModal } from './GameListModal';
+import { GameGraveyard } from './GameGraveyard';
 import clsx from 'clsx';
 
 interface FunStatsPanelProps {
@@ -80,6 +82,14 @@ export function FunStatsPanel({ games }: FunStatsPanelProps) {
   const deadZone = getDeadZone(games);
   const finishingSprint = getFinishingSprintScore(games);
   const returnRate = getReturnRate(games);
+
+  // Parallel universe: find the game that most distorts your stats
+  const ownedWithHours = games.filter(g => g.status !== 'Wishlist' && getTotalHours(g) > 0);
+  const parallelUniverse = ownedWithHours.length >= 3
+    ? ownedWithHours
+        .map(g => ({ game: g, data: getParallelUniverseImpact(g, games) }))
+        .sort((a, b) => b.data.impactScore - a.data.impactScore)[0]
+    : null;
 
   // Calculate some fun badges
   const ownedGames = games.filter(g => g.status !== 'Wishlist');
@@ -641,6 +651,45 @@ export function FunStatsPanel({ games }: FunStatsPanelProps) {
           </p>
         </div>
       )}
+
+      {/* Parallel Universe Impact — most influential game in your library */}
+      {parallelUniverse && (
+        <div className="p-4 bg-gradient-to-br from-indigo-500/10 to-purple-500/10 border border-indigo-500/20 rounded-xl">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-lg">🌌</span>
+            <h4 className="text-sm font-medium text-white">Parallel Universe</h4>
+            <span className="text-xs text-white/30">most influential game</span>
+          </div>
+          <div className="flex items-center gap-3 mb-2">
+            {parallelUniverse.game.thumbnail && (
+              <img src={parallelUniverse.game.thumbnail} alt={parallelUniverse.game.name} className="w-10 h-10 rounded-lg object-cover shrink-0" loading="lazy" />
+            )}
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-bold text-white truncate">{parallelUniverse.game.name}</div>
+              <div className="text-xs text-indigo-300">{parallelUniverse.data.label}</div>
+            </div>
+            <div className="text-2xl font-bold text-indigo-400 shrink-0">{parallelUniverse.data.impactScore}</div>
+          </div>
+          <p className="text-xs text-white/50 leading-relaxed">{parallelUniverse.data.summary}</p>
+          {parallelUniverse.data.deltas.totalHours > 0 && (
+            <div className="mt-2 grid grid-cols-2 gap-2 text-center text-[10px]">
+              <div className="p-1.5 bg-white/5 rounded-lg">
+                <div className="font-bold text-indigo-300">{parallelUniverse.data.deltas.totalHours}h</div>
+                <div className="text-white/30">hours contributed</div>
+              </div>
+              <div className="p-1.5 bg-white/5 rounded-lg">
+                <div className={`font-bold ${parallelUniverse.data.deltas.avgCostPerHour > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                  {parallelUniverse.data.deltas.avgCostPerHour > 0 ? '+' : ''}{parallelUniverse.data.deltas.avgCostPerHour.toFixed(2)}/hr impact
+                </div>
+                <div className="text-white/30">on avg $/hr</div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Game Graveyard — abandoned games with auto-generated eulogies */}
+      <GameGraveyard games={games} />
 
       {/* Modals */}
       <GameListModal

@@ -3,7 +3,7 @@
 import { useMemo, useState, useEffect } from 'react';
 import { Calendar, Clock, Gamepad2, DollarSign, Play, CheckCircle, XCircle, Plus, Flame, TrendingUp, TrendingDown, Sparkles, ChevronDown, ChevronUp } from 'lucide-react';
 import { Game, PlayLog } from '../lib/types';
-import { getAllPlayLogs, getWeekStatsForOffset, getAvailableWeeksCount, getTotalHours, getMonthlyVibe, getTimelineMilestones, getMonthlyComparison, getStreakSegments, getGameJourneyArc, getCumulativeHoursAtDate, getMonthInReviewData, parseLocalDate } from '../lib/calculations';
+import { getAllPlayLogs, getWeekStatsForOffset, getAvailableWeeksCount, getTotalHours, getMonthlyVibe, getTimelineMilestones, getMonthlyComparison, getStreakSegments, getGameJourneyArc, getCumulativeHoursAtDate, getMonthInReviewData, parseLocalDate, getTimelineWeather, getPlotTwists, getStoryArc } from '../lib/calculations';
 import { TimelinePeriodCards } from './TimelinePeriodCards';
 import { QuickAddTimeModal } from './QuickAddTimeModal';
 import { WeekInReview } from './WeekInReview';
@@ -17,6 +17,7 @@ import { GamingPulse } from './GamingPulse';
 import { FilmstripTimeline } from './FilmstripTimeline';
 import { GamingCalendar } from './GamingCalendar';
 import { CumulativeHoursCounter } from './CumulativeHoursCounter';
+import { StoryArcOverlay } from './StoryArcOverlay';
 import clsx from 'clsx';
 
 interface TimelineViewProps {
@@ -150,6 +151,19 @@ export function TimelineView({ games, onLogTime, onQuickAddTime }: TimelineViewP
     });
     return streaks;
   }, [groupedEvents]);
+
+  // Timeline weather per month
+  const monthWeather = useMemo(() => {
+    const weather: Record<string, ReturnType<typeof getTimelineWeather>> = {};
+    monthKeys.forEach(mk => {
+      const [y, m] = mk.split('-');
+      weather[mk] = getTimelineWeather(games, parseInt(y), parseInt(m));
+    });
+    return weather;
+  }, [games, monthKeys]);
+
+  // Plot twists (dramatic behavioral events)
+  const plotTwists = useMemo(() => getPlotTwists(games), [games]);
 
   // Game journey arcs (for completed/abandoned games)
   const journeyArcs = useMemo(() => {
@@ -486,6 +500,38 @@ export function TimelineView({ games, onLogTime, onQuickAddTime }: TimelineViewP
 
       <TimelinePeriodCards games={games} />
 
+      {/* Story Arc — yearly narrative structure */}
+      <StoryArcOverlay games={games} />
+
+      {/* Plot Twists — dramatic behavioral events */}
+      {plotTwists.length > 0 && (
+        <div className="space-y-2">
+          <h3 className="text-xs font-semibold text-white/30 uppercase tracking-widest flex items-center gap-2">
+            <span>⚡</span> Plot Twists
+          </h3>
+          <div className="space-y-1.5">
+            {plotTwists.slice(0, 5).map(twist => (
+              <div
+                key={twist.id}
+                className={clsx(
+                  'flex items-center gap-3 px-3 py-2.5 rounded-xl border',
+                  twist.severity === 'epic' ? 'bg-yellow-500/5 border-yellow-500/15' :
+                  twist.severity === 'major' ? 'bg-purple-500/5 border-purple-500/15' :
+                  'bg-white/[0.02] border-white/5',
+                )}
+              >
+                <span className="text-xl shrink-0">{twist.icon}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs font-bold text-white/70">{twist.title}</div>
+                  <div className="text-[10px] text-white/35">{twist.description}</div>
+                </div>
+                <div className="text-[9px] text-white/20 shrink-0">{twist.date}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Game Journey Arcs */}
       {journeyArcs.length > 0 && (
         <div className="space-y-3">
@@ -552,6 +598,7 @@ export function TimelineView({ games, onLogTime, onQuickAddTime }: TimelineViewP
         {monthKeys.map((monthKey, monthIdx) => {
           const monthEvents = groupedEvents[monthKey];
           const vibe = monthVibes[monthKey];
+          const weather = monthWeather[monthKey];
           const comparison = monthComparisons[monthKey];
           const streaks = monthStreaks[monthKey];
           const thumbs = monthThumbnails[monthKey];
@@ -590,6 +637,16 @@ export function TimelineView({ games, onLogTime, onQuickAddTime }: TimelineViewP
               <div className="mb-4">
                 <div className="flex items-center gap-3 mb-2">
                   <h3 className="text-lg font-semibold text-white">{formatMonth(monthKey)}</h3>
+                  {/* Weather badge */}
+                  {weather && (
+                    <span
+                      title={weather.tooltip}
+                      className="text-base cursor-default select-none"
+                      style={{ filter: `drop-shadow(0 0 4px ${weather.color}60)` }}
+                    >
+                      {weather.icon}
+                    </span>
+                  )}
                   {/* Vibe tag */}
                   {vibe && (
                     <span className="text-[10px] px-2.5 py-1 rounded-full font-medium vibe-pulse" style={{ color: vibe.color, backgroundColor: `${vibe.color}15`, borderColor: `${vibe.color}20` }}>

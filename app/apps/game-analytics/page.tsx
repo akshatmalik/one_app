@@ -20,7 +20,7 @@ import { gameRepository } from './lib/storage';
 import { BASELINE_GAMES_2025 } from './data/baseline-games';
 import { useAuthContext } from '@/lib/AuthContext';
 import { useToast } from '@/components/Toast';
-import { getROIRating, getWeekStatsForOffset, getGamesPlayedInTimeRange, getCompletionProbability, getGameHealthDot, getRelativeTime, getDaysContext, getSessionMomentum, getValueTrajectory, getGameSmartOneLiner, getFranchiseInfo, getProgressPercent, getShelfLife, parseLocalDate, getCardRarity, getRelationshipStatus, getGameStreak, getHeroNumber, getCardFreshness, getGameSections, getCardBackData, getContextualWhisper, getLibraryRank, getCardMoodPulse, getProgressRingData, getStatPopoverData, getWeekRecapData, getSmartNudges, getGamingCreditScore, getRotationStats, getSpendingForecast, getSpendingByMonth } from './lib/calculations';
+import { getROIRating, getWeekStatsForOffset, getGamesPlayedInTimeRange, getCompletionProbability, getGameHealthDot, getRelativeTime, getDaysContext, getSessionMomentum, getValueTrajectory, getGameSmartOneLiner, getFranchiseInfo, getProgressPercent, getShelfLife, parseLocalDate, getCardRarity, getRelationshipStatus, getGameStreak, getHeroNumber, getCardFreshness, getGameSections, getCardBackData, getContextualWhisper, getLibraryRank, getCardMoodPulse, getProgressRingData, getStatPopoverData, getWeekRecapData, getSmartNudges, getGamingCreditScore, getRotationStats, getSpendingForecast, getSpendingByMonth, getShelfLifeExpiry } from './lib/calculations';
 import { OnThisDayCard } from './components/OnThisDayCard';
 import { ActivityPulse } from './components/ActivityPulse';
 import { RandomPicker } from './components/RandomPicker';
@@ -33,6 +33,7 @@ import { MomentumDots } from './components/MomentumDots';
 import { ProgressRing } from './components/ProgressRing';
 import { ExportPanel } from './components/ExportPanel';
 import { YearlyWrapped } from './components/YearlyWrapped';
+import { FortuneCookie } from './components/FortuneCookie';
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist';
@@ -742,6 +743,9 @@ export default function GameAnalyticsPage() {
           {/* On This Day */}
           {games.length > 0 && <OnThisDayCard games={games} />}
 
+          {/* Daily Fortune Cookie */}
+          {games.length > 0 && <div className="mb-4"><FortuneCookie games={games} /></div>}
+
           {/* Tab Navigation */}
           <div className="space-y-4 mb-6">
             {/* Tabs - Two Rows */}
@@ -1407,6 +1411,7 @@ function NowPlayingCard({ game, allGames, onClick, onQuickLog, sortBy = 'hours',
   const libraryRank = getLibraryRank(game, allGames, sortBy);
   const moodPulse = getCardMoodPulse(game);
   const progressRing = getProgressRingData(game, allGames);
+  const shelfExpiry = getShelfLifeExpiry(game, allGames);
   const avgSession = game.playLogs && game.playLogs.length > 0
     ? Math.round(game.playLogs.reduce((s, l) => s + l.hours, 0) / game.playLogs.length * 10) / 10
     : 2;
@@ -1498,7 +1503,7 @@ function NowPlayingCard({ game, allGames, onClick, onQuickLog, sortBy = 'hours',
             {/* Name + Relationship overlay */}
             <div className="absolute bottom-2 left-3 right-16">
               <h3 className="text-white font-bold text-base leading-tight truncate">{game.name}</h3>
-              <div className="flex items-center gap-1.5 mt-0.5">
+              <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                 <span
                   className="text-[10px] px-2 py-0.5 rounded-full font-bold"
                   style={{ color: relationship.color, backgroundColor: relationship.bgColor }}
@@ -1506,6 +1511,18 @@ function NowPlayingCard({ game, allGames, onClick, onQuickLog, sortBy = 'hours',
                   {relationship.label}
                 </span>
                 {game.genre && <span className="text-[10px] text-white/30">{game.genre}</span>}
+                {(shelfExpiry.tier === 'at_risk' || shelfExpiry.tier === 'critical' || shelfExpiry.tier === 'expired') && (
+                  <span
+                    className="text-[9px] px-1.5 py-0.5 rounded font-bold"
+                    style={{
+                      color: shelfExpiry.tier === 'expired' ? '#ef4444' : shelfExpiry.tier === 'critical' ? '#f97316' : '#eab308',
+                      backgroundColor: shelfExpiry.tier === 'expired' ? '#ef444420' : shelfExpiry.tier === 'critical' ? '#f9731620' : '#eab30820',
+                    }}
+                    title={shelfExpiry.reasoning}
+                  >
+                    {shelfExpiry.tier === 'expired' ? '⌛ Expired' : `⏳ Exp ${shelfExpiry.daysRemaining}d`}
+                  </span>
+                )}
               </div>
             </div>
           </div>
@@ -1605,6 +1622,7 @@ function PosterCard({ game, allGames, idx, onClick, onQuickLog, isInQueue, sortB
   const libraryRank = getLibraryRank(game, allGames, sortBy);
   const moodPulse = getCardMoodPulse(game);
   const progressRing = getProgressRingData(game, allGames);
+  const shelfExpiry = getShelfLifeExpiry(game, allGames);
 
   const handleFlip = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -1696,7 +1714,7 @@ function PosterCard({ game, allGames, idx, onClick, onQuickLog, isInQueue, sortB
             {/* Name + Relationship overlay */}
             <div className="absolute bottom-2 left-3 right-16">
               <h3 className="text-white font-bold text-base leading-tight truncate">{game.name}</h3>
-              <div className="flex items-center gap-1.5 mt-0.5">
+              <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                 <span
                   className="text-[10px] px-2 py-0.5 rounded-full font-bold"
                   style={{ color: relationship.color, backgroundColor: relationship.bgColor }}
@@ -1704,6 +1722,18 @@ function PosterCard({ game, allGames, idx, onClick, onQuickLog, isInQueue, sortB
                   {relationship.label}
                 </span>
                 {game.genre && <span className="text-[10px] text-white/30">{game.genre}</span>}
+                {(shelfExpiry.tier === 'at_risk' || shelfExpiry.tier === 'critical' || shelfExpiry.tier === 'expired') && (
+                  <span
+                    className="text-[9px] px-1.5 py-0.5 rounded font-bold"
+                    style={{
+                      color: shelfExpiry.tier === 'expired' ? '#ef4444' : shelfExpiry.tier === 'critical' ? '#f97316' : '#eab308',
+                      backgroundColor: shelfExpiry.tier === 'expired' ? '#ef444420' : shelfExpiry.tier === 'critical' ? '#f9731620' : '#eab30820',
+                    }}
+                    title={shelfExpiry.reasoning}
+                  >
+                    {shelfExpiry.tier === 'expired' ? '⌛ Expired' : `⏳ Exp ${shelfExpiry.daysRemaining}d`}
+                  </span>
+                )}
               </div>
             </div>
           </div>
@@ -1884,6 +1914,7 @@ function CompactCard({ game, allGames, idx, onClick, onLogTime, onToggleQueue, o
   const streak = getGameStreak(game);
   const heroNum = getHeroNumber(game);
   const freshness = getCardFreshness(game);
+  const shelfExpiry = getShelfLifeExpiry(game, allGames);
   const daysCtx = getDaysContext(game);
   const franchise = getFranchiseInfo(game, allGames);
   const smartLine = getGameSmartOneLiner(game, allGames);
@@ -1956,6 +1987,19 @@ function CompactCard({ game, allGames, idx, onClick, onLogTime, onToggleQueue, o
                 >
                   {relationship.label}
                 </span>
+                {/* Shelf life expiry badge */}
+                {(shelfExpiry.tier === 'at_risk' || shelfExpiry.tier === 'critical' || shelfExpiry.tier === 'expired') && (
+                  <span
+                    className="text-[9px] px-1.5 py-0.5 rounded font-bold shrink-0"
+                    style={{
+                      color: shelfExpiry.tier === 'expired' ? '#ef4444' : shelfExpiry.tier === 'critical' ? '#f97316' : '#eab308',
+                      backgroundColor: shelfExpiry.tier === 'expired' ? '#ef444420' : shelfExpiry.tier === 'critical' ? '#f9731620' : '#eab30820',
+                    }}
+                    title={shelfExpiry.reasoning}
+                  >
+                    {shelfExpiry.tier === 'expired' ? '⌛ Expired' : `⏳ Exp ${shelfExpiry.daysRemaining}d`}
+                  </span>
+                )}
                 {/* Library rank badge */}
                 {libraryRank.rank > 0 && (
                   <span className="text-[9px] px-1.5 py-0.5 bg-white/5 rounded text-white/35 font-medium shrink-0">

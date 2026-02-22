@@ -32,6 +32,9 @@ import { RatingParadoxScreen } from './story-screens/RatingParadoxScreen';
 import { HotTakeScreen, getHotTake } from './story-screens/HotTakeScreen';
 import { VibeCheckScreen } from './story-screens/VibeCheckScreen';
 import { WeekVsWeekScreen } from './story-screens/WeekVsWeekScreen';
+import { OscarAwardsScreen } from './story-screens/OscarAwardsScreen';
+import { getOscarAwards } from '../lib/calculations';
+import { weekPeriodKey } from '../lib/oscar-storage';
 import { generateMultipleBlurbs, AIBlurbType, AIBlurbResult } from '../lib/ai-service';
 
 interface WeekStoryModeProps {
@@ -58,6 +61,8 @@ export function WeekStoryMode({ data, allGames, onClose, prefetchedBlurbs, isLoa
   const momentumData = useMemo(() => getMomentumData(allGames, data), [allGames, data]);
   const ratingParadox = useMemo(() => getRatingParadox(data, allGames), [data, allGames]);
   const hotTake = useMemo(() => getHotTake(data), [data]);
+  const weekOscars = useMemo(() => getOscarAwards(allGames, data.weekStart, data.weekEnd), [allGames, data.weekStart, data.weekEnd]);
+  const weekPKey = useMemo(() => weekPeriodKey(data.weekStart), [data.weekStart]);
 
   // Use prefetched blurbs if available, otherwise generate them
   useEffect(() => {
@@ -152,6 +157,16 @@ export function WeekStoryMode({ data, allGames, onClose, prefetchedBlurbs, isLoa
 
     // ─── ACT 5: WRAP-UP ───
     weekAwards.length > 0 ? <WeekAwardsScreen key="awards" data={data} /> : null,
+    weekOscars.awards.length > 0 ? (
+      <OscarAwardsScreen
+        key="oscar-awards"
+        data={weekOscars}
+        allPlayedGames={data.gamesPlayed.map(gp => gp.game)}
+        periodType="week"
+        periodYear={data.weekStart.getFullYear()}
+        periodKeyOverride={weekPKey}
+      />
+    ) : null,
 
     // AI: Closing reflection
     <AIBlurbScreen

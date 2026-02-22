@@ -3,7 +3,9 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, ChevronLeft, ChevronRight } from 'lucide-react';
-import { MonthInReviewData, getMonthGrade, getMonthHotTake, getMonthAwards, getMonthMoodArc } from '../lib/calculations';
+import { MonthInReviewData, getMonthGrade, getMonthHotTake, getMonthAwards, getMonthMoodArc, getOscarAwards } from '../lib/calculations';
+import { OscarAwardsScreen } from './story-screens/OscarAwardsScreen';
+import { monthPeriodKey } from '../lib/oscar-storage';
 import { Game } from '../lib/types';
 import { generateMonthBlurbs, MonthAIBlurbType, AIBlurbResult } from '../lib/ai-service';
 
@@ -47,6 +49,12 @@ export function MonthStoryMode({ data, allGames, onClose, monthTitle }: MonthSto
   const hotTake = useMemo(() => getMonthHotTake(data), [data]);
   const awards = useMemo(() => getMonthAwards(data), [data]);
   const moodArc = useMemo(() => getMonthMoodArc(data), [data]);
+  const monthOscars = useMemo(() => {
+    const start = new Date(data.year, data.month - 1, 1);
+    const end = new Date(data.year, data.month, 0, 23, 59, 59);
+    return getOscarAwards(allGames, start, end);
+  }, [allGames, data.year, data.month]);
+  const monthPKey = useMemo(() => monthPeriodKey(data.year, data.month), [data.year, data.month]);
 
   // Generate AI blurbs on mount
   useEffect(() => {
@@ -123,6 +131,17 @@ export function MonthStoryMode({ data, allGames, onClose, monthTitle }: MonthSto
 
     // ─── ACT 5: WRAP-UP ───
     awards.length > 0 ? <MonthAwardsScreen key="awards" awards={awards} /> : null,
+    monthOscars.awards.length > 0 ? (
+      <OscarAwardsScreen
+        key="oscar-awards"
+        data={monthOscars}
+        allPlayedGames={data.gamesPlayed.map(gp => gp.game)}
+        periodType="month"
+        periodYear={data.year}
+        periodMonth={data.month}
+        periodKeyOverride={monthPKey}
+      />
+    ) : null,
     <MonthPersonalityScreen key="personality" data={data} allGames={allGames} />,
     <MonthVsLastScreen key="vs-last" data={data} />,
     <MonthAIBlurbScreen
