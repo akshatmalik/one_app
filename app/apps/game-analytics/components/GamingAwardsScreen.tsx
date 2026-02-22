@@ -75,10 +75,11 @@ export function GamingAwardsScreen({
 
   const { changePick } = useAwards(allGames, updateGame);
 
-  // Sync existingPicks into local state
+  // Only sync picks when switching to a different period (not on every parent re-render)
   useEffect(() => {
     setPicks(existingPicks);
-  }, [existingPicks]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [periodKey]);
 
   // Fetch AI narrative once
   useEffect(() => {

@@ -8,7 +8,7 @@
  * ceremony for any selected period.
  */
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Trophy, ChevronRight, Check, Award, ChevronLeft } from 'lucide-react';
 import clsx from 'clsx';
@@ -275,6 +275,12 @@ export function AwardsHub({
   const [activePeriodKey, setActivePeriodKey] = useState<string | null>(initialPeriodKey ?? null);
   const { getPicksForPeriod } = useAwards(rawGames, updateGame);
 
+  // Keep refs so category-building memos don't recompute on every pick
+  const rawGamesRef = useRef(rawGames);
+  rawGamesRef.current = rawGames;
+  const allGamesRef = useRef(allGames);
+  allGamesRef.current = allGames;
+
   // Build period lists
   const weekPeriods = useMemo(() => discoverWeeks(rawGames), [rawGames]);
   const monthPeriods = useMemo(() => discoverMonths(rawGames), [rawGames]);
@@ -312,18 +318,20 @@ export function AwardsHub({
     return null;
   }, [activePeriodKey, enrichedPeriods]);
 
-  // Build categories for the active period
-  const ceremonyData = useMemo(() => {
+  // Build categories for the active period — only recomputes when the
+  // period *selection* changes, NOT when a pick mutates rawGames.
+  const ceremonyCategories = useMemo(() => {
     if (!activePeriodEntry) return null;
     const { periodType, key, year, meta, label } = activePeriodEntry;
 
-    const existingPicks = getPicksForPeriod(periodType, key);
+    // Read from refs so we get current data but don't trigger recomputes
+    const rg = rawGamesRef.current;
+    const ag = allGamesRef.current;
 
     // Context winners from lower tiers
     const contextWinners: Array<{ label: string; gameName: string; icon: string }> = [];
-    for (const g of rawGames) {
+    for (const g of rg) {
       for (const a of (g.awards || [])) {
-        // For month → show week winners; for quarter → month winners; for year → quarter winners
         if (
           (periodType === 'month' && a.periodType === 'week') ||
           (periodType === 'quarter' && a.periodType === 'month') ||
@@ -343,24 +351,24 @@ export function AwardsHub({
       case 'week': {
         const weekStart = new Date(meta.weekStart as number);
         const weekEnd = new Date(meta.weekEnd as number);
-        categories = buildWeekCategories(rawGames, allGames, weekStart, weekEnd);
+        categories = buildWeekCategories(rg, ag, weekStart, weekEnd);
         ceremonyTitle = 'The Golden Controller';
         break;
       }
       case 'month': {
         const month = meta.month as number;
-        categories = buildMonthCategories(rawGames, allGames, year, month, contextWinners);
+        categories = buildMonthCategories(rg, ag, year, month, contextWinners);
         ceremonyTitle = `${label} — Awards Night`;
         break;
       }
       case 'quarter': {
         const quarter = meta.quarter as number;
-        categories = buildQuarterCategories(allGames, rawGames, year, quarter, contextWinners);
+        categories = buildQuarterCategories(ag, rg, year, quarter, contextWinners);
         ceremonyTitle = `${label} Honours`;
         break;
       }
       case 'year': {
-        categories = buildYearCategories(allGames, rawGames, year, contextWinners);
+        categories = buildYearCategories(ag, rg, year, contextWinners);
         ceremonyTitle = `The ${year} Gaming Ceremony`;
         break;
       }
@@ -369,13 +377,20 @@ export function AwardsHub({
     return {
       categories,
       ceremonyTitle,
-      existingPicks,
       contextWinners: contextWinners.slice(0, 8),
       contextBanner: contextWinners.length > 0
         ? `Prior winners: ${[...new Set(contextWinners.map(w => w.gameName))].join(', ')}`
         : undefined,
     };
-  }, [activePeriodEntry, rawGames, allGames, getPicksForPeriod]);
+    // Only recompute when the selected period changes, NOT on every rawGames mutation
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activePeriodKey]);
+
+  // Existing picks — this CAN update on every rawGames change (it's cheap)
+  const ceremonyPicks = useMemo(() => {
+    if (!activePeriodEntry) return {};
+    return getPicksForPeriod(activePeriodEntry.periodType, activePeriodEntry.key);
+  }, [activePeriodEntry, getPicksForPeriod]);
 
   const handleOpenCeremony = useCallback((key: string) => {
     setActivePeriodKey(key);
@@ -398,10 +413,11 @@ export function AwardsHub({
 
   // ─── Ceremony drill-down view ─────────────────────────────────
 
-  if (activePeriodKey && activePeriodEntry && ceremonyData) {
+  if (activePeriodKey && activePeriodEntry && ceremonyCategories) {
     const style = TAB_STYLES[activePeriodEntry.periodType];
     return (
       <motion.div
+        key={`ceremony-${activePeriodKey}`}
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
@@ -437,12 +453,12 @@ export function AwardsHub({
             periodType={activePeriodEntry.periodType}
             periodKey={activePeriodEntry.key}
             periodLabel={activePeriodEntry.label}
-            ceremonyTitle={ceremonyData.ceremonyTitle}
-            categories={ceremonyData.categories}
-            existingPicks={ceremonyData.existingPicks}
+            ceremonyTitle={ceremonyCategories.ceremonyTitle}
+            categories={ceremonyCategories.categories}
+            existingPicks={ceremonyPicks}
             onPick={() => {}}
-            contextBanner={ceremonyData.contextBanner}
-            contextWinners={ceremonyData.contextWinners}
+            contextBanner={ceremonyCategories.contextBanner}
+            contextWinners={ceremonyCategories.contextWinners}
             allGames={rawGames}
             updateGame={updateGame}
           />
