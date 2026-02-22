@@ -750,76 +750,64 @@ export default function GameAnalyticsPage() {
 
           {/* Tab Navigation */}
           <div className="space-y-4 mb-6">
-            {/* Tabs - Two Rows */}
-            <div className="space-y-2">
-              {/* First Row: Games, Timeline, Stats */}
-              <div className="flex items-center gap-2">
+            {/* Tabs - Two icon-only rows */}
+            <div className="space-y-1.5">
+              {/* Row 1: Games, Timeline, Stats, AI Coach */}
+              <div className="flex items-center gap-1.5">
                 {([
-                  { id: 'games', label: 'Games', icon: <List size={14} /> },
-                  { id: 'timeline', label: 'Timeline', icon: <Calendar size={14} /> },
-                  { id: 'stats', label: 'Stats', icon: <BarChart3 size={14} /> },
+                  { id: 'games',    icon: <List size={16} />,          title: 'Games' },
+                  { id: 'timeline', icon: <Calendar size={16} />,      title: 'Timeline' },
+                  { id: 'stats',    icon: <BarChart3 size={16} />,     title: 'Stats' },
+                  { id: 'ai-coach', icon: <MessageCircle size={16} />, title: 'AI Coach' },
                 ] as const).map((tab) => (
                   <button
                     key={tab.id}
                     onClick={() => setTabMode(tab.id)}
+                    title={tab.title}
                     className={clsx(
-                      'flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all',
+                      'flex-1 flex items-center justify-center py-2.5 rounded-lg transition-all',
                       tabMode === tab.id
                         ? 'bg-white/10 text-white'
                         : 'bg-white/[0.02] text-white/40 hover:text-white/60'
                     )}
                   >
                     {tab.icon}
-                    {tab.label}
                   </button>
                 ))}
               </div>
 
-              {/* Second Row: AI Coach, Up Next, Discover, Leaderboard, Export */}
-              <div className="flex items-center gap-2">
+              {/* Row 2: Up Next, Discover, Leaderboard + utilities */}
+              <div className="flex items-center gap-1.5">
                 {([
-                  { id: 'ai-coach', label: 'AI Coach', icon: <MessageCircle size={14} /> },
-                  { id: 'up-next', label: 'Up Next', icon: <ListOrdered size={14} /> },
-                  { id: 'discover', label: 'Discover', icon: <Compass size={14} /> },
-                  { id: 'leaderboard', label: 'Ranks', icon: <Trophy size={14} /> },
+                  { id: 'up-next',     icon: <ListOrdered size={16} />, title: 'Up Next' },
+                  { id: 'discover',    icon: <Compass size={16} />,     title: 'Discover' },
+                  { id: 'leaderboard', icon: <Trophy size={16} />,      title: 'Ranks' },
                 ] as const).map((tab) => (
                   <button
                     key={tab.id}
                     onClick={() => setTabMode(tab.id)}
+                    title={tab.title}
                     className={clsx(
-                      'flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all',
+                      'flex-1 flex items-center justify-center py-2.5 rounded-lg transition-all',
                       tabMode === tab.id
                         ? 'bg-white/10 text-white'
                         : 'bg-white/[0.02] text-white/40 hover:text-white/60'
                     )}
                   >
                     {tab.icon}
-                    {tab.label}
                   </button>
                 ))}
-                {/* Export button */}
-                <button
-                  onClick={() => setShowExport(true)}
-                  className="p-2.5 rounded-lg bg-white/[0.02] text-white/30 hover:text-white/60 transition-all"
-                  title="Export data"
-                >
-                  <Download size={14} />
+                <button onClick={() => setShowExport(true)} title="Export data"
+                  className="flex-1 flex items-center justify-center py-2.5 rounded-lg bg-white/[0.02] text-white/30 hover:text-white/60 transition-all">
+                  <Download size={16} />
                 </button>
-                {/* Yearly Wrapped button */}
-                <button
-                  onClick={() => setWrappedYear(new Date().getFullYear())}
-                  className="p-2.5 rounded-lg bg-white/[0.02] text-purple-400/50 hover:text-purple-400 transition-all"
-                  title="Yearly Wrapped"
-                >
-                  <Gift size={14} />
+                <button onClick={() => setWrappedYear(new Date().getFullYear())} title="Yearly Wrapped"
+                  className="flex-1 flex items-center justify-center py-2.5 rounded-lg bg-white/[0.02] text-purple-400/50 hover:text-purple-400 transition-all">
+                  <Gift size={16} />
                 </button>
-                {/* Year Awards button */}
-                <button
-                  onClick={() => setYearAwardsYear(new Date().getFullYear())}
-                  className="p-2.5 rounded-lg bg-white/[0.02] text-amber-400/50 hover:text-amber-400 transition-all"
-                  title={`${new Date().getFullYear()} Awards`}
-                >
-                  <Trophy size={14} />
+                <button onClick={() => setYearAwardsYear(new Date().getFullYear())} title={`${new Date().getFullYear()} Awards`}
+                  className="flex-1 flex items-center justify-center py-2.5 rounded-lg bg-white/[0.02] text-amber-400/50 hover:text-amber-400 transition-all">
+                  <Star size={16} />
                 </button>
               </div>
             </div>
