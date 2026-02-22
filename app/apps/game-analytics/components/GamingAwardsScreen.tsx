@@ -5,8 +5,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Award, CheckCircle2, Gamepad2, Loader2, Sparkles, Trophy } from 'lucide-react';
 import clsx from 'clsx';
 import { Game, GameAward, AwardPeriodType } from '../lib/types';
-import { useAwards } from '../hooks/useAwards';
 import { generateAwardNarrative, AwardCeremonyNarrative, AwardNomineeInput } from '../lib/ai-service';
+import { v4 as uuidv4 } from 'uuid';
 
 // ── Types ────────────────────────────────────────────────────────
 
@@ -73,7 +73,12 @@ export function GamingAwardsScreen({
   const [openingShown, setOpeningShown] = useState(false);
   const narrativeFetched = useRef(false);
 
-  const { changePick } = useAwards(allGames, updateGame);
+  // Keep refs so we always have fresh data for mutations
+  // without the hook recreating callbacks on every parent re-render
+  const allGamesRef = useRef(allGames);
+  allGamesRef.current = allGames;
+  const updateGameRef = useRef(updateGame);
+  updateGameRef.current = updateGame;
 
   // Only sync picks when switching to a different period (not on every parent re-render)
   useEffect(() => {
@@ -124,7 +129,6 @@ export function GamingAwardsScreen({
     // Optimistic UI
     setPicks(prev => ({ ...prev, [categoryDef.id]: newGameId }));
 
-    // Persist via changePick (strips old winner, awards new)
     const awardData: Omit<GameAward, 'id' | 'awardedAt'> = {
       category: categoryDef.id,
       categoryLabel: categoryDef.aiCategoryName || categoryDef.label,
@@ -133,7 +137,36 @@ export function GamingAwardsScreen({
       periodKey,
       periodLabel,
     };
-    await changePick(newGameId, oldGameId, awardData);
+
+    // Persist directly via refs (avoids useAwards re-render cascade)
+    const games = allGamesRef.current;
+    const doUpdate = updateGameRef.current;
+
+    // Strip award from old winner if switching
+    if (oldGameId && oldGameId !== newGameId) {
+      const oldGame = games.find(g => g.id === oldGameId);
+      if (oldGame) {
+        await doUpdate(oldGameId, {
+          awards: (oldGame.awards || []).filter(
+            a => !(a.category === awardData.category && a.periodKey === awardData.periodKey)
+          ),
+        });
+      }
+    }
+
+    // Give award to new winner
+    const newGame = games.find(g => g.id === newGameId);
+    if (newGame) {
+      const newAward: GameAward = {
+        id: uuidv4(),
+        ...awardData,
+        awardedAt: new Date().toISOString(),
+      };
+      const filtered = (newGame.awards || []).filter(
+        a => !(a.category === awardData.category && a.periodKey === awardData.periodKey)
+      );
+      await doUpdate(newGameId, { awards: [...filtered, newAward] });
+    }
 
     onPick(categoryDef.id, nominee.game, oldGameId);
   };

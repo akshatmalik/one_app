@@ -9,7 +9,7 @@
  */
 
 import { useState, useMemo, useCallback, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { X, Trophy, ChevronRight, Check, Award, ChevronLeft } from 'lucide-react';
 import clsx from 'clsx';
 import { Game, AwardPeriodType } from '../lib/types';
@@ -411,33 +411,20 @@ export function AwardsHub({
 
   const tabs: AwardPeriodType[] = ['week', 'month', 'quarter', 'year'];
 
-  // ─── Ceremony drill-down view ─────────────────────────────────
+  const showCeremony = !!(activePeriodKey && activePeriodEntry && ceremonyCategories);
+  const ceremonyStyle = showCeremony ? TAB_STYLES[activePeriodEntry!.periodType] : null;
 
-  if (activePeriodKey && activePeriodEntry && ceremonyCategories) {
-    const style = TAB_STYLES[activePeriodEntry.periodType];
-    return (
-      <motion.div
-        key={`ceremony-${activePeriodKey}`}
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="fixed inset-0 z-[60] bg-[#0a0a0f] flex flex-col"
-      >
-        {/* Sticky header */}
+  // ─── Single render tree — ceremony overlays the list ──────────
+
+  return (
+    <div className="fixed inset-0 z-[60] bg-[#0a0a0f] flex flex-col">
+      {/* ─── Period list view (always mounted, hidden when ceremony is open) ─── */}
+      <div className={showCeremony ? 'hidden' : 'flex flex-col h-full'}>
+        {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-white/5 shrink-0 bg-[#0a0a0f]">
-          <button
-            onClick={handleBackToList}
-            className="flex items-center gap-1.5 text-white/50 hover:text-white/80 transition-colors"
-          >
-            <ChevronLeft size={18} />
-            <span className="text-sm font-medium">Back</span>
-          </button>
-          <div className="flex items-center gap-2">
-            <Trophy size={14} className={style.iconColor} />
-            <span className="font-bold text-white text-sm">{activePeriodEntry.label}</span>
-            <span className={clsx('text-[10px] px-2 py-0.5 rounded-full font-bold', style.pill)}>
-              {activePeriodEntry.periodType.toUpperCase()}
-            </span>
+          <div className="flex items-center gap-2.5">
+            <Trophy size={18} className="text-amber-400" />
+            <span className="font-bold text-white text-base">Awards Hub</span>
           </div>
           <button
             onClick={onClose}
@@ -447,165 +434,167 @@ export function AwardsHub({
           </button>
         </div>
 
-        {/* Scrollable ceremony content */}
-        <div className="flex-1 overflow-y-auto overscroll-contain py-4">
-          <GamingAwardsScreen
-            periodType={activePeriodEntry.periodType}
-            periodKey={activePeriodEntry.key}
-            periodLabel={activePeriodEntry.label}
-            ceremonyTitle={ceremonyCategories.ceremonyTitle}
-            categories={ceremonyCategories.categories}
-            existingPicks={ceremonyPicks}
-            onPick={() => {}}
-            contextBanner={ceremonyCategories.contextBanner}
-            contextWinners={ceremonyCategories.contextWinners}
-            allGames={rawGames}
-            updateGame={updateGame}
-          />
-        </div>
-      </motion.div>
-    );
-  }
-
-  // ─── Period list view ──────────────────────────────────────────
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 24 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: 24 }}
-      transition={{ type: 'spring', damping: 28, stiffness: 280 }}
-      className="fixed inset-0 z-[60] bg-[#0a0a0f] flex flex-col"
-    >
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-white/5 shrink-0 bg-[#0a0a0f]">
-        <div className="flex items-center gap-2.5">
-          <Trophy size={18} className="text-amber-400" />
-          <span className="font-bold text-white text-base">Awards Hub</span>
-        </div>
-        <button
-          onClick={onClose}
-          className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-white/40 active:bg-white/10"
-        >
-          <X size={16} />
-        </button>
-      </div>
-
-      {/* Tabs */}
-      <div className="flex items-center gap-1 px-4 py-3 border-b border-white/5 bg-[#0a0a0f]">
-        {tabs.map(tab => {
-          const style = TAB_STYLES[tab];
-          const isActive = activeTab === tab;
-          const pending = pendingSummary[tab];
-
-          return (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={clsx(
-                'flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all relative',
-                isActive
-                  ? clsx(style.bg, style.accent, style.border, 'border')
-                  : 'text-white/30 hover:text-white/50 bg-white/[0.02]',
-              )}
-            >
-              {tab}
-              {pending > 0 && (
-                <span className={clsx(
-                  'absolute -top-1 -right-1 w-4 h-4 rounded-full text-[9px] font-bold flex items-center justify-center',
-                  isActive ? 'bg-red-500 text-white' : 'bg-white/10 text-white/40',
-                )}>
-                  {pending}
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Period list */}
-      <div className="flex-1 overflow-y-auto overscroll-contain">
-        <div className="px-4 py-4 space-y-2">
-          {currentPeriods.length === 0 && (
-            <div className="text-center py-12 text-white/20">
-              <Award size={32} className="mx-auto mb-3 opacity-30" />
-              <p className="text-sm">No {activeTab}ly periods with games found</p>
-            </div>
-          )}
-
-          {currentPeriods.map((period, i) => {
-            const style = TAB_STYLES[period.periodType];
-            const isComplete = period.assignedCount >= period.totalCategories;
-            const isPending = period.assignedCount === 0;
-            const isPartial = !isComplete && !isPending;
+        {/* Tabs */}
+        <div className="flex items-center gap-1 px-4 py-3 border-b border-white/5 bg-[#0a0a0f]">
+          {tabs.map(tab => {
+            const style = TAB_STYLES[tab];
+            const isActive = activeTab === tab;
+            const pending = pendingSummary[tab];
 
             return (
-              <motion.button
-                key={period.key}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.04 }}
-                onClick={() => handleOpenCeremony(period.key)}
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
                 className={clsx(
-                  'w-full flex items-center gap-3 p-3.5 rounded-xl border text-left transition-all active:scale-[0.98]',
-                  isComplete
-                    ? 'bg-white/[0.03] border-white/8 hover:border-white/15'
-                    : clsx(`bg-gradient-to-r ${TAB_STYLES[period.periodType].bg.replace('bg-', 'from-')} to-transparent`, style.border),
+                  'flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all relative',
+                  isActive
+                    ? clsx(style.bg, style.accent, style.border, 'border')
+                    : 'text-white/30 hover:text-white/50 bg-white/[0.02]',
                 )}
               >
-                {/* Status indicator */}
-                <div className={clsx(
-                  'w-10 h-10 rounded-xl flex items-center justify-center shrink-0',
-                  isComplete
-                    ? 'bg-emerald-500/15'
-                    : isPending
-                      ? `${style.bg}`
-                      : 'bg-amber-500/15',
-                )}>
-                  {isComplete ? (
-                    <Check size={18} className="text-emerald-400" />
-                  ) : (
-                    <Trophy size={18} className={isPending ? style.accent : 'text-amber-400'} />
-                  )}
-                </div>
-
-                {/* Period info */}
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-semibold text-white">{period.label}</div>
-                  <div className="text-xs text-white/30 mt-0.5">
-                    {isComplete
-                      ? `All ${period.totalCategories} awards given ✓`
-                      : isPending
-                        ? `${period.totalCategories} categories waiting`
-                        : `${period.assignedCount}/${period.totalCategories} awarded`
-                    }
-                  </div>
-                </div>
-
-                {/* Progress + arrow */}
-                <div className="flex items-center gap-2 shrink-0">
-                  {!isPending && (
-                    <div className="flex gap-0.5">
-                      {Array.from({ length: period.totalCategories }).map((_, j) => (
-                        <div
-                          key={j}
-                          className={clsx(
-                            'w-1.5 h-1.5 rounded-full',
-                            j < period.assignedCount
-                              ? isComplete ? 'bg-emerald-400' : 'bg-amber-400'
-                              : 'bg-white/10',
-                          )}
-                        />
-                      ))}
-                    </div>
-                  )}
-                  <ChevronRight size={16} className="text-white/20" />
-                </div>
-              </motion.button>
+                {tab}
+                {pending > 0 && (
+                  <span className={clsx(
+                    'absolute -top-1 -right-1 w-4 h-4 rounded-full text-[9px] font-bold flex items-center justify-center',
+                    isActive ? 'bg-red-500 text-white' : 'bg-white/10 text-white/40',
+                  )}>
+                    {pending}
+                  </span>
+                )}
+              </button>
             );
           })}
         </div>
+
+        {/* Period list */}
+        <div className="flex-1 overflow-y-auto overscroll-contain">
+          <div className="px-4 py-4 space-y-2">
+            {currentPeriods.length === 0 && (
+              <div className="text-center py-12 text-white/20">
+                <Award size={32} className="mx-auto mb-3 opacity-30" />
+                <p className="text-sm">No {activeTab}ly periods with games found</p>
+              </div>
+            )}
+
+            {currentPeriods.map((period, i) => {
+              const style = TAB_STYLES[period.periodType];
+              const isComplete = period.assignedCount >= period.totalCategories;
+              const isPending = period.assignedCount === 0;
+
+              return (
+                <motion.button
+                  key={period.key}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.04 }}
+                  onClick={() => handleOpenCeremony(period.key)}
+                  className={clsx(
+                    'w-full flex items-center gap-3 p-3.5 rounded-xl border text-left transition-all active:scale-[0.98]',
+                    isComplete
+                      ? 'bg-white/[0.03] border-white/8 hover:border-white/15'
+                      : clsx(`bg-gradient-to-r ${TAB_STYLES[period.periodType].bg.replace('bg-', 'from-')} to-transparent`, style.border),
+                  )}
+                >
+                  {/* Status indicator */}
+                  <div className={clsx(
+                    'w-10 h-10 rounded-xl flex items-center justify-center shrink-0',
+                    isComplete
+                      ? 'bg-emerald-500/15'
+                      : isPending
+                        ? `${style.bg}`
+                        : 'bg-amber-500/15',
+                  )}>
+                    {isComplete ? (
+                      <Check size={18} className="text-emerald-400" />
+                    ) : (
+                      <Trophy size={18} className={isPending ? style.accent : 'text-amber-400'} />
+                    )}
+                  </div>
+
+                  {/* Period info */}
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-semibold text-white">{period.label}</div>
+                    <div className="text-xs text-white/30 mt-0.5">
+                      {isComplete
+                        ? `All ${period.totalCategories} awards given ✓`
+                        : isPending
+                          ? `${period.totalCategories} categories waiting`
+                          : `${period.assignedCount}/${period.totalCategories} awarded`
+                      }
+                    </div>
+                  </div>
+
+                  {/* Progress + arrow */}
+                  <div className="flex items-center gap-2 shrink-0">
+                    {!isPending && (
+                      <div className="flex gap-0.5">
+                        {Array.from({ length: period.totalCategories }).map((_, j) => (
+                          <div
+                            key={j}
+                            className={clsx(
+                              'w-1.5 h-1.5 rounded-full',
+                              j < period.assignedCount
+                                ? isComplete ? 'bg-emerald-400' : 'bg-amber-400'
+                                : 'bg-white/10',
+                            )}
+                          />
+                        ))}
+                      </div>
+                    )}
+                    <ChevronRight size={16} className="text-white/20" />
+                  </div>
+                </motion.button>
+              );
+            })}
+          </div>
+        </div>
       </div>
-    </motion.div>
+
+      {/* ─── Ceremony drill-down (overlays the list when active) ─── */}
+      {showCeremony && (
+        <div className="flex flex-col h-full">
+          {/* Sticky header */}
+          <div className="flex items-center justify-between px-4 py-3 border-b border-white/5 shrink-0 bg-[#0a0a0f]">
+            <button
+              onClick={handleBackToList}
+              className="flex items-center gap-1.5 text-white/50 hover:text-white/80 transition-colors"
+            >
+              <ChevronLeft size={18} />
+              <span className="text-sm font-medium">Back</span>
+            </button>
+            <div className="flex items-center gap-2">
+              <Trophy size={14} className={ceremonyStyle!.iconColor} />
+              <span className="font-bold text-white text-sm">{activePeriodEntry!.label}</span>
+              <span className={clsx('text-[10px] px-2 py-0.5 rounded-full font-bold', ceremonyStyle!.pill)}>
+                {activePeriodEntry!.periodType.toUpperCase()}
+              </span>
+            </div>
+            <button
+              onClick={onClose}
+              className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-white/40 active:bg-white/10"
+            >
+              <X size={16} />
+            </button>
+          </div>
+
+          {/* Scrollable ceremony content */}
+          <div className="flex-1 overflow-y-auto overscroll-contain py-4">
+            <GamingAwardsScreen
+              periodType={activePeriodEntry!.periodType}
+              periodKey={activePeriodEntry!.key}
+              periodLabel={activePeriodEntry!.label}
+              ceremonyTitle={ceremonyCategories!.ceremonyTitle}
+              categories={ceremonyCategories!.categories}
+              existingPicks={ceremonyPicks}
+              onPick={() => {}}
+              contextBanner={ceremonyCategories!.contextBanner}
+              contextWinners={ceremonyCategories!.contextWinners}
+              allGames={rawGames}
+              updateGame={updateGame}
+            />
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
