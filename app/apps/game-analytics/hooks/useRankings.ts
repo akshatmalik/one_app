@@ -60,17 +60,27 @@ export function getPeriodKey(period: RankingPeriod, date = new Date()): string {
   return 'all';
 }
 
-export function getPeriodLabel(period: RankingPeriod): string {
-  const now = new Date();
-  const key = getPeriodKey(period, now);
+export function getPeriodLabel(period: RankingPeriod, date = new Date()): string {
   if (period === 'all') return 'All Time';
-  if (period === 'year') return String(now.getFullYear());
+  if (period === 'year') return String(date.getFullYear());
   if (period === 'month') {
-    return now.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+    return date.toLocaleString('en-US', { month: 'long', year: 'numeric' });
   }
-  if (period === 'quarter') return key;
-  if (period === 'week') return `Week ${key.split('-W')[1]}`;
-  return key;
+  if (period === 'quarter') {
+    const q = Math.ceil((date.getMonth() + 1) / 3);
+    return `Q${q} ${date.getFullYear()}`;
+  }
+  if (period === 'week') {
+    const d = new Date(date);
+    const day = d.getDay() || 7;
+    d.setDate(d.getDate() - day + 1); // Monday
+    const end = new Date(d);
+    end.setDate(end.getDate() + 6);   // Sunday
+    const fmt = (dt: Date) => dt.toLocaleString('en-US', { month: 'short', day: 'numeric' });
+    const sameMonth = end.getMonth() === d.getMonth();
+    return `${fmt(d)}–${sameMonth ? end.getDate() : fmt(end)}, ${d.getFullYear()}`;
+  }
+  return period;
 }
 
 // ── Hook ─────────────────────────────────────────────────────────────

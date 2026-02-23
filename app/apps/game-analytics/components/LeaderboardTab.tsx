@@ -3,8 +3,8 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import {
   Star, Clock, DollarSign, TrendingUp, Zap, Frown, Trophy, Medal,
-  ChevronDown, ChevronUp, Swords, ListOrdered, RefreshCw, CheckCircle2,
-  Info, LucideProps,
+  ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Swords, ListOrdered,
+  RefreshCw, CheckCircle2, Info, Calendar, LucideProps,
 } from 'lucide-react';
 import { GameWithMetrics } from '../hooks/useAnalytics';
 import { useRankings, getPeriodKey, getPeriodLabel } from '../hooks/useRankings';
@@ -259,7 +259,25 @@ export function LeaderboardTab({ gamesWithMetrics, userId }: LeaderboardTabProps
   // ── View + ELO state ────────────────────────────────────────────
   const [view, setView] = useState<LeaderboardView>('classic');
   const [eloPeriod, setEloPeriod] = useState<RankingPeriod>('all');
-  const periodKey = useMemo(() => getPeriodKey(eloPeriod), [eloPeriod]);
+  const [periodOffset, setPeriodOffset] = useState(0); // 0 = current, 1 = one back, etc.
+
+  // Reset offset when period type changes
+  useEffect(() => { setPeriodOffset(0); }, [eloPeriod]);
+
+  const targetDate = useMemo(() => {
+    const d = new Date();
+    switch (eloPeriod) {
+      case 'week':    d.setDate(d.getDate() - periodOffset * 7); break;
+      case 'month':   d.setMonth(d.getMonth() - periodOffset); break;
+      case 'quarter': d.setMonth(d.getMonth() - periodOffset * 3); break;
+      case 'year':    d.setFullYear(d.getFullYear() - periodOffset); break;
+      default: break;
+    }
+    return d;
+  }, [eloPeriod, periodOffset]);
+
+  const periodKey = useMemo(() => getPeriodKey(eloPeriod, targetDate), [eloPeriod, targetDate]);
+  const currentPeriodLabel = useMemo(() => getPeriodLabel(eloPeriod, targetDate), [eloPeriod, targetDate]);
 
   const { rankings, battles, loading: rankLoading, submitting, recordBattle, getBattleCount, getNextPair } =
     useRankings(userId, eloPeriod, periodKey);
@@ -277,12 +295,13 @@ export function LeaderboardTab({ gamesWithMetrics, userId }: LeaderboardTabProps
   );
   const eligibleIds = useMemo(() => eligibleGames.map(g => g.id), [eligibleGames]);
 
-  // Pick next pair when view = battle or when battles update
+  // Pick next pair; clear while loading so a fresh pair appears after period/offset changes
   useEffect(() => {
     if (view !== 'battle') return;
+    if (rankLoading) { setCurrentPair(null); return; }
     const pair = getNextPair(eligibleIds);
     setCurrentPair(pair);
-  }, [view, battles, eligibleIds, getNextPair]);
+  }, [view, battles, eligibleIds, getNextPair, rankLoading]);
 
   // Classic leaderboard data
   const category = CATEGORIES.find(c => c.id === selectedCategory)!;
@@ -520,7 +539,7 @@ export function LeaderboardTab({ gamesWithMetrics, userId }: LeaderboardTabProps
       {/* ── BATTLE MODE ──────────────────────────────────────────── */}
       {view === 'battle' && (
         <div className="space-y-4">
-          {/* Period selector */}
+          {/* Period type selector */}
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-[11px] text-white/40">Period:</span>
             {ELO_PERIOD_OPTIONS.map(opt => (
@@ -537,12 +556,35 @@ export function LeaderboardTab({ gamesWithMetrics, userId }: LeaderboardTabProps
             ))}
           </div>
 
+          {/* Period key: label + prev/next navigation */}
+          <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-white/3 border border-white/8">
+            <button
+              onClick={() => setPeriodOffset(o => o + 1)}
+              disabled={eloPeriod === 'all'}
+              className="p-1 rounded-lg text-white/30 hover:text-white/60 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+              aria-label="Previous period"
+            ><ChevronLeft size={14} /></button>
+            <div className="flex items-center gap-1.5">
+              <Calendar size={12} className="text-purple-400" />
+              <span className="text-xs font-semibold text-white/80">{currentPeriodLabel}</span>
+              {periodOffset > 0 && (
+                <span className="text-[10px] text-white/30 ml-1">({periodOffset} {eloPeriod}{periodOffset > 1 ? 's' : ''} ago)</span>
+              )}
+            </div>
+            <button
+              onClick={() => setPeriodOffset(o => Math.max(0, o - 1))}
+              disabled={eloPeriod === 'all' || periodOffset === 0}
+              className="p-1 rounded-lg text-white/30 hover:text-white/60 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+              aria-label="Next period"
+            ><ChevronRight size={14} /></button>
+          </div>
+
           {/* Info banner */}
           <div className="flex items-start gap-2 p-3 rounded-lg bg-blue-500/5 border border-blue-400/15">
             <Info size={13} className="text-blue-400 flex-shrink-0 mt-0.5" />
             <p className="text-[11px] text-white/50 leading-relaxed">
               Pick your favourite between two games. Wins and losses update ELO scores. Results are saved locally — sign in to sync across devices.
-              <span className="ml-1 text-white/30">{battles.length} battle{battles.length !== 1 ? 's' : ''} in {getPeriodLabel(eloPeriod)}.</span>
+              <span className="ml-1 text-white/30">{battles.length} battle{battles.length !== 1 ? 's' : ''} in {currentPeriodLabel}.</span>
             </p>
           </div>
 
@@ -640,7 +682,7 @@ export function LeaderboardTab({ gamesWithMetrics, userId }: LeaderboardTabProps
       {/* ── ELO RANKINGS ─────────────────────────────────────────── */}
       {view === 'elo-rankings' && (
         <div className="space-y-4">
-          {/* Period selector */}
+          {/* Period type selector */}
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-[11px] text-white/40">Period:</span>
             {ELO_PERIOD_OPTIONS.map(opt => (
@@ -655,6 +697,29 @@ export function LeaderboardTab({ gamesWithMetrics, userId }: LeaderboardTabProps
                 )}
               >{opt.label}</button>
             ))}
+          </div>
+
+          {/* Period key: label + prev/next navigation */}
+          <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-white/3 border border-white/8">
+            <button
+              onClick={() => setPeriodOffset(o => o + 1)}
+              disabled={eloPeriod === 'all'}
+              className="p-1 rounded-lg text-white/30 hover:text-white/60 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+              aria-label="Previous period"
+            ><ChevronLeft size={14} /></button>
+            <div className="flex items-center gap-1.5">
+              <Calendar size={12} className="text-purple-400" />
+              <span className="text-xs font-semibold text-white/80">{currentPeriodLabel}</span>
+              {periodOffset > 0 && (
+                <span className="text-[10px] text-white/30 ml-1">({periodOffset} {eloPeriod}{periodOffset > 1 ? 's' : ''} ago)</span>
+              )}
+            </div>
+            <button
+              onClick={() => setPeriodOffset(o => Math.max(0, o - 1))}
+              disabled={eloPeriod === 'all' || periodOffset === 0}
+              className="p-1 rounded-lg text-white/30 hover:text-white/60 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+              aria-label="Next period"
+            ><ChevronRight size={14} /></button>
           </div>
 
           {rankLoading ? (
