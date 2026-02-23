@@ -3,11 +3,10 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, ChevronLeft, ChevronRight } from 'lucide-react';
-import { MonthInReviewData, getMonthGrade, getMonthHotTake, getMonthAwards, getMonthMoodArc, getOscarAwards, generateAwardDescriptionTemplate } from '../lib/calculations';
+import { MonthInReviewData, getMonthGrade, getMonthHotTake, getMonthAwards, getMonthMoodArc } from '../lib/calculations';
 import { Game } from '../lib/types';
-import { generateMonthBlurbs, MonthAIBlurbType, AIBlurbResult, generateOscarAwardBlurbs } from '../lib/ai-service';
+import { generateMonthBlurbs, MonthAIBlurbType, AIBlurbResult } from '../lib/ai-service';
 import { useAwards, awardMonthKey, awardMonthLabel } from '../hooks/useAwards';
-import { monthPeriodKey } from '../lib/oscar-storage';
 import { AwardsSummaryCard, AwardPickInfo } from './story-screens/AwardsSummaryCard';
 import { AwardsHub } from './AwardsHub';
 import { GameWithMetrics } from '../hooks/useAnalytics';
@@ -28,9 +27,6 @@ import { MonthMoneyScreen } from './story-screens/MonthMoneyScreen';
 import { MonthCompletionsScreen } from './story-screens/MonthCompletionsScreen';
 import { MonthBestValueScreen } from './story-screens/MonthBestValueScreen';
 import { MonthUnfinishedScreen } from './story-screens/MonthUnfinishedScreen';
-import { AwardIntroScreen } from './story-screens/AwardIntroScreen';
-import { SingleAwardScreen } from './story-screens/SingleAwardScreen';
-import { OscarSummaryScreen } from './story-screens/OscarSummaryScreen';
 import { MonthPersonalityScreen } from './story-screens/MonthPersonalityScreen';
 import { MonthVsLastScreen } from './story-screens/MonthVsLastScreen';
 import { MonthAIBlurbScreen } from './story-screens/MonthAIBlurbScreen';
@@ -50,8 +46,6 @@ export function MonthStoryMode({ data, allGames, onClose, monthTitle, updateGame
   const [aiBlurbs, setAiBlurbs] = useState<Partial<Record<MonthAIBlurbType, AIBlurbResult>>>({});
   const [isLoadingAI, setIsLoadingAI] = useState(true);
   const [showAwardsHub, setShowAwardsHub] = useState(false);
-  const [oscarBlurbs, setOscarBlurbs] = useState<Record<string, string>>({});
-  const [isLoadingOscarBlurbs, setIsLoadingOscarBlurbs] = useState(true);
 
   // Refs for stable navigation callbacks
   const currentScreenRef = useRef(0);
@@ -82,20 +76,7 @@ export function MonthStoryMode({ data, allGames, onClose, monthTitle, updateGame
   const awards = useMemo(() => getMonthAwards(data), [data]);
   const moodArc = useMemo(() => getMonthMoodArc(data), [data]);
 
-  // Oscar awards for this month
-  const oscarData = useMemo(() => {
-    const start = new Date(data.year, data.month - 1, 1);
-    const end = new Date(data.year, data.month, 0); // last day of month
-    return getOscarAwards(allGames, start, end);
-  }, [allGames, data.year, data.month]);
-
-  // Stable period key for Oscar votes
-  const oscarPeriodKey = useMemo(
-    () => monthPeriodKey(data.year, data.month),
-    [data.year, data.month],
-  );
-
-  // Awards summary data — replaces the broken interactive award screens
+  // Awards summary data
   const monthAwardPeriodKey = useMemo(() => awardMonthKey(new Date(data.year, data.month - 1, 1)), [data.year, data.month]);
   const monthAwardPeriodLabel = useMemo(() => awardMonthLabel(data.year, data.month), [data.year, data.month]);
   const { getPicksForPeriod } = useAwards(allGames, updateGame || (async (id: string) => allGames.find(g => g.id === id) as Game));
@@ -150,28 +131,6 @@ export function MonthStoryMode({ data, allGames, onClose, monthTitle, updateGame
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Load Oscar award blurbs
-  useEffect(() => {
-    if (oscarData.awards.length === 0) {
-      setIsLoadingOscarBlurbs(false);
-      return;
-    }
-    let cancelled = false;
-    const load = async () => {
-      try {
-        const blurbs = await generateOscarAwardBlurbs(oscarData.awards, oscarData.periodLabel);
-        if (!cancelled) setOscarBlurbs(blurbs);
-      } catch {
-        // Template descriptions serve as fallback
-      } finally {
-        if (!cancelled) setIsLoadingOscarBlurbs(false);
-      }
-    };
-    load();
-    return () => { cancelled = true; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   // ─── 5-ACT FLOW ────────────────────────────────────────────
   //
   // Act 1: HOOK (3-4 screens)
@@ -223,32 +182,6 @@ export function MonthStoryMode({ data, allGames, onClose, monthTitle, updateGame
     data.unfinishedGames.length > 0 ? <MonthUnfinishedScreen key="unfinished" data={data} /> : null,
 
     // ─── ACT 5: WRAP-UP ───
-    // Oscar ceremony: intro + one screen per award + summary
-    oscarData.awards.length > 0 ? (
-      <AwardIntroScreen key="oscar-intro" data={oscarData} periodType="month" />
-    ) : null,
-    ...oscarData.awards.map((award, i) => (
-      <SingleAwardScreen
-        key={`oscar-${award.category}`}
-        award={award}
-        awardIndex={i}
-        totalAwards={oscarData.awards.length}
-        periodType="month"
-        periodKey={oscarPeriodKey}
-        templateBlurb={generateAwardDescriptionTemplate(award)}
-        aiBlurb={oscarBlurbs[award.category]}
-        isLoadingAiBlurb={isLoadingOscarBlurbs}
-        onAdvance={goToNext}
-      />
-    )),
-    oscarData.awards.length > 1 ? (
-      <OscarSummaryScreen
-        key="oscar-summary"
-        data={oscarData}
-        periodKey={oscarPeriodKey}
-        periodType="month"
-      />
-    ) : null,
     data.gamesPlayed.length > 0 ? (
       <AwardsSummaryCard
         key="awards-summary"
