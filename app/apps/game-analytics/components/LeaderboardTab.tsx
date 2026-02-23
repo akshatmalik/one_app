@@ -541,14 +541,12 @@ export function LeaderboardTab({ gamesWithMetrics, userId }: LeaderboardTabProps
           <div className="flex items-start gap-2 p-3 rounded-lg bg-blue-500/5 border border-blue-400/15">
             <Info size={13} className="text-blue-400 flex-shrink-0 mt-0.5" />
             <p className="text-[11px] text-white/50 leading-relaxed">
-              Pick your favourite between two games. Wins and losses update ELO scores. Battle counts build over time — the system gets smarter as you play more.
-              <span className="ml-1 text-white/30">{battles.length} battles in {getPeriodLabel(eloPeriod)}.</span>
+              Pick your favourite between two games. Wins and losses update ELO scores. Results are saved locally — sign in to sync across devices.
+              <span className="ml-1 text-white/30">{battles.length} battle{battles.length !== 1 ? 's' : ''} in {getPeriodLabel(eloPeriod)}.</span>
             </p>
           </div>
 
-          {!userId ? (
-            <div className="text-center py-10 text-white/30 text-sm">Sign in to save battle results across devices.</div>
-          ) : eligibleGames.length < 2 ? (
+          {eligibleGames.length < 2 ? (
             <div className="text-center py-10 text-white/30 text-sm">Add at least 2 played games to start battling.</div>
           ) : !currentPair ? (
             <div className="text-center py-10 space-y-3">
