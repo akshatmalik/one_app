@@ -83,6 +83,39 @@ export function getPeriodLabel(period: RankingPeriod, date = new Date()): string
   return period;
 }
 
+export function getPeriodRange(period: RankingPeriod, date = new Date()): { start: Date; end: Date } | null {
+  if (period === 'all') return null;
+
+  const y = date.getFullYear();
+  const mo = date.getMonth();
+
+  if (period === 'year') {
+    return { start: new Date(y, 0, 1, 0, 0, 0), end: new Date(y, 11, 31, 23, 59, 59) };
+  }
+
+  if (period === 'month') {
+    return { start: new Date(y, mo, 1, 0, 0, 0), end: new Date(y, mo + 1, 0, 23, 59, 59) };
+  }
+
+  if (period === 'quarter') {
+    const q = Math.floor(mo / 3);
+    return { start: new Date(y, q * 3, 1, 0, 0, 0), end: new Date(y, q * 3 + 3, 0, 23, 59, 59) };
+  }
+
+  if (period === 'week') {
+    const day = date.getDay() || 7;
+    const monday = new Date(date);
+    monday.setDate(date.getDate() - day + 1);
+    monday.setHours(0, 0, 0, 0);
+    const sunday = new Date(monday);
+    sunday.setDate(monday.getDate() + 6);
+    sunday.setHours(23, 59, 59, 999);
+    return { start: monday, end: sunday };
+  }
+
+  return null;
+}
+
 // ── Hook ─────────────────────────────────────────────────────────────
 
 export interface UseRankingsReturn {

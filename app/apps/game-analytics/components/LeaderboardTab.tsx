@@ -7,7 +7,7 @@ import {
   RefreshCw, CheckCircle2, Info, Calendar, LucideProps,
 } from 'lucide-react';
 import { GameWithMetrics } from '../hooks/useAnalytics';
-import { useRankings, getPeriodKey, getPeriodLabel } from '../hooks/useRankings';
+import { useRankings, getPeriodKey, getPeriodLabel, getPeriodRange } from '../hooks/useRankings';
 import { RankingPeriod, GameRanking } from '../lib/types';
 import { logError } from '../lib/error-log';
 import { ForwardRefExoticComponent, RefAttributes } from 'react';
@@ -288,11 +288,20 @@ export function LeaderboardTab({ gamesWithMetrics, userId }: LeaderboardTabProps
   const [showResult, setShowResult] = useState(false);
   const resultTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Eligible game IDs for battles (owned, rated or played)
-  const eligibleGames = useMemo(() =>
-    gamesWithMetrics.filter(g => g.status !== 'Wishlist' && (g.rating > 0 || g.totalHours > 0)),
-    [gamesWithMetrics]
-  );
+  // Eligible games for battles: for 'all', any owned game with rating/hours;
+  // for specific periods, only games with play logs in that period window.
+  const eligibleGames = useMemo(() => {
+    const owned = gamesWithMetrics.filter(g => g.status !== 'Wishlist' && (g.rating > 0 || g.totalHours > 0));
+    const range = getPeriodRange(eloPeriod, targetDate);
+    if (!range) return owned; // 'all' — no period filter
+    const { start, end } = range;
+    return owned.filter(g =>
+      g.playLogs?.some(log => {
+        const d = new Date(log.date);
+        return d >= start && d <= end;
+      })
+    );
+  }, [gamesWithMetrics, eloPeriod, targetDate]);
   const eligibleIds = useMemo(() => eligibleGames.map(g => g.id), [eligibleGames]);
 
   // Pick next pair; clear while loading so a fresh pair appears after period/offset changes
@@ -589,7 +598,11 @@ export function LeaderboardTab({ gamesWithMetrics, userId }: LeaderboardTabProps
           </div>
 
           {eligibleGames.length < 2 ? (
-            <div className="text-center py-10 text-white/30 text-sm">Add at least 2 played games to start battling.</div>
+            <div className="text-center py-10 text-white/30 text-sm">
+              {eloPeriod === 'all'
+                ? 'Add at least 2 played games to start battling.'
+                : `No games played in ${currentPeriodLabel}. Log play sessions or try a different period.`}
+            </div>
           ) : !currentPair ? (
             <div className="text-center py-10 space-y-3">
               <CheckCircle2 size={32} className="mx-auto text-emerald-400" />
