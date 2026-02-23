@@ -203,6 +203,63 @@ export interface RecommendationRepository {
   delete(id: string): Promise<void>;
 }
 
+// ── Game Rating Comparisons (ELO Battle System) ────────────────────
+
+export type RankingPeriod = 'week' | 'month' | 'quarter' | 'year' | 'all';
+
+export interface GameRanking {
+  id: string;
+  userId: string;
+  gameId: string;
+  period: RankingPeriod;
+  periodKey: string; // e.g. '2026-02', '2026-W08', '2026-Q1', '2026', 'all'
+  eloScore: number;  // default 1000
+  wins: number;
+  losses: number;
+  battlesCount: number;
+  lastBattleAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RatingBattle {
+  id: string;
+  userId: string;
+  period: RankingPeriod;
+  periodKey: string;
+  winnerId: string;
+  loserId: string;
+  winnerEloChange: number;
+  loserEloChange: number;
+  battleDate: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RankingRepository {
+  setUserId(userId: string): void;
+  getForPeriod(period: RankingPeriod, periodKey: string): Promise<GameRanking[]>;
+  upsert(data: Omit<GameRanking, 'id' | 'userId' | 'createdAt' | 'updatedAt'>): Promise<GameRanking>;
+  deleteForGame(gameId: string): Promise<void>;
+}
+
+export interface BattleRepository {
+  setUserId(userId: string): void;
+  getForPeriod(period: RankingPeriod, periodKey: string): Promise<RatingBattle[]>;
+  getPairHistory(gameId1: string, gameId2: string): Promise<RatingBattle[]>;
+  create(data: Omit<RatingBattle, 'id' | 'userId' | 'createdAt' | 'updatedAt'>): Promise<RatingBattle>;
+}
+
+// ── Error Log ────────────────────────────────────────────────────────
+
+export interface ErrorLogEntry {
+  id: string;
+  timestamp: string;
+  message: string;
+  context?: string; // e.g. 'saveRanking', 'loadBattles'
+  stack?: string;
+}
+
 export interface TasteProfile {
   topGenres: string[];          // Ranked by hours × rating
   avoidGenres: string[];        // Low ratings or high abandonment

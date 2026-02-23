@@ -35,6 +35,7 @@ import { ExportPanel } from './components/ExportPanel';
 import { YearlyWrapped } from './components/YearlyWrapped';
 import { FortuneCookie } from './components/FortuneCookie';
 import { AwardsHub } from './components/AwardsHub';
+import { ErrorLogPanel, ErrorLogButton } from './components/ErrorLogPanel';
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist';
@@ -99,6 +100,7 @@ export default function GameAnalyticsPage() {
     return localStorage.getItem('ga-recap-collapsed') === 'true';
   });
   const [showCommandPalette, setShowCommandPalette] = useState(false);
+  const [showErrorLog, setShowErrorLog] = useState(false);
 
   // Week recap data for header strip
   const weekRecap = useMemo(() => {
@@ -411,6 +413,7 @@ export default function GameAnalyticsPage() {
                   </>
                 )}
               </div>
+              <ErrorLogButton onClick={() => setShowErrorLog(true)} />
               <button
                 onClick={() => setIsFormOpen(true)}
                 className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-500 transition-all text-sm font-medium"
@@ -1032,7 +1035,7 @@ export default function GameAnalyticsPage() {
           )}
 
           {tabMode === 'leaderboard' && (
-            <LeaderboardTab gamesWithMetrics={gamesWithMetrics} />
+            <LeaderboardTab gamesWithMetrics={gamesWithMetrics} userId={user?.uid ?? null} />
           )}
         </div>
       </div>
@@ -1062,6 +1065,11 @@ export default function GameAnalyticsPage() {
           games={games}
           onClose={() => setShowRandomPicker(false)}
         />
+      )}
+
+      {/* Error Log Panel */}
+      {showErrorLog && (
+        <ErrorLogPanel onClose={() => setShowErrorLog(false)} />
       )}
 
       {/* Export Panel */}
