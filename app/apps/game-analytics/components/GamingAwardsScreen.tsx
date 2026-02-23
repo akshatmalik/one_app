@@ -131,9 +131,6 @@ function NomineeCard({ nominee, isPicked, isAIPick, phase, glow, style, onClick,
           </div>
         )}
 
-        {isPicked && phase === 'reveal' && (
-          <p className="text-[9px] font-bold mt-1" style={{ color: glow.ring }}>✓ You chose this</p>
-        )}
         {isPicked && phase === 'pick' && (
           <p className="text-[9px] font-bold mt-1" style={{ color: glow.ring }}>✓ Selected</p>
         )}
@@ -328,12 +325,25 @@ export function GamingAwardsScreen({
 
   const handleNomineeTap = (categoryDef: AwardCategoryDef, nominee: AwardNominee) => {
     if (getPhase(categoryDef.id) !== 'pick') return;
-    persistPick(categoryDef, nominee);
-    setCatPhases(prev => ({ ...prev, [categoryDef.id]: 'reveal' }));
+    // Toggle: clicking the already-selected nominee deselects it; clicking another switches
+    setPicks(prev => {
+      if (prev[categoryDef.id] === nominee.game.id) {
+        const next = { ...prev };
+        delete next[categoryDef.id];
+        return next;
+      }
+      return { ...prev, [categoryDef.id]: nominee.game.id };
+    });
   };
 
-  const handleOpenEnvelope = (catId: string) => {
-    setCatPhases(prev => ({ ...prev, [catId]: 'done' }));
+  const handleOpenEnvelope = (categoryDef: AwardCategoryDef) => {
+    // Persist whichever pick is selected (if any), then reveal AI pick
+    const pickedNomineeId = picks[categoryDef.id];
+    if (pickedNomineeId) {
+      const nominee = categoryDef.nominees.find(n => n.game.id === pickedNomineeId);
+      if (nominee) persistPick(categoryDef, nominee);
+    }
+    setCatPhases(prev => ({ ...prev, [categoryDef.id]: 'done' }));
   };
 
   const advanceToNext = () => {
@@ -401,7 +411,7 @@ export function GamingAwardsScreen({
 
       <AnimatePresence mode="wait">
         <motion.div
-          key={`${cat.id}-${phase}`}
+          key={cat.id}
           initial={{ opacity: 0, x: 16 }}
           animate={{ opacity: 1, x: 0 }}
           exit={{ opacity: 0, x: -16 }}
@@ -479,29 +489,30 @@ export function GamingAwardsScreen({
 
           {/* CTAs based on phase */}
           {phase === 'pick' && (
-            <button
-              onClick={() => handleSkip(cat.id)}
-              className="w-full text-[11px] text-white/20 hover:text-white/35 transition-colors py-2 text-center"
-            >
-              Skip this award
-            </button>
-          )}
-
-          {phase === 'reveal' && (
-            <motion.button
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              onClick={() => handleOpenEnvelope(cat.id)}
-              className={clsx(
-                'w-full flex items-center justify-center gap-2 py-3.5 rounded-xl border font-bold text-sm',
-                `bg-gradient-to-r ${style.bg}`,
-                style.border,
-                style.accent,
+            <div className="flex flex-col gap-2">
+              {pickedId && (
+                <motion.button
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  onClick={() => handleOpenEnvelope(cat)}
+                  className={clsx(
+                    'w-full flex items-center justify-center gap-2 py-3.5 rounded-xl border font-bold text-sm',
+                    `bg-gradient-to-r ${style.bg}`,
+                    style.border,
+                    style.accent,
+                  )}
+                >
+                  <Gift size={16} />
+                  Open Envelope — See AI&apos;s Pick
+                </motion.button>
               )}
-            >
-              <Gift size={16} />
-              Open Envelope — See AI&apos;s Pick
-            </motion.button>
+              <button
+                onClick={() => handleSkip(cat.id)}
+                className="w-full text-[11px] text-white/20 hover:text-white/35 transition-colors py-2 text-center"
+              >
+                Skip this award
+              </button>
+            </div>
           )}
 
           {phase === 'done' && (
