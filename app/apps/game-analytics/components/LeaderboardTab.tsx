@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect, useRef } from 'react';
 import {
   Star, Clock, DollarSign, TrendingUp, Zap, Frown, Trophy, Medal,
   ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Swords, ListOrdered,
-  RefreshCw, CheckCircle2, Info, Calendar, LucideProps,
+  RefreshCw, CheckCircle2, Info, Calendar, ExternalLink, LucideProps,
 } from 'lucide-react';
 import { GameWithMetrics } from '../hooks/useAnalytics';
 import { useRankings, getPeriodKey, getPeriodLabel, getPeriodRange } from '../hooks/useRankings';
@@ -279,7 +279,7 @@ export function LeaderboardTab({ gamesWithMetrics, userId }: LeaderboardTabProps
   const periodKey = useMemo(() => getPeriodKey(eloPeriod, targetDate), [eloPeriod, targetDate]);
   const currentPeriodLabel = useMemo(() => getPeriodLabel(eloPeriod, targetDate), [eloPeriod, targetDate]);
 
-  const { rankings, battles, loading: rankLoading, submitting, recordBattle, getBattleCount, getNextPair } =
+  const { rankings, battles, loading: rankLoading, submitting, indexError, recordBattle, getBattleCount, getNextPair } =
     useRankings(userId, eloPeriod, periodKey);
 
   // ── Battle state ────────────────────────────────────────────────
@@ -543,6 +543,28 @@ export function LeaderboardTab({ gamesWithMetrics, userId }: LeaderboardTabProps
             </>
           )}
         </>
+      )}
+
+      {/* ── FIREBASE INDEX ERROR BANNER ─────────────────────────── */}
+      {indexError && (view === 'battle' || view === 'elo-rankings') && (
+        <div className="flex items-start gap-3 p-3 rounded-xl bg-amber-500/10 border border-amber-400/30">
+          <Info size={14} className="text-amber-400 flex-shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0 space-y-2">
+            <p className="text-xs font-semibold text-amber-300">Firestore index required</p>
+            <p className="text-[11px] text-white/50 leading-relaxed">
+              This query needs a composite index that hasn&apos;t been created yet. Click the link below to open Firebase Console and create it — takes about 2 minutes to build.
+            </p>
+            <a
+              href={indexError}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/20 border border-amber-400/30 text-amber-300 text-[11px] font-medium hover:bg-amber-500/30 transition-colors"
+            >
+              <ExternalLink size={11} /> Create index in Firebase Console →
+            </a>
+            <p className="text-[10px] text-white/25 break-all">{indexError}</p>
+          </div>
+        </div>
       )}
 
       {/* ── BATTLE MODE ──────────────────────────────────────────── */}
