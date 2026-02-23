@@ -452,7 +452,7 @@ export function GamingAwardsScreen({
           {/* Pick hint */}
           {phase === 'pick' && cat.nominees.length > 0 && (
             <p className="text-[10px] text-white/25 text-center mb-3">
-              Pick your winner — AI's pick hidden until reveal
+              Pick your winner — AI&apos;s pick hidden until reveal
             </p>
           )}
 
@@ -500,7 +500,7 @@ export function GamingAwardsScreen({
               )}
             >
               <Gift size={16} />
-              Open Envelope — See AI's Pick
+              Open Envelope — See AI&apos;s Pick
             </motion.button>
           )}
 
