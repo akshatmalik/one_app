@@ -404,7 +404,7 @@ export function LeaderboardTab({ gamesWithMetrics, userId }: LeaderboardTabProps
         });
         setShowResult(true);
         if (resultTimerRef.current) clearTimeout(resultTimerRef.current);
-        resultTimerRef.current = setTimeout(() => setShowResult(false), 2500);
+        resultTimerRef.current = setTimeout(() => setShowResult(false), 600);
       }
 
       // Next pair is set via the useEffect watching battles
