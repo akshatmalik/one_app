@@ -103,7 +103,6 @@ export function useRankings(
   }, [userId]);
 
   const refresh = useCallback(async () => {
-    if (!userId) return;
     setLoading(true);
     try {
       const [r, b] = await Promise.all([
@@ -117,7 +116,7 @@ export function useRankings(
     } finally {
       setLoading(false);
     }
-  }, [userId, period, periodKey]);
+  }, [period, periodKey]);
 
   useEffect(() => { refresh(); }, [refresh]);
 
@@ -172,7 +171,6 @@ export function useRankings(
   }, [battles, rankings]);
 
   const recordBattle = useCallback(async (winnerId: string, loserId: string) => {
-    if (!userId) return;
     setSubmitting(true);
     try {
       // Get or create rankings for both games
