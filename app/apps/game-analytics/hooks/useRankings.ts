@@ -116,6 +116,16 @@ export function getPeriodRange(period: RankingPeriod, date = new Date()): { star
   return null;
 }
 
+// ── Firebase index error helper ──────────────────────────────────────
+
+/** Extract the "create index" URL that Firebase embeds in index-missing errors. */
+function extractIndexUrl(err: unknown): string | null {
+  const msg = err instanceof Error ? err.message : String(err);
+  // Firebase format: "...You can create it here: https://console.firebase.google.com/..."
+  const match = msg.match(/https:\/\/console\.firebase\.google\.com\/[^\s"]+/);
+  return match ? match[0] : null;
+}
+
 // ── Hook ─────────────────────────────────────────────────────────────
 
 export interface UseRankingsReturn {
@@ -123,6 +133,8 @@ export interface UseRankingsReturn {
   battles: RatingBattle[];
   loading: boolean;
   submitting: boolean;
+  /** Non-null when a Firestore query fails due to a missing index. Contains the Firebase Console URL to create it. */
+  indexError: string | null;
   recordBattle: (winnerId: string, loserId: string) => Promise<void>;
   refresh: () => Promise<void>;
   getBattleCount: (gameId1: string, gameId2: string) => number;
@@ -138,6 +150,7 @@ export function useRankings(
   const [battles, setBattles] = useState<RatingBattle[]>([]);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [indexError, setIndexError] = useState<string | null>(null);
 
   // Propagate userId to repos
   useEffect(() => {
@@ -154,7 +167,10 @@ export function useRankings(
       ]);
       setRankings(r);
       setBattles(b);
+      setIndexError(null);
     } catch (err) {
+      const url = extractIndexUrl(err);
+      if (url) setIndexError(url);
       logError('Failed to load rankings/battles', 'useRankings.refresh', err);
     } finally {
       setLoading(false);
@@ -272,6 +288,8 @@ export function useRankings(
 
       await refresh();
     } catch (err) {
+      const url = extractIndexUrl(err);
+      if (url) setIndexError(url);
       logError('Failed to record battle', 'useRankings.recordBattle', err);
       throw err;
     } finally {
@@ -279,5 +297,5 @@ export function useRankings(
     }
   }, [userId, rankings, period, periodKey, refresh]);
 
-  return { rankings, battles, loading, submitting, recordBattle, refresh, getBattleCount, getNextPair };
+  return { rankings, battles, loading, submitting, indexError, recordBattle, refresh, getBattleCount, getNextPair };
 }
