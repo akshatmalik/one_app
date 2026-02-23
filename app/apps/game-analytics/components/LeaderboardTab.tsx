@@ -1,14 +1,19 @@
 'use client';
 
-import { useState, useMemo } from 'react';
-import { Star, Clock, DollarSign, TrendingUp, Zap, Frown, Trophy, Medal, ChevronDown, ChevronUp, LucideProps } from 'lucide-react';
+import { useState, useMemo, useEffect, useRef } from 'react';
+import {
+  Star, Clock, DollarSign, TrendingUp, Zap, Frown, Trophy, Medal,
+  ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Swords, ListOrdered,
+  RefreshCw, CheckCircle2, Info, Calendar, LucideProps,
+} from 'lucide-react';
 import { GameWithMetrics } from '../hooks/useAnalytics';
+import { useRankings, getPeriodKey, getPeriodLabel, getPeriodRange } from '../hooks/useRankings';
+import { RankingPeriod, GameRanking } from '../lib/types';
+import { logError } from '../lib/error-log';
 import { ForwardRefExoticComponent, RefAttributes } from 'react';
 import clsx from 'clsx';
 
-interface LeaderboardTabProps {
-  gamesWithMetrics: GameWithMetrics[];
-}
+// ── Classic leaderboard categories ──────────────────────────────────
 
 type CategoryId = 'rating' | 'value' | 'hours' | 'roi' | 'speed' | 'regret';
 type LucideIcon = ForwardRefExoticComponent<Omit<LucideProps, 'ref'> & RefAttributes<SVGSVGElement>>;
@@ -82,7 +87,6 @@ const CATEGORIES: Category[] = [
     desc: 'Expensive and barely played',
     getValue: g => {
       if (g.price <= 0 || g.rating <= 0) return null;
-      // Regret score: high price, low hours, low rating
       return (g.price * (10 - g.rating)) / Math.max(g.totalHours, 0.5);
     },
     formatValue: v => v.toFixed(1),
@@ -121,19 +125,15 @@ const TIER_COLORS = {
 function PodiumCard({ game, rank, category }: { game: GameWithMetrics; rank: 1 | 2 | 3; category: Category }) {
   const tier = TIER_COLORS[rank];
   const value = category.getValue(game);
-
   return (
     <div className={clsx(
       'relative flex flex-col items-center rounded-xl border p-3 transition-all',
       tier.border, tier.bg,
       rank === 1 ? 'scale-105' : 'opacity-90',
     )}>
-      {/* Rank badge */}
       <div className={clsx('absolute -top-2.5 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded-full text-[10px] font-bold', tier.badge)}>
         {rank === 1 ? '🥇' : rank === 2 ? '🥈' : '🥉'} {tier.label}
       </div>
-
-      {/* Thumbnail */}
       <div className="mt-2 mb-2 w-14 h-14 rounded-lg overflow-hidden bg-white/5 flex-shrink-0">
         {game.thumbnail ? (
           <img src={game.thumbnail} alt={game.name} className="w-full h-full object-cover" />
@@ -141,37 +141,180 @@ function PodiumCard({ game, rank, category }: { game: GameWithMetrics; rank: 1 |
           <div className="w-full h-full flex items-center justify-center text-2xl">🎮</div>
         )}
       </div>
-
-      {/* Name */}
-      <p className="text-[11px] font-semibold text-white/90 text-center leading-tight line-clamp-2 mb-1">
-        {game.name}
-      </p>
-
-      {/* Value */}
-      {value != null && (
-        <span className={clsx('text-sm font-bold', tier.text)}>
-          {category.formatValue(value)}
-        </span>
-      )}
-
-      {/* Genre */}
-      {game.genre && (
-        <span className="mt-1 text-[9px] text-white/30 truncate max-w-full">{game.genre}</span>
-      )}
+      <p className="text-[11px] font-semibold text-white/90 text-center leading-tight line-clamp-2 mb-1">{game.name}</p>
+      {value != null && <span className={clsx('text-sm font-bold', tier.text)}>{category.formatValue(value)}</span>}
+      {game.genre && <span className="mt-1 text-[9px] text-white/30 truncate max-w-full">{game.genre}</span>}
     </div>
   );
 }
 
-export function LeaderboardTab({ gamesWithMetrics }: LeaderboardTabProps) {
+// ── ELO Battle components ────────────────────────────────────────────
+
+const ELO_PERIOD_OPTIONS: { value: RankingPeriod; label: string }[] = [
+  { value: 'all', label: 'All Time' },
+  { value: 'year', label: 'This Year' },
+  { value: 'month', label: 'This Month' },
+  { value: 'quarter', label: 'This Quarter' },
+  { value: 'week', label: 'This Week' },
+];
+
+function EloTierBadge({ elo }: { elo: number }) {
+  let label: string;
+  let cls: string;
+  if (elo >= 1300) { label = '🏆 Legend'; cls = 'text-yellow-300 bg-yellow-400/10 border-yellow-400/30'; }
+  else if (elo >= 1200) { label = '💎 Elite'; cls = 'text-blue-300 bg-blue-400/10 border-blue-400/30'; }
+  else if (elo >= 1100) { label = '⭐ Pro'; cls = 'text-purple-300 bg-purple-400/10 border-purple-400/30'; }
+  else if (elo >= 1000) { label = '🎮 Ranked'; cls = 'text-white/60 bg-white/5 border-white/10'; }
+  else { label = '📉 Low'; cls = 'text-white/30 bg-white/[0.02] border-white/5'; }
+  return (
+    <span className={clsx('text-[9px] font-semibold px-1.5 py-0.5 rounded border', cls)}>{label}</span>
+  );
+}
+
+interface BattleCardProps {
+  game: GameWithMetrics;
+  ranking?: GameRanking;
+  onPick: () => void;
+  disabled: boolean;
+}
+
+function BattleCard({ game, ranking, onPick, disabled }: BattleCardProps) {
+  return (
+    <button
+      onClick={onPick}
+      disabled={disabled}
+      className={clsx(
+        'relative flex flex-col items-center gap-3 p-4 rounded-2xl border w-full transition-all duration-200',
+        'bg-white/[0.02] border-white/10',
+        !disabled && 'hover:bg-white/[0.06] hover:border-purple-400/40 hover:scale-[1.02] active:scale-[0.98]',
+        disabled && 'opacity-50 cursor-not-allowed',
+      )}
+    >
+      {/* Thumbnail */}
+      <div className="w-20 h-20 rounded-xl overflow-hidden bg-white/5 flex-shrink-0">
+        {game.thumbnail ? (
+          <img src={game.thumbnail} alt={game.name} className="w-full h-full object-cover" />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center text-4xl">🎮</div>
+        )}
+      </div>
+
+      {/* Name */}
+      <p className="text-sm font-semibold text-white/90 text-center leading-snug line-clamp-2">
+        {game.name}
+      </p>
+
+      {/* ELO + battles */}
+      <div className="flex flex-col items-center gap-1">
+        {ranking ? (
+          <>
+            <span className="text-xl font-bold text-white/80">{ranking.eloScore}</span>
+            <EloTierBadge elo={ranking.eloScore} />
+            <span className="text-[10px] text-white/30 mt-0.5">
+              {ranking.wins}W · {ranking.losses}L · {ranking.battlesCount} battles
+            </span>
+          </>
+        ) : (
+          <>
+            <span className="text-xl font-bold text-white/40">1000</span>
+            <span className="text-[10px] text-white/30">Unranked</span>
+          </>
+        )}
+      </div>
+
+      {/* Genre/platform */}
+      {(game.genre || game.platform) && (
+        <span className="text-[10px] text-white/30 text-center truncate w-full">
+          {[game.genre, game.platform].filter(Boolean).join(' · ')}
+        </span>
+      )}
+
+      {/* Pick label */}
+      {!disabled && (
+        <div className="absolute bottom-3 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100">
+          <span className="text-[10px] text-purple-400 font-semibold">TAP TO PICK</span>
+        </div>
+      )}
+    </button>
+  );
+}
+
+// ── Main component ───────────────────────────────────────────────────
+
+type LeaderboardView = 'classic' | 'battle' | 'elo-rankings';
+
+interface LeaderboardTabProps {
+  gamesWithMetrics: GameWithMetrics[];
+  userId: string | null;
+}
+
+export function LeaderboardTab({ gamesWithMetrics, userId }: LeaderboardTabProps) {
+  // ── Classic mode state ─────────────────────────────────────────
   const [selectedCategory, setSelectedCategory] = useState<CategoryId>('rating');
   const [yearFilter, setYearFilter] = useState<string>('all');
   const [genreFilter, setGenreFilter] = useState<string>('all');
   const [platformFilter, setPlatformFilter] = useState<string>('all');
   const [showAll, setShowAll] = useState(false);
 
+  // ── View + ELO state ────────────────────────────────────────────
+  const [view, setView] = useState<LeaderboardView>('classic');
+  const [eloPeriod, setEloPeriod] = useState<RankingPeriod>('all');
+  const [periodOffset, setPeriodOffset] = useState(0); // 0 = current, 1 = one back, etc.
+
+  // Reset offset when period type changes
+  useEffect(() => { setPeriodOffset(0); }, [eloPeriod]);
+
+  const targetDate = useMemo(() => {
+    const d = new Date();
+    switch (eloPeriod) {
+      case 'week':    d.setDate(d.getDate() - periodOffset * 7); break;
+      case 'month':   d.setMonth(d.getMonth() - periodOffset); break;
+      case 'quarter': d.setMonth(d.getMonth() - periodOffset * 3); break;
+      case 'year':    d.setFullYear(d.getFullYear() - periodOffset); break;
+      default: break;
+    }
+    return d;
+  }, [eloPeriod, periodOffset]);
+
+  const periodKey = useMemo(() => getPeriodKey(eloPeriod, targetDate), [eloPeriod, targetDate]);
+  const currentPeriodLabel = useMemo(() => getPeriodLabel(eloPeriod, targetDate), [eloPeriod, targetDate]);
+
+  const { rankings, battles, loading: rankLoading, submitting, recordBattle, getBattleCount, getNextPair } =
+    useRankings(userId, eloPeriod, periodKey);
+
+  // ── Battle state ────────────────────────────────────────────────
+  const [currentPair, setCurrentPair] = useState<[string, string] | null>(null);
+  const [lastResult, setLastResult] = useState<{ winner: string; loser: string; winnerChange: number; loserChange: number } | null>(null);
+  const [showResult, setShowResult] = useState(false);
+  const resultTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Eligible games for battles: for 'all', any owned game with rating/hours;
+  // for specific periods, only games with play logs in that period window.
+  const eligibleGames = useMemo(() => {
+    const owned = gamesWithMetrics.filter(g => g.status !== 'Wishlist' && (g.rating > 0 || g.totalHours > 0));
+    const range = getPeriodRange(eloPeriod, targetDate);
+    if (!range) return owned; // 'all' — no period filter
+    const { start, end } = range;
+    return owned.filter(g =>
+      g.playLogs?.some(log => {
+        const d = new Date(log.date);
+        return d >= start && d <= end;
+      })
+    );
+  }, [gamesWithMetrics, eloPeriod, targetDate]);
+  const eligibleIds = useMemo(() => eligibleGames.map(g => g.id), [eligibleGames]);
+
+  // Pick next pair; clear while loading so a fresh pair appears after period/offset changes
+  useEffect(() => {
+    if (view !== 'battle') return;
+    if (rankLoading) { setCurrentPair(null); return; }
+    const pair = getNextPair(eligibleIds);
+    setCurrentPair(pair);
+  }, [view, battles, eligibleIds, getNextPair, rankLoading]);
+
+  // Classic leaderboard data
   const category = CATEGORIES.find(c => c.id === selectedCategory)!;
 
-  // Available filter options
   const years = useMemo(() => {
     const ys = new Set<string>();
     gamesWithMetrics.forEach(g => {
@@ -193,11 +336,8 @@ export function LeaderboardTab({ gamesWithMetrics }: LeaderboardTabProps) {
     return ['all', ...Array.from(ps).sort()];
   }, [gamesWithMetrics]);
 
-  // Filtered + sorted games for the selected category
   const ranked = useMemo(() => {
     let filtered = gamesWithMetrics.filter(category.filter);
-
-    // Apply filters
     if (yearFilter !== 'all') {
       filtered = filtered.filter(g => {
         const d = g.datePurchased || g.createdAt;
@@ -206,16 +346,10 @@ export function LeaderboardTab({ gamesWithMetrics }: LeaderboardTabProps) {
     }
     if (genreFilter !== 'all') filtered = filtered.filter(g => g.genre === genreFilter);
     if (platformFilter !== 'all') filtered = filtered.filter(g => g.platform === platformFilter);
-
-    // Sort
     const withValues = filtered
       .map(g => ({ game: g, value: category.getValue(g) }))
       .filter(x => x.value != null) as { game: GameWithMetrics; value: number }[];
-
-    withValues.sort((a, b) =>
-      category.higherIsBetter ? b.value - a.value : a.value - b.value
-    );
-
+    withValues.sort((a, b) => category.higherIsBetter ? b.value - a.value : a.value - b.value);
     return withValues;
   }, [gamesWithMetrics, category, yearFilter, genreFilter, platformFilter]);
 
@@ -223,11 +357,64 @@ export function LeaderboardTab({ gamesWithMetrics }: LeaderboardTabProps) {
   const rest = ranked.slice(3);
   const visibleRest = showAll ? rest : rest.slice(0, 7);
 
+  // ELO rankings view — sorted by ELO, merged with game data
+  const eloRanked = useMemo(() => {
+    return rankings
+      .map(r => ({ ranking: r, game: gamesWithMetrics.find(g => g.id === r.gameId) }))
+      .filter(x => x.game)
+      .sort((a, b) => b.ranking.eloScore - a.ranking.eloScore) as { ranking: GameRanking; game: GameWithMetrics }[];
+  }, [rankings, gamesWithMetrics]);
+
+  // Also add unranked eligible games to ELO view
+  const eloRankedWithUnranked = useMemo(() => {
+    const rankedIds = new Set(eloRanked.map(x => x.game.id));
+    const unranked = eligibleGames
+      .filter(g => !rankedIds.has(g.id))
+      .map(g => ({ ranking: null as GameRanking | null, game: g }));
+    return [...eloRanked, ...unranked];
+  }, [eloRanked, eligibleGames]);
+
+  // Handle battle pick
+  async function handlePick(winnerId: string, loserId: string) {
+    if (!currentPair || submitting) return;
+
+    try {
+      // Snapshot current ELOs for the result display
+      const winnerR = rankings.find(r => r.gameId === winnerId);
+      const loserR = rankings.find(r => r.gameId === loserId);
+
+      await recordBattle(winnerId, loserId);
+
+      // Show result flash
+      const winnerGame = gamesWithMetrics.find(g => g.id === winnerId);
+      const loserGame = gamesWithMetrics.find(g => g.id === loserId);
+      if (winnerGame && loserGame) {
+        const wElo = winnerR?.eloScore ?? 1000;
+        const lElo = loserR?.eloScore ?? 1000;
+        // Rough ELO change estimate for display
+        const expectedWin = 1 / (1 + Math.pow(10, (lElo - wElo) / 400));
+        const k = 32;
+        const wChange = Math.round(k * (1 - expectedWin));
+        const lChange = Math.round(k * (0 - (1 - expectedWin)));
+        setLastResult({
+          winner: winnerGame.name,
+          loser: loserGame.name,
+          winnerChange: wChange,
+          loserChange: lChange,
+        });
+        setShowResult(true);
+        if (resultTimerRef.current) clearTimeout(resultTimerRef.current);
+        resultTimerRef.current = setTimeout(() => setShowResult(false), 2500);
+      }
+
+      // Next pair is set via the useEffect watching battles
+    } catch (err) {
+      logError('Battle pick failed', 'handlePick', err);
+    }
+  }
+
   const SelectFilter = ({ value, onChange, options, label }: {
-    value: string;
-    onChange: (v: string) => void;
-    options: string[];
-    label: string;
+    value: string; onChange: (v: string) => void; options: string[]; label: string;
   }) => (
     <select
       value={value}
@@ -235,142 +422,436 @@ export function LeaderboardTab({ gamesWithMetrics }: LeaderboardTabProps) {
       className="bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white/70 focus:outline-none focus:border-white/20"
     >
       <option value="all">{label}</option>
-      {options.filter(o => o !== 'all').map(o => (
-        <option key={o} value={o}>{o}</option>
-      ))}
+      {options.filter(o => o !== 'all').map(o => <option key={o} value={o}>{o}</option>)}
     </select>
   );
 
   return (
     <div className="space-y-4">
-      {/* Category selector */}
-      <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
-        {CATEGORIES.map(cat => {
-          const Icon = cat.icon;
-          const isSelected = selectedCategory === cat.id;
-          return (
-            <button
-              key={cat.id}
-              onClick={() => { setSelectedCategory(cat.id); setShowAll(false); }}
-              className={clsx(
-                'flex flex-col items-center gap-1 p-2.5 rounded-xl border text-center transition-all',
-                isSelected
-                  ? 'bg-purple-500/20 border-purple-400/40 text-purple-300'
-                  : 'bg-white/[0.02] border-white/5 text-white/40 hover:text-white/60 hover:border-white/10'
-              )}
-            >
-              <Icon size={16} className={isSelected ? 'text-purple-400' : ''} />
-              <span className="text-[10px] font-medium leading-tight">{cat.label}</span>
-            </button>
-          );
-        })}
-      </div>
 
-      {/* Filters */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <SelectFilter value={yearFilter} onChange={setYearFilter} options={years} label="All Years" />
-        <SelectFilter value={genreFilter} onChange={setGenreFilter} options={genres} label="All Genres" />
-        <SelectFilter value={platformFilter} onChange={setPlatformFilter} options={platforms} label="All Platforms" />
-        {(yearFilter !== 'all' || genreFilter !== 'all' || platformFilter !== 'all') && (
+      {/* View toggle */}
+      <div className="grid grid-cols-3 gap-1 p-1 bg-white/[0.03] border border-white/5 rounded-xl">
+        {([
+          { id: 'classic' as LeaderboardView, label: 'Leaderboard', icon: Trophy },
+          { id: 'battle' as LeaderboardView, label: 'Battle Mode', icon: Swords },
+          { id: 'elo-rankings' as LeaderboardView, label: 'ELO Rankings', icon: ListOrdered },
+        ] as const).map(({ id, label, icon: Icon }) => (
           <button
-            onClick={() => { setYearFilter('all'); setGenreFilter('all'); setPlatformFilter('all'); }}
-            className="text-[11px] text-white/40 hover:text-white/60 underline"
+            key={id}
+            onClick={() => setView(id)}
+            className={clsx(
+              'flex flex-col items-center gap-1 py-2 px-1 rounded-lg text-center transition-all',
+              view === id
+                ? 'bg-purple-500/20 border border-purple-400/30 text-purple-300'
+                : 'text-white/40 hover:text-white/60'
+            )}
           >
-            Clear
+            <Icon size={15} />
+            <span className="text-[10px] font-medium leading-tight">{label}</span>
           </button>
-        )}
-        <span className="ml-auto text-[11px] text-white/30">{ranked.length} games</span>
+        ))}
       </div>
 
-      {ranked.length === 0 ? (
-        <div className="text-center py-12 text-white/30 text-sm">
-          No games match the current filters for this category.
-        </div>
-      ) : (
+      {/* ── CLASSIC LEADERBOARD ─────────────────────────────────── */}
+      {view === 'classic' && (
         <>
-          {/* Podium */}
-          {podium.length > 0 && (
-            <div className="mb-2">
-              <div className="flex items-center gap-1.5 mb-3">
-                <Trophy size={14} className="text-yellow-400" />
-                <span className="text-xs font-semibold text-white/60">{category.desc}</span>
-              </div>
-              <div className={clsx(
-                'grid gap-3',
-                podium.length === 1 ? 'grid-cols-1 max-w-[140px] mx-auto' :
-                podium.length === 2 ? 'grid-cols-2 max-w-xs mx-auto' :
-                'grid-cols-3'
-              )}>
-                {/* Arrange: 2nd | 1st | 3rd */}
-                {podium.length >= 2 && (
-                  <div className="mt-4">
-                    <PodiumCard game={podium[1].game} rank={2} category={category} />
-                  </div>
-                )}
-                <PodiumCard game={podium[0].game} rank={1} category={category} />
-                {podium.length >= 3 && (
-                  <div className="mt-8">
-                    <PodiumCard game={podium[2].game} rank={3} category={category} />
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Full ranked list */}
-          {rest.length > 0 && (
-            <div className="space-y-1.5">
-              <p className="text-[11px] text-white/30 font-medium uppercase tracking-wider mb-2">Full Rankings</p>
-              {visibleRest.map(({ game, value }, idx) => (
-                <div
-                  key={game.id}
-                  className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-white/[0.02] border border-white/[0.04] hover:bg-white/[0.04] transition-colors"
+          {/* Category selector */}
+          <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
+            {CATEGORIES.map(cat => {
+              const Icon = cat.icon;
+              const isSelected = selectedCategory === cat.id;
+              return (
+                <button
+                  key={cat.id}
+                  onClick={() => { setSelectedCategory(cat.id); setShowAll(false); }}
+                  className={clsx(
+                    'flex flex-col items-center gap-1 p-2.5 rounded-xl border text-center transition-all',
+                    isSelected
+                      ? 'bg-purple-500/20 border-purple-400/40 text-purple-300'
+                      : 'bg-white/[0.02] border-white/5 text-white/40 hover:text-white/60 hover:border-white/10'
+                  )}
                 >
-                  {/* Rank number */}
-                  <span className="text-[11px] text-white/30 font-mono w-6 text-right flex-shrink-0">
-                    #{idx + 4}
-                  </span>
+                  <Icon size={16} className={isSelected ? 'text-purple-400' : ''} />
+                  <span className="text-[10px] font-medium leading-tight">{cat.label}</span>
+                </button>
+              );
+            })}
+          </div>
 
-                  {/* Thumbnail */}
-                  <div className="w-8 h-8 rounded-md overflow-hidden bg-white/5 flex-shrink-0">
-                    {game.thumbnail ? (
-                      <img src={game.thumbnail} alt={game.name} className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-sm">🎮</div>
-                    )}
+          {/* Filters */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <SelectFilter value={yearFilter} onChange={setYearFilter} options={years} label="All Years" />
+            <SelectFilter value={genreFilter} onChange={setGenreFilter} options={genres} label="All Genres" />
+            <SelectFilter value={platformFilter} onChange={setPlatformFilter} options={platforms} label="All Platforms" />
+            {(yearFilter !== 'all' || genreFilter !== 'all' || platformFilter !== 'all') && (
+              <button
+                onClick={() => { setYearFilter('all'); setGenreFilter('all'); setPlatformFilter('all'); }}
+                className="text-[11px] text-white/40 hover:text-white/60 underline"
+              >Clear</button>
+            )}
+            <span className="ml-auto text-[11px] text-white/30">{ranked.length} games</span>
+          </div>
+
+          {ranked.length === 0 ? (
+            <div className="text-center py-12 text-white/30 text-sm">No games match the current filters.</div>
+          ) : (
+            <>
+              {podium.length > 0 && (
+                <div className="mb-2">
+                  <div className="flex items-center gap-1.5 mb-3">
+                    <Trophy size={14} className="text-yellow-400" />
+                    <span className="text-xs font-semibold text-white/60">{category.desc}</span>
                   </div>
-
-                  {/* Name + meta */}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium text-white/80 truncate">{game.name}</p>
-                    <p className="text-[10px] text-white/30 truncate">
-                      {[game.genre, game.platform].filter(Boolean).join(' · ')}
-                    </p>
+                  <div className={clsx(
+                    'grid gap-3',
+                    podium.length === 1 ? 'grid-cols-1 max-w-[140px] mx-auto' :
+                    podium.length === 2 ? 'grid-cols-2 max-w-xs mx-auto' : 'grid-cols-3'
+                  )}>
+                    {podium.length >= 2 && <div className="mt-4"><PodiumCard game={podium[1].game} rank={2} category={category} /></div>}
+                    <PodiumCard game={podium[0].game} rank={1} category={category} />
+                    {podium.length >= 3 && <div className="mt-8"><PodiumCard game={podium[2].game} rank={3} category={category} /></div>}
                   </div>
+                </div>
+              )}
 
-                  {/* Value */}
-                  <span className="text-xs font-bold text-white/60 flex-shrink-0">
-                    {category.formatValue(value)}
-                  </span>
-
-                  {/* Medal for top ranks if using medal icons */}
-                  {idx < 3 && (
-                    <Medal size={12} className="text-white/20 flex-shrink-0" />
+              {rest.length > 0 && (
+                <div className="space-y-1.5">
+                  <p className="text-[11px] text-white/30 font-medium uppercase tracking-wider mb-2">Full Rankings</p>
+                  {visibleRest.map(({ game, value }, idx) => (
+                    <div key={game.id} className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-white/[0.02] border border-white/[0.04] hover:bg-white/[0.04] transition-colors">
+                      <span className="text-[11px] text-white/30 font-mono w-6 text-right flex-shrink-0">#{idx + 4}</span>
+                      <div className="w-8 h-8 rounded-md overflow-hidden bg-white/5 flex-shrink-0">
+                        {game.thumbnail
+                          ? <img src={game.thumbnail} alt={game.name} className="w-full h-full object-cover" />
+                          : <div className="w-full h-full flex items-center justify-center text-sm">🎮</div>}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium text-white/80 truncate">{game.name}</p>
+                        <p className="text-[10px] text-white/30 truncate">{[game.genre, game.platform].filter(Boolean).join(' · ')}</p>
+                      </div>
+                      <span className="text-xs font-bold text-white/60 flex-shrink-0">{category.formatValue(value)}</span>
+                      {idx < 3 && <Medal size={12} className="text-white/20 flex-shrink-0" />}
+                    </div>
+                  ))}
+                  {rest.length > 7 && (
+                    <button onClick={() => setShowAll(s => !s)} className="w-full flex items-center justify-center gap-1.5 py-2.5 text-[11px] text-white/30 hover:text-white/50 transition-colors">
+                      {showAll ? <><ChevronUp size={12} /> Show less</> : <><ChevronDown size={12} /> Show all {rest.length} remaining</>}
+                    </button>
                   )}
                 </div>
-              ))}
-
-              {rest.length > 7 && (
-                <button
-                  onClick={() => setShowAll(s => !s)}
-                  className="w-full flex items-center justify-center gap-1.5 py-2.5 text-[11px] text-white/30 hover:text-white/50 transition-colors"
-                >
-                  {showAll ? <><ChevronUp size={12} /> Show less</> : <><ChevronDown size={12} /> Show all {rest.length} remaining</>}
-                </button>
               )}
-            </div>
+            </>
           )}
         </>
+      )}
+
+      {/* ── BATTLE MODE ──────────────────────────────────────────── */}
+      {view === 'battle' && (
+        <div className="space-y-4">
+          {/* Period type selector */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[11px] text-white/40">Period:</span>
+            {ELO_PERIOD_OPTIONS.map(opt => (
+              <button
+                key={opt.value}
+                onClick={() => setEloPeriod(opt.value)}
+                className={clsx(
+                  'px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all border',
+                  eloPeriod === opt.value
+                    ? 'bg-purple-500/20 border-purple-400/30 text-purple-300'
+                    : 'border-white/5 text-white/40 hover:text-white/60 hover:border-white/10'
+                )}
+              >{opt.label}</button>
+            ))}
+          </div>
+
+          {/* Period key: label + prev/next navigation */}
+          <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-white/3 border border-white/8">
+            <button
+              onClick={() => setPeriodOffset(o => o + 1)}
+              disabled={eloPeriod === 'all'}
+              className="p-1 rounded-lg text-white/30 hover:text-white/60 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+              aria-label="Previous period"
+            ><ChevronLeft size={14} /></button>
+            <div className="flex items-center gap-1.5">
+              <Calendar size={12} className="text-purple-400" />
+              <span className="text-xs font-semibold text-white/80">{currentPeriodLabel}</span>
+              {periodOffset > 0 && (
+                <span className="text-[10px] text-white/30 ml-1">({periodOffset} {eloPeriod}{periodOffset > 1 ? 's' : ''} ago)</span>
+              )}
+            </div>
+            <button
+              onClick={() => setPeriodOffset(o => Math.max(0, o - 1))}
+              disabled={eloPeriod === 'all' || periodOffset === 0}
+              className="p-1 rounded-lg text-white/30 hover:text-white/60 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+              aria-label="Next period"
+            ><ChevronRight size={14} /></button>
+          </div>
+
+          {/* Info banner */}
+          <div className="flex items-start gap-2 p-3 rounded-lg bg-blue-500/5 border border-blue-400/15">
+            <Info size={13} className="text-blue-400 flex-shrink-0 mt-0.5" />
+            <p className="text-[11px] text-white/50 leading-relaxed">
+              Pick your favourite between two games. Wins and losses update ELO scores. Results are saved locally — sign in to sync across devices.
+              <span className="ml-1 text-white/30">{battles.length} battle{battles.length !== 1 ? 's' : ''} in {currentPeriodLabel}.</span>
+            </p>
+          </div>
+
+          {eligibleGames.length < 2 ? (
+            <div className="text-center py-10 text-white/30 text-sm">
+              {eloPeriod === 'all'
+                ? 'Add at least 2 played games to start battling.'
+                : `No games played in ${currentPeriodLabel}. Log play sessions or try a different period.`}
+            </div>
+          ) : !currentPair ? (
+            <div className="text-center py-10 space-y-3">
+              <CheckCircle2 size={32} className="mx-auto text-emerald-400" />
+              <p className="text-sm font-semibold text-white/70">All pairs have been compared!</p>
+              <p className="text-xs text-white/30">You&apos;ve battled every possible pair. Rankings are complete for this period.</p>
+              <button
+                onClick={() => setView('elo-rankings')}
+                className="mt-2 px-4 py-2 rounded-xl bg-purple-500/20 border border-purple-400/30 text-purple-300 text-sm font-medium hover:bg-purple-500/30 transition-colors"
+              >View Rankings →</button>
+            </div>
+          ) : (
+            <>
+              {/* Progress */}
+              <div className="flex items-center justify-between text-[11px] text-white/30">
+                <span>{battles.length} battles completed</span>
+                <span>
+                  {eligibleIds.length * (eligibleIds.length - 1) / 2} total pairs
+                </span>
+              </div>
+
+              {/* Battle cards */}
+              <div className="relative">
+                {/* Result flash */}
+                {showResult && lastResult && (
+                  <div className="absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-black/60 backdrop-blur-sm pointer-events-none">
+                    <div className="text-center space-y-1">
+                      <p className="text-lg font-bold text-white">{lastResult.winner} wins!</p>
+                      <p className="text-sm text-emerald-400">+{lastResult.winnerChange} ELO</p>
+                      <p className="text-xs text-red-400">{lastResult.loser} {lastResult.loserChange} ELO</p>
+                    </div>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-3 group">
+                  {currentPair.map((gameId, idx) => {
+                    const game = gamesWithMetrics.find(g => g.id === gameId);
+                    const ranking = rankings.find(r => r.gameId === gameId);
+                    if (!game) return null;
+                    const otherId = currentPair[idx === 0 ? 1 : 0];
+                    return (
+                      <BattleCard
+                        key={gameId}
+                        game={game}
+                        ranking={ranking}
+                        onPick={() => handlePick(gameId, otherId)}
+                        disabled={submitting}
+                      />
+                    );
+                  })}
+                </div>
+
+                {/* VS separator */}
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 pointer-events-none">
+                  <div className="w-9 h-9 rounded-full bg-[#1a1a2e] border-2 border-white/10 flex items-center justify-center">
+                    <span className="text-[11px] font-black text-white/50">VS</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Skip pair */}
+              <button
+                onClick={() => {
+                  // Cycle to next pair by temporarily removing this pair from consideration
+                  // Simple approach: just get the pair after by shuffling eligible IDs
+                  const shuffled = [...eligibleIds].sort(() => Math.random() - 0.5);
+                  const pair = getNextPair(shuffled);
+                  if (pair && (pair[0] !== currentPair[0] || pair[1] !== currentPair[1])) {
+                    setCurrentPair(pair);
+                  }
+                }}
+                className="w-full py-2 text-[11px] text-white/25 hover:text-white/40 transition-colors"
+              >
+                Skip this pair →
+              </button>
+
+              {/* Pair history */}
+              {currentPair && (() => {
+                const pairCount = getBattleCount(currentPair[0], currentPair[1]);
+                return pairCount > 0 ? (
+                  <p className="text-center text-[10px] text-white/25">
+                    This pair has battled {pairCount} time{pairCount !== 1 ? 's' : ''} before.
+                  </p>
+                ) : null;
+              })()}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* ── ELO RANKINGS ─────────────────────────────────────────── */}
+      {view === 'elo-rankings' && (
+        <div className="space-y-4">
+          {/* Period type selector */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[11px] text-white/40">Period:</span>
+            {ELO_PERIOD_OPTIONS.map(opt => (
+              <button
+                key={opt.value}
+                onClick={() => setEloPeriod(opt.value)}
+                className={clsx(
+                  'px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all border',
+                  eloPeriod === opt.value
+                    ? 'bg-purple-500/20 border-purple-400/30 text-purple-300'
+                    : 'border-white/5 text-white/40 hover:text-white/60 hover:border-white/10'
+                )}
+              >{opt.label}</button>
+            ))}
+          </div>
+
+          {/* Period key: label + prev/next navigation */}
+          <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-white/3 border border-white/8">
+            <button
+              onClick={() => setPeriodOffset(o => o + 1)}
+              disabled={eloPeriod === 'all'}
+              className="p-1 rounded-lg text-white/30 hover:text-white/60 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+              aria-label="Previous period"
+            ><ChevronLeft size={14} /></button>
+            <div className="flex items-center gap-1.5">
+              <Calendar size={12} className="text-purple-400" />
+              <span className="text-xs font-semibold text-white/80">{currentPeriodLabel}</span>
+              {periodOffset > 0 && (
+                <span className="text-[10px] text-white/30 ml-1">({periodOffset} {eloPeriod}{periodOffset > 1 ? 's' : ''} ago)</span>
+              )}
+            </div>
+            <button
+              onClick={() => setPeriodOffset(o => Math.max(0, o - 1))}
+              disabled={eloPeriod === 'all' || periodOffset === 0}
+              className="p-1 rounded-lg text-white/30 hover:text-white/60 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+              aria-label="Next period"
+            ><ChevronRight size={14} /></button>
+          </div>
+
+          {rankLoading ? (
+            <div className="text-center py-8 text-white/30 text-sm flex items-center justify-center gap-2">
+              <RefreshCw size={14} className="animate-spin" /> Loading rankings…
+            </div>
+          ) : eloRankedWithUnranked.length === 0 ? (
+            <div className="text-center py-10 text-white/30 text-sm">
+              No eligible games found. Add games with ratings or play time to get started.
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center justify-between text-[11px] text-white/30">
+                <span>{eloRanked.length} ranked · {eloRankedWithUnranked.length - eloRanked.length} unranked</span>
+                <button
+                  onClick={() => setView('battle')}
+                  className="flex items-center gap-1 text-purple-400 hover:text-purple-300 transition-colors"
+                >
+                  <Swords size={11} /> Battle to rank
+                </button>
+              </div>
+
+              {/* Top 3 podium */}
+              {eloRanked.length >= 1 && (
+                <div className={clsx(
+                  'grid gap-3',
+                  eloRanked.length === 1 ? 'grid-cols-1 max-w-[140px] mx-auto' :
+                  eloRanked.length === 2 ? 'grid-cols-2 max-w-xs mx-auto' : 'grid-cols-3'
+                )}>
+                  {eloRanked.length >= 2 && (
+                    <div className="mt-4">
+                      <div className={clsx('relative flex flex-col items-center rounded-xl border p-3', TIER_COLORS[2].border, TIER_COLORS[2].bg, 'opacity-90')}>
+                        <div className={clsx('absolute -top-2.5 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded-full text-[10px] font-bold', TIER_COLORS[2].badge)}>🥈 2nd</div>
+                        <div className="mt-2 mb-1 w-12 h-12 rounded-lg overflow-hidden bg-white/5">
+                          {eloRanked[1].game.thumbnail
+                            ? <img src={eloRanked[1].game.thumbnail} alt={eloRanked[1].game.name} className="w-full h-full object-cover" />
+                            : <div className="w-full h-full flex items-center justify-center text-xl">🎮</div>}
+                        </div>
+                        <p className="text-[10px] font-semibold text-white/90 text-center line-clamp-2 mb-1">{eloRanked[1].game.name}</p>
+                        <span className={clsx('text-sm font-bold', TIER_COLORS[2].text)}>{eloRanked[1].ranking.eloScore}</span>
+                        <EloTierBadge elo={eloRanked[1].ranking.eloScore} />
+                      </div>
+                    </div>
+                  )}
+                  <div className={clsx('relative flex flex-col items-center rounded-xl border p-3 scale-105', TIER_COLORS[1].border, TIER_COLORS[1].bg)}>
+                    <div className={clsx('absolute -top-2.5 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded-full text-[10px] font-bold', TIER_COLORS[1].badge)}>🥇 1st</div>
+                    <div className="mt-2 mb-1 w-14 h-14 rounded-lg overflow-hidden bg-white/5">
+                      {eloRanked[0].game.thumbnail
+                        ? <img src={eloRanked[0].game.thumbnail} alt={eloRanked[0].game.name} className="w-full h-full object-cover" />
+                        : <div className="w-full h-full flex items-center justify-center text-2xl">🎮</div>}
+                    </div>
+                    <p className="text-[11px] font-semibold text-white/90 text-center line-clamp-2 mb-1">{eloRanked[0].game.name}</p>
+                    <span className={clsx('text-base font-bold', TIER_COLORS[1].text)}>{eloRanked[0].ranking.eloScore}</span>
+                    <EloTierBadge elo={eloRanked[0].ranking.eloScore} />
+                  </div>
+                  {eloRanked.length >= 3 && (
+                    <div className="mt-8">
+                      <div className={clsx('relative flex flex-col items-center rounded-xl border p-3', TIER_COLORS[3].border, TIER_COLORS[3].bg, 'opacity-90')}>
+                        <div className={clsx('absolute -top-2.5 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded-full text-[10px] font-bold', TIER_COLORS[3].badge)}>🥉 3rd</div>
+                        <div className="mt-2 mb-1 w-12 h-12 rounded-lg overflow-hidden bg-white/5">
+                          {eloRanked[2].game.thumbnail
+                            ? <img src={eloRanked[2].game.thumbnail} alt={eloRanked[2].game.name} className="w-full h-full object-cover" />
+                            : <div className="w-full h-full flex items-center justify-center text-xl">🎮</div>}
+                        </div>
+                        <p className="text-[10px] font-semibold text-white/90 text-center line-clamp-2 mb-1">{eloRanked[2].game.name}</p>
+                        <span className={clsx('text-sm font-bold', TIER_COLORS[3].text)}>{eloRanked[2].ranking.eloScore}</span>
+                        <EloTierBadge elo={eloRanked[2].ranking.eloScore} />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Full list */}
+              {eloRankedWithUnranked.length > 3 && (
+                <div className="space-y-1.5 mt-2">
+                  <p className="text-[11px] text-white/30 font-medium uppercase tracking-wider mb-2">All Games</p>
+                  {eloRankedWithUnranked.slice(3).map(({ ranking, game }, idx) => (
+                    <div key={game.id} className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-white/[0.02] border border-white/[0.04] hover:bg-white/[0.04] transition-colors">
+                      <span className="text-[11px] text-white/30 font-mono w-6 text-right flex-shrink-0">
+                        {ranking ? `#${idx + 4}` : '—'}
+                      </span>
+                      <div className="w-8 h-8 rounded-md overflow-hidden bg-white/5 flex-shrink-0">
+                        {game.thumbnail
+                          ? <img src={game.thumbnail} alt={game.name} className="w-full h-full object-cover" />
+                          : <div className="w-full h-full flex items-center justify-center text-sm">🎮</div>}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium text-white/80 truncate">{game.name}</p>
+                        <p className="text-[10px] text-white/30 truncate">
+                          {[game.genre, game.platform].filter(Boolean).join(' · ')}
+                        </p>
+                      </div>
+                      {ranking ? (
+                        <div className="flex flex-col items-end gap-0.5 flex-shrink-0">
+                          <span className="text-xs font-bold text-white/70">{ranking.eloScore}</span>
+                          <span className="text-[9px] text-white/30">{ranking.wins}W·{ranking.losses}L</span>
+                        </div>
+                      ) : (
+                        <span className="text-[10px] text-white/25 italic flex-shrink-0">Unranked</span>
+                      )}
+                      {ranking && <EloTierBadge elo={ranking.eloScore} />}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {eloRanked.length === 0 && (
+                <div className="text-center py-6 text-white/30 text-sm">
+                  <p>No ELO data yet for {getPeriodLabel(eloPeriod)}.</p>
+                  <button
+                    onClick={() => setView('battle')}
+                    className="mt-3 px-4 py-2 rounded-xl bg-purple-500/20 border border-purple-400/30 text-purple-300 text-sm font-medium hover:bg-purple-500/30 transition-colors"
+                  >Start Battling →</button>
+                </div>
+              )}
+            </>
+          )}
+        </div>
       )}
     </div>
   );
