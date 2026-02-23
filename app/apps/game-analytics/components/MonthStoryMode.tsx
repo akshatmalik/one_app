@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, ChevronLeft, ChevronRight } from 'lucide-react';
-import { MonthInReviewData, getMonthGrade, getMonthHotTake, getMonthAwards, getMonthMoodArc } from '../lib/calculations';
+import { MonthInReviewData, getMonthGrade, getMonthHotTake, getMonthMoodArc } from '../lib/calculations';
 import { Game } from '../lib/types';
 import { generateMonthBlurbs, MonthAIBlurbType, AIBlurbResult } from '../lib/ai-service';
 import { useAwards, awardMonthKey, awardMonthLabel } from '../hooks/useAwards';
@@ -73,7 +73,6 @@ export function MonthStoryMode({ data, allGames, onClose, monthTitle, updateGame
   // Pre-compute derived data
   const grade = useMemo(() => getMonthGrade(data), [data]);
   const hotTake = useMemo(() => getMonthHotTake(data), [data]);
-  const awards = useMemo(() => getMonthAwards(data), [data]);
   const moodArc = useMemo(() => getMonthMoodArc(data), [data]);
 
   // Awards summary data

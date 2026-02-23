@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, ChevronLeft, ChevronRight } from 'lucide-react';
-import { WeekInReviewData, getSharpInsight, getWeekAwards, getIgnoredGames, getFranchiseCheckIns, getHistoricalEchoes, getMomentumData, getRatingParadox } from '../lib/calculations';
+import { WeekInReviewData, getSharpInsight, getIgnoredGames, getFranchiseCheckIns, getHistoricalEchoes, getMomentumData, getRatingParadox } from '../lib/calculations';
 import { Game } from '../lib/types';
 import { OpeningScreen } from './story-screens/OpeningScreen';
 import { TotalHoursScreen } from './story-screens/TotalHoursScreen';
@@ -61,8 +61,7 @@ export function WeekStoryMode({ data, allGames, onClose, prefetchedBlurbs, isLoa
 
   // Pre-compute data for new screens
   const sharpInsight = useMemo(() => getSharpInsight(data, allGames), [data, allGames]);
-  const weekAwards = useMemo(() => getWeekAwards(data), [data]);
-  const ignoredGames = useMemo(() => getIgnoredGames(data, allGames), [data, allGames]);
+const ignoredGames = useMemo(() => getIgnoredGames(data, allGames), [data, allGames]);
   const franchiseCheckIns = useMemo(() => getFranchiseCheckIns(data, allGames), [data, allGames]);
   const historicalEchoes = useMemo(() => getHistoricalEchoes(data, allGames), [data, allGames]);
   const momentumData = useMemo(() => getMomentumData(allGames, data), [allGames, data]);
