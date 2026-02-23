@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, ChevronLeft, ChevronRight } from 'lucide-react';
-import { WeekInReviewData, getSharpInsight, getWeekAwards, getIgnoredGames, getFranchiseCheckIns, getHistoricalEchoes, getMomentumData, getRatingParadox } from '../lib/calculations';
+import { WeekInReviewData, getSharpInsight, getIgnoredGames, getFranchiseCheckIns, getHistoricalEchoes, getMomentumData, getRatingParadox } from '../lib/calculations';
 import { Game } from '../lib/types';
 import { OpeningScreen } from './story-screens/OpeningScreen';
 import { TotalHoursScreen } from './story-screens/TotalHoursScreen';
@@ -21,7 +21,6 @@ import { BestValueScreen } from './story-screens/BestValueScreen';
 import { ActivityPulseScreen } from './story-screens/ActivityPulseScreen';
 import { AIBlurbScreen } from './story-screens/AIBlurbScreen';
 import { GuildFreeScreen } from './story-screens/GuildFreeScreen';
-import { WeekAwardsScreen } from './story-screens/WeekAwardsScreen';
 import { SharpInsightScreen } from './story-screens/SharpInsightScreen';
 import { YouIgnoredScreen } from './story-screens/YouIgnoredScreen';
 import { FranchiseCheckInScreen } from './story-screens/FranchiseCheckInScreen';
@@ -55,15 +54,37 @@ export function WeekStoryMode({ data, allGames, onClose, prefetchedBlurbs, isLoa
   const [isLoadingAI, setIsLoadingAI] = useState(isLoadingPrefetch ?? true);
   const [showAwardsHub, setShowAwardsHub] = useState(false);
 
+  // Refs for stable navigation callbacks (allows passing goToNext into screens before totalScreens is known)
+  const currentScreenRef = useRef(0);
+  const totalScreensRef = useRef(0);
+  useEffect(() => { currentScreenRef.current = currentScreen; }, [currentScreen]);
+
   // Pre-compute data for new screens
   const sharpInsight = useMemo(() => getSharpInsight(data, allGames), [data, allGames]);
-  const weekAwards = useMemo(() => getWeekAwards(data), [data]);
-  const ignoredGames = useMemo(() => getIgnoredGames(data, allGames), [data, allGames]);
+const ignoredGames = useMemo(() => getIgnoredGames(data, allGames), [data, allGames]);
   const franchiseCheckIns = useMemo(() => getFranchiseCheckIns(data, allGames), [data, allGames]);
   const historicalEchoes = useMemo(() => getHistoricalEchoes(data, allGames), [data, allGames]);
   const momentumData = useMemo(() => getMomentumData(allGames, data), [allGames, data]);
   const ratingParadox = useMemo(() => getRatingParadox(data, allGames), [data, allGames]);
   const hotTake = useMemo(() => getHotTake(data), [data]);
+
+  // Stable navigation callbacks using refs — defined before screens so they can be passed as props
+  const goToNext = useCallback(() => {
+    const cur = currentScreenRef.current;
+    const total = totalScreensRef.current;
+    if (cur < total - 1) {
+      setDirection(1);
+      setCurrentScreen(cur + 1);
+    }
+  }, []);
+
+  const goToPrevious = useCallback(() => {
+    const cur = currentScreenRef.current;
+    if (cur > 0) {
+      setDirection(-1);
+      setCurrentScreen(cur - 1);
+    }
+  }, []);
 
   // Awards summary data — replaces the 3 broken interactive award screens
   const weekAwardPeriodKey = useMemo(() => awardWeekKey(data.weekStart), [data.weekStart]);
@@ -185,7 +206,6 @@ export function WeekStoryMode({ data, allGames, onClose, prefetchedBlurbs, isLoa
     <MomentumReadScreen key="momentum" momentum={momentumData} />,
 
     // ─── ACT 5: WRAP-UP ───
-    weekAwards.length > 0 ? <WeekAwardsScreen key="awards" data={data} /> : null,
     data.gamesPlayed.length > 0 ? (
       <AwardsSummaryCard
         key="awards-summary"
@@ -211,22 +231,9 @@ export function WeekStoryMode({ data, allGames, onClose, prefetchedBlurbs, isLoa
     <ClosingScreen key="closing" data={data} />,
   ].filter(Boolean);
 
+  // Keep totalScreensRef up-to-date so stable goToNext/goToPrevious work correctly
+  totalScreensRef.current = screens.length;
   const totalScreens = screens.length;
-
-  // Navigation handlers
-  const goToNext = useCallback(() => {
-    if (currentScreen < totalScreens - 1) {
-      setDirection(1);
-      setCurrentScreen(prev => prev + 1);
-    }
-  }, [currentScreen, totalScreens]);
-
-  const goToPrevious = useCallback(() => {
-    if (currentScreen > 0) {
-      setDirection(-1);
-      setCurrentScreen(prev => prev - 1);
-    }
-  }, [currentScreen]);
 
   // Keyboard navigation
   useEffect(() => {
@@ -244,7 +251,7 @@ export function WeekStoryMode({ data, allGames, onClose, prefetchedBlurbs, isLoa
 
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [currentScreen, totalScreens, goToNext, goToPrevious, onClose]);
+  }, [goToNext, goToPrevious, onClose]);
 
   // Click navigation - left/right halves
   const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {

@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, ChevronLeft, ChevronRight } from 'lucide-react';
-import { MonthInReviewData, getMonthGrade, getMonthHotTake, getMonthAwards, getMonthMoodArc } from '../lib/calculations';
+import { MonthInReviewData, getMonthGrade, getMonthHotTake, getMonthMoodArc } from '../lib/calculations';
 import { Game } from '../lib/types';
 import { generateMonthBlurbs, MonthAIBlurbType, AIBlurbResult } from '../lib/ai-service';
 import { useAwards, awardMonthKey, awardMonthLabel } from '../hooks/useAwards';
@@ -27,7 +27,6 @@ import { MonthMoneyScreen } from './story-screens/MonthMoneyScreen';
 import { MonthCompletionsScreen } from './story-screens/MonthCompletionsScreen';
 import { MonthBestValueScreen } from './story-screens/MonthBestValueScreen';
 import { MonthUnfinishedScreen } from './story-screens/MonthUnfinishedScreen';
-import { MonthAwardsScreen } from './story-screens/MonthAwardsScreen';
 import { MonthPersonalityScreen } from './story-screens/MonthPersonalityScreen';
 import { MonthVsLastScreen } from './story-screens/MonthVsLastScreen';
 import { MonthAIBlurbScreen } from './story-screens/MonthAIBlurbScreen';
@@ -46,16 +45,37 @@ export function MonthStoryMode({ data, allGames, onClose, monthTitle, updateGame
   const [direction, setDirection] = useState(0);
   const [aiBlurbs, setAiBlurbs] = useState<Partial<Record<MonthAIBlurbType, AIBlurbResult>>>({});
   const [isLoadingAI, setIsLoadingAI] = useState(true);
-
   const [showAwardsHub, setShowAwardsHub] = useState(false);
+
+  // Refs for stable navigation callbacks
+  const currentScreenRef = useRef(0);
+  const totalScreensRef = useRef(0);
+  useEffect(() => { currentScreenRef.current = currentScreen; }, [currentScreen]);
+
+  // Stable navigation — defined before screens so they can be passed as props
+  const goToNext = useCallback(() => {
+    const cur = currentScreenRef.current;
+    const total = totalScreensRef.current;
+    if (cur < total - 1) {
+      setDirection(1);
+      setCurrentScreen(cur + 1);
+    }
+  }, []);
+
+  const goToPrevious = useCallback(() => {
+    const cur = currentScreenRef.current;
+    if (cur > 0) {
+      setDirection(-1);
+      setCurrentScreen(cur - 1);
+    }
+  }, []);
 
   // Pre-compute derived data
   const grade = useMemo(() => getMonthGrade(data), [data]);
   const hotTake = useMemo(() => getMonthHotTake(data), [data]);
-  const awards = useMemo(() => getMonthAwards(data), [data]);
   const moodArc = useMemo(() => getMonthMoodArc(data), [data]);
 
-  // Awards summary data — replaces the broken interactive award screens
+  // Awards summary data
   const monthAwardPeriodKey = useMemo(() => awardMonthKey(new Date(data.year, data.month - 1, 1)), [data.year, data.month]);
   const monthAwardPeriodLabel = useMemo(() => awardMonthLabel(data.year, data.month), [data.year, data.month]);
   const { getPicksForPeriod } = useAwards(allGames, updateGame || (async (id: string) => allGames.find(g => g.id === id) as Game));
@@ -161,7 +181,6 @@ export function MonthStoryMode({ data, allGames, onClose, monthTitle, updateGame
     data.unfinishedGames.length > 0 ? <MonthUnfinishedScreen key="unfinished" data={data} /> : null,
 
     // ─── ACT 5: WRAP-UP ───
-    awards.length > 0 ? <MonthAwardsScreen key="awards" awards={awards} /> : null,
     data.gamesPlayed.length > 0 ? (
       <AwardsSummaryCard
         key="awards-summary"
@@ -184,22 +203,9 @@ export function MonthStoryMode({ data, allGames, onClose, monthTitle, updateGame
     <MonthClosingScreen key="closing" data={data} monthTitle={monthTitle} />,
   ].filter(Boolean);
 
+  // Keep totalScreensRef up-to-date so stable goToNext/goToPrevious work correctly
+  totalScreensRef.current = screens.length;
   const totalScreens = screens.length;
-
-  // Navigation
-  const goToNext = useCallback(() => {
-    if (currentScreen < totalScreens - 1) {
-      setDirection(1);
-      setCurrentScreen(prev => prev + 1);
-    }
-  }, [currentScreen, totalScreens]);
-
-  const goToPrevious = useCallback(() => {
-    if (currentScreen > 0) {
-      setDirection(-1);
-      setCurrentScreen(prev => prev - 1);
-    }
-  }, [currentScreen]);
 
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
