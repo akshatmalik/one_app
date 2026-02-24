@@ -8,11 +8,38 @@ import {
 } from 'lucide-react';
 import { GameWithMetrics } from '../hooks/useAnalytics';
 import { useRankings, getPeriodKey, getPeriodLabel, getPeriodRange } from '../hooks/useRankings';
-import { RankingPeriod, GameRanking, GameTier } from '../lib/types';
+import { RankingPeriod, GameRanking, GameTier, GameAward } from '../lib/types';
 import { useTierAssignments } from '../hooks/useTierAssignments';
 import { logError } from '../lib/error-log';
 import { ForwardRefExoticComponent, RefAttributes } from 'react';
 import clsx from 'clsx';
+
+// Small inline helper — award strip for a game in the leaderboard rows
+function AwardStrip({ awards }: { awards?: GameAward[] }) {
+  if (!awards || awards.length === 0) return null;
+  const tierOrder: GameAward['periodType'][] = ['year', 'quarter', 'month', 'week'];
+  const tierColor: Record<GameAward['periodType'], string> = {
+    year: '#fbbf24', quarter: '#a855f7', month: '#facc15', week: '#60a5fa',
+  };
+  // Group by highest tier
+  let topTier: GameAward['periodType'] | null = null;
+  for (const t of tierOrder) {
+    if (awards.some(a => a.periodType === t)) { topTier = t; break; }
+  }
+  if (!topTier) return null;
+  const color = tierColor[topTier];
+  const count = awards.length;
+  const labels: Record<GameAward['periodType'], string> = { year: 'GOTY', quarter: 'GOTQ', month: 'GOTM', week: 'GOTW' };
+  return (
+    <span
+      className="text-[8px] px-1.5 py-0.5 rounded font-bold flex-shrink-0"
+      style={{ color, backgroundColor: `${color}18` }}
+      title={`${count} award${count > 1 ? 's' : ''} — best: ${labels[topTier]}`}
+    >
+      🏆 {labels[topTier]}{count > 1 ? ` ×${count}` : ''}
+    </span>
+  );
+}
 
 // ── Classic leaderboard categories ──────────────────────────────────
 
@@ -145,6 +172,7 @@ function PodiumCard({ game, rank, category }: { game: GameWithMetrics; rank: 1 |
       <p className="text-[11px] font-semibold text-white/90 text-center leading-tight line-clamp-2 mb-1">{game.name}</p>
       {value != null && <span className={clsx('text-sm font-bold', tier.text)}>{category.formatValue(value)}</span>}
       {game.genre && <span className="mt-1 text-[9px] text-white/30 truncate max-w-full">{game.genre}</span>}
+      <AwardStrip awards={game.awards} />
     </div>
   );
 }
@@ -1030,6 +1058,7 @@ export function LeaderboardTab({ gamesWithMetrics, userId }: LeaderboardTabProps
                         <p className="text-[10px] font-semibold text-white/90 text-center line-clamp-2 mb-1">{eloRanked[1].game.name}</p>
                         <span className={clsx('text-sm font-bold', TIER_COLORS[2].text)}>{eloRanked[1].ranking.eloScore}</span>
                         <EloTierBadge elo={eloRanked[1].ranking.eloScore} />
+                        <AwardStrip awards={eloRanked[1].game.awards} />
                       </div>
                     </div>
                   )}
@@ -1043,6 +1072,7 @@ export function LeaderboardTab({ gamesWithMetrics, userId }: LeaderboardTabProps
                     <p className="text-[11px] font-semibold text-white/90 text-center line-clamp-2 mb-1">{eloRanked[0].game.name}</p>
                     <span className={clsx('text-base font-bold', TIER_COLORS[1].text)}>{eloRanked[0].ranking.eloScore}</span>
                     <EloTierBadge elo={eloRanked[0].ranking.eloScore} />
+                    <AwardStrip awards={eloRanked[0].game.awards} />
                   </div>
                   {eloRanked.length >= 3 && (
                     <div className="mt-8">
@@ -1056,6 +1086,7 @@ export function LeaderboardTab({ gamesWithMetrics, userId }: LeaderboardTabProps
                         <p className="text-[10px] font-semibold text-white/90 text-center line-clamp-2 mb-1">{eloRanked[2].game.name}</p>
                         <span className={clsx('text-sm font-bold', TIER_COLORS[3].text)}>{eloRanked[2].ranking.eloScore}</span>
                         <EloTierBadge elo={eloRanked[2].ranking.eloScore} />
+                        <AwardStrip awards={eloRanked[2].game.awards} />
                       </div>
                     </div>
                   )}
@@ -1091,6 +1122,7 @@ export function LeaderboardTab({ gamesWithMetrics, userId }: LeaderboardTabProps
                         <span className="text-[10px] text-white/25 italic flex-shrink-0">Unranked</span>
                       )}
                       {ranking && <EloTierBadge elo={ranking.eloScore} />}
+                      <AwardStrip awards={game.awards} />
                     </div>
                   ))}
                 </div>
