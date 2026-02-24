@@ -207,6 +207,11 @@ export interface RecommendationRepository {
 
 export type RankingPeriod = 'week' | 'month' | 'quarter' | 'year' | 'all';
 
+export type GameTier = 'S' | 'A' | 'B' | 'C' | 'D' | 'F';
+
+/** Maps gameId → assigned tier for a given period */
+export type TierAssignmentMap = Record<string, GameTier>;
+
 export interface GameRanking {
   id: string;
   userId: string;

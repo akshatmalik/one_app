@@ -4,11 +4,12 @@ import { useState, useMemo, useEffect, useRef } from 'react';
 import {
   Star, Clock, DollarSign, TrendingUp, Zap, Frown, Trophy, Medal,
   ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Swords, ListOrdered,
-  RefreshCw, CheckCircle2, Info, Calendar, ExternalLink, LucideProps,
+  RefreshCw, CheckCircle2, Info, Calendar, ExternalLink, LucideProps, LayoutGrid,
 } from 'lucide-react';
 import { GameWithMetrics } from '../hooks/useAnalytics';
 import { useRankings, getPeriodKey, getPeriodLabel, getPeriodRange } from '../hooks/useRankings';
-import { RankingPeriod, GameRanking } from '../lib/types';
+import { RankingPeriod, GameRanking, GameTier } from '../lib/types';
+import { useTierAssignments } from '../hooks/useTierAssignments';
 import { logError } from '../lib/error-log';
 import { ForwardRefExoticComponent, RefAttributes } from 'react';
 import clsx from 'clsx';
@@ -148,6 +149,21 @@ function PodiumCard({ game, rank, category }: { game: GameWithMetrics; rank: 1 |
   );
 }
 
+// ── Tier Rank system ─────────────────────────────────────────────────
+
+const GAME_TIERS: GameTier[] = ['S', 'A', 'B', 'C', 'D', 'F'];
+
+const TIER_STYLES: Record<GameTier, {
+  text: string; border: string; activeBg: string; activeBorder: string; tabBg: string;
+}> = {
+  S: { text: 'text-yellow-300',  border: 'border-yellow-400/20',  activeBg: 'bg-yellow-400/20',  activeBorder: 'border-yellow-400/60',  tabBg: 'bg-yellow-400/10' },
+  A: { text: 'text-emerald-300', border: 'border-emerald-400/20', activeBg: 'bg-emerald-400/20', activeBorder: 'border-emerald-400/60', tabBg: 'bg-emerald-400/10' },
+  B: { text: 'text-blue-300',    border: 'border-blue-400/20',    activeBg: 'bg-blue-400/20',    activeBorder: 'border-blue-400/60',    tabBg: 'bg-blue-400/10' },
+  C: { text: 'text-purple-300',  border: 'border-purple-400/20',  activeBg: 'bg-purple-400/20',  activeBorder: 'border-purple-400/60',  tabBg: 'bg-purple-400/10' },
+  D: { text: 'text-orange-300',  border: 'border-orange-400/20',  activeBg: 'bg-orange-400/20',  activeBorder: 'border-orange-400/60',  tabBg: 'bg-orange-400/10' },
+  F: { text: 'text-red-400',     border: 'border-red-400/20',     activeBg: 'bg-red-400/15',     activeBorder: 'border-red-400/50',     tabBg: 'bg-red-400/10' },
+};
+
 // ── ELO Battle components ────────────────────────────────────────────
 
 const ELO_PERIOD_OPTIONS: { value: RankingPeriod; label: string }[] = [
@@ -176,18 +192,22 @@ interface BattleCardProps {
   ranking?: GameRanking;
   onPick: () => void;
   disabled: boolean;
+  isWinner?: boolean;
+  isLoser?: boolean;
 }
 
-function BattleCard({ game, ranking, onPick, disabled }: BattleCardProps) {
+function BattleCard({ game, ranking, onPick, disabled, isWinner, isLoser }: BattleCardProps) {
   return (
     <button
       onClick={onPick}
       disabled={disabled}
       className={clsx(
-        'relative flex flex-col items-center gap-3 p-4 rounded-2xl border w-full transition-all duration-200',
+        'relative flex flex-col items-center gap-3 p-4 rounded-2xl border w-full transition-colors duration-150',
         'bg-white/[0.02] border-white/10',
-        !disabled && 'hover:bg-white/[0.06] hover:border-purple-400/40 hover:scale-[1.02] active:scale-[0.98]',
-        disabled && 'opacity-50 cursor-not-allowed',
+        !disabled && !isWinner && !isLoser && 'hover:bg-white/[0.06] hover:border-purple-400/40 hover:scale-[1.02] active:scale-[0.98]',
+        isWinner && 'battle-win-flash bg-emerald-500/[0.04]',
+        isLoser  && 'battle-lose-flash',
+        disabled && !isWinner && !isLoser && 'opacity-50 cursor-not-allowed',
       )}
     >
       {/* Thumbnail */}
@@ -261,6 +281,10 @@ export function LeaderboardTab({ gamesWithMetrics, userId }: LeaderboardTabProps
   const [eloPeriod, setEloPeriod] = useState<RankingPeriod>('all');
   const [periodOffset, setPeriodOffset] = useState(0); // 0 = current, 1 = one back, etc.
 
+  // ── Tier Rank state ──────────────────────────────────────────────
+  const [tierPhase, setTierPhase] = useState<'assign' | 'battle'>('assign');
+  const [selectedBattleTier, setSelectedBattleTier] = useState<GameTier | null>(null);
+
   // Reset offset when period type changes
   useEffect(() => { setPeriodOffset(0); }, [eloPeriod]);
 
@@ -286,6 +310,8 @@ export function LeaderboardTab({ gamesWithMetrics, userId }: LeaderboardTabProps
   const [currentPair, setCurrentPair] = useState<[string, string] | null>(null);
   const [lastResult, setLastResult] = useState<{ winner: string; loser: string; winnerChange: number; loserChange: number } | null>(null);
   const [showResult, setShowResult] = useState(false);
+  const [pickedWinnerId, setPickedWinnerId] = useState<string | null>(null);
+  const [battleKey, setBattleKey] = useState(0);
   const resultTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Eligible games for battles: for 'all', any owned game with rating/hours;
@@ -304,13 +330,55 @@ export function LeaderboardTab({ gamesWithMetrics, userId }: LeaderboardTabProps
   }, [gamesWithMetrics, eloPeriod, targetDate]);
   const eligibleIds = useMemo(() => eligibleGames.map(g => g.id), [eligibleGames]);
 
-  // Pick next pair; clear while loading so a fresh pair appears after period/offset changes
+  // ── Tier assignments (persisted per userId + periodKey) ──────────
+  const { assignments, assignTier, removeTier, clearAll, assignedCount } =
+    useTierAssignments(userId, periodKey);
+
+  // Reset tier phase when the period changes
   useEffect(() => {
-    if (view !== 'battle') return;
+    setTierPhase('assign');
+    setSelectedBattleTier(null);
+  }, [periodKey]);
+
+  // How many eligible games are assigned to each tier
+  const tierCounts = useMemo(() => {
+    const counts: Partial<Record<GameTier, number>> = {};
+    for (const id of eligibleIds) {
+      const tier = assignments[id];
+      if (tier) counts[tier] = (counts[tier] || 0) + 1;
+    }
+    return counts;
+  }, [eligibleIds, assignments]);
+
+  // Tiers that have 2+ assigned games (can run battles)
+  const battleableTiers = useMemo(
+    () => GAME_TIERS.filter(t => (tierCounts[t] || 0) >= 2),
+    [tierCounts],
+  );
+
+  // IDs eligible for battle in the currently selected tier
+  const tierEligibleIds = useMemo(() => {
+    if (!selectedBattleTier) return [];
+    return eligibleGames
+      .filter(g => assignments[g.id] === selectedBattleTier)
+      .map(g => g.id);
+  }, [eligibleGames, assignments, selectedBattleTier]);
+
+  // Pick next pair within the selected tier
+  useEffect(() => {
+    if (view !== 'battle' || tierPhase !== 'battle') return;
     if (rankLoading) { setCurrentPair(null); return; }
-    const pair = getNextPair(eligibleIds);
+    if (tierEligibleIds.length < 2) { setCurrentPair(null); return; }
+    const pair = getNextPair(tierEligibleIds);
     setCurrentPair(pair);
-  }, [view, battles, eligibleIds, getNextPair, rankLoading]);
+  }, [view, tierPhase, battles, tierEligibleIds, getNextPair, rankLoading]);
+
+  // Bump battleKey whenever the pair changes so entrance animations re-fire
+  const currentPairKey = currentPair ? `${currentPair[0]}|${currentPair[1]}` : null;
+  useEffect(() => {
+    if (currentPairKey) setBattleKey(k => k + 1);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPairKey]);
 
   // Classic leaderboard data
   const category = CATEGORIES.find(c => c.id === selectedCategory)!;
@@ -378,6 +446,9 @@ export function LeaderboardTab({ gamesWithMetrics, userId }: LeaderboardTabProps
   async function handlePick(winnerId: string, loserId: string) {
     if (!currentPair || submitting) return;
 
+    // Immediately flash the chosen winner before the async round-trip
+    setPickedWinnerId(winnerId);
+
     try {
       // Snapshot current ELOs for the result display
       const winnerR = rankings.find(r => r.gameId === winnerId);
@@ -391,7 +462,6 @@ export function LeaderboardTab({ gamesWithMetrics, userId }: LeaderboardTabProps
       if (winnerGame && loserGame) {
         const wElo = winnerR?.eloScore ?? 1000;
         const lElo = loserR?.eloScore ?? 1000;
-        // Rough ELO change estimate for display
         const expectedWin = 1 / (1 + Math.pow(10, (lElo - wElo) / 400));
         const k = 32;
         const wChange = Math.round(k * (1 - expectedWin));
@@ -404,11 +474,15 @@ export function LeaderboardTab({ gamesWithMetrics, userId }: LeaderboardTabProps
         });
         setShowResult(true);
         if (resultTimerRef.current) clearTimeout(resultTimerRef.current);
-        resultTimerRef.current = setTimeout(() => setShowResult(false), 2500);
+        resultTimerRef.current = setTimeout(() => {
+          setShowResult(false);
+          setPickedWinnerId(null);
+        }, 800);
       }
 
       // Next pair is set via the useEffect watching battles
     } catch (err) {
+      setPickedWinnerId(null);
       logError('Battle pick failed', 'handlePick', err);
     }
   }
@@ -433,7 +507,7 @@ export function LeaderboardTab({ gamesWithMetrics, userId }: LeaderboardTabProps
       <div className="grid grid-cols-3 gap-1 p-1 bg-white/[0.03] border border-white/5 rounded-xl">
         {([
           { id: 'classic' as LeaderboardView, label: 'Leaderboard', icon: Trophy },
-          { id: 'battle' as LeaderboardView, label: 'Battle Mode', icon: Swords },
+          { id: 'battle' as LeaderboardView, label: 'Tier Rank', icon: LayoutGrid },
           { id: 'elo-rankings' as LeaderboardView, label: 'ELO Rankings', icon: ListOrdered },
         ] as const).map(({ id, label, icon: Icon }) => (
           <button
@@ -567,7 +641,7 @@ export function LeaderboardTab({ gamesWithMetrics, userId }: LeaderboardTabProps
         </div>
       )}
 
-      {/* ── BATTLE MODE ──────────────────────────────────────────── */}
+      {/* ── TIER RANK ────────────────────────────────────────────── */}
       {view === 'battle' && (
         <div className="space-y-4">
           {/* Period type selector */}
@@ -587,8 +661,8 @@ export function LeaderboardTab({ gamesWithMetrics, userId }: LeaderboardTabProps
             ))}
           </div>
 
-          {/* Period key: label + prev/next navigation */}
-          <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-white/3 border border-white/8">
+          {/* Period nav bar */}
+          <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-white/[0.03] border border-white/[0.08]">
             <button
               onClick={() => setPeriodOffset(o => o + 1)}
               disabled={eloPeriod === 'all'}
@@ -610,106 +684,266 @@ export function LeaderboardTab({ gamesWithMetrics, userId }: LeaderboardTabProps
             ><ChevronRight size={14} /></button>
           </div>
 
-          {/* Info banner */}
-          <div className="flex items-start gap-2 p-3 rounded-lg bg-blue-500/5 border border-blue-400/15">
-            <Info size={13} className="text-blue-400 flex-shrink-0 mt-0.5" />
-            <p className="text-[11px] text-white/50 leading-relaxed">
-              Pick your favourite between two games. Wins and losses update ELO scores. Results are saved locally — sign in to sync across devices.
-              <span className="ml-1 text-white/30">{battles.length} battle{battles.length !== 1 ? 's' : ''} in {currentPeriodLabel}.</span>
-            </p>
-          </div>
-
           {eligibleGames.length < 2 ? (
             <div className="text-center py-10 text-white/30 text-sm">
               {eloPeriod === 'all'
-                ? 'Add at least 2 played games to start battling.'
+                ? 'Add at least 2 played games to start ranking.'
                 : `No games played in ${currentPeriodLabel}. Log play sessions or try a different period.`}
             </div>
-          ) : !currentPair ? (
-            <div className="text-center py-10 space-y-3">
-              <CheckCircle2 size={32} className="mx-auto text-emerald-400" />
-              <p className="text-sm font-semibold text-white/70">All pairs have been compared!</p>
-              <p className="text-xs text-white/30">You&apos;ve battled every possible pair. Rankings are complete for this period.</p>
-              <button
-                onClick={() => setView('elo-rankings')}
-                className="mt-2 px-4 py-2 rounded-xl bg-purple-500/20 border border-purple-400/30 text-purple-300 text-sm font-medium hover:bg-purple-500/30 transition-colors"
-              >View Rankings →</button>
-            </div>
-          ) : (
-            <>
-              {/* Progress */}
-              <div className="flex items-center justify-between text-[11px] text-white/30">
-                <span>{battles.length} battles completed</span>
-                <span>
-                  {eligibleIds.length * (eligibleIds.length - 1) / 2} total pairs
-                </span>
+
+          ) : tierPhase === 'assign' ? (
+            /* ── PHASE 1: ASSIGN TIERS ─────────────────────────────── */
+            <div className="space-y-3">
+              {/* Header */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-semibold text-white/70">Step 1 — Assign Tiers</p>
+                  <p className="text-[10px] text-white/30 mt-0.5">
+                    {assignedCount} / {eligibleGames.length} assigned
+                  </p>
+                </div>
+                {assignedCount > 0 && (
+                  <button
+                    onClick={clearAll}
+                    className="text-[10px] text-white/25 hover:text-white/50 transition-colors"
+                  >Reset all</button>
+                )}
               </div>
 
-              {/* Battle cards */}
-              <div className="relative">
-                {/* Result flash */}
-                {showResult && lastResult && (
-                  <div className="absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-black/60 backdrop-blur-sm pointer-events-none">
-                    <div className="text-center space-y-1">
-                      <p className="text-lg font-bold text-white">{lastResult.winner} wins!</p>
-                      <p className="text-sm text-emerald-400">+{lastResult.winnerChange} ELO</p>
-                      <p className="text-xs text-red-400">{lastResult.loser} {lastResult.loserChange} ELO</p>
-                    </div>
-                  </div>
-                )}
+              {/* Progress bar */}
+              <div className="h-1 rounded-full bg-white/[0.06] overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-purple-500/60 transition-all duration-300"
+                  style={{ width: `${eligibleGames.length > 0 ? (assignedCount / eligibleGames.length) * 100 : 0}%` }}
+                />
+              </div>
 
-                <div className="grid grid-cols-2 gap-3 group">
-                  {currentPair.map((gameId, idx) => {
-                    const game = gamesWithMetrics.find(g => g.id === gameId);
-                    const ranking = rankings.find(r => r.gameId === gameId);
-                    if (!game) return null;
-                    const otherId = currentPair[idx === 0 ? 1 : 0];
+              {/* Tier legend */}
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {GAME_TIERS.map(tier => {
+                  const s = TIER_STYLES[tier];
+                  const count = tierCounts[tier] || 0;
+                  return (
+                    <span
+                      key={tier}
+                      className={clsx('inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border', s.activeBg, s.activeBorder, s.text)}
+                    >
+                      {tier}{count > 0 && <span className="font-normal opacity-60">×{count}</span>}
+                    </span>
+                  );
+                })}
+              </div>
+
+              {/* Game list */}
+              <div className="space-y-1.5">
+                {eligibleGames.map(game => {
+                  const assigned = assignments[game.id] as GameTier | undefined;
+                  return (
+                    <div
+                      key={game.id}
+                      className={clsx(
+                        'flex items-center gap-2.5 px-2.5 py-2 rounded-xl border transition-colors',
+                        assigned
+                          ? `${TIER_STYLES[assigned].tabBg} ${TIER_STYLES[assigned].activeBorder}`
+                          : 'bg-white/[0.02] border-white/[0.05]',
+                      )}
+                    >
+                      {/* Thumbnail */}
+                      <div className="w-8 h-8 rounded-md overflow-hidden bg-white/5 flex-shrink-0">
+                        {game.thumbnail
+                          ? <img src={game.thumbnail} alt={game.name} className="w-full h-full object-cover" />
+                          : <div className="w-full h-full flex items-center justify-center text-sm">🎮</div>}
+                      </div>
+                      {/* Name */}
+                      <div className="flex-1 min-w-0">
+                        <p className={clsx('text-xs font-medium truncate transition-colors', assigned ? TIER_STYLES[assigned].text : 'text-white/60')}>
+                          {game.name}
+                        </p>
+                      </div>
+                      {/* Tier buttons */}
+                      <div className="flex items-center gap-0.5 flex-shrink-0">
+                        {GAME_TIERS.map(tier => {
+                          const s = TIER_STYLES[tier];
+                          const isActive = assigned === tier;
+                          return (
+                            <button
+                              key={tier}
+                              onClick={() => isActive ? removeTier(game.id) : assignTier(game.id, tier)}
+                              className={clsx(
+                                'w-7 h-7 rounded-md text-[11px] font-bold border transition-all',
+                                isActive
+                                  ? `${s.activeBg} ${s.activeBorder} ${s.text}`
+                                  : 'border-white/[0.08] text-white/20 hover:border-white/25 hover:text-white/50',
+                              )}
+                            >{tier}</button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* CTA */}
+              {battleableTiers.length > 0 ? (
+                <button
+                  onClick={() => {
+                    setSelectedBattleTier(battleableTiers[0]);
+                    setTierPhase('battle');
+                  }}
+                  className="w-full py-3 rounded-xl bg-purple-500/20 border border-purple-400/30 text-purple-300 text-sm font-semibold hover:bg-purple-500/30 transition-colors"
+                >
+                  Battle within tiers →
+                </button>
+              ) : (
+                <p className="text-center text-[11px] text-white/25 py-2">
+                  Assign at least 2 games to the same tier to start battling.
+                </p>
+              )}
+            </div>
+
+          ) : (
+            /* ── PHASE 2: BATTLE WITHIN TIER ───────────────────────── */
+            <div className="space-y-4">
+              {/* Back link + tier tab strip */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  onClick={() => setTierPhase('assign')}
+                  className="flex items-center gap-1 text-[11px] text-white/35 hover:text-white/60 transition-colors flex-shrink-0"
+                >
+                  <ChevronLeft size={12} /> Edit tiers
+                </button>
+                <div className="flex items-center gap-1 flex-wrap">
+                  {GAME_TIERS.map(tier => {
+                    const count = tierCounts[tier] || 0;
+                    if (count < 2) return null;
+                    const s = TIER_STYLES[tier];
+                    const isActive = selectedBattleTier === tier;
                     return (
-                      <BattleCard
-                        key={gameId}
-                        game={game}
-                        ranking={ranking}
-                        onPick={() => handlePick(gameId, otherId)}
-                        disabled={submitting}
-                      />
+                      <button
+                        key={tier}
+                        onClick={() => {
+                          setSelectedBattleTier(tier);
+                          setCurrentPair(null);
+                        }}
+                        className={clsx(
+                          'px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all',
+                          isActive
+                            ? `${s.activeBg} ${s.activeBorder} ${s.text}`
+                            : 'border-white/[0.08] text-white/30 hover:border-white/20 hover:text-white/50',
+                        )}
+                      >
+                        {tier} <span className="font-normal opacity-60 ml-0.5">{count}</span>
+                      </button>
                     );
                   })}
                 </div>
-
-                {/* VS separator */}
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 pointer-events-none">
-                  <div className="w-9 h-9 rounded-full bg-[#1a1a2e] border-2 border-white/10 flex items-center justify-center">
-                    <span className="text-[11px] font-black text-white/50">VS</span>
-                  </div>
-                </div>
               </div>
 
-              {/* Skip pair */}
-              <button
-                onClick={() => {
-                  // Cycle to next pair by temporarily removing this pair from consideration
-                  // Simple approach: just get the pair after by shuffling eligible IDs
-                  const shuffled = [...eligibleIds].sort(() => Math.random() - 0.5);
-                  const pair = getNextPair(shuffled);
-                  if (pair && (pair[0] !== currentPair[0] || pair[1] !== currentPair[1])) {
-                    setCurrentPair(pair);
-                  }
-                }}
-                className="w-full py-2 text-[11px] text-white/25 hover:text-white/40 transition-colors"
-              >
-                Skip this pair →
-              </button>
+              {/* Info */}
+              <div className="flex items-start gap-2 p-3 rounded-lg bg-blue-500/5 border border-blue-400/15">
+                <Info size={13} className="text-blue-400 flex-shrink-0 mt-0.5" />
+                <p className="text-[11px] text-white/50 leading-relaxed">
+                  Battling within <span className={clsx('font-bold', selectedBattleTier ? TIER_STYLES[selectedBattleTier].text : '')}>
+                    {selectedBattleTier} tier
+                  </span> — {tierEligibleIds.length} games,{' '}
+                  {tierEligibleIds.length * (tierEligibleIds.length - 1) / 2} pairs.
+                  <span className="ml-1 text-white/30">{battles.length} battle{battles.length !== 1 ? 's' : ''} recorded for {currentPeriodLabel}.</span>
+                </p>
+              </div>
 
-              {/* Pair history */}
-              {currentPair && (() => {
-                const pairCount = getBattleCount(currentPair[0], currentPair[1]);
-                return pairCount > 0 ? (
-                  <p className="text-center text-[10px] text-white/25">
-                    This pair has battled {pairCount} time{pairCount !== 1 ? 's' : ''} before.
-                  </p>
-                ) : null;
-              })()}
-            </>
+              {tierEligibleIds.length < 2 ? (
+                <div className="text-center py-8 text-white/30 text-sm">
+                  Select a tier with 2+ games to battle.
+                </div>
+              ) : !currentPair ? (
+                <div className="text-center py-10 space-y-3">
+                  <CheckCircle2 size={32} className="mx-auto text-emerald-400" />
+                  <p className="text-sm font-semibold text-white/70">Tier {selectedBattleTier} is fully ranked!</p>
+                  <p className="text-xs text-white/30">All pairs compared. Switch to another tier or view ELO Rankings.</p>
+                  <button
+                    onClick={() => setView('elo-rankings')}
+                    className="mt-2 px-4 py-2 rounded-xl bg-purple-500/20 border border-purple-400/30 text-purple-300 text-sm font-medium hover:bg-purple-500/30 transition-colors"
+                  >View Rankings →</button>
+                </div>
+              ) : (
+                <>
+                  {/* Progress */}
+                  <div className="flex items-center justify-between text-[11px] text-white/30">
+                    <span>{battles.length} battles recorded this period</span>
+                    <span>{tierEligibleIds.length * (tierEligibleIds.length - 1) / 2} pairs in tier {selectedBattleTier}</span>
+                  </div>
+
+                  {/* Battle cards */}
+                  <div className="relative">
+                    {showResult && lastResult && (
+                      <div className="absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-black/50 backdrop-blur-[2px] pointer-events-none">
+                        <div className="battle-result-pop text-center space-y-1 px-4 py-3 rounded-xl bg-white/[0.06] border border-white/10">
+                          <p className="text-base font-bold text-white">{lastResult.winner} wins!</p>
+                          <p className="text-sm font-semibold text-emerald-400">+{lastResult.winnerChange} ELO</p>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-2 gap-3 group">
+                      {currentPair.map((gameId, idx) => {
+                        const game = gamesWithMetrics.find(g => g.id === gameId);
+                        const ranking = rankings.find(r => r.gameId === gameId);
+                        if (!game) return null;
+                        const otherId = currentPair[idx === 0 ? 1 : 0];
+                        const isWinner = pickedWinnerId === gameId;
+                        const isLoser  = pickedWinnerId !== null && pickedWinnerId !== gameId;
+                        return (
+                          <div
+                            key={`${gameId}-${battleKey}`}
+                            className={idx === 0 ? 'battle-enter-left' : 'battle-enter-right'}
+                          >
+                            <BattleCard
+                              game={game}
+                              ranking={ranking}
+                              onPick={() => handlePick(gameId, otherId)}
+                              disabled={submitting}
+                              isWinner={isWinner}
+                              isLoser={isLoser}
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* VS separator */}
+                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 pointer-events-none">
+                      <div className="w-9 h-9 rounded-full bg-[#1a1a2e] border-2 border-white/10 flex items-center justify-center">
+                        <span className="text-[11px] font-black text-white/50">VS</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Skip pair */}
+                  <button
+                    onClick={() => {
+                      const shuffled = [...tierEligibleIds].sort(() => Math.random() - 0.5);
+                      const pair = getNextPair(shuffled);
+                      if (pair && (pair[0] !== currentPair[0] || pair[1] !== currentPair[1])) {
+                        setCurrentPair(pair);
+                      }
+                    }}
+                    className="w-full py-2 text-[11px] text-white/25 hover:text-white/40 transition-colors"
+                  >
+                    Skip this pair →
+                  </button>
+
+                  {currentPair && (() => {
+                    const pairCount = getBattleCount(currentPair[0], currentPair[1]);
+                    return pairCount > 0 ? (
+                      <p className="text-center text-[10px] text-white/25">
+                        This pair has battled {pairCount} time{pairCount !== 1 ? 's' : ''} before.
+                      </p>
+                    ) : null;
+                  })()}
+                </>
+              )}
+            </div>
           )}
         </div>
       )}
@@ -773,7 +1007,7 @@ export function LeaderboardTab({ gamesWithMetrics, userId }: LeaderboardTabProps
                   onClick={() => setView('battle')}
                   className="flex items-center gap-1 text-purple-400 hover:text-purple-300 transition-colors"
                 >
-                  <Swords size={11} /> Battle to rank
+                  <LayoutGrid size={11} /> Tier Rank
                 </button>
               </div>
 
@@ -868,7 +1102,7 @@ export function LeaderboardTab({ gamesWithMetrics, userId }: LeaderboardTabProps
                   <button
                     onClick={() => setView('battle')}
                     className="mt-3 px-4 py-2 rounded-xl bg-purple-500/20 border border-purple-400/30 text-purple-300 text-sm font-medium hover:bg-purple-500/30 transition-colors"
-                  >Start Battling →</button>
+                  >Assign Tiers →</button>
                 </div>
               )}
             </>
