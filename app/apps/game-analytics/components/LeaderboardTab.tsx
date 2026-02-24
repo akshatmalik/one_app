@@ -176,18 +176,22 @@ interface BattleCardProps {
   ranking?: GameRanking;
   onPick: () => void;
   disabled: boolean;
+  isWinner?: boolean;
+  isLoser?: boolean;
 }
 
-function BattleCard({ game, ranking, onPick, disabled }: BattleCardProps) {
+function BattleCard({ game, ranking, onPick, disabled, isWinner, isLoser }: BattleCardProps) {
   return (
     <button
       onClick={onPick}
       disabled={disabled}
       className={clsx(
-        'relative flex flex-col items-center gap-3 p-4 rounded-2xl border w-full transition-all duration-200',
+        'relative flex flex-col items-center gap-3 p-4 rounded-2xl border w-full transition-colors duration-150',
         'bg-white/[0.02] border-white/10',
-        !disabled && 'hover:bg-white/[0.06] hover:border-purple-400/40 hover:scale-[1.02] active:scale-[0.98]',
-        disabled && 'opacity-50 cursor-not-allowed',
+        !disabled && !isWinner && !isLoser && 'hover:bg-white/[0.06] hover:border-purple-400/40 hover:scale-[1.02] active:scale-[0.98]',
+        isWinner && 'battle-win-flash bg-emerald-500/[0.04]',
+        isLoser  && 'battle-lose-flash',
+        disabled && !isWinner && !isLoser && 'opacity-50 cursor-not-allowed',
       )}
     >
       {/* Thumbnail */}
@@ -286,6 +290,8 @@ export function LeaderboardTab({ gamesWithMetrics, userId }: LeaderboardTabProps
   const [currentPair, setCurrentPair] = useState<[string, string] | null>(null);
   const [lastResult, setLastResult] = useState<{ winner: string; loser: string; winnerChange: number; loserChange: number } | null>(null);
   const [showResult, setShowResult] = useState(false);
+  const [pickedWinnerId, setPickedWinnerId] = useState<string | null>(null);
+  const [battleKey, setBattleKey] = useState(0);
   const resultTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Eligible games for battles: for 'all', any owned game with rating/hours;
@@ -311,6 +317,13 @@ export function LeaderboardTab({ gamesWithMetrics, userId }: LeaderboardTabProps
     const pair = getNextPair(eligibleIds);
     setCurrentPair(pair);
   }, [view, battles, eligibleIds, getNextPair, rankLoading]);
+
+  // Bump battleKey whenever the pair changes so entrance animations re-fire
+  const currentPairKey = currentPair ? `${currentPair[0]}|${currentPair[1]}` : null;
+  useEffect(() => {
+    if (currentPairKey) setBattleKey(k => k + 1);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPairKey]);
 
   // Classic leaderboard data
   const category = CATEGORIES.find(c => c.id === selectedCategory)!;
@@ -378,6 +391,9 @@ export function LeaderboardTab({ gamesWithMetrics, userId }: LeaderboardTabProps
   async function handlePick(winnerId: string, loserId: string) {
     if (!currentPair || submitting) return;
 
+    // Immediately flash the chosen winner before the async round-trip
+    setPickedWinnerId(winnerId);
+
     try {
       // Snapshot current ELOs for the result display
       const winnerR = rankings.find(r => r.gameId === winnerId);
@@ -391,7 +407,6 @@ export function LeaderboardTab({ gamesWithMetrics, userId }: LeaderboardTabProps
       if (winnerGame && loserGame) {
         const wElo = winnerR?.eloScore ?? 1000;
         const lElo = loserR?.eloScore ?? 1000;
-        // Rough ELO change estimate for display
         const expectedWin = 1 / (1 + Math.pow(10, (lElo - wElo) / 400));
         const k = 32;
         const wChange = Math.round(k * (1 - expectedWin));
@@ -404,11 +419,15 @@ export function LeaderboardTab({ gamesWithMetrics, userId }: LeaderboardTabProps
         });
         setShowResult(true);
         if (resultTimerRef.current) clearTimeout(resultTimerRef.current);
-        resultTimerRef.current = setTimeout(() => setShowResult(false), 2500);
+        resultTimerRef.current = setTimeout(() => {
+          setShowResult(false);
+          setPickedWinnerId(null);
+        }, 800);
       }
 
       // Next pair is set via the useEffect watching battles
     } catch (err) {
+      setPickedWinnerId(null);
       logError('Battle pick failed', 'handlePick', err);
     }
   }
@@ -649,11 +668,10 @@ export function LeaderboardTab({ gamesWithMetrics, userId }: LeaderboardTabProps
               <div className="relative">
                 {/* Result flash */}
                 {showResult && lastResult && (
-                  <div className="absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-black/60 backdrop-blur-sm pointer-events-none">
-                    <div className="text-center space-y-1">
-                      <p className="text-lg font-bold text-white">{lastResult.winner} wins!</p>
-                      <p className="text-sm text-emerald-400">+{lastResult.winnerChange} ELO</p>
-                      <p className="text-xs text-red-400">{lastResult.loser} {lastResult.loserChange} ELO</p>
+                  <div className="absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-black/50 backdrop-blur-[2px] pointer-events-none">
+                    <div className="battle-result-pop text-center space-y-1 px-4 py-3 rounded-xl bg-white/[0.06] border border-white/10">
+                      <p className="text-base font-bold text-white">{lastResult.winner} wins!</p>
+                      <p className="text-sm font-semibold text-emerald-400">+{lastResult.winnerChange} ELO</p>
                     </div>
                   </div>
                 )}
@@ -664,14 +682,22 @@ export function LeaderboardTab({ gamesWithMetrics, userId }: LeaderboardTabProps
                     const ranking = rankings.find(r => r.gameId === gameId);
                     if (!game) return null;
                     const otherId = currentPair[idx === 0 ? 1 : 0];
+                    const isWinner = pickedWinnerId === gameId;
+                    const isLoser  = pickedWinnerId !== null && pickedWinnerId !== gameId;
                     return (
-                      <BattleCard
-                        key={gameId}
-                        game={game}
-                        ranking={ranking}
-                        onPick={() => handlePick(gameId, otherId)}
-                        disabled={submitting}
-                      />
+                      <div
+                        key={`${gameId}-${battleKey}`}
+                        className={idx === 0 ? 'battle-enter-left' : 'battle-enter-right'}
+                      >
+                        <BattleCard
+                          game={game}
+                          ranking={ranking}
+                          onPick={() => handlePick(gameId, otherId)}
+                          disabled={submitting}
+                          isWinner={isWinner}
+                          isLoser={isLoser}
+                        />
+                      </div>
                     );
                   })}
                 </div>
