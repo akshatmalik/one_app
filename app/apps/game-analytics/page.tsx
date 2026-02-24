@@ -981,6 +981,7 @@ export default function GameAnalyticsPage() {
                   sortBy={sortBy}
                   gameColors={gameColors}
                   gameQuips={gameQuips}
+                  eloByGameId={eloByGameId}
                 />
               )}
             </>
@@ -1305,6 +1306,7 @@ interface GameCardListProps {
   sortBy?: string;
   gameColors: Map<string, string>;
   gameQuips?: Record<string, { quip: string }>;
+  eloByGameId?: Map<string, GameRanking>;
 }
 
 function GameCardList({
@@ -1322,6 +1324,7 @@ function GameCardList({
   sortBy = 'hours',
   gameColors,
   gameQuips = {},
+  eloByGameId = new Map(),
 }: GameCardListProps) {
   const sections = useMemo(() => groupBySection ? getGameSections(allGames) : [], [allGames, groupBySection]);
 
