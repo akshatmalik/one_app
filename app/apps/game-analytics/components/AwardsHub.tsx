@@ -37,6 +37,8 @@ interface AwardsHubProps {
   rawGames: Game[];
   updateGame: (id: string, updates: Partial<Game>) => Promise<Game>;
   onClose: () => void;
+  /** Called whenever a game wins an award — used to grant Elo bonus */
+  onAwardGiven?: (gameId: string, periodType: AwardPeriodType) => void;
   /** Pre-select a specific tab on open */
   initialTab?: AwardPeriodType;
   /** Pre-select a specific period key to open ceremony immediately */
@@ -268,6 +270,7 @@ export function AwardsHub({
   rawGames,
   updateGame,
   onClose,
+  onAwardGiven,
   initialTab = 'week',
   initialPeriodKey,
 }: AwardsHubProps) {
@@ -586,7 +589,11 @@ export function AwardsHub({
               ceremonyTitle={ceremonyCategories!.ceremonyTitle}
               categories={ceremonyCategories!.categories}
               existingPicks={ceremonyPicks}
-              onPick={() => {}}
+              onPick={(categoryId, game) => {
+                if (onAwardGiven && activePeriodEntry) {
+                  onAwardGiven(game.id, activePeriodEntry.periodType);
+                }
+              }}
               contextBanner={ceremonyCategories!.contextBanner}
               contextWinners={ceremonyCategories!.contextWinners}
               allGames={rawGames}

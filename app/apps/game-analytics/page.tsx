@@ -15,8 +15,10 @@ import { TimelineView } from './components/TimelineView';
 import { StatsView } from './components/StatsView';
 import { AIChatTab } from './components/AIChatTab';
 import { UpNextTab } from './components/UpNextTab';
-import { Game, GameStatus, PlayLog } from './lib/types';
+import { Game, GameStatus, PlayLog, GameRanking, GameAward, AwardPeriodType } from './lib/types';
 import { gameRepository } from './lib/storage';
+import { useRankings } from './hooks/useRankings';
+import { rankingRepository } from './lib/ranking-storage';
 import { BASELINE_GAMES_2025 } from './data/baseline-games';
 import { useAuthContext } from '@/lib/AuthContext';
 import { useToast } from '@/components/Toast';
@@ -52,6 +54,37 @@ function getValueColor(rating: string): string {
   }
 }
 
+// Returns the Elo tier label + color for display on cards
+function getEloTierInfo(elo: number): { label: string; color: string; bg: string } {
+  if (elo >= 1300) return { label: '🏆 Legend', color: '#fbbf24', bg: 'rgba(251,191,36,0.12)' };
+  if (elo >= 1200) return { label: '💎 Elite',  color: '#93c5fd', bg: 'rgba(147,197,253,0.10)' };
+  if (elo >= 1100) return { label: '⭐ Pro',    color: '#c4b5fd', bg: 'rgba(196,181,253,0.10)' };
+  if (elo >= 1000) return { label: '🎮 Ranked', color: 'rgba(255,255,255,0.5)', bg: 'rgba(255,255,255,0.05)' };
+  return               { label: '📉 Low',    color: 'rgba(255,255,255,0.25)', bg: 'rgba(255,255,255,0.03)' };
+}
+
+// Returns the richest award badge info for a game: highest period tier + win count per category
+function getTopAwardBadge(awards: GameAward[]): { label: string; color: string; bg: string; count: number } | null {
+  if (!awards || awards.length === 0) return null;
+  const tierOrder: GameAward['periodType'][] = ['year', 'quarter', 'month', 'week'];
+  const tierMeta: Record<GameAward['periodType'], { short: string; color: string; bg: string }> = {
+    year:    { short: 'GOTY',  color: '#fbbf24', bg: 'rgba(251,191,36,0.15)' },
+    quarter: { short: 'GOTQ', color: '#a855f7', bg: 'rgba(168,85,247,0.15)' },
+    month:   { short: 'GOTM', color: '#facc15', bg: 'rgba(250,204,21,0.12)' },
+    week:    { short: 'GOTW', color: '#60a5fa', bg: 'rgba(96,165,250,0.12)' },
+  };
+  // Find the highest-tier period type that exists in this game's awards
+  let topTier: GameAward['periodType'] | null = null;
+  for (const t of tierOrder) {
+    if (awards.some(a => a.periodType === t)) { topTier = t; break; }
+  }
+  if (!topTier) return null;
+  const meta = tierMeta[topTier];
+  // Count total wins across ALL tiers
+  const total = awards.length;
+  return { label: meta.short, color: meta.color, bg: meta.bg, count: total };
+}
+
 export default function GameAnalyticsPage() {
   const { user, loading: authLoading } = useAuthContext();
   const { showToast } = useToast();
@@ -61,6 +94,12 @@ export default function GameAnalyticsPage() {
   const { loading: thumbnailsLoading, fetchedCount } = useGameThumbnails(games, updateGame);
   const gameColors = useGameColors(games);
   const { quips: gameQuips } = useGameQuips(games, user?.uid ?? null);
+  const { rankings: allTimeRankings } = useRankings(user?.uid ?? null, 'all', 'all');
+  const eloByGameId = useMemo(() => {
+    const map = new Map<string, GameRanking>();
+    for (const r of allTimeRankings) map.set(r.gameId, r);
+    return map;
+  }, [allTimeRankings]);
   const {
     queuedGames,
     availableGames,
@@ -282,6 +321,28 @@ export default function GameAnalyticsPage() {
       showToast(`Failed to seed data: ${(e as Error).message}`, 'error');
     }
   };
+
+  // When an award is given, boost the winner's all-time Elo score
+  const handleAwardGiven = useCallback(async (gameId: string, periodType: AwardPeriodType) => {
+    const uid = user?.uid ?? null;
+    if (!uid) return;
+    const bonusMap: Record<AwardPeriodType, number> = { week: 15, month: 30, quarter: 50, year: 80 };
+    const bonus = bonusMap[periodType] ?? 15;
+    try {
+      rankingRepository.setUserId(uid);
+      const existing = allTimeRankings.find(r => r.gameId === gameId);
+      await rankingRepository.upsert({
+        gameId,
+        period: 'all',
+        periodKey: 'all',
+        eloScore: (existing?.eloScore ?? 1000) + bonus,
+        wins: existing?.wins ?? 0,
+        losses: existing?.losses ?? 0,
+        battlesCount: existing?.battlesCount ?? 0,
+        lastBattleAt: new Date().toISOString(),
+      });
+    } catch { /* non-critical */ }
+  }, [user?.uid, allTimeRankings]);
 
   const handleBulkWishlist = async (gamesToAdd: Omit<Game, 'id' | 'userId' | 'createdAt' | 'updatedAt'>[]) => {
     try {
@@ -920,6 +981,7 @@ export default function GameAnalyticsPage() {
                   sortBy={sortBy}
                   gameColors={gameColors}
                   gameQuips={gameQuips}
+                  eloByGameId={eloByGameId}
                 />
               )}
             </>
@@ -1095,6 +1157,7 @@ export default function GameAnalyticsPage() {
           allGames={gamesWithMetrics}
           rawGames={games}
           updateGame={updateGame}
+          onAwardGiven={handleAwardGiven}
           onClose={() => setShowAwardsHub(false)}
         />
       )}
@@ -1243,6 +1306,7 @@ interface GameCardListProps {
   sortBy?: string;
   gameColors: Map<string, string>;
   gameQuips?: Record<string, { quip: string }>;
+  eloByGameId?: Map<string, GameRanking>;
 }
 
 function GameCardList({
@@ -1260,6 +1324,7 @@ function GameCardList({
   sortBy = 'hours',
   gameColors,
   gameQuips = {},
+  eloByGameId = new Map(),
 }: GameCardListProps) {
   const sections = useMemo(() => groupBySection ? getGameSections(allGames) : [], [allGames, groupBySection]);
 
@@ -1305,16 +1370,17 @@ function GameCardList({
   const renderCard = (game: GameWithMetrics, idx: number) => {
     const isEntering = enteringCards.has(game.id);
     const animClass = `game-card-animate${isEntering ? ' game-card-enter' : ''}`;
+    const eloRanking = eloByGameId.get(game.id);
     if (cardViewMode === 'poster') {
       return (
         <div key={game.id} className={animClass}>
-          <PosterCard game={game} allGames={allGames} idx={idx} onClick={() => onCardClick(game)} onQuickLog={(h) => onQuickLog(game, h)} isInQueue={isInQueue(game.id)} sortBy={sortBy} tintColor={gameColors.get(game.id)} aiQuip={gameQuips[game.id]?.quip} />
+          <PosterCard game={game} allGames={allGames} idx={idx} onClick={() => onCardClick(game)} onQuickLog={(h) => onQuickLog(game, h)} isInQueue={isInQueue(game.id)} sortBy={sortBy} tintColor={gameColors.get(game.id)} aiQuip={gameQuips[game.id]?.quip} eloRanking={eloRanking} />
         </div>
       );
     }
     return (
       <div key={game.id} className={animClass}>
-        <CompactCard game={game} allGames={allGames} idx={idx} onClick={() => onCardClick(game)} onLogTime={() => onLogTime(game)} onToggleQueue={() => onToggleQueue(game)} onDelete={() => onDelete(game)} isInQueue={isInQueue(game.id)} sortBy={sortBy} tintColor={gameColors.get(game.id)} aiQuip={gameQuips[game.id]?.quip} />
+        <CompactCard game={game} allGames={allGames} idx={idx} onClick={() => onCardClick(game)} onLogTime={() => onLogTime(game)} onToggleQueue={() => onToggleQueue(game)} onDelete={() => onDelete(game)} isInQueue={isInQueue(game.id)} sortBy={sortBy} tintColor={gameColors.get(game.id)} aiQuip={gameQuips[game.id]?.quip} eloRanking={eloRanking} />
       </div>
     );
   };
@@ -1336,7 +1402,7 @@ function GameCardList({
             <div className="space-y-3">
               {nowPlayingGames.map(g => (
                 <div key={g.id} className={`game-card-animate${enteringCards.has(g.id) ? ' game-card-enter' : ''}`}>
-                  <NowPlayingCard game={g} allGames={allGames} onClick={() => onCardClick(g)} onQuickLog={(h) => onQuickLog(g, h)} sortBy={sortBy} tintColor={gameColors.get(g.id)} />
+                  <NowPlayingCard game={g} allGames={allGames} onClick={() => onCardClick(g)} onQuickLog={(h) => onQuickLog(g, h)} sortBy={sortBy} tintColor={gameColors.get(g.id)} eloRanking={eloByGameId.get(g.id)} />
                 </div>
               ))}
             </div>
@@ -1379,7 +1445,7 @@ function GameCardList({
           <div className="space-y-3">
             {nowPlayingGames.map(g => (
               <div key={g.id} className={`game-card-animate${enteringCards.has(g.id) ? ' game-card-enter' : ''}`}>
-                <NowPlayingCard game={g} allGames={allGames} onClick={() => onCardClick(g)} onQuickLog={(h) => onQuickLog(g, h)} />
+                <NowPlayingCard game={g} allGames={allGames} onClick={() => onCardClick(g)} onQuickLog={(h) => onQuickLog(g, h)} eloRanking={eloByGameId.get(g.id)} />
               </div>
             ))}
           </div>
@@ -1409,13 +1475,14 @@ function SectionIcon({ id }: { id: string }) {
 
 // --- Now Playing Card ---
 
-function NowPlayingCard({ game, allGames, onClick, onQuickLog, sortBy = 'hours', tintColor }: {
+function NowPlayingCard({ game, allGames, onClick, onQuickLog, sortBy = 'hours', tintColor, eloRanking }: {
   game: GameWithMetrics;
   allGames: Game[];
   onClick: () => void;
   onQuickLog: (hours: number) => void;
   sortBy?: string;
   tintColor?: string;
+  eloRanking?: GameRanking;
 }) {
   const [isFlipped, setIsFlipped] = useState(false);
   const rarity = getCardRarity(game);
@@ -1495,14 +1562,19 @@ function NowPlayingCard({ game, allGames, onClick, onQuickLog, sortBy = 'hours',
               </div>
             )}
 
-            {/* Trophy count badge */}
-            {(game.awards || []).length > 0 && (
-              <div className="absolute bottom-2 left-2 text-[9px] px-1.5 py-0.5 bg-black/60 backdrop-blur-sm rounded font-bold text-amber-400 z-10">
-                🏆 {(game.awards || []).length}
-              </div>
-            )}
+            {/* Award badge — highest tier + total win count */}
+            {(() => {
+              const badge = getTopAwardBadge(game.awards || []);
+              if (!badge) return null;
+              return (
+                <div className="absolute bottom-2 left-2 text-[9px] px-1.5 py-0.5 bg-black/60 backdrop-blur-sm rounded font-bold z-10 flex items-center gap-0.5"
+                  style={{ color: badge.color, backgroundColor: badge.bg }}>
+                  🏆 {badge.label}{badge.count > 1 ? ` ×${badge.count}` : ''}
+                </div>
+              );
+            })()}
 
-                        {/* Library rank badge */}
+            {/* Library rank badge */}
             {libraryRank.rank > 0 && (() => {
               const pos: React.CSSProperties = streak.isActive ? { left: 52 } : rarity.tier === 'common' ? { right: 8 } : { left: 8 };
               return (
@@ -1573,6 +1645,15 @@ function NowPlayingCard({ game, allGames, onClick, onQuickLog, sortBy = 'hours',
             <div className="flex-1" />
             {momentum.length >= 2 && <MomentumDots sessions={momentum} />}
             {game.platform && <span className="text-[9px] px-1.5 py-0.5 bg-white/5 rounded text-white/30">{game.platform}</span>}
+            {eloRanking && (() => {
+              const t = getEloTierInfo(eloRanking.eloScore);
+              return (
+                <span className="text-[9px] px-1.5 py-0.5 rounded border font-semibold"
+                  style={{ color: t.color, backgroundColor: t.bg, borderColor: `${t.color}30` }}>
+                  {t.label} {eloRanking.eloScore}
+                </span>
+              );
+            })()}
           </div>
 
           {/* Smart one-liner + contextual whisper */}
@@ -1624,7 +1705,7 @@ function NowPlayingCard({ game, allGames, onClick, onQuickLog, sortBy = 'hours',
 
 // --- Poster Card ---
 
-function PosterCard({ game, allGames, idx, onClick, onQuickLog, isInQueue, sortBy = 'hours', tintColor, aiQuip }: {
+function PosterCard({ game, allGames, idx, onClick, onQuickLog, isInQueue, sortBy = 'hours', tintColor, aiQuip, eloRanking }: {
   game: GameWithMetrics;
   allGames: Game[];
   idx: number;
@@ -1634,6 +1715,7 @@ function PosterCard({ game, allGames, idx, onClick, onQuickLog, isInQueue, sortB
   sortBy?: string;
   tintColor?: string;
   aiQuip?: string;
+  eloRanking?: GameRanking;
 }) {
   const [isFlipped, setIsFlipped] = useState(false);
   const rarity = getCardRarity(game);
@@ -1713,12 +1795,17 @@ function PosterCard({ game, allGames, idx, onClick, onQuickLog, isInQueue, sortB
               </div>
             )}
 
-            {/* Trophy count badge */}
-            {(game.awards || []).length > 0 && (
-              <div className="absolute bottom-2 left-2 text-[9px] px-1.5 py-0.5 bg-black/60 backdrop-blur-sm rounded font-bold text-amber-400 z-10">
-                🏆 {(game.awards || []).length}
-              </div>
-            )}
+            {/* Award badge — highest tier + total win count */}
+            {(() => {
+              const badge = getTopAwardBadge(game.awards || []);
+              if (!badge) return null;
+              return (
+                <div className="absolute bottom-2 left-2 text-[9px] px-1.5 py-0.5 bg-black/60 backdrop-blur-sm rounded font-bold z-10 flex items-center gap-0.5"
+                  style={{ color: badge.color, backgroundColor: badge.bg }}>
+                  🏆 {badge.label}{badge.count > 1 ? ` ×${badge.count}` : ''}
+                </div>
+              );
+            })()}
 
             {/* Library rank badge — positioned to avoid overlap */}
             {libraryRank.rank > 0 && (() => {
@@ -1792,6 +1879,15 @@ function PosterCard({ game, allGames, idx, onClick, onQuickLog, isInQueue, sortB
             {/* Momentum sparkline */}
             {momentum.length >= 2 && <MomentumDots sessions={momentum} />}
             {game.platform && <span className="text-[9px] px-1.5 py-0.5 bg-white/5 rounded text-white/30">{game.platform}</span>}
+            {eloRanking && (() => {
+              const t = getEloTierInfo(eloRanking.eloScore);
+              return (
+                <span className="text-[9px] px-1.5 py-0.5 rounded border font-semibold"
+                  style={{ color: t.color, backgroundColor: t.bg, borderColor: `${t.color}30` }}>
+                  {t.label} {eloRanking.eloScore}
+                </span>
+              );
+            })()}
           </div>
 
           {/* Smart one-liner + contextual whisper */}
@@ -1956,7 +2052,7 @@ function PosterCardBack({ game, allGames, onFlip, rarity, freshness, relationshi
 
 // --- Compact Card (original layout, fixed) ---
 
-function CompactCard({ game, allGames, idx, onClick, onLogTime, onToggleQueue, onDelete, isInQueue, sortBy = 'hours', tintColor, aiQuip }: {
+function CompactCard({ game, allGames, idx, onClick, onLogTime, onToggleQueue, onDelete, isInQueue, sortBy = 'hours', tintColor, aiQuip, eloRanking }: {
   game: GameWithMetrics;
   allGames: Game[];
   idx: number;
@@ -1968,6 +2064,7 @@ function CompactCard({ game, allGames, idx, onClick, onLogTime, onToggleQueue, o
   sortBy?: string;
   tintColor?: string;
   aiQuip?: string;
+  eloRanking?: GameRanking;
 }) {
   const [isFlipped, setIsFlipped] = useState(false);
   const rarity = getCardRarity(game);
@@ -2067,12 +2164,27 @@ function CompactCard({ game, allGames, idx, onClick, onLogTime, onToggleQueue, o
                     {libraryRank.label}
                   </span>
                 )}
-                {/* Trophy badge */}
-                {(game.awards || []).length > 0 && (
-                  <span className="text-[9px] px-1.5 py-0.5 bg-amber-500/10 rounded font-bold text-amber-400 shrink-0">
-                    🏆 {(game.awards || []).length}
-                  </span>
-                )}
+                {/* Award badge — highest tier + total win count */}
+                {(() => {
+                  const badge = getTopAwardBadge(game.awards || []);
+                  if (!badge) return null;
+                  return (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded font-bold shrink-0"
+                      style={{ color: badge.color, backgroundColor: badge.bg }}>
+                      🏆 {badge.label}{badge.count > 1 ? ` ×${badge.count}` : ''}
+                    </span>
+                  );
+                })()}
+                {/* Elo tier badge */}
+                {eloRanking && (() => {
+                  const t = getEloTierInfo(eloRanking.eloScore);
+                  return (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded border font-semibold shrink-0"
+                      style={{ color: t.color, backgroundColor: t.bg, borderColor: `${t.color}30` }}>
+                      {t.label} {eloRanking.eloScore}
+                    </span>
+                  );
+                })()}
               </div>
               <div className="flex items-center gap-2 text-[10px] text-white/30">
                 <span>{daysCtx}</span>
