@@ -1727,6 +1727,23 @@ function NowPlayingCard({ game, allGames, onClick, onQuickLog, sortBy = 'hours',
                   {relationship.label}
                 </span>
                 {game.genre && <span className="text-[10px] text-white/30">{game.genre}</span>}
+                {eloTierRank ? (() => {
+                  const c = TIER_BADGE[eloTierRank.tier];
+                  return (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full border font-bold"
+                      style={{ color: c.color, backgroundColor: c.bg, borderColor: c.border }}>
+                      {eloTierRank.tier} #{eloTierRank.rank}
+                    </span>
+                  );
+                })() : gameTier ? (() => {
+                  const c = TIER_BADGE[gameTier];
+                  return (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full border font-bold"
+                      style={{ color: c.color, backgroundColor: c.bg, borderColor: c.border }}>
+                      {gameTier} Tier
+                    </span>
+                  );
+                })() : null}
                 {(shelfExpiry.tier === 'at_risk' || shelfExpiry.tier === 'critical' || shelfExpiry.tier === 'expired') && (
                   <span
                     className="text-[9px] px-1.5 py-0.5 rounded font-bold"
@@ -1764,23 +1781,6 @@ function NowPlayingCard({ game, allGames, onClick, onQuickLog, sortBy = 'hours',
             <div className="flex-1" />
             {momentum.length >= 2 && <MomentumDots sessions={momentum} />}
             {game.platform && <span className="text-[9px] px-1.5 py-0.5 bg-white/5 rounded text-white/30">{game.platform}</span>}
-            {eloTierRank ? (() => {
-              const c = TIER_BADGE[eloTierRank.tier];
-              return (
-                <span className="text-[9px] px-1.5 py-0.5 rounded border font-bold"
-                  style={{ color: c.color, backgroundColor: c.bg, borderColor: c.border }}>
-                  {eloTierRank.tier} #{eloTierRank.rank}
-                </span>
-              );
-            })() : gameTier ? (() => {
-              const c = TIER_BADGE[gameTier];
-              return (
-                <span className="text-[9px] px-1.5 py-0.5 rounded border font-bold"
-                  style={{ color: c.color, backgroundColor: c.bg, borderColor: c.border }}>
-                  {gameTier} Tier
-                </span>
-              );
-            })() : null}
           </div>
 
           {/* Smart one-liner + contextual whisper */}
@@ -1970,6 +1970,23 @@ function PosterCard({ game, allGames, idx, onClick, onQuickLog, isInQueue, sortB
                   {relationship.label}
                 </span>
                 {game.genre && <span className="text-[10px] text-white/30">{game.genre}</span>}
+                {eloTierRank ? (() => {
+                  const c = TIER_BADGE[eloTierRank.tier];
+                  return (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full border font-bold"
+                      style={{ color: c.color, backgroundColor: c.bg, borderColor: c.border }}>
+                      {eloTierRank.tier} #{eloTierRank.rank}
+                    </span>
+                  );
+                })() : gameTier ? (() => {
+                  const c = TIER_BADGE[gameTier];
+                  return (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full border font-bold"
+                      style={{ color: c.color, backgroundColor: c.bg, borderColor: c.border }}>
+                      {gameTier} Tier
+                    </span>
+                  );
+                })() : null}
                 {(shelfExpiry.tier === 'at_risk' || shelfExpiry.tier === 'critical' || shelfExpiry.tier === 'expired') && (
                   <span
                     className="text-[9px] px-1.5 py-0.5 rounded font-bold"
@@ -2008,23 +2025,6 @@ function PosterCard({ game, allGames, idx, onClick, onQuickLog, isInQueue, sortB
             {/* Momentum sparkline */}
             {momentum.length >= 2 && <MomentumDots sessions={momentum} />}
             {game.platform && <span className="text-[9px] px-1.5 py-0.5 bg-white/5 rounded text-white/30">{game.platform}</span>}
-            {eloTierRank ? (() => {
-              const c = TIER_BADGE[eloTierRank.tier];
-              return (
-                <span className="text-[9px] px-1.5 py-0.5 rounded border font-bold"
-                  style={{ color: c.color, backgroundColor: c.bg, borderColor: c.border }}>
-                  {eloTierRank.tier} #{eloTierRank.rank}
-                </span>
-              );
-            })() : gameTier ? (() => {
-              const c = TIER_BADGE[gameTier];
-              return (
-                <span className="text-[9px] px-1.5 py-0.5 rounded border font-bold"
-                  style={{ color: c.color, backgroundColor: c.bg, borderColor: c.border }}>
-                  {gameTier} Tier
-                </span>
-              );
-            })() : null}
           </div>
 
           {/* Smart one-liner + contextual whisper */}
