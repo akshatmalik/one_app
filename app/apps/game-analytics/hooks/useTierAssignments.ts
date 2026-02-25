@@ -33,6 +33,7 @@ export interface UseTierAssignmentsReturn {
   assignTier: (gameId: string, tier: GameTier) => void;
   removeTier: (gameId: string) => void;
   clearAll: () => void;
+  bulkAssign: (map: TierAssignmentMap) => void;
   assignedCount: number;
   gamesInTier: (tier: GameTier) => string[];
 }
@@ -72,6 +73,11 @@ export function useTierAssignments(
     save(userId, periodKey, {});
   }, [userId, periodKey]);
 
+  const bulkAssign = useCallback((map: TierAssignmentMap) => {
+    setAssignments(map);
+    save(userId, periodKey, map);
+  }, [userId, periodKey]);
+
   const gamesInTier = useCallback((tier: GameTier): string[] => {
     return Object.entries(assignments)
       .filter(([, t]) => t === tier)
@@ -83,6 +89,7 @@ export function useTierAssignments(
     assignTier,
     removeTier,
     clearAll,
+    bulkAssign,
     assignedCount: Object.keys(assignments).length,
     gamesInTier,
   };
