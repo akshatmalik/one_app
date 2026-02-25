@@ -192,12 +192,15 @@ const TIER_STYLES: Record<GameTier, {
   F: { text: 'text-red-400',     border: 'border-red-400/20',     activeBg: 'bg-red-400/15',     activeBorder: 'border-red-400/50',     tabBg: 'bg-red-400/10' },
 };
 
-// ── Percentile auto-tier ─────────────────────────────────────────────
+// ── Slot-based auto-tier ─────────────────────────────────────────────
 
-// Thresholds: top 5% → S, 5-20% → A, 20-50% → B, 50-75% → C, 75-90% → D, 90-100% → F
+// Uses custom slot config if provided, otherwise falls back to percentile thresholds
+const TIER_LIST: GameTier[] = ['S', 'A', 'B', 'C', 'D', 'F'];
+
 function computePercentileTiers(
   eligible: GameWithMetrics[],
   rankings: GameRanking[],
+  slotConfig?: Record<GameTier, number>,
 ): TierAssignmentMap {
   if (eligible.length === 0) return {};
 
@@ -209,20 +212,37 @@ function computePercentileTiers(
     return eloB - eloA || a.name.localeCompare(b.name);
   });
 
-  const n = sorted.length;
   const result: TierAssignmentMap = {};
 
-  sorted.forEach((game, i) => {
-    const pct = i / n;
-    let tier: GameTier;
-    if (pct < 0.05) tier = 'S';
-    else if (pct < 0.20) tier = 'A';
-    else if (pct < 0.50) tier = 'B';
-    else if (pct < 0.75) tier = 'C';
-    else if (pct < 0.90) tier = 'D';
-    else tier = 'F';
-    result[game.id] = tier;
-  });
+  if (slotConfig) {
+    // Slot-based: fill each tier by slot count
+    let idx = 0;
+    for (const tier of TIER_LIST) {
+      const slots = slotConfig[tier];
+      for (let i = 0; i < slots && idx < sorted.length; i++, idx++) {
+        result[sorted[idx].id] = tier;
+      }
+    }
+    // Remaining games go to F
+    while (idx < sorted.length) {
+      result[sorted[idx].id] = 'F';
+      idx++;
+    }
+  } else {
+    // Fallback: percentile-based
+    const n = sorted.length;
+    sorted.forEach((game, i) => {
+      const pct = i / n;
+      let tier: GameTier;
+      if (pct < 0.05) tier = 'S';
+      else if (pct < 0.20) tier = 'A';
+      else if (pct < 0.50) tier = 'B';
+      else if (pct < 0.75) tier = 'C';
+      else if (pct < 0.90) tier = 'D';
+      else tier = 'F';
+      result[game.id] = tier;
+    });
+  }
 
   return result;
 }
@@ -329,9 +349,10 @@ type LeaderboardView = 'classic' | 'battle' | 'elo-rankings';
 interface LeaderboardTabProps {
   gamesWithMetrics: GameWithMetrics[];
   userId: string | null;
+  eloTierConfig?: Record<GameTier, number>;
 }
 
-export function LeaderboardTab({ gamesWithMetrics, userId }: LeaderboardTabProps) {
+export function LeaderboardTab({ gamesWithMetrics, userId, eloTierConfig }: LeaderboardTabProps) {
   // ── Classic mode state ─────────────────────────────────────────
   const [selectedCategory, setSelectedCategory] = useState<CategoryId>('rating');
   const [yearFilter, setYearFilter] = useState<string>('all');
@@ -767,7 +788,7 @@ export function LeaderboardTab({ gamesWithMetrics, userId }: LeaderboardTabProps
                 </div>
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => bulkAssign(computePercentileTiers(eligibleGames, rankings))}
+                    onClick={() => bulkAssign(computePercentileTiers(eligibleGames, rankings, eloTierConfig))}
                     className="text-[10px] px-2 py-1 rounded-md bg-purple-500/20 border border-purple-400/30 text-purple-300 hover:bg-purple-500/30 transition-colors font-medium"
                   >Auto-assign</button>
                   {assignedCount > 0 && (
