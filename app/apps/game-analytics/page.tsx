@@ -15,7 +15,8 @@ import { TimelineView } from './components/TimelineView';
 import { StatsView } from './components/StatsView';
 import { AIChatTab } from './components/AIChatTab';
 import { UpNextTab } from './components/UpNextTab';
-import { Game, GameStatus, PlayLog, GameRanking, GameAward, AwardPeriodType } from './lib/types';
+import { Game, GameStatus, PlayLog, GameRanking, GameAward, AwardPeriodType, GameTier, TierAssignmentMap } from './lib/types';
+import { useTierAssignments } from './hooks/useTierAssignments';
 import { gameRepository } from './lib/storage';
 import { useRankings } from './hooks/useRankings';
 import { rankingRepository } from './lib/ranking-storage';
@@ -53,6 +54,16 @@ function getValueColor(rating: string): string {
     default: return 'text-white/50';
   }
 }
+
+// S/A/B/C/D/F tier badge colors
+const TIER_BADGE: Record<string, { color: string; bg: string; border: string }> = {
+  S: { color: '#fde047', bg: 'rgba(253,224,71,0.12)',  border: 'rgba(253,224,71,0.30)' },
+  A: { color: '#6ee7b7', bg: 'rgba(110,231,183,0.10)', border: 'rgba(110,231,183,0.30)' },
+  B: { color: '#93c5fd', bg: 'rgba(147,197,253,0.10)', border: 'rgba(147,197,253,0.30)' },
+  C: { color: '#c4b5fd', bg: 'rgba(196,181,253,0.10)', border: 'rgba(196,181,253,0.30)' },
+  D: { color: '#fdba74', bg: 'rgba(253,186,116,0.10)', border: 'rgba(253,186,116,0.30)' },
+  F: { color: '#f87171', bg: 'rgba(248,113,113,0.10)', border: 'rgba(248,113,113,0.30)' },
+};
 
 // Returns the Elo tier label + color for display on cards
 function getEloTierInfo(elo: number): { label: string; color: string; bg: string } {
@@ -95,6 +106,7 @@ export default function GameAnalyticsPage() {
   const gameColors = useGameColors(games);
   const { quips: gameQuips } = useGameQuips(games, user?.uid ?? null);
   const { rankings: allTimeRankings } = useRankings(user?.uid ?? null, 'all', 'all');
+  const { assignments: allTimeTiers } = useTierAssignments(user?.uid ?? null, 'all');
   const eloByGameId = useMemo(() => {
     const map = new Map<string, GameRanking>();
     for (const r of allTimeRankings) map.set(r.gameId, r);
@@ -982,6 +994,7 @@ export default function GameAnalyticsPage() {
                   gameColors={gameColors}
                   gameQuips={gameQuips}
                   eloByGameId={eloByGameId}
+                  tierAssignments={allTimeTiers}
                 />
               )}
             </>
@@ -1307,6 +1320,7 @@ interface GameCardListProps {
   gameColors: Map<string, string>;
   gameQuips?: Record<string, { quip: string }>;
   eloByGameId?: Map<string, GameRanking>;
+  tierAssignments?: TierAssignmentMap;
 }
 
 function GameCardList({
@@ -1325,6 +1339,7 @@ function GameCardList({
   gameColors,
   gameQuips = {},
   eloByGameId = new Map(),
+  tierAssignments = {},
 }: GameCardListProps) {
   const sections = useMemo(() => groupBySection ? getGameSections(allGames) : [], [allGames, groupBySection]);
 
@@ -1371,16 +1386,17 @@ function GameCardList({
     const isEntering = enteringCards.has(game.id);
     const animClass = `game-card-animate${isEntering ? ' game-card-enter' : ''}`;
     const eloRanking = eloByGameId.get(game.id);
+    const gameTier = tierAssignments[game.id] as GameTier | undefined;
     if (cardViewMode === 'poster') {
       return (
         <div key={game.id} className={animClass}>
-          <PosterCard game={game} allGames={allGames} idx={idx} onClick={() => onCardClick(game)} onQuickLog={(h) => onQuickLog(game, h)} isInQueue={isInQueue(game.id)} sortBy={sortBy} tintColor={gameColors.get(game.id)} aiQuip={gameQuips[game.id]?.quip} eloRanking={eloRanking} />
+          <PosterCard game={game} allGames={allGames} idx={idx} onClick={() => onCardClick(game)} onQuickLog={(h) => onQuickLog(game, h)} isInQueue={isInQueue(game.id)} sortBy={sortBy} tintColor={gameColors.get(game.id)} aiQuip={gameQuips[game.id]?.quip} eloRanking={eloRanking} gameTier={gameTier} />
         </div>
       );
     }
     return (
       <div key={game.id} className={animClass}>
-        <CompactCard game={game} allGames={allGames} idx={idx} onClick={() => onCardClick(game)} onLogTime={() => onLogTime(game)} onToggleQueue={() => onToggleQueue(game)} onDelete={() => onDelete(game)} isInQueue={isInQueue(game.id)} sortBy={sortBy} tintColor={gameColors.get(game.id)} aiQuip={gameQuips[game.id]?.quip} eloRanking={eloRanking} />
+        <CompactCard game={game} allGames={allGames} idx={idx} onClick={() => onCardClick(game)} onLogTime={() => onLogTime(game)} onToggleQueue={() => onToggleQueue(game)} onDelete={() => onDelete(game)} isInQueue={isInQueue(game.id)} sortBy={sortBy} tintColor={gameColors.get(game.id)} aiQuip={gameQuips[game.id]?.quip} eloRanking={eloRanking} gameTier={gameTier} />
       </div>
     );
   };
@@ -1402,7 +1418,7 @@ function GameCardList({
             <div className="space-y-3">
               {nowPlayingGames.map(g => (
                 <div key={g.id} className={`game-card-animate${enteringCards.has(g.id) ? ' game-card-enter' : ''}`}>
-                  <NowPlayingCard game={g} allGames={allGames} onClick={() => onCardClick(g)} onQuickLog={(h) => onQuickLog(g, h)} sortBy={sortBy} tintColor={gameColors.get(g.id)} eloRanking={eloByGameId.get(g.id)} />
+                  <NowPlayingCard game={g} allGames={allGames} onClick={() => onCardClick(g)} onQuickLog={(h) => onQuickLog(g, h)} sortBy={sortBy} tintColor={gameColors.get(g.id)} eloRanking={eloByGameId.get(g.id)} gameTier={tierAssignments[g.id] as GameTier | undefined} />
                 </div>
               ))}
             </div>
@@ -1445,7 +1461,7 @@ function GameCardList({
           <div className="space-y-3">
             {nowPlayingGames.map(g => (
               <div key={g.id} className={`game-card-animate${enteringCards.has(g.id) ? ' game-card-enter' : ''}`}>
-                <NowPlayingCard game={g} allGames={allGames} onClick={() => onCardClick(g)} onQuickLog={(h) => onQuickLog(g, h)} eloRanking={eloByGameId.get(g.id)} />
+                <NowPlayingCard game={g} allGames={allGames} onClick={() => onCardClick(g)} onQuickLog={(h) => onQuickLog(g, h)} eloRanking={eloByGameId.get(g.id)} gameTier={tierAssignments[g.id] as GameTier | undefined} />
               </div>
             ))}
           </div>
@@ -1475,7 +1491,7 @@ function SectionIcon({ id }: { id: string }) {
 
 // --- Now Playing Card ---
 
-function NowPlayingCard({ game, allGames, onClick, onQuickLog, sortBy = 'hours', tintColor, eloRanking }: {
+function NowPlayingCard({ game, allGames, onClick, onQuickLog, sortBy = 'hours', tintColor, eloRanking, gameTier }: {
   game: GameWithMetrics;
   allGames: Game[];
   onClick: () => void;
@@ -1483,6 +1499,7 @@ function NowPlayingCard({ game, allGames, onClick, onQuickLog, sortBy = 'hours',
   sortBy?: string;
   tintColor?: string;
   eloRanking?: GameRanking;
+  gameTier?: GameTier;
 }) {
   const [isFlipped, setIsFlipped] = useState(false);
   const rarity = getCardRarity(game);
@@ -1705,7 +1722,7 @@ function NowPlayingCard({ game, allGames, onClick, onQuickLog, sortBy = 'hours',
 
 // --- Poster Card ---
 
-function PosterCard({ game, allGames, idx, onClick, onQuickLog, isInQueue, sortBy = 'hours', tintColor, aiQuip, eloRanking }: {
+function PosterCard({ game, allGames, idx, onClick, onQuickLog, isInQueue, sortBy = 'hours', tintColor, aiQuip, eloRanking, gameTier }: {
   game: GameWithMetrics;
   allGames: Game[];
   idx: number;
@@ -1716,6 +1733,7 @@ function PosterCard({ game, allGames, idx, onClick, onQuickLog, isInQueue, sortB
   tintColor?: string;
   aiQuip?: string;
   eloRanking?: GameRanking;
+  gameTier?: GameTier;
 }) {
   const [isFlipped, setIsFlipped] = useState(false);
   const rarity = getCardRarity(game);
@@ -1879,6 +1897,15 @@ function PosterCard({ game, allGames, idx, onClick, onQuickLog, isInQueue, sortB
             {/* Momentum sparkline */}
             {momentum.length >= 2 && <MomentumDots sessions={momentum} />}
             {game.platform && <span className="text-[9px] px-1.5 py-0.5 bg-white/5 rounded text-white/30">{game.platform}</span>}
+            {gameTier && (() => {
+              const c = TIER_BADGE[gameTier];
+              return (
+                <span className="text-[9px] px-1.5 py-0.5 rounded border font-bold"
+                  style={{ color: c.color, backgroundColor: c.bg, borderColor: c.border }}>
+                  {gameTier} Tier
+                </span>
+              );
+            })()}
             {eloRanking && (() => {
               const t = getEloTierInfo(eloRanking.eloScore);
               return (
@@ -2052,7 +2079,7 @@ function PosterCardBack({ game, allGames, onFlip, rarity, freshness, relationshi
 
 // --- Compact Card (original layout, fixed) ---
 
-function CompactCard({ game, allGames, idx, onClick, onLogTime, onToggleQueue, onDelete, isInQueue, sortBy = 'hours', tintColor, aiQuip, eloRanking }: {
+function CompactCard({ game, allGames, idx, onClick, onLogTime, onToggleQueue, onDelete, isInQueue, sortBy = 'hours', tintColor, aiQuip, eloRanking, gameTier }: {
   game: GameWithMetrics;
   allGames: Game[];
   idx: number;
@@ -2065,6 +2092,7 @@ function CompactCard({ game, allGames, idx, onClick, onLogTime, onToggleQueue, o
   tintColor?: string;
   aiQuip?: string;
   eloRanking?: GameRanking;
+  gameTier?: GameTier;
 }) {
   const [isFlipped, setIsFlipped] = useState(false);
   const rarity = getCardRarity(game);
@@ -2172,6 +2200,16 @@ function CompactCard({ game, allGames, idx, onClick, onLogTime, onToggleQueue, o
                     <span className="text-[9px] px-1.5 py-0.5 rounded font-bold shrink-0"
                       style={{ color: badge.color, backgroundColor: badge.bg }}>
                       🏆 {badge.label}{badge.count > 1 ? ` ×${badge.count}` : ''}
+                    </span>
+                  );
+                })()}
+                {/* S/A/B/C/D/F tier badge */}
+                {gameTier && (() => {
+                  const c = TIER_BADGE[gameTier];
+                  return (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded border font-bold shrink-0"
+                      style={{ color: c.color, backgroundColor: c.bg, borderColor: c.border }}>
+                      {gameTier} Tier
                     </span>
                   );
                 })()}

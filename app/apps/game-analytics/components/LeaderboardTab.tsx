@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { GameWithMetrics } from '../hooks/useAnalytics';
 import { useRankings, getPeriodKey, getPeriodLabel, getPeriodRange } from '../hooks/useRankings';
-import { RankingPeriod, GameRanking, GameTier, GameAward } from '../lib/types';
+import { RankingPeriod, GameRanking, GameTier, GameAward, TierAssignmentMap } from '../lib/types';
 import { useTierAssignments } from '../hooks/useTierAssignments';
 import { logError } from '../lib/error-log';
 import { ForwardRefExoticComponent, RefAttributes } from 'react';
@@ -192,6 +192,41 @@ const TIER_STYLES: Record<GameTier, {
   F: { text: 'text-red-400',     border: 'border-red-400/20',     activeBg: 'bg-red-400/15',     activeBorder: 'border-red-400/50',     tabBg: 'bg-red-400/10' },
 };
 
+// ── Percentile auto-tier ─────────────────────────────────────────────
+
+// Thresholds: top 5% → S, 5-20% → A, 20-50% → B, 50-75% → C, 75-90% → D, 90-100% → F
+function computePercentileTiers(
+  eligible: GameWithMetrics[],
+  rankings: GameRanking[],
+): TierAssignmentMap {
+  if (eligible.length === 0) return {};
+
+  const eloMap = new Map(rankings.map(r => [r.gameId, r.eloScore]));
+
+  const sorted = [...eligible].sort((a, b) => {
+    const eloA = eloMap.get(a.id) ?? 1000;
+    const eloB = eloMap.get(b.id) ?? 1000;
+    return eloB - eloA || a.name.localeCompare(b.name);
+  });
+
+  const n = sorted.length;
+  const result: TierAssignmentMap = {};
+
+  sorted.forEach((game, i) => {
+    const pct = i / n;
+    let tier: GameTier;
+    if (pct < 0.05) tier = 'S';
+    else if (pct < 0.20) tier = 'A';
+    else if (pct < 0.50) tier = 'B';
+    else if (pct < 0.75) tier = 'C';
+    else if (pct < 0.90) tier = 'D';
+    else tier = 'F';
+    result[game.id] = tier;
+  });
+
+  return result;
+}
+
 // ── ELO Battle components ────────────────────────────────────────────
 
 const ELO_PERIOD_OPTIONS: { value: RankingPeriod; label: string }[] = [
@@ -359,7 +394,7 @@ export function LeaderboardTab({ gamesWithMetrics, userId }: LeaderboardTabProps
   const eligibleIds = useMemo(() => eligibleGames.map(g => g.id), [eligibleGames]);
 
   // ── Tier assignments (persisted per userId + periodKey) ──────────
-  const { assignments, assignTier, removeTier, clearAll, assignedCount } =
+  const { assignments, assignTier, removeTier, clearAll, bulkAssign, assignedCount } =
     useTierAssignments(userId, periodKey);
 
   // Reset tier phase when the period changes
@@ -730,12 +765,18 @@ export function LeaderboardTab({ gamesWithMetrics, userId }: LeaderboardTabProps
                     {assignedCount} / {eligibleGames.length} assigned
                   </p>
                 </div>
-                {assignedCount > 0 && (
+                <div className="flex items-center gap-2">
                   <button
-                    onClick={clearAll}
-                    className="text-[10px] text-white/25 hover:text-white/50 transition-colors"
-                  >Reset all</button>
-                )}
+                    onClick={() => bulkAssign(computePercentileTiers(eligibleGames, rankings))}
+                    className="text-[10px] px-2 py-1 rounded-md bg-purple-500/20 border border-purple-400/30 text-purple-300 hover:bg-purple-500/30 transition-colors font-medium"
+                  >Auto-assign</button>
+                  {assignedCount > 0 && (
+                    <button
+                      onClick={clearAll}
+                      className="text-[10px] text-white/25 hover:text-white/50 transition-colors"
+                    >Reset</button>
+                  )}
+                </div>
               </div>
 
               {/* Progress bar */}
