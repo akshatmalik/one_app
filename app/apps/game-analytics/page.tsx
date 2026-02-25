@@ -1003,7 +1003,10 @@ export default function GameAnalyticsPage() {
                       ⚙ Tiers
                     </button>
                     {showTierConfig && (
-                      <div className="absolute right-0 top-full mt-1 z-50 bg-[#13131a] border border-white/10 rounded-lg p-3 shadow-xl w-52">
+                      <div className="fixed inset-0 z-40" onClick={() => setShowTierConfig(false)} />
+                    )}
+                    {showTierConfig && (
+                      <div className="absolute left-1/2 -translate-x-1/2 top-full mt-1 z-50 bg-[#13131a] border border-white/10 rounded-lg p-3 shadow-xl w-48">
                         <p className="text-[10px] text-white/40 font-bold uppercase tracking-wider mb-2">Games per tier</p>
                         {TIER_ORDER.map(tier => {
                           const c = TIER_BADGE[tier];
@@ -1016,7 +1019,7 @@ export default function GameAnalyticsPage() {
                                 max={99}
                                 value={eloTierConfig[tier]}
                                 onChange={e => updateEloTierConfig(tier, parseInt(e.target.value) || 0)}
-                                className="w-14 px-2 py-1 bg-white/5 border border-white/10 rounded text-white text-xs text-center focus:outline-none focus:border-white/30"
+                                className="w-12 px-1.5 py-1 bg-white/5 border border-white/10 rounded text-white text-xs text-center focus:outline-none focus:border-white/30"
                               />
                               <span className="text-[9px] text-white/20">{eloTierConfig[tier] === 1 ? 'slot' : 'slots'}</span>
                             </div>
@@ -1205,7 +1208,7 @@ export default function GameAnalyticsPage() {
           )}
 
           {tabMode === 'leaderboard' && (
-            <LeaderboardTab gamesWithMetrics={gamesWithMetrics} userId={user?.uid ?? null} />
+            <LeaderboardTab gamesWithMetrics={gamesWithMetrics} userId={user?.uid ?? null} eloTierConfig={eloTierConfig} />
           )}
         </div>
       </div>
