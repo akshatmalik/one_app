@@ -11714,3 +11714,583 @@ export function getGameGraveyardData(games: Game[]): { game: Game; eulogy: GameE
     .filter(x => x.eulogy !== null)
     .sort((a, b) => (b.game.datePurchased || '').localeCompare(a.game.datePurchased || ''));
 }
+
+// ─── Quarter In Review ─────────────────────────────────────────────────────────
+
+export interface QuarterInReviewData {
+  year: number;
+  quarter: number;
+  quarterLabel: string;
+  dateRange: string;
+  startMonth: number;
+  endMonth: number;
+
+  totalHours: number;
+  totalSessions: number;
+  uniqueGames: number;
+  daysActive: number;
+  avgSessionLength: number;
+
+  gamesPlayed: Array<{ game: Game; hours: number; sessions: number; percentage: number }>;
+  topGame: { game: Game; hours: number; sessions: number; percentage: number } | null;
+  top3Games: Array<{ game: Game; hours: number; percentage: number }>;
+
+  monthBreakdown: Array<{ monthKey: string; monthLabel: string; hours: number; sessions: number; games: number }>;
+
+  genreBreakdown: Array<{ genre: string; hours: number; percentage: number }>;
+  topGenre: string | null;
+
+  totalSpent: number;
+  gamesPurchased: Array<{ game: Game; price: number }>;
+  bestDeal: { game: Game; costPerHour: number } | null;
+
+  completedGames: Game[];
+  newGamesStarted: Game[];
+  abandonedGames: Game[];
+
+  bestValueGame: { game: Game; costPerHour: number } | null;
+
+  vsLastQuarter: {
+    hoursDiff: number;
+    sessionsDiff: number;
+    gamesDiff: number;
+    spendingDiff: number;
+    completionsDiff: number;
+    trend: 'up' | 'down' | 'same';
+  };
+
+  personality: GamingPersonality;
+  longestSession: { date: string; hours: number; gameName: string } | null;
+  biggestDay: { date: string; hours: number; games: string[] } | null;
+  plotTwists: PlotTwist[];
+}
+
+const QUARTER_MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+function getQuarterRange(year: number, quarter: number): { startMonth: number; endMonth: number; start: Date; end: Date; label: string; dateRange: string } {
+  const startMonth = (quarter - 1) * 3 + 1;
+  const endMonth = startMonth + 2;
+  const start = new Date(year, startMonth - 1, 1);
+  const end = new Date(year, endMonth, 0, 23, 59, 59);
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return {
+    startMonth,
+    endMonth,
+    start,
+    end,
+    label: `Q${quarter} ${year}`,
+    dateRange: `${monthNames[startMonth - 1]} – ${monthNames[endMonth - 1]} ${year}`,
+  };
+}
+
+export function getQuarterInReviewData(games: Game[], year: number, quarter: number): QuarterInReviewData {
+  const range = getQuarterRange(year, quarter);
+  const ownedGames = games.filter(g => g.status !== 'Wishlist');
+
+  // Build per-game stats for the quarter
+  const gameHours: Record<string, number> = {};
+  const gameSessions: Record<string, number> = {};
+  const genreHours: Record<string, number> = {};
+  const monthlyHours: Record<string, number> = {};
+  const monthlySessions: Record<string, number> = {};
+  const monthlyGames: Record<string, Set<string>> = {};
+  const dailyHours: Record<string, { hours: number; games: Set<string> }> = {};
+  let totalHours = 0;
+  let totalSessions = 0;
+  const activeDays = new Set<string>();
+  let longestSession: { date: string; hours: number; gameName: string } | null = null;
+
+  for (const game of ownedGames) {
+    for (const log of game.playLogs ?? []) {
+      const d = parseLocalDate(log.date);
+      if (d < range.start || d > range.end) continue;
+
+      totalHours += log.hours;
+      totalSessions++;
+      activeDays.add(log.date.substring(0, 10));
+
+      gameHours[game.id] = (gameHours[game.id] || 0) + log.hours;
+      gameSessions[game.id] = (gameSessions[game.id] || 0) + 1;
+
+      if (game.genre) genreHours[game.genre] = (genreHours[game.genre] || 0) + log.hours;
+
+      const mk = log.date.substring(0, 7);
+      monthlyHours[mk] = (monthlyHours[mk] || 0) + log.hours;
+      monthlySessions[mk] = (monthlySessions[mk] || 0) + 1;
+      if (!monthlyGames[mk]) monthlyGames[mk] = new Set();
+      monthlyGames[mk].add(game.id);
+
+      const dk = log.date.substring(0, 10);
+      if (!dailyHours[dk]) dailyHours[dk] = { hours: 0, games: new Set() };
+      dailyHours[dk].hours += log.hours;
+      dailyHours[dk].games.add(game.name);
+
+      if (!longestSession || log.hours > longestSession.hours) {
+        longestSession = { date: log.date, hours: log.hours, gameName: game.name };
+      }
+    }
+  }
+
+  const gamesPlayedIds = new Set(Object.keys(gameHours));
+  const gamesPlayed = Array.from(gamesPlayedIds)
+    .map(id => {
+      const game = ownedGames.find(g => g.id === id)!;
+      return { game, hours: gameHours[id], sessions: gameSessions[id] || 0, percentage: totalHours > 0 ? (gameHours[id] / totalHours) * 100 : 0 };
+    })
+    .sort((a, b) => b.hours - a.hours);
+
+  const topGame = gamesPlayed[0] || null;
+  const top3Games = gamesPlayed.slice(0, 3).map(g => ({ game: g.game, hours: g.hours, percentage: g.percentage }));
+
+  // Month breakdown
+  const monthBreakdown = [];
+  for (let m = range.startMonth; m <= range.endMonth; m++) {
+    const mk = `${year}-${String(m).padStart(2, '0')}`;
+    monthBreakdown.push({
+      monthKey: mk,
+      monthLabel: QUARTER_MONTH_LABELS[m - 1],
+      hours: monthlyHours[mk] || 0,
+      sessions: monthlySessions[mk] || 0,
+      games: monthlyGames[mk]?.size || 0,
+    });
+  }
+
+  // Genre breakdown
+  const totalGenreHours = Object.values(genreHours).reduce((s, h) => s + h, 0) || 1;
+  const genreBreakdown = Object.entries(genreHours)
+    .sort((a, b) => b[1] - a[1])
+    .map(([genre, hours]) => ({ genre, hours, percentage: (hours / totalGenreHours) * 100 }));
+  const topGenre = genreBreakdown[0]?.genre || null;
+
+  // Spending
+  const gamesPurchased = ownedGames
+    .filter(g => g.datePurchased && parseLocalDate(g.datePurchased) >= range.start && parseLocalDate(g.datePurchased) <= range.end)
+    .map(g => ({ game: g, price: g.price }));
+  const totalSpent = gamesPurchased.reduce((s, g) => s + g.price, 0);
+
+  // Best deal
+  let bestDeal: { game: Game; costPerHour: number } | null = null;
+  for (const { game } of gamesPurchased) {
+    const h = getTotalHours(game);
+    if (h > 0 && game.price > 0) {
+      const cph = game.price / h;
+      if (!bestDeal || cph < bestDeal.costPerHour) {
+        bestDeal = { game, costPerHour: cph };
+      }
+    }
+  }
+
+  // Best value in quarter
+  let bestValueGame: { game: Game; costPerHour: number } | null = null;
+  for (const { game, hours } of gamesPlayed) {
+    if (hours > 0 && game.price > 0) {
+      const cph = game.price / getTotalHours(game);
+      if (!bestValueGame || cph < bestValueGame.costPerHour) {
+        bestValueGame = { game, costPerHour: cph };
+      }
+    }
+  }
+
+  // Completions, starts, abandonments in this quarter
+  const completedGames = ownedGames.filter(g => g.status === 'Completed' && g.endDate && parseLocalDate(g.endDate) >= range.start && parseLocalDate(g.endDate) <= range.end);
+  const newGamesStarted = ownedGames.filter(g => g.startDate && parseLocalDate(g.startDate) >= range.start && parseLocalDate(g.startDate) <= range.end);
+  const abandonedGames = ownedGames.filter(g => g.status === 'Abandoned' && g.endDate && parseLocalDate(g.endDate) >= range.start && parseLocalDate(g.endDate) <= range.end);
+
+  // Biggest day
+  let biggestDay: { date: string; hours: number; games: string[] } | null = null;
+  for (const [dk, d] of Object.entries(dailyHours)) {
+    if (!biggestDay || d.hours > biggestDay.hours) {
+      biggestDay = { date: dk, hours: d.hours, games: Array.from(d.games) };
+    }
+  }
+
+  // Personality (games active this quarter)
+  const quarterGames = ownedGames.filter(g => gamesPlayedIds.has(g.id));
+  const personality = getGamingPersonality(quarterGames.length > 0 ? quarterGames : ownedGames);
+
+  // vs last quarter
+  const prevQ = quarter === 1 ? { year: year - 1, quarter: 4 } : { year, quarter: quarter - 1 };
+  const prevRange = getQuarterRange(prevQ.year, prevQ.quarter);
+  let prevHours = 0;
+  let prevSessions = 0;
+  const prevGamesSet = new Set<string>();
+  let prevSpent = 0;
+  let prevCompleted = 0;
+
+  for (const game of ownedGames) {
+    for (const log of game.playLogs ?? []) {
+      const d = parseLocalDate(log.date);
+      if (d >= prevRange.start && d <= prevRange.end) {
+        prevHours += log.hours;
+        prevSessions++;
+        prevGamesSet.add(game.id);
+      }
+    }
+    if (game.datePurchased) {
+      const pd = parseLocalDate(game.datePurchased);
+      if (pd >= prevRange.start && pd <= prevRange.end) prevSpent += game.price;
+    }
+    if (game.status === 'Completed' && game.endDate) {
+      const ed = parseLocalDate(game.endDate);
+      if (ed >= prevRange.start && ed <= prevRange.end) prevCompleted++;
+    }
+  }
+
+  const hoursDiff = totalHours - prevHours;
+  const trend: 'up' | 'down' | 'same' = hoursDiff > 2 ? 'up' : hoursDiff < -2 ? 'down' : 'same';
+
+  // Plot twists filtered to this quarter
+  const allTwists = getPlotTwists(games);
+  const plotTwists = allTwists.filter(t => {
+    const d = parseLocalDate(t.date + (t.date.length === 7 ? '-01' : ''));
+    return d >= range.start && d <= range.end;
+  });
+
+  return {
+    year,
+    quarter,
+    quarterLabel: range.label,
+    dateRange: range.dateRange,
+    startMonth: range.startMonth,
+    endMonth: range.endMonth,
+    totalHours,
+    totalSessions,
+    uniqueGames: gamesPlayedIds.size,
+    daysActive: activeDays.size,
+    avgSessionLength: totalSessions > 0 ? totalHours / totalSessions : 0,
+    gamesPlayed,
+    topGame,
+    top3Games,
+    monthBreakdown,
+    genreBreakdown,
+    topGenre,
+    totalSpent,
+    gamesPurchased,
+    bestDeal,
+    completedGames,
+    newGamesStarted,
+    abandonedGames,
+    bestValueGame,
+    vsLastQuarter: {
+      hoursDiff,
+      sessionsDiff: totalSessions - prevSessions,
+      gamesDiff: gamesPlayedIds.size - prevGamesSet.size,
+      spendingDiff: totalSpent - prevSpent,
+      completionsDiff: completedGames.length - prevCompleted,
+      trend,
+    },
+    personality,
+    longestSession,
+    biggestDay,
+    plotTwists,
+  };
+}
+
+// ─── Year In Review (Full) ────────────────────────────────────────────────────
+
+export interface YearInReviewFullData {
+  year: number;
+  yearLabel: string;
+  hasData: boolean;
+
+  totalHours: number;
+  totalSessions: number;
+  uniqueGames: number;
+  daysActive: number;
+  avgSessionLength: number;
+  hoursPerDay: number;
+
+  gamesPlayed: Array<{ game: Game; hours: number; sessions: number; percentage: number }>;
+  topGame: { game: Game; hours: number; sessions: number; percentage: number } | null;
+  top10Games: Array<{ game: Game; hours: number; rating: number; percentage: number }>;
+
+  monthBreakdown: Array<{ monthKey: string; monthLabel: string; hours: number; sessions: number; games: number }>;
+  peakMonth: { monthKey: string; monthLabel: string; hours: number } | null;
+
+  quarterBreakdown: Array<{ quarter: number; label: string; hours: number; sessions: number; games: number; completions: number }>;
+
+  genreBreakdown: Array<{ genre: string; hours: number; percentage: number }>;
+  topGenre: string | null;
+
+  totalSpent: number;
+  gamesPurchased: Array<{ game: Game; price: number }>;
+  avgPurchasePrice: number;
+  totalSaved: number;
+  bestDeal: { game: Game; costPerHour: number } | null;
+  bestValueGame: { game: Game; costPerHour: number } | null;
+  worstValueGame: { game: Game; costPerHour: number } | null;
+
+  completedGames: Game[];
+  newGamesStarted: Game[];
+  abandonedGames: Game[];
+  completionRate: number;
+
+  longestSession: { date: string; hours: number; gameName: string } | null;
+  biggestDay: { date: string; hours: number; games: string[] } | null;
+  longestStreak: number;
+
+  personality: GamingPersonality;
+  personalityEvolution: PersonalitySnapshot[];
+
+  plotTwists: PlotTwist[];
+
+  vsLastYear: {
+    hoursDiff: number;
+    sessionsDiff: number;
+    gamesDiff: number;
+    spendingDiff: number;
+    completionsDiff: number;
+    trend: 'up' | 'down' | 'same';
+  };
+
+  fastestCompletion: { game: Game; days: number } | null;
+  biggestSurprise: { game: Game; reason: string } | null;
+}
+
+export function getYearInReviewFullData(games: Game[], year: number): YearInReviewFullData {
+  const yearStr = year.toString();
+  const yearStart = new Date(year, 0, 1);
+  const yearEnd = new Date(year, 11, 31, 23, 59, 59);
+  const ownedGames = games.filter(g => g.status !== 'Wishlist');
+
+  const gameHours: Record<string, number> = {};
+  const gameSessions: Record<string, number> = {};
+  const genreHours: Record<string, number> = {};
+  const monthlyHours: Record<string, number> = {};
+  const monthlySessions: Record<string, number> = {};
+  const monthlyGamesMap: Record<string, Set<string>> = {};
+  const dailyHours: Record<string, { hours: number; games: Set<string> }> = {};
+  const activeDays = new Set<string>();
+  let totalHours = 0;
+  let totalSessions = 0;
+  let longestSession: { date: string; hours: number; gameName: string } | null = null;
+
+  for (const game of ownedGames) {
+    for (const log of game.playLogs ?? []) {
+      if (!log.date.startsWith(yearStr)) continue;
+      totalHours += log.hours;
+      totalSessions++;
+      activeDays.add(log.date.substring(0, 10));
+
+      gameHours[game.id] = (gameHours[game.id] || 0) + log.hours;
+      gameSessions[game.id] = (gameSessions[game.id] || 0) + 1;
+
+      if (game.genre) genreHours[game.genre] = (genreHours[game.genre] || 0) + log.hours;
+
+      const mk = log.date.substring(0, 7);
+      monthlyHours[mk] = (monthlyHours[mk] || 0) + log.hours;
+      monthlySessions[mk] = (monthlySessions[mk] || 0) + 1;
+      if (!monthlyGamesMap[mk]) monthlyGamesMap[mk] = new Set();
+      monthlyGamesMap[mk].add(game.id);
+
+      const dk = log.date.substring(0, 10);
+      if (!dailyHours[dk]) dailyHours[dk] = { hours: 0, games: new Set() };
+      dailyHours[dk].hours += log.hours;
+      dailyHours[dk].games.add(game.name);
+
+      if (!longestSession || log.hours > longestSession.hours) {
+        longestSession = { date: log.date, hours: log.hours, gameName: game.name };
+      }
+    }
+  }
+
+  const hasData = totalHours > 0;
+  const gamesPlayedIds = new Set(Object.keys(gameHours));
+
+  const gamesPlayed = Array.from(gamesPlayedIds)
+    .map(id => {
+      const game = ownedGames.find(g => g.id === id)!;
+      return {
+        game,
+        hours: gameHours[id],
+        sessions: gameSessions[id] || 0,
+        percentage: totalHours > 0 ? (gameHours[id] / totalHours) * 100 : 0,
+      };
+    })
+    .sort((a, b) => b.hours - a.hours);
+
+  const topGame = gamesPlayed[0] || null;
+  const top10Games = gamesPlayed.slice(0, 10).map(g => ({
+    game: g.game,
+    hours: g.hours,
+    rating: g.game.rating,
+    percentage: g.percentage,
+  }));
+
+  // Month breakdown (all 12)
+  const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const monthBreakdown = [];
+  for (let m = 1; m <= 12; m++) {
+    const mk = `${year}-${String(m).padStart(2, '0')}`;
+    monthBreakdown.push({
+      monthKey: mk,
+      monthLabel: MONTH_SHORT[m - 1],
+      hours: monthlyHours[mk] || 0,
+      sessions: monthlySessions[mk] || 0,
+      games: monthlyGamesMap[mk]?.size || 0,
+    });
+  }
+  const peakMonthData = monthBreakdown.reduce((best, m) => m.hours > (best?.hours || 0) ? m : best, null as typeof monthBreakdown[0] | null);
+  const peakMonth = peakMonthData && peakMonthData.hours > 0 ? { monthKey: peakMonthData.monthKey, monthLabel: peakMonthData.monthLabel, hours: peakMonthData.hours } : null;
+
+  // Quarter breakdown
+  const quarterBreakdown = [1, 2, 3, 4].map(q => {
+    const sm = (q - 1) * 3 + 1;
+    const em = sm + 2;
+    let qHours = 0; let qSessions = 0; const qGames = new Set<string>(); let qCompletions = 0;
+    for (let m = sm; m <= em; m++) {
+      const mk = `${year}-${String(m).padStart(2, '0')}`;
+      qHours += monthlyHours[mk] || 0;
+      qSessions += monthlySessions[mk] || 0;
+      monthlyGamesMap[mk]?.forEach(id => qGames.add(id));
+    }
+    qCompletions = ownedGames.filter(g => g.status === 'Completed' && g.endDate && g.endDate.startsWith(yearStr) && parseInt(g.endDate.substring(5, 7)) >= sm && parseInt(g.endDate.substring(5, 7)) <= em).length;
+    return { quarter: q, label: `Q${q}`, hours: qHours, sessions: qSessions, games: qGames.size, completions: qCompletions };
+  });
+
+  // Genre breakdown
+  const totalGenreHours = Object.values(genreHours).reduce((s, h) => s + h, 0) || 1;
+  const genreBreakdown = Object.entries(genreHours)
+    .sort((a, b) => b[1] - a[1])
+    .map(([genre, hours]) => ({ genre, hours, percentage: (hours / totalGenreHours) * 100 }));
+  const topGenre = genreBreakdown[0]?.genre || null;
+
+  // Spending
+  const gamesPurchased = ownedGames
+    .filter(g => g.datePurchased?.startsWith(yearStr))
+    .map(g => ({ game: g, price: g.price }));
+  const totalSpent = gamesPurchased.reduce((s, g) => s + g.price, 0);
+  const avgPurchasePrice = gamesPurchased.length > 0 ? totalSpent / gamesPurchased.length : 0;
+  const totalSaved = gamesPurchased.reduce((s, g) => {
+    if (g.game.acquiredFree) return s + (g.game.originalPrice || 0);
+    if (g.game.originalPrice && g.game.originalPrice > g.game.price) return s + (g.game.originalPrice - g.game.price);
+    return s;
+  }, 0);
+
+  let bestDeal: { game: Game; costPerHour: number } | null = null;
+  let bestValueGame: { game: Game; costPerHour: number } | null = null;
+  let worstValueGame: { game: Game; costPerHour: number } | null = null;
+  for (const { game } of gamesPlayed) {
+    const h = getTotalHours(game);
+    if (h > 0 && game.price > 0) {
+      const cph = game.price / h;
+      if (!bestValueGame || cph < bestValueGame.costPerHour) bestValueGame = { game, costPerHour: cph };
+      if (!worstValueGame || cph > worstValueGame.costPerHour) worstValueGame = { game, costPerHour: cph };
+    }
+    if (gamesPurchased.some(p => p.game.id === game.id) && h > 0 && game.price > 0) {
+      const cph = game.price / h;
+      if (!bestDeal || cph < bestDeal.costPerHour) bestDeal = { game, costPerHour: cph };
+    }
+  }
+
+  // Completions, starts, abandonments
+  const completedGames = ownedGames.filter(g => g.status === 'Completed' && g.endDate?.startsWith(yearStr));
+  const newGamesStarted = ownedGames.filter(g => g.startDate?.startsWith(yearStr));
+  const abandonedGames = ownedGames.filter(g => g.status === 'Abandoned' && g.endDate?.startsWith(yearStr));
+  const completionRate = newGamesStarted.length > 0 ? (completedGames.length / newGamesStarted.length) * 100 : 0;
+
+  // Biggest day
+  let biggestDay: { date: string; hours: number; games: string[] } | null = null;
+  for (const [dk, d] of Object.entries(dailyHours)) {
+    if (!biggestDay || d.hours > biggestDay.hours) {
+      biggestDay = { date: dk, hours: d.hours, games: Array.from(d.games) };
+    }
+  }
+
+  // Longest streak
+  const sortedDays = Array.from(activeDays).sort();
+  let curStreak = 1; let maxStreak = sortedDays.length > 0 ? 1 : 0;
+  for (let i = 1; i < sortedDays.length; i++) {
+    const prev = new Date(sortedDays[i - 1]);
+    const cur = new Date(sortedDays[i]);
+    const diff = (cur.getTime() - prev.getTime()) / 86400000;
+    if (diff === 1) { curStreak++; if (curStreak > maxStreak) maxStreak = curStreak; } else curStreak = 1;
+  }
+
+  // Personality + evolution
+  const yearGames = ownedGames.filter(g => gamesPlayedIds.has(g.id));
+  const personality = getGamingPersonality(yearGames.length > 0 ? yearGames : ownedGames);
+  const personalityEvolution = getPersonalityEvolution(games).filter(s => s.period.startsWith(yearStr));
+
+  // Plot twists for this year
+  const allTwists = getPlotTwists(games);
+  const plotTwists = allTwists.filter(t => t.date.startsWith(yearStr));
+
+  // vs last year
+  let prevHours = 0; let prevSessions = 0; const prevGamesSet = new Set<string>(); let prevSpent = 0;
+  const prevYearStr = (year - 1).toString();
+  for (const game of ownedGames) {
+    for (const log of game.playLogs ?? []) {
+      if (log.date.startsWith(prevYearStr)) {
+        prevHours += log.hours; prevSessions++; prevGamesSet.add(game.id);
+      }
+    }
+    if (game.datePurchased?.startsWith(prevYearStr)) prevSpent += game.price;
+  }
+  const prevCompleted = ownedGames.filter(g => g.status === 'Completed' && g.endDate?.startsWith(prevYearStr)).length;
+  const hoursDiff = totalHours - prevHours;
+
+  // Fastest completion
+  let fastestCompletion: { game: Game; days: number } | null = null;
+  for (const game of completedGames) {
+    if (game.startDate && game.endDate) {
+      const days = Math.round((parseLocalDate(game.endDate).getTime() - parseLocalDate(game.startDate).getTime()) / 86400000);
+      if (!fastestCompletion || days < fastestCompletion.days) fastestCompletion = { game, days };
+    }
+  }
+
+  // Biggest surprise: cheap + high rating
+  let biggestSurprise: { game: Game; reason: string } | null = null;
+  for (const g of gamesPurchased) {
+    if (g.game.price <= 20 && g.game.rating >= 8 && getTotalHours(g.game) >= 10) {
+      if (!biggestSurprise) biggestSurprise = { game: g.game, reason: `$${g.game.price} for a ${g.game.rating}/10 masterpiece` };
+    }
+  }
+
+  return {
+    year,
+    yearLabel: yearStr,
+    hasData,
+    totalHours,
+    totalSessions,
+    uniqueGames: gamesPlayedIds.size,
+    daysActive: activeDays.size,
+    avgSessionLength: totalSessions > 0 ? totalHours / totalSessions : 0,
+    hoursPerDay: activeDays.size > 0 ? totalHours / 365 : 0,
+    gamesPlayed,
+    topGame,
+    top10Games,
+    monthBreakdown,
+    peakMonth,
+    quarterBreakdown,
+    genreBreakdown,
+    topGenre,
+    totalSpent,
+    gamesPurchased,
+    avgPurchasePrice,
+    totalSaved,
+    bestDeal,
+    bestValueGame,
+    worstValueGame,
+    completedGames,
+    newGamesStarted,
+    abandonedGames,
+    completionRate,
+    longestSession,
+    biggestDay,
+    longestStreak: maxStreak,
+    personality,
+    personalityEvolution,
+    plotTwists,
+    vsLastYear: {
+      hoursDiff,
+      sessionsDiff: totalSessions - prevSessions,
+      gamesDiff: gamesPlayedIds.size - prevGamesSet.size,
+      spendingDiff: totalSpent - prevSpent,
+      completionsDiff: completedGames.length - prevCompleted,
+      trend: hoursDiff > 5 ? 'up' : hoursDiff < -5 ? 'down' : 'same',
+    },
+    fastestCompletion,
+    biggestSurprise,
+  };
+}

@@ -8,9 +8,12 @@ import { TimelinePeriodCards } from './TimelinePeriodCards';
 import { QuickAddTimeModal } from './QuickAddTimeModal';
 import { WeekInReview } from './WeekInReview';
 import { MonthStoryMode } from './MonthStoryMode';
+import { QuarterStoryMode } from './QuarterStoryMode';
+import { YearStoryMode } from './YearStoryMode';
 import { AwardsHub } from './AwardsHub';
 import { GameWithMetrics } from '../hooks/useAnalytics';
 import { generateMonthlyRecap, generateYearChapterTitles, generateMonthChapterTitles } from '../lib/ai-game-service';
+import { getQuarterInReviewData, getYearInReviewFullData } from '../lib/calculations';
 import { RacingBarChart } from './RacingBarChart';
 import { HoursRace } from './HoursRace';
 import { ActivityFeed } from './ActivityFeed';
@@ -52,7 +55,9 @@ export function TimelineView({ games, gamesWithMetrics, updateGame, onLogTime, o
   const [monthChapterTitles, setMonthChapterTitles] = useState<Record<string, string>>({});
   const [expandedJourneys, setExpandedJourneys] = useState<Set<string>>(new Set());
   const [monthRecapKey, setMonthRecapKey] = useState<string | null>(null);
-  const [awardsHubConfig, setAwardsHubConfig] = useState<{ tab: 'quarter'; periodKey: string } | null>(null);
+  const [quarterRecapConfig, setQuarterRecapConfig] = useState<{ year: number; quarter: number } | null>(null);
+  const [yearRecapConfig, setYearRecapConfig] = useState<number | null>(null);
+  const [awardsHubConfig, setAwardsHubConfig] = useState<{ tab: 'quarter' | 'year'; periodKey: string } | null>(null);
 
   const maxWeeksBack = useMemo(() => {
     return Math.max(1, getAvailableWeeksCount(games));
@@ -336,6 +341,61 @@ export function TimelineView({ games, gamesWithMetrics, updateGame, onLogTime, o
     return totals;
   }, [events]);
 
+  // Quarter recap data (computed on demand when modal opens)
+  const quarterRecapData = useMemo(() => {
+    if (!quarterRecapConfig) return null;
+    return getQuarterInReviewData(games, quarterRecapConfig.year, quarterRecapConfig.quarter);
+  }, [quarterRecapConfig, games]);
+
+  // Year recap data (computed on demand)
+  const yearRecapData = useMemo(() => {
+    if (yearRecapConfig === null) return null;
+    return getYearInReviewFullData(games, yearRecapConfig);
+  }, [yearRecapConfig, games]);
+
+  // Derive unique years from monthKeys for year boundary rendering
+  const yearsWithData = useMemo(() => {
+    const years = new Set<number>();
+    monthKeys.forEach(mk => years.add(parseInt(mk.split('-')[0])));
+    return Array.from(years).sort((a, b) => b - a);
+  }, [monthKeys]);
+
+  // Per-year aggregates for year boundary banner
+  const yearTotals = useMemo(() => {
+    const totals: Record<number, { hours: number; games: Set<string>; completions: number }> = {};
+    events.forEach(event => {
+      const year = parseInt(event.date.substring(0, 4));
+      if (!totals[year]) totals[year] = { hours: 0, games: new Set(), completions: 0 };
+      if (event.type === 'play') { totals[year].hours += event.hours || 0; totals[year].games.add(event.game.id); }
+      if (event.type === 'complete') totals[year].completions++;
+    });
+    return totals;
+  }, [events]);
+
+  // Helper: return the ISO week's Monday date string for any date string
+  const getWeekStartStr = (dateStr: string): string => {
+    const date = parseLocalDate(dateStr);
+    const day = date.getDay() || 7; // 1=Mon … 7=Sun
+    const monday = new Date(date);
+    monday.setDate(date.getDate() - (day - 1));
+    const y = monday.getFullYear();
+    const m = String(monday.getMonth() + 1).padStart(2, '0');
+    const d = String(monday.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  };
+
+  // Helper: how many weeks ago was the week that starts on weekStartStr?
+  const computeWeekOffset = (weekStartStr: string): number => {
+    const today = new Date();
+    const todayDay = today.getDay() || 7;
+    const currentMonday = new Date(today);
+    currentMonday.setDate(today.getDate() - (todayDay - 1));
+    currentMonday.setHours(0, 0, 0, 0);
+    const weekMonday = parseLocalDate(weekStartStr);
+    const diffMs = currentMonday.getTime() - weekMonday.getTime();
+    return Math.max(0, Math.round(diffMs / (7 * 24 * 60 * 60 * 1000)));
+  };
+
   const handleQuickAddTime = async (gameId: string, playLog: PlayLog) => {
     if (onQuickAddTime) {
       await onQuickAddTime(gameId, playLog);
@@ -468,8 +528,9 @@ export function TimelineView({ games, gamesWithMetrics, updateGame, onLogTime, o
     );
   }
 
-  // Track which quarter we're in for chapter title display
+  // Track which quarter/year we're in for boundary title display
   let lastQuarter = '';
+  let lastYear = '';
 
   return (
     <div className="space-y-6">
@@ -480,6 +541,29 @@ export function TimelineView({ games, gamesWithMetrics, updateGame, onLogTime, o
           allGames={games}
           onClose={() => setMonthRecapKey(null)}
           monthTitle={monthChapterTitles[monthRecapKey]}
+          updateGame={updateGame}
+        />
+      )}
+
+      {/* Quarter Recap Modal */}
+      {quarterRecapData && quarterRecapConfig && (
+        <QuarterStoryMode
+          data={quarterRecapData}
+          allGames={games}
+          onClose={() => setQuarterRecapConfig(null)}
+          quarterTitle={chapterTitles[`Q${quarterRecapConfig.quarter}`]}
+          updateGame={updateGame}
+        />
+      )}
+
+      {/* Year Recap Modal */}
+      {yearRecapData && yearRecapConfig !== null && (
+        <YearStoryMode
+          data={yearRecapData}
+          allGames={games}
+          onClose={() => setYearRecapConfig(null)}
+          yearTitle={chapterTitles[`${yearRecapConfig}`]}
+          chapterTitles={chapterTitles}
           updateGame={updateGame}
         />
       )}
@@ -622,6 +706,9 @@ export function TimelineView({ games, gamesWithMetrics, updateGame, onLogTime, o
           const thumbs = monthThumbnails[monthKey];
           const totals = monthlyTotals[monthKey];
           const recap = aiRecaps[monthKey];
+          const yearOfMonth = parseInt(monthKey.split('-')[0]);
+          const showYearBoundary = String(yearOfMonth) !== lastYear;
+          lastYear = String(yearOfMonth);
           const quarter = getQuarterKey(monthKey);
           const showChapterTitle = quarter !== lastQuarter && chapterTitles[quarter];
           lastQuarter = quarter;
@@ -632,24 +719,94 @@ export function TimelineView({ games, gamesWithMetrics, updateGame, onLogTime, o
 
           return (
             <div key={monthKey} className="card-enter" style={{ animationDelay: `${monthIdx * 80}ms` }}>
-              {/* Quarter chapter title */}
+              {/* Year boundary banner — rendered at first month of each new year */}
+              {showYearBoundary && (() => {
+                const yt = yearTotals[yearOfMonth];
+                return (
+                  <div className="mb-5">
+                    <div className="relative overflow-hidden rounded-2xl border border-amber-500/25 bg-gradient-to-br from-amber-500/8 via-amber-500/4 to-transparent p-5">
+                      <div className="absolute -top-6 -right-6 w-48 h-48 bg-amber-500/5 rounded-full blur-3xl pointer-events-none" />
+                      <div className="relative flex items-start justify-between gap-4">
+                        <div className="flex-1 min-w-0">
+                          <div className="text-5xl font-black text-amber-500/20 leading-none mb-2 select-none">{yearOfMonth}</div>
+                          <div className="flex items-center gap-3 flex-wrap text-[10px] text-white/30">
+                            {yt && yt.hours > 0 && <span className="text-amber-400/60">{yt.hours.toFixed(0)}h played</span>}
+                            {yt && yt.games.size > 0 && <span>{yt.games.size} games</span>}
+                            {yt && yt.completions > 0 && <span>{yt.completions} completed</span>}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            onClick={() => setYearRecapConfig(yearOfMonth)}
+                            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/20 text-amber-300 text-xs font-bold transition-all"
+                          >
+                            <span>🎬</span>
+                            <span>Year in Review</span>
+                          </button>
+                          {updateGame && (
+                            <button
+                              onClick={() => setAwardsHubConfig({ tab: 'year', periodKey: `${yearOfMonth}` })}
+                              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/15 text-amber-400/70 text-xs font-bold transition-all"
+                            >
+                              <span>🏆</span>
+                              <span>Awards</span>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Quarter chapter title — grand segment banner */}
               {showChapterTitle && (() => {
                 const qYear = parseInt(monthKey.split('-')[0]);
                 const qNum = parseInt(quarter.replace('Q', ''));
+                const qMonths = ['01','02','03','04','05','06','07','08','09','10','11','12'].slice((qNum - 1) * 3, qNum * 3);
+                const qKeys = qMonths.map(m => `${qYear}-${m}`);
+                const qHours = qKeys.reduce((s, k) => s + (monthlyTotals[k]?.hours || 0), 0);
+                const qGames = new Set(qKeys.flatMap(k => Array.from(monthlyTotals[k]?.games || new Set<string>())));
+                const qCompletions = qKeys.reduce((s, k) => s + (monthlyTotals[k]?.completions || 0), 0);
                 return (
-                  <div className="flex items-center gap-3 mb-4 pb-2">
-                    <Sparkles size={14} className="text-purple-400" />
-                    <span className="text-sm font-semibold text-purple-400">{chapterTitles[quarter]}</span>
-                    <span className="text-[10px] text-white/20">{quarter}</span>
-                    <div className="flex-1 h-px bg-purple-500/10" />
-                    {updateGame && (
-                      <button
-                        onClick={() => setAwardsHubConfig({ tab: 'quarter', periodKey: `${qYear}-Q${qNum}` })}
-                        className="flex items-center gap-1 text-[10px] px-2 py-1 rounded-full bg-purple-500/15 text-purple-300 hover:bg-purple-500/25 transition-colors font-semibold shrink-0"
-                      >
-                        🏆 {quarter} Awards
-                      </button>
-                    )}
+                  <div className="mb-5">
+                    <div className="relative overflow-hidden rounded-2xl border border-purple-500/20 bg-gradient-to-br from-purple-500/8 via-purple-500/4 to-transparent p-4">
+                      <div className="absolute -top-4 -right-4 w-32 h-32 bg-purple-500/5 rounded-full blur-3xl pointer-events-none" />
+                      <div className="relative flex items-start justify-between gap-4">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <Sparkles size={11} className="text-purple-400/70 shrink-0" />
+                            <span className="text-[10px] font-bold uppercase tracking-widest text-purple-400/50">{quarter} · {qYear}</span>
+                          </div>
+                          <div className="text-sm font-bold text-purple-300 leading-snug truncate">
+                            {chapterTitles[quarter]}
+                          </div>
+                          <div className="flex items-center gap-3 mt-2 text-[10px] text-white/30">
+                            {qHours > 0 && <span>{qHours.toFixed(0)}h played</span>}
+                            {qGames.size > 0 && <span>{qGames.size} games</span>}
+                            {qCompletions > 0 && <span>{qCompletions} completed</span>}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            onClick={() => setQuarterRecapConfig({ year: qYear, quarter: qNum })}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-500/15 hover:bg-purple-500/25 border border-purple-500/20 text-purple-300 text-xs font-semibold transition-all"
+                          >
+                            <span>📖</span>
+                            <span>Recap</span>
+                          </button>
+                          {updateGame && (
+                            <button
+                              onClick={() => setAwardsHubConfig({ tab: 'quarter', periodKey: `${qYear}-Q${qNum}` })}
+                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/15 text-purple-400/70 text-xs font-semibold transition-all"
+                            >
+                              <span>🏆</span>
+                              <span>Awards</span>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 );
               })()}
@@ -756,56 +913,104 @@ export function TimelineView({ games, gamesWithMetrics, updateGame, onLogTime, o
                 )}
               </div>
 
-              {/* Events grouped by day */}
+              {/* Events grouped by week, then by day */}
               <div className="space-y-2 relative">
                 <div className="absolute left-6 top-3 bottom-3 w-px bg-gradient-to-b from-white/8 via-white/5 to-transparent" />
 
-                {sortedDays.map(dayDate => {
-                  const dayEvents = dayGroups[dayDate];
-                  const isMultiEvent = dayEvents.length > 2;
+                {(() => {
+                  // Group sorted days by ISO week start (Monday)
+                  const daysByWeek = new Map<string, string[]>();
+                  sortedDays.forEach(dayDate => {
+                    const wk = getWeekStartStr(dayDate);
+                    if (!daysByWeek.has(wk)) daysByWeek.set(wk, []);
+                    daysByWeek.get(wk)!.push(dayDate);
+                  });
+                  const sortedWeekStarts = Array.from(daysByWeek.keys()).sort((a, b) => b.localeCompare(a));
 
-                  if (isMultiEvent) {
-                    // Same-day grouping: show as a grouped card
-                    const totalDayHours = dayEvents.filter(e => e.type === 'play').reduce((s, e) => s + (e.hours || 0), 0);
-                    const uniqueGames = [...new Set(dayEvents.map(e => e.game.name))];
+                  return sortedWeekStarts.map(weekStart => {
+                    const weekDays = daysByWeek.get(weekStart)!;
+                    const weekEndDate = new Date(parseLocalDate(weekStart));
+                    weekEndDate.setDate(weekEndDate.getDate() + 6);
+
+                    // Week totals for the mini-header
+                    const weekPlayEvents = weekDays.flatMap(d => (dayGroups[d] || []).filter(e => e.type === 'play'));
+                    const weekHours = weekPlayEvents.reduce((s, e) => s + (e.hours || 0), 0);
+                    const weekSessions = weekPlayEvents.length;
+                    const wkOffset = computeWeekOffset(weekStart);
+
+                    const startLabel = parseLocalDate(weekStart).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                    const endLabel = weekEndDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
                     return (
-                      <div key={dayDate} className="relative">
-                        <div className="flex items-start gap-4">
-                          <div className="relative z-10 shrink-0">
-                            <div className="w-12 h-12 rounded-xl bg-white/[0.03] border border-white/10 flex flex-col items-center justify-center">
-                              <span className="text-xs font-bold text-white/60">
-                                {parseLocalDate(dayDate).getDate()}
-                              </span>
-                              <span className="text-[8px] text-white/30 uppercase">
-                                {parseLocalDate(dayDate).toLocaleDateString('en-US', { weekday: 'short' })}
-                              </span>
-                            </div>
+                      <div key={weekStart}>
+                        {/* Week sub-segment header — only when there is play activity */}
+                        {weekSessions > 0 && (
+                          <div className="flex items-center gap-2 pt-2 pb-1 mb-1">
+                            <span className="text-[10px] text-white/25 font-medium tracking-wide whitespace-nowrap">{startLabel} – {endLabel}</span>
+                            <span className="text-[10px] text-blue-400/50">{weekHours.toFixed(1)}h</span>
+                            {weekSessions > 1 && <span className="text-[10px] text-white/20">{weekSessions} sessions</span>}
+                            <div className="flex-1 h-px bg-white/[0.04]" />
+                            <button
+                              onClick={() => { setWeekOffset(wkOffset); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                              className="text-[10px] px-2 py-0.5 rounded bg-white/[0.04] hover:bg-purple-500/10 text-white/25 hover:text-purple-400 transition-all whitespace-nowrap"
+                            >
+                              View Recap
+                            </button>
                           </div>
-                          <div className="flex-1 p-3 bg-white/[0.02] border border-white/5 rounded-xl">
-                            <div className="flex items-center gap-2 mb-2">
-                              <span className="text-sm text-white/70 font-medium">{dayEvents.length} events</span>
-                              {totalDayHours > 0 && <span className="text-xs text-blue-400">{totalDayHours}h played</span>}
-                              <span className="text-[10px] text-white/25">{uniqueGames.join(', ')}</span>
-                            </div>
-                            <div className="space-y-1.5">
-                              {dayEvents.map(event => (
-                                <div key={event.id} className="flex items-center gap-2 text-xs">
-                                  <div className="scale-75">{getEventIcon(event.type)}</div>
-                                  <span className="text-white/60">{event.game.name}</span>
-                                  <span className="text-white/30">{getEventLabel(event)}</span>
-                                  {event.notes && <span className="text-white/20 italic truncate">&ldquo;{event.notes}&rdquo;</span>}
+                        )}
+
+                        {/* Days within this week */}
+                        <div className="space-y-2">
+                          {weekDays.map(dayDate => {
+                            const dayEvents = dayGroups[dayDate];
+                            const isMultiEvent = dayEvents.length > 2;
+
+                            if (isMultiEvent) {
+                              const totalDayHours = dayEvents.filter(e => e.type === 'play').reduce((s, e) => s + (e.hours || 0), 0);
+                              const uniqueGames = [...new Set(dayEvents.map(e => e.game.name))];
+                              return (
+                                <div key={dayDate} className="relative">
+                                  <div className="flex items-start gap-4">
+                                    <div className="relative z-10 shrink-0">
+                                      <div className="w-12 h-12 rounded-xl bg-white/[0.03] border border-white/10 flex flex-col items-center justify-center">
+                                        <span className="text-xs font-bold text-white/60">
+                                          {parseLocalDate(dayDate).getDate()}
+                                        </span>
+                                        <span className="text-[8px] text-white/30 uppercase">
+                                          {parseLocalDate(dayDate).toLocaleDateString('en-US', { weekday: 'short' })}
+                                        </span>
+                                      </div>
+                                    </div>
+                                    <div className="flex-1 p-3 bg-white/[0.02] border border-white/5 rounded-xl">
+                                      <div className="flex items-center gap-2 mb-2">
+                                        <span className="text-sm text-white/70 font-medium">{dayEvents.length} events</span>
+                                        {totalDayHours > 0 && <span className="text-xs text-blue-400">{totalDayHours}h played</span>}
+                                        <span className="text-[10px] text-white/25">{uniqueGames.join(', ')}</span>
+                                      </div>
+                                      <div className="space-y-1.5">
+                                        {dayEvents.map(event => (
+                                          <div key={event.id} className="flex items-center gap-2 text-xs">
+                                            <div className="scale-75">{getEventIcon(event.type)}</div>
+                                            <span className="text-white/60">{event.game.name}</span>
+                                            <span className="text-white/30">{getEventLabel(event)}</span>
+                                            {event.notes && <span className="text-white/20 italic truncate">&ldquo;{event.notes}&rdquo;</span>}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  </div>
                                 </div>
-                              ))}
-                            </div>
-                          </div>
+                              );
+                            }
+
+                            // Normal events (1–2 per day)
+                            return dayEvents.map(event => renderEvent(event));
+                          })}
                         </div>
                       </div>
                     );
-                  }
-
-                  // Normal events (1-2 per day)
-                  return dayEvents.map(event => renderEvent(event));
-                })}
+                  });
+                })()}
               </div>
             </div>
           );
