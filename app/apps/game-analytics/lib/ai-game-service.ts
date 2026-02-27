@@ -3,6 +3,7 @@
 import { getAI, getGenerativeModel, GoogleAIBackend } from 'firebase/ai';
 import { initializeApp, getApps } from 'firebase/app';
 import { Game } from './types';
+import { AIBlurbResult } from './ai-service';
 
 const firebaseConfig = {
   apiKey: "AIzaSyBS3IVvszDrm_zjjXu8TATgs1H-FlegHtM",
@@ -391,4 +392,87 @@ export function clearGameAICache(): void {
   localStorage.removeItem(CHAPTER_TITLES_CACHE);
   localStorage.removeItem(MONTH_CHAPTER_TITLES_CACHE);
   localStorage.removeItem(WEEK_TITLES_CACHE);
+}
+
+// ─── Quarter blurbs ──────────────────────────────────────────────────────────
+
+export type { AIBlurbResult } from './ai-service';
+export type QuarterAIBlurbType = 'quarter-opening' | 'quarter-closing' | 'quarter-hot-take';
+export type YearAIBlurbType = 'year-opening' | 'year-closing' | 'year-hot-take';
+
+export async function generateQuarterBlurbs(
+  quarterLabel: string,
+  topGame: string | null,
+  totalHours: number,
+  topGenre: string | null,
+  completions: number,
+): Promise<Partial<Record<QuarterAIBlurbType, AIBlurbResult>>> {
+  const cacheKey = `quarter-blurbs-${quarterLabel}`;
+  const cached = getCache<Partial<Record<QuarterAIBlurbType, AIBlurbResult>>>(cacheKey);
+  if (cached) return cached;
+
+  const context = `Quarter: ${quarterLabel}. Top game: ${topGame || 'none'}. Hours: ${totalHours.toFixed(0)}h. Top genre: ${topGenre || 'mixed'}. Completions: ${completions}.`;
+
+  const fallbacks: Partial<Record<QuarterAIBlurbType, AIBlurbResult>> = {
+    'quarter-opening': { text: `${quarterLabel} — a quarter of ${topGenre ? topGenre + ' adventures' : 'gaming adventures'}. ${totalHours.toFixed(0)} hours lived.`, isFallback: true },
+    'quarter-closing': { text: `${quarterLabel} is sealed. ${completions > 0 ? `${completions} game${completions > 1 ? 's' : ''} conquered.` : 'Next quarter awaits.'} The journey continues.`, isFallback: true },
+    'quarter-hot-take': { text: topGame ? `${topGame} was the heartbeat of ${quarterLabel}.` : `${quarterLabel}: ${totalHours.toFixed(0)} hours you'll never regret.`, isFallback: true },
+  };
+
+  try {
+    const model = getAIModel();
+    const prompt = `Gaming quarter recap. ${context}\n\nGenerate 3 short texts separated by "|||":\n1. Opening (1 sentence, poetic, about what the quarter meant)\n2. Closing (1 sentence, reflective, closing chapter)\n3. Hot take (1 bold provocative sentence about the quarter)\n\nBe specific, use the data. No generic phrases.`;
+    const genResult = await model.generateContent(prompt);
+    const text = genResult.response.text();
+    const parts = text.split('|||').map((s: string) => s.trim());
+    const result: Partial<Record<QuarterAIBlurbType, AIBlurbResult>> = {
+      'quarter-opening': { text: parts[0] || fallbacks['quarter-opening']!.text, isFallback: false },
+      'quarter-closing': { text: parts[1] || fallbacks['quarter-closing']!.text, isFallback: false },
+      'quarter-hot-take': { text: parts[2] || fallbacks['quarter-hot-take']!.text, isFallback: false },
+    };
+    setCache(cacheKey, result);
+    return result;
+  } catch {
+    setCache(cacheKey, fallbacks);
+    return fallbacks;
+  }
+}
+
+export async function generateYearBlurbs(
+  year: number,
+  topGame: string | null,
+  totalHours: number,
+  topGenre: string | null,
+  completions: number,
+  totalSpent: number,
+): Promise<Partial<Record<YearAIBlurbType, AIBlurbResult>>> {
+  const cacheKey = `year-blurbs-${year}`;
+  const cached = getCache<Partial<Record<YearAIBlurbType, AIBlurbResult>>>(cacheKey);
+  if (cached) return cached;
+
+  const context = `Year: ${year}. Top game: ${topGame || 'none'}. Total hours: ${totalHours.toFixed(0)}h. Top genre: ${topGenre || 'varied'}. Completions: ${completions}. Total spent: $${totalSpent.toFixed(0)}.`;
+
+  const fallbacks: Partial<Record<YearAIBlurbType, AIBlurbResult>> = {
+    'year-opening': { text: `${year} — ${totalHours.toFixed(0)} hours of gaming history, sealed and delivered.`, isFallback: true },
+    'year-closing': { text: `${year} is done. ${completions} games completed, ${totalHours.toFixed(0)} hours lived. ${year + 1} is yours.`, isFallback: true },
+    'year-hot-take': { text: topGame ? `${topGame} was the defining game of ${year} — and it wasn't close.` : `${year}: ${totalHours.toFixed(0)} hours that defined who you are as a gamer.`, isFallback: true },
+  };
+
+  try {
+    const model = getAIModel();
+    const prompt = `Gaming year-end recap. ${context}\n\nGenerate 3 texts separated by "|||":\n1. Grand opening reflection (2 sentences, epic and cinematic, about what the gaming year meant)\n2. Closing letter to the year (2 sentences, retrospective, welcoming next year)\n3. Hot take (1 absolutely bold sentence that captures the year's essence)\n\nBe specific and emotionally resonant. Use the data.`;
+    const genResult = await model.generateContent(prompt);
+    const text = genResult.response.text();
+    const parts = text.split('|||').map((s: string) => s.trim());
+    const result: Partial<Record<YearAIBlurbType, AIBlurbResult>> = {
+      'year-opening': { text: parts[0] || fallbacks['year-opening']!.text, isFallback: false },
+      'year-closing': { text: parts[1] || fallbacks['year-closing']!.text, isFallback: false },
+      'year-hot-take': { text: parts[2] || fallbacks['year-hot-take']!.text, isFallback: false },
+    };
+    setCache(cacheKey, result);
+    return result;
+  } catch {
+    setCache(cacheKey, fallbacks);
+    return fallbacks;
+  }
 }
