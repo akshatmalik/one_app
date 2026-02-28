@@ -272,8 +272,18 @@ export function YearlyWrapped({ games, year, onClose }: YearlyWrappedProps) {
         </button>
       </div>
 
-      {/* Screen Content */}
-      <div className="flex-1 overflow-hidden">
+      {/* Screen Content — tap left 35% to go back, right 65% to go forward */}
+      <div
+        className="flex-1 overflow-hidden relative"
+        onClick={(e) => {
+          const rect = e.currentTarget.getBoundingClientRect();
+          if (e.clientX - rect.left < rect.width * 0.35) {
+            goPrev();
+          } else {
+            goNext();
+          }
+        }}
+      >
         {screens[screenIndex]?.component}
       </div>
 

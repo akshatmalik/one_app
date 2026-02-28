@@ -26,7 +26,7 @@ import { GameWithMetrics } from '../hooks/useAnalytics';
 import { Game } from '../lib/types';
 import {
   getQueueSmartChirps, getQueueRivalry, getEstimatedHoursToReach,
-  buildQueueAIContext, SmartChirp, RivalryData,
+  buildQueueAIContext, SmartChirp, RivalryData, getUserGamingPace,
 } from '../lib/calculations';
 import {
   generateHypeChirps, generateNarrativeThread, generateQueueRoast,
@@ -44,6 +44,7 @@ interface UpNextTabProps {
   onRemoveFromQueue: (gameId: string) => Promise<void>;
   onReorderQueue: (gameId: string, newPosition: number) => Promise<void>;
   onLogTime?: (game: GameWithMetrics) => void;
+  onStartGame?: (game: GameWithMetrics) => void;
 }
 
 type AIMode = 'hype' | 'roast' | 'narrative' | 'advisor' | null;
@@ -58,6 +59,7 @@ export function UpNextTab({
   onRemoveFromQueue,
   onReorderQueue,
   onLogTime,
+  onStartGame,
 }: UpNextTabProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddingGames, setIsAddingGames] = useState(false);
@@ -82,20 +84,42 @@ export function UpNextTab({
   );
 
   // Compute smart chirps
-  const smartChirps = useMemo(() => {
-    return getQueueSmartChirps(queuedGames, allGames);
-  }, [queuedGames, allGames]);
+  const smartChirps = useMemo(() => getQueueSmartChirps(queuedGames, allGames), [queuedGames, allGames]);
 
   // Compute rivalry
-  const rivalry = useMemo(() => {
-    return getQueueRivalry(queuedGames);
-  }, [queuedGames]);
+  const rivalry = useMemo(() => getQueueRivalry(queuedGames), [queuedGames]);
 
   // Build AI context
   const aiContext = useMemo(() => {
     if (queuedGames.length === 0) return null;
     return buildQueueAIContext(queuedGames, allGames);
   }, [queuedGames, allGames]);
+
+  // Weekly gaming pace (hours/week over last 4 weeks)
+  const weeklyPace = useMemo(() => getUserGamingPace(allGames), [allGames]);
+
+  // Queue summary: active game count + total estimated remaining hours
+  const queueSummary = useMemo(() => {
+    const activeGames = queuedGames.filter(g => g.status !== 'Completed' && g.status !== 'Abandoned');
+    const totalHours = activeGames.reduce((sum, g) => {
+      const played = g.totalHours || 0;
+      const estimated = played > 0 ? Math.max(played * 1.5, 25) : 30;
+      return sum + Math.max(estimated - played, 0);
+    }, 0);
+    const weeks = weeklyPace > 0 ? totalHours / weeklyPace : null;
+    let timeLabel = '';
+    if (weeks !== null) {
+      if (weeks < 4) timeLabel = `~${Math.round(weeks)}w`;
+      else if (weeks < 52) timeLabel = `~${Math.round(weeks / 4.33)}mo`;
+      else timeLabel = '1+ year';
+    }
+    return { count: activeGames.length, totalHours: Math.round(totalHours), timeLabel };
+  }, [queuedGames, weeklyPace]);
+
+  // Index of the last In Progress game (for On Deck divider placement)
+  const lastHeroIndex = useMemo(() => {
+    return queuedGames.reduce((last, game, idx) => game.status === 'In Progress' ? idx : last, -1);
+  }, [queuedGames]);
 
   // Load AI hype chirps on mount (if queue has games)
   useEffect(() => {
@@ -224,9 +248,6 @@ export function UpNextTab({
   // Stats chirp
   const statsChirp = smartChirps.find(c => c.type === 'stats');
 
-  // Is first game a hero?
-  const isFirstGameHero = queuedGames.length > 0 && queuedGames[0].status === 'In Progress';
-
   return (
     <div className="space-y-4">
       {/* Header */}
@@ -266,14 +287,33 @@ export function UpNextTab({
         </div>
       </div>
 
-      {/* Queue Stats Banner */}
-      {statsChirp && queuedGames.length > 0 && (
+      {/* Queue Summary */}
+      {queuedGames.length > 0 && (
         <div className="flex items-center gap-3 px-4 py-3 bg-gradient-to-r from-purple-500/10 via-purple-500/5 to-transparent border border-purple-500/10 rounded-xl">
           <TrendingUp size={16} className="text-purple-400 shrink-0" />
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-sm font-medium text-white/80">
+              {queueSummary.count} game{queueSummary.count !== 1 ? 's' : ''}
+            </span>
+            <span className="text-white/20">·</span>
+            <span className="text-sm text-white/50">~{queueSummary.totalHours}h remaining</span>
+            {queueSummary.timeLabel && weeklyPace > 0 && (
+              <>
+                <span className="text-white/20">·</span>
+                <span className="text-xs text-white/35">est. {queueSummary.timeLabel} at your pace</span>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Smart Chirp Banner (secondary) */}
+      {statsChirp && queuedGames.length > 0 && (
+        <div className="flex items-center gap-3 px-4 py-2 bg-white/[0.02] border border-white/5 rounded-xl">
           <div>
-            <span className="text-sm font-medium text-white/80">{statsChirp.text}</span>
+            <span className="text-xs text-white/50">{statsChirp.text}</span>
             {statsChirp.subtext && (
-              <span className="text-xs text-white/40 block sm:inline sm:ml-2">{statsChirp.subtext}</span>
+              <span className="text-xs text-white/30 block sm:inline sm:ml-2">{statsChirp.subtext}</span>
             )}
           </div>
         </div>
@@ -451,11 +491,13 @@ export function UpNextTab({
           >
             <div className="journey-path space-y-2">
               {queuedGames.map((game, index) => {
-                const isHero = index === 0 && isFirstGameHero;
+                const isHero = game.status === 'In Progress';
                 const estimatedHours = getEstimatedHoursToReach(queuedGames, index);
                 const aiChirp = getChirpForPosition(index);
                 const smartChirp = getSmartChirpForPosition(index);
                 const isFirstCompleted = index === firstCompletedIndex && firstCompletedIndex > 0;
+                // "On Deck" shows after the last In Progress hero, before the first non-hero
+                const showOnDeck = index === lastHeroIndex && lastHeroIndex >= 0 && index < queuedGames.length - 1;
 
                 return (
                   <div key={game.id}>
@@ -474,9 +516,11 @@ export function UpNextTab({
                       position={index + 1}
                       isHero={isHero}
                       estimatedHoursAway={estimatedHours}
+                      weeklyPace={weeklyPace}
                       allGames={allGames}
                       onRemove={() => onRemoveFromQueue(game.id)}
                       onLogTime={onLogTime ? () => onLogTime(game) : undefined}
+                      onStartGame={onStartGame ? () => onStartGame(game) : undefined}
                     />
 
                     {/* Smart chirp after card (template-based) */}
@@ -499,8 +543,8 @@ export function UpNextTab({
                       />
                     )}
 
-                    {/* "On Deck" label between hero and #2 */}
-                    {isHero && queuedGames.length > 1 && (
+                    {/* "On Deck" label after last Now Playing hero */}
+                    {showOnDeck && (
                       <div className="chirp-enter flex items-center gap-3 py-2 px-2">
                         <div className="flex-1 h-px bg-gradient-to-r from-yellow-500/20 to-transparent" />
                         <span className="text-[10px] font-bold text-yellow-400/50 tracking-widest uppercase">On Deck</span>

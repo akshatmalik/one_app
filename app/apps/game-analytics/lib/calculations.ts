@@ -4480,6 +4480,25 @@ export function getEstimatedHoursToReach(queuedGames: Game[], index: number): nu
 }
 
 /**
+ * Average hours played per week over the last 4 weeks.
+ * Returns 0 if no play logs exist in that window.
+ */
+export function getUserGamingPace(games: Game[]): number {
+  const now = new Date();
+  const fourWeeksAgo = new Date(now.getTime() - 28 * 24 * 60 * 60 * 1000);
+  let totalHours = 0;
+  for (const game of games) {
+    for (const log of game.playLogs || []) {
+      const logDate = parseLocalDate(log.date);
+      if (logDate >= fourWeeksAgo && logDate <= now) {
+        totalHours += log.hours;
+      }
+    }
+  }
+  return totalHours / 4;
+}
+
+/**
  * Queue context for AI service
  */
 export interface QueueAIContext {

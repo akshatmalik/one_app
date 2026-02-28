@@ -2,64 +2,54 @@
 
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { GripVertical, X, CheckCircle2, PlayCircle, Calendar, XCircle, Clock, TrendingDown, Zap } from 'lucide-react';
+import { GripVertical, X, CheckCircle2, PlayCircle, Calendar, XCircle, Clock, TrendingDown, Zap, Play } from 'lucide-react';
 import { GameWithMetrics } from '../hooks/useAnalytics';
-import { getShelfLife, getOneHourProjection, getEstimatedHoursToReach, parseLocalDate, getGameChemistry, getQueueShameData } from '../lib/calculations';
+import { getShelfLife, getOneHourProjection, parseLocalDate, getGameChemistry, getQueueShameData } from '../lib/calculations';
 import { Game } from '../lib/types';
 import clsx from 'clsx';
 
 interface QueueGameCardProps {
   game: GameWithMetrics;
   position: number;
-  isHero?: boolean; // Position 1 with In Progress = hero card
+  isHero?: boolean;
   estimatedHoursAway?: number;
+  weeklyPace?: number;       // avg hours/week over last 4 weeks
   allGames?: Game[];
   onRemove: () => void;
   onLogTime?: () => void;
+  onStartGame?: () => void;  // sets status → In Progress + stamps start date
 }
 
-export function QueueGameCard({ game, position, isHero, estimatedHoursAway, allGames = [], onRemove, onLogTime }: QueueGameCardProps) {
+export function QueueGameCard({
+  game, position, isHero, estimatedHoursAway, weeklyPace = 0,
+  allGames = [], onRemove, onLogTime, onStartGame,
+}: QueueGameCardProps) {
   const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
+    attributes, listeners, setNodeRef, transform, transition, isDragging,
   } = useSortable({ id: game.id });
 
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-  };
+  const style = { transform: CSS.Transform.toString(transform), transition };
 
   const shelfLife = getShelfLife(game);
-  const oneHourProjection = isHero ? getOneHourProjection(game) : null;
+  const oneHourProjection = game.status === 'In Progress' ? getOneHourProjection(game) : null;
   const chemistry = allGames.length > 0 ? getGameChemistry(game, allGames) : null;
   const shameData = allGames.length > 0 ? getQueueShameData(game, allGames) : null;
 
-  // Calculate days playing
   const getDaysPlaying = () => {
     if (game.status === 'In Progress' && game.startDate) {
-      const days = Math.floor(
-        (new Date().getTime() - parseLocalDate(game.startDate).getTime()) /
-        (1000 * 60 * 60 * 24)
+      return Math.floor(
+        (new Date().getTime() - parseLocalDate(game.startDate).getTime()) / (1000 * 60 * 60 * 24)
       );
-      return days;
     }
     if (game.status === 'Completed' && game.startDate && game.endDate) {
-      const days = Math.floor(
-        (parseLocalDate(game.endDate).getTime() - parseLocalDate(game.startDate).getTime()) /
-        (1000 * 60 * 60 * 24)
+      return Math.floor(
+        (parseLocalDate(game.endDate).getTime() - parseLocalDate(game.startDate).getTime()) / (1000 * 60 * 60 * 24)
       );
-      return days;
     }
     return null;
   };
-
   const daysPlaying = getDaysPlaying();
 
-  // Days since last session
   const getDaysSinceLastPlay = () => {
     if (game.playLogs && game.playLogs.length > 0) {
       const sorted = [...game.playLogs].sort((a, b) => parseLocalDate(b.date).getTime() - parseLocalDate(a.date).getTime());
@@ -67,28 +57,32 @@ export function QueueGameCard({ game, position, isHero, estimatedHoursAway, allG
     }
     return null;
   };
-
   const daysSinceLastPlay = getDaysSinceLastPlay();
 
-  // Last session note
   const getLastSessionInfo = () => {
     if (game.playLogs && game.playLogs.length > 0) {
       const sorted = [...game.playLogs].sort((a, b) => parseLocalDate(b.date).getTime() - parseLocalDate(a.date).getTime());
-      return {
-        note: sorted[0].notes || null,
-        hours: sorted[0].hours,
-        date: sorted[0].date,
-      };
+      return { note: sorted[0].notes || null, hours: sorted[0].hours, date: sorted[0].date };
     }
     return null;
   };
-
   const lastSession = getLastSessionInfo();
 
   const formatDate = (dateStr: string) => {
-    const date = parseLocalDate(dateStr);
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    return parseLocalDate(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
+
+  // Convert estimated hours away → human-readable time at current pace
+  const formatTimeEstimate = (): string | null => {
+    if (!weeklyPace || weeklyPace <= 0 || !estimatedHoursAway || estimatedHoursAway <= 0) return null;
+    const weeks = estimatedHoursAway / weeklyPace;
+    if (weeks < 1) return '< 1 week away';
+    if (weeks < 4) return `~${Math.round(weeks)}w away`;
+    const months = weeks / 4.33;
+    if (months < 12) return `~${Math.round(months)}mo away`;
+    return '1+ year away';
+  };
+  const timeEstimate = formatTimeEstimate();
 
   const getStatusIcon = () => {
     switch (game.status) {
@@ -117,7 +111,7 @@ export function QueueGameCard({ game, position, isHero, estimatedHoursAway, allG
     }
   };
 
-  // ===== HERO CARD (Position 1, In Progress) =====
+  // ===== HERO CARD (all In Progress games) =====
   if (isHero) {
     return (
       <div
@@ -134,21 +128,14 @@ export function QueueGameCard({ game, position, isHero, estimatedHoursAway, allG
         <div className="relative overflow-hidden rounded-t-2xl">
           {game.thumbnail && (
             <div className="relative h-32 sm:h-40">
-              <img
-                src={game.thumbnail}
-                alt={game.name}
-                className="w-full h-full object-cover opacity-40"
-                loading="lazy"
-              />
+              <img src={game.thumbnail} alt={game.name} className="w-full h-full object-cover opacity-40" loading="lazy" />
               <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0f] via-[#0a0a0f]/80 to-transparent" />
             </div>
           )}
 
-          {/* Drag Handle + Position - overlaid on banner */}
           <div className="absolute top-3 left-3 flex items-center gap-2">
             <button
-              {...attributes}
-              {...listeners}
+              {...attributes} {...listeners}
               className="touch-manipulation cursor-grab active:cursor-grabbing p-1.5 text-white/40 hover:text-white/70 transition-colors bg-black/30 rounded-lg backdrop-blur-sm"
               aria-label="Drag to reorder"
             >
@@ -160,7 +147,6 @@ export function QueueGameCard({ game, position, isHero, estimatedHoursAway, allG
             </div>
           </div>
 
-          {/* Remove button */}
           <button
             onClick={(e) => { e.stopPropagation(); onRemove(); }}
             className="absolute top-3 right-3 touch-manipulation p-1.5 text-white/30 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all bg-black/30 backdrop-blur-sm"
@@ -169,21 +155,16 @@ export function QueueGameCard({ game, position, isHero, estimatedHoursAway, allG
             <X size={16} />
           </button>
 
-          {/* Game Name + Status overlay */}
           <div className="absolute bottom-0 left-0 right-0 p-4">
             <h3 className="text-lg font-bold text-white mb-1">{game.name}</h3>
             <div className="flex items-center gap-3 flex-wrap">
-              {game.platform && (
-                <span className="text-[10px] px-2 py-0.5 bg-white/10 backdrop-blur-sm rounded text-white/60">{game.platform}</span>
-              )}
-              {game.genre && (
-                <span className="text-[10px] px-2 py-0.5 bg-white/10 backdrop-blur-sm rounded text-white/60">{game.genre}</span>
-              )}
+              {game.platform && <span className="text-[10px] px-2 py-0.5 bg-white/10 backdrop-blur-sm rounded text-white/60">{game.platform}</span>}
+              {game.genre && <span className="text-[10px] px-2 py-0.5 bg-white/10 backdrop-blur-sm rounded text-white/60">{game.genre}</span>}
             </div>
           </div>
         </div>
 
-        {/* Hero Stats Row */}
+        {/* Hero Stats */}
         <div className="px-4 py-3">
           <div className="grid grid-cols-4 gap-2 text-center">
             <div className="p-2 bg-white/[0.03] rounded-lg">
@@ -199,21 +180,35 @@ export function QueueGameCard({ game, position, isHero, estimatedHoursAway, allG
               <div className="text-[10px] text-white/30">sessions</div>
             </div>
             <div className="p-2 bg-white/[0.03] rounded-lg">
-              <div className={clsx('font-bold text-sm', daysSinceLastPlay !== null && daysSinceLastPlay <= 2 ? 'text-emerald-400' : daysSinceLastPlay !== null && daysSinceLastPlay <= 7 ? 'text-yellow-400' : 'text-red-400')}>
+              <div className={clsx('font-bold text-sm',
+                daysSinceLastPlay !== null && daysSinceLastPlay <= 2 ? 'text-emerald-400' :
+                daysSinceLastPlay !== null && daysSinceLastPlay <= 7 ? 'text-yellow-400' : 'text-red-400'
+              )}>
                 {daysSinceLastPlay !== null ? (daysSinceLastPlay === 0 ? 'Today' : daysSinceLastPlay === 1 ? '1d' : `${daysSinceLastPlay}d`) : '-'}
               </div>
               <div className="text-[10px] text-white/30">last played</div>
             </div>
           </div>
 
-          {/* Last session note */}
+          {/* Dates row */}
+          {game.startDate && (
+            <div className="mt-2 flex items-center gap-3 px-1 text-[11px] text-white/35">
+              <span>Started {formatDate(game.startDate)}</span>
+              {game.endDate && (
+                <>
+                  <span className="text-white/15">→</span>
+                  <span>Done {formatDate(game.endDate)}</span>
+                </>
+              )}
+            </div>
+          )}
+
           {lastSession?.note && (
             <div className="mt-2 px-3 py-2 bg-white/[0.02] rounded-lg border-l-2 border-blue-500/30">
               <p className="text-xs text-white/50 italic">&ldquo;{lastSession.note}&rdquo;</p>
             </div>
           )}
 
-          {/* 1 Hour Projection */}
           {oneHourProjection && oneHourProjection.currentHours > 0 && (
             <div className="mt-2 flex items-center gap-2 px-3 py-2 bg-emerald-500/5 border border-emerald-500/10 rounded-lg">
               <Zap size={14} className="text-emerald-400 shrink-0" />
@@ -226,7 +221,6 @@ export function QueueGameCard({ game, position, isHero, estimatedHoursAway, allG
             </div>
           )}
 
-          {/* Chemistry Score (hero card) */}
           {chemistry && (
             <div className="mt-2 flex items-center gap-2 px-3 py-2 bg-pink-500/5 border border-pink-500/10 rounded-lg">
               <span className="text-lg shrink-0">
@@ -242,7 +236,6 @@ export function QueueGameCard({ game, position, isHero, estimatedHoursAway, allG
             </div>
           )}
 
-          {/* Log Time button */}
           {onLogTime && (
             <button
               onClick={(e) => { e.stopPropagation(); onLogTime(); }}
@@ -257,178 +250,188 @@ export function QueueGameCard({ game, position, isHero, estimatedHoursAway, allG
     );
   }
 
-  // ===== STANDARD CARD =====
+  // ===== STANDARD CARD (Completed, Not Started, Wishlist, Abandoned) =====
+  const canStart = game.status === 'Not Started' || game.status === 'Wishlist';
+
   return (
     <div
       ref={setNodeRef}
       style={style}
       className={clsx(
-        'group flex items-center gap-3 p-3 rounded-xl transition-all',
+        'group flex flex-col gap-0 p-3 rounded-xl transition-all',
         'bg-white/[0.02] border border-white/5',
         game.status === 'Completed' && 'opacity-60',
         isDragging && 'opacity-50 ring-2 ring-purple-500/50'
       )}
     >
-      {/* Drag Handle */}
-      <button
-        {...attributes}
-        {...listeners}
-        className="touch-manipulation cursor-grab active:cursor-grabbing p-2 -m-2 text-white/30 hover:text-white/60 transition-colors shrink-0"
-        aria-label="Drag to reorder"
-      >
-        <GripVertical size={20} />
-      </button>
+      {/* Main row */}
+      <div className="flex items-center gap-3">
+        {/* Drag Handle */}
+        <button
+          {...attributes} {...listeners}
+          className="touch-manipulation cursor-grab active:cursor-grabbing p-2 -m-2 text-white/30 hover:text-white/60 transition-colors shrink-0"
+          aria-label="Drag to reorder"
+        >
+          <GripVertical size={20} />
+        </button>
 
-      {/* Position Badge */}
-      <div className={clsx(
-        'flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold shrink-0',
-        game.status === 'In Progress' ? 'bg-blue-500/20 text-blue-400 node-pulse' :
-        game.status === 'Completed' ? 'bg-emerald-500/20 text-emerald-400' :
-        'bg-purple-500/15 text-purple-400/70'
-      )}>
-        {position}
-      </div>
-
-      {/* Thumbnail */}
-      {game.thumbnail && (
-        <div className="shrink-0">
-          <img
-            src={game.thumbnail}
-            alt={game.name}
-            className="w-14 h-14 object-cover rounded-lg"
-            loading="lazy"
-          />
-        </div>
-      )}
-
-      {/* Game Info */}
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-0.5">
-          <h3 className="text-sm font-medium text-white/90 truncate">
-            {game.name}
-          </h3>
-          {/* Shelf life badge */}
-          {shelfLife.level !== 'fresh' && game.status !== 'Completed' && (
-            <span
-              className="dust-float text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0"
-              style={{ backgroundColor: `${shelfLife.color}15`, color: shelfLife.color }}
-              title={`${shelfLife.daysInQueue} days`}
-            >
-              {shelfLife.label}
-            </span>
-          )}
+        {/* Position Badge */}
+        <div className={clsx(
+          'flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold shrink-0',
+          game.status === 'In Progress' ? 'bg-blue-500/20 text-blue-400 node-pulse' :
+          game.status === 'Completed' ? 'bg-emerald-500/20 text-emerald-400' :
+          'bg-purple-500/15 text-purple-400/70'
+        )}>
+          {position}
         </div>
 
-        {/* Status + Days Playing */}
-        <div className="flex items-center gap-1.5">
-          {getStatusIcon()}
-          <span className={clsx('text-xs font-medium', getStatusColor())}>{getStatusLabel()}</span>
-
-          {daysPlaying !== null && game.status === 'In Progress' && (
-            <>
-              <span className="text-white/10">·</span>
-              <span className="text-xs text-white/40">Day {daysPlaying}</span>
-            </>
-          )}
-          {daysPlaying !== null && game.status === 'Completed' && (
-            <>
-              <span className="text-white/10">·</span>
-              <span className="text-xs text-white/40">{daysPlaying}d to beat</span>
-            </>
-          )}
-        </div>
-
-        {/* Chemistry + Shame line */}
-        {(chemistry || shameData) && (
-          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-            {chemistry && (
-              <span
-                className="text-[10px] px-1.5 py-0.5 rounded font-bold"
-                style={{ color: chemistry.grade === 'S' ? '#f59e0b' : chemistry.grade === 'A' ? '#ec4899' : chemistry.grade === 'B' ? '#8b5cf6' : '#6b7280', backgroundColor: chemistry.grade === 'S' ? '#f59e0b15' : chemistry.grade === 'A' ? '#ec489915' : chemistry.grade === 'B' ? '#8b5cf615' : '#6b728015' }}
-                title={chemistry.justification}
-              >
-                ⚗️ {chemistry.grade} chem
-              </span>
-            )}
-            {shameData && shameData.tier !== 'fresh' && (
-              <span
-                className="text-[10px] px-1.5 py-0.5 rounded font-bold"
-                style={{ color: shameData.color, backgroundColor: `${shameData.color}15` }}
-                title={shameData.message}
-              >
-                {shameData.icon} {shameData.tierLabel}
-              </span>
-            )}
+        {/* Thumbnail */}
+        {game.thumbnail && (
+          <div className="shrink-0">
+            <img src={game.thumbnail} alt={game.name} className="w-14 h-14 object-cover rounded-lg" loading="lazy" />
           </div>
         )}
 
-        {/* Stats line */}
-        <div className="flex items-center gap-2 mt-0.5">
-          {game.totalHours > 0 && (
-            <span className="text-xs text-white/40">{game.totalHours}h</span>
-          )}
-          {game.totalHours > 0 && game.price > 0 && (
-            <>
-              <span className="text-white/10">·</span>
-              <span className={clsx('text-xs',
-                game.metrics.valueRating === 'Excellent' ? 'text-emerald-400/60' :
-                game.metrics.valueRating === 'Good' ? 'text-blue-400/60' :
-                game.metrics.valueRating === 'Fair' ? 'text-yellow-400/60' : 'text-red-400/60'
-              )}>
-                ${game.metrics.costPerHour.toFixed(2)}/hr
+        {/* Game Info */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-0.5">
+            <h3 className="text-sm font-medium text-white/90 truncate">{game.name}</h3>
+            {shelfLife.level !== 'fresh' && game.status !== 'Completed' && (
+              <span
+                className="dust-float text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0"
+                style={{ backgroundColor: `${shelfLife.color}15`, color: shelfLife.color }}
+                title={`${shelfLife.daysInQueue} days`}
+              >
+                {shelfLife.label}
               </span>
-            </>
+            )}
+          </div>
+
+          {/* Status */}
+          <div className="flex items-center gap-1.5">
+            {getStatusIcon()}
+            <span className={clsx('text-xs font-medium', getStatusColor())}>{getStatusLabel()}</span>
+            {daysPlaying !== null && game.status === 'Completed' && (
+              <>
+                <span className="text-white/10">·</span>
+                <span className="text-xs text-white/40">{daysPlaying}d to beat</span>
+              </>
+            )}
+          </div>
+
+          {/* Chemistry + Shame */}
+          {(chemistry || shameData) && (
+            <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+              {chemistry && (
+                <span
+                  className="text-[10px] px-1.5 py-0.5 rounded font-bold"
+                  style={{
+                    color: chemistry.grade === 'S' ? '#f59e0b' : chemistry.grade === 'A' ? '#ec4899' : chemistry.grade === 'B' ? '#8b5cf6' : '#6b7280',
+                    backgroundColor: chemistry.grade === 'S' ? '#f59e0b15' : chemistry.grade === 'A' ? '#ec489915' : chemistry.grade === 'B' ? '#8b5cf615' : '#6b728015',
+                  }}
+                  title={chemistry.justification}
+                >
+                  ⚗️ {chemistry.grade} chem
+                </span>
+              )}
+              {shameData && shameData.tier !== 'fresh' && (
+                <span
+                  className="text-[10px] px-1.5 py-0.5 rounded font-bold"
+                  style={{ color: shameData.color, backgroundColor: `${shameData.color}15` }}
+                  title={shameData.message}
+                >
+                  {shameData.icon} {shameData.tierLabel}
+                </span>
+              )}
+            </div>
           )}
-          {daysSinceLastPlay !== null && game.status === 'In Progress' && (
-            <>
-              <span className="text-white/10">·</span>
-              <span className={clsx('text-xs', daysSinceLastPlay <= 3 ? 'text-white/40' : 'text-yellow-400/60')}>
-                {daysSinceLastPlay === 0 ? 'played today' : daysSinceLastPlay === 1 ? 'played yesterday' : `${daysSinceLastPlay}d ago`}
-              </span>
-            </>
+
+          {/* Stats + Dates line */}
+          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+            {/* Hours played */}
+            <span className="text-xs text-white/40">{game.totalHours}h played</span>
+
+            {/* Cost per hour */}
+            {game.totalHours > 0 && game.price > 0 && (
+              <>
+                <span className="text-white/10">·</span>
+                <span className={clsx('text-xs',
+                  game.metrics.valueRating === 'Excellent' ? 'text-emerald-400/60' :
+                  game.metrics.valueRating === 'Good' ? 'text-blue-400/60' :
+                  game.metrics.valueRating === 'Fair' ? 'text-yellow-400/60' : 'text-red-400/60'
+                )}>
+                  ${game.metrics.costPerHour.toFixed(2)}/hr
+                </span>
+              </>
+            )}
+
+            {/* Start date */}
+            {game.startDate && (
+              <>
+                <span className="text-white/10">·</span>
+                <span className="text-xs text-white/35">Started {formatDate(game.startDate)}</span>
+              </>
+            )}
+
+            {/* End date (completed/abandoned) */}
+            {game.endDate && (
+              <>
+                <span className="text-white/10">·</span>
+                <span className="text-xs text-white/35">
+                  {game.status === 'Completed' ? 'Done' : 'Stopped'} {formatDate(game.endDate)}
+                </span>
+              </>
+            )}
+
+            {/* Purchase date (not started, no start date) */}
+            {!game.startDate && game.datePurchased && (
+              <>
+                <span className="text-white/10">·</span>
+                <span className="text-xs text-white/30">Bought {formatDate(game.datePurchased)}</span>
+              </>
+            )}
+
+            {/* Time estimate */}
+            {timeEstimate && (
+              <>
+                <span className="text-white/10">·</span>
+                <span className="text-xs text-white/25">{timeEstimate}</span>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Action Buttons */}
+        <div className="flex items-center gap-1 shrink-0">
+          {onLogTime && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onLogTime(); }}
+              className="touch-manipulation p-2 -m-1 text-white/20 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg transition-all sm:opacity-0 sm:group-hover:opacity-100"
+              aria-label="Log play session"
+            >
+              <Clock size={18} />
+            </button>
           )}
-          {game.status === 'Not Started' && game.datePurchased && (
-            <>
-              <span className="text-white/10">·</span>
-              <span className="text-xs text-white/30">
-                bought {formatDate(game.datePurchased)}
-              </span>
-            </>
-          )}
-          {estimatedHoursAway !== undefined && estimatedHoursAway > 0 && game.status === 'Not Started' && (
-            <>
-              <span className="text-white/10">·</span>
-              <span className="text-xs text-white/25">~{estimatedHoursAway}h away</span>
-            </>
-          )}
+          <button
+            onClick={(e) => { e.stopPropagation(); onRemove(); }}
+            className="touch-manipulation p-2 -m-1 text-white/20 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all shrink-0 sm:opacity-0 sm:group-hover:opacity-100"
+            aria-label="Remove from queue"
+          >
+            <X size={18} />
+          </button>
         </div>
       </div>
 
-      {/* Action Buttons */}
-      <div className="flex items-center gap-1 shrink-0">
-        {onLogTime && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onLogTime();
-            }}
-            className="touch-manipulation p-2 -m-1 text-white/20 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg transition-all sm:opacity-0 sm:group-hover:opacity-100"
-            aria-label="Log play session"
-          >
-            <Clock size={18} />
-          </button>
-        )}
+      {/* Auto-start button row — only for not-yet-started games */}
+      {canStart && onStartGame && (
         <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onRemove();
-          }}
-          className="touch-manipulation p-2 -m-1 text-white/20 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all shrink-0 sm:opacity-0 sm:group-hover:opacity-100"
-          aria-label="Remove from queue"
+          onClick={(e) => { e.stopPropagation(); onStartGame(); }}
+          className="mt-2 ml-[5.5rem] flex items-center gap-1.5 text-[11px] text-white/30 hover:text-emerald-400 hover:bg-emerald-500/5 px-2 py-1 rounded-lg transition-all text-left"
         >
-          <X size={18} />
+          <Play size={11} />
+          Start playing
         </button>
-      </div>
+      )}
     </div>
   );
 }

@@ -1196,6 +1196,11 @@ export default function GameAnalyticsPage() {
                   handleOpenPlayLog(gameWithMetrics);
                 }
               }}
+              onStartGame={async (game) => {
+                const today = new Date().toISOString().split('T')[0];
+                await updateGame(game.id, { status: 'In Progress', startDate: game.startDate || today });
+                showToast(`Started playing ${game.name}`, 'success');
+              }}
             />
           )}
 
