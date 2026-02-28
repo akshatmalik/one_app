@@ -253,6 +253,12 @@ const ignoredGames = useMemo(() => getIgnoredGames(data, allGames), [data, allGa
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, [goToNext, goToPrevious, onClose]);
 
+  // Lock body scroll while modal is open
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = ''; };
+  }, []);
+
   // Click navigation - left/right halves
   const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -282,7 +288,12 @@ const ignoredGames = useMemo(() => getIgnoredGames(data, allGames), [data, allGa
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-[#0a0a0f] overflow-hidden">
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.15 }}
+      className="fixed inset-0 z-[60] bg-[#0a0a0f] overflow-hidden"
+    >
       {/* Close button */}
       <button
         onClick={onClose}
@@ -390,6 +401,6 @@ const ignoredGames = useMemo(() => getIgnoredGames(data, allGames), [data, allGa
           initialPeriodKey={weekAwardPeriodKey}
         />
       )}
-    </div>
+    </motion.div>
   );
 }

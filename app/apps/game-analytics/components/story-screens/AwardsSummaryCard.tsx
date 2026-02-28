@@ -89,7 +89,6 @@ export function AwardsSummaryCard({
   return (
     <div
       className="w-full max-w-lg mx-auto px-4"
-      onClick={(e) => e.stopPropagation()}
     >
       {/* Header */}
       <motion.div

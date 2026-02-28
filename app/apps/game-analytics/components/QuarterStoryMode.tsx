@@ -164,6 +164,12 @@ export function QuarterStoryMode({ data, allGames, onClose, quarterTitle, update
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, [goToNext, goToPrevious, onClose]);
 
+  // Lock body scroll while modal is open
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = ''; };
+  }, []);
+
   const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
     if (e.clientX - rect.left < rect.width * 0.3) goToPrevious();
@@ -177,7 +183,12 @@ export function QuarterStoryMode({ data, allGames, onClose, quarterTitle, update
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-[#0a0a0f] overflow-hidden">
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.15 }}
+      className="fixed inset-0 z-[60] bg-[#0a0a0f] overflow-hidden"
+    >
       {/* Close */}
       <button onClick={onClose} className="absolute top-4 right-4 z-50 p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors backdrop-blur-sm">
         <X size={24} className="text-white" />
@@ -242,6 +253,6 @@ export function QuarterStoryMode({ data, allGames, onClose, quarterTitle, update
           initialPeriodKey={quarterAwardKey}
         />
       )}
-    </div>
+    </motion.div>
   );
 }
