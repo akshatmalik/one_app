@@ -150,6 +150,12 @@ export function YearStoryMode({ data, allGames, onClose, yearTitle, chapterTitle
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, [goToNext, goToPrevious, onClose]);
 
+  // Lock body scroll while modal is open
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = ''; };
+  }, []);
+
   const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
     if (e.clientX - rect.left < rect.width * 0.3) goToPrevious(); else goToNext();
@@ -162,7 +168,12 @@ export function YearStoryMode({ data, allGames, onClose, yearTitle, chapterTitle
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-[#050508] overflow-hidden">
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.15 }}
+      className="fixed inset-0 z-[60] bg-[#050508] overflow-hidden"
+    >
       {/* Subtle starfield bg */}
       <div className="absolute inset-0 opacity-30" style={{ background: 'radial-gradient(ellipse at 20% 50%, rgba(245,158,11,0.08) 0%, transparent 50%), radial-gradient(ellipse at 80% 20%, rgba(168,85,247,0.08) 0%, transparent 50%)' }} />
 
@@ -226,6 +237,6 @@ export function YearStoryMode({ data, allGames, onClose, yearTitle, chapterTitle
           initialPeriodKey={yearAwardKey}
         />
       )}
-    </div>
+    </motion.div>
   );
 }

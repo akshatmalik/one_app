@@ -224,6 +224,12 @@ export function MonthStoryMode({ data, allGames, onClose, monthTitle, updateGame
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, [goToNext, goToPrevious, onClose]);
 
+  // Lock body scroll while modal is open
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = ''; };
+  }, []);
+
   const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
     const x = e.clientX - rect.left;
@@ -238,7 +244,12 @@ export function MonthStoryMode({ data, allGames, onClose, monthTitle, updateGame
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-[#0a0a0f] overflow-hidden">
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.15 }}
+      className="fixed inset-0 z-[60] bg-[#0a0a0f] overflow-hidden"
+    >
       {/* Close button */}
       <button
         onClick={onClose}
@@ -342,6 +353,6 @@ export function MonthStoryMode({ data, allGames, onClose, monthTitle, updateGame
           initialPeriodKey={monthAwardPeriodKey}
         />
       )}
-    </div>
+    </motion.div>
   );
 }
