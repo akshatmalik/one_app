@@ -18,7 +18,10 @@ export function useGameQueue(
       return sorted.filter(g => g.status !== 'Completed' && g.status !== 'Abandoned');
     }
 
-    return sorted;
+    // Float completed/abandoned to the bottom, preserving relative order within each group
+    const active = sorted.filter(g => g.status !== 'Completed' && g.status !== 'Abandoned');
+    const finished = sorted.filter(g => g.status === 'Completed' || g.status === 'Abandoned');
+    return [...active, ...finished];
   }, [games, hideFinished]);
 
   // Get games not in the queue (for adding)
@@ -26,15 +29,31 @@ export function useGameQueue(
     return games.filter(g => g.queuePosition === undefined);
   }, [games]);
 
-  // Add a game to the queue
+  // Add a game to the queue — inserts at position 2 if there's a Now Playing hero, otherwise at the end
   const addToQueue = async (gameId: string) => {
-    // Find the highest position
-    const positions = games
+    const sortedQueue = games
       .filter(g => g.queuePosition !== undefined)
-      .map(g => g.queuePosition || 0);
-    const nextPosition = positions.length > 0 ? Math.max(...positions) + 1 : 1;
+      .sort((a, b) => (a.queuePosition || 0) - (b.queuePosition || 0));
 
-    await updateGame(gameId, { queuePosition: nextPosition });
+    const heroGame = sortedQueue[0];
+    const hasHero = heroGame && heroGame.status === 'In Progress';
+
+    if (hasHero) {
+      // Shift all games at position >= 2 down by 1, then insert at 2
+      const gamesToShift = games.filter(
+        g => g.id !== gameId && g.queuePosition !== undefined && (g.queuePosition || 0) >= 2
+      );
+      await Promise.all([
+        ...gamesToShift.map(g => updateGame(g.id, { queuePosition: (g.queuePosition || 0) + 1 })),
+        updateGame(gameId, { queuePosition: 2 }),
+      ]);
+    } else {
+      const positions = games
+        .filter(g => g.queuePosition !== undefined)
+        .map(g => g.queuePosition || 0);
+      const nextPosition = positions.length > 0 ? Math.max(...positions) + 1 : 1;
+      await updateGame(gameId, { queuePosition: nextPosition });
+    }
   };
 
   // Remove a game from the queue
@@ -44,25 +63,15 @@ export function useGameQueue(
 
     const removedPosition = game.queuePosition;
 
-    // Collect all updates to batch them
-    const updates: Array<{ id: string; position: number | null }> = [];
-
-    // Remove this game from queue (use null instead of undefined for proper deletion)
-    updates.push({ id: gameId, position: null });
-
-    // Shift down all games after this position
     const gamesToShift = games.filter(
       g => g.id !== gameId && g.queuePosition !== undefined && g.queuePosition > removedPosition
     );
 
-    for (const g of gamesToShift) {
-      updates.push({ id: g.id, position: (g.queuePosition || 0) - 1 });
-    }
-
-    // Execute all updates
-    for (const update of updates) {
-      await updateGame(update.id, { queuePosition: update.position === null ? undefined : update.position });
-    }
+    // Run all updates in parallel — React 18 batches the resulting state updates
+    await Promise.all([
+      updateGame(gameId, { queuePosition: undefined }),
+      ...gamesToShift.map(g => updateGame(g.id, { queuePosition: (g.queuePosition || 0) - 1 })),
+    ]);
   };
 
   // Reorder a game in the queue
@@ -106,12 +115,8 @@ export function useGameQueue(
       }
     }
 
-    // Execute all updates in sequence
-    // Note: Each update will trigger a re-render, but this is unavoidable
-    // without batching support in the parent component
-    for (const update of updates) {
-      await updateGame(update.id, { queuePosition: update.position });
-    }
+    // Run all updates in parallel — React 18 batches the resulting state updates
+    await Promise.all(updates.map(u => updateGame(u.id, { queuePosition: u.position })));
   };
 
   // Check if a game is in the queue
