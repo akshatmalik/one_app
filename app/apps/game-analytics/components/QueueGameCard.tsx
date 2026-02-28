@@ -2,7 +2,7 @@
 
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { GripVertical, X, CheckCircle2, PlayCircle, Calendar, XCircle, Clock, TrendingDown, Zap } from 'lucide-react';
+import { GripVertical, X, CheckCircle2, PlayCircle, Calendar, XCircle, Clock, TrendingDown, Zap, Play } from 'lucide-react';
 import { GameWithMetrics } from '../hooks/useAnalytics';
 import { getShelfLife, getOneHourProjection, getEstimatedHoursToReach, parseLocalDate, getGameChemistry, getQueueShameData } from '../lib/calculations';
 import { Game } from '../lib/types';
