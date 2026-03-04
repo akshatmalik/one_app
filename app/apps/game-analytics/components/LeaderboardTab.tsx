@@ -367,7 +367,7 @@ export function LeaderboardTab({ gamesWithMetrics, userId, eloTierConfig }: Lead
 
   // ── Tier Rank state ──────────────────────────────────────────────
   const [tierPhase, setTierPhase] = useState<'assign' | 'battle'>('assign');
-  const [selectedBattleTier, setSelectedBattleTier] = useState<GameTier | null>(null);
+  const [selectedBattleTier, setSelectedBattleTier] = useState<GameTier | 'all' | null>(null);
 
   // Reset offset when period type changes
   useEffect(() => { setPeriodOffset(0); }, [eloPeriod]);
@@ -440,13 +440,14 @@ export function LeaderboardTab({ gamesWithMetrics, userId, eloTierConfig }: Lead
     [tierCounts],
   );
 
-  // IDs eligible for battle in the currently selected tier
+  // IDs eligible for battle in the currently selected tier (or all games when 'all')
   const tierEligibleIds = useMemo(() => {
     if (!selectedBattleTier) return [];
+    if (selectedBattleTier === 'all') return eligibleIds;
     return eligibleGames
       .filter(g => assignments[g.id] === selectedBattleTier)
       .map(g => g.id);
-  }, [eligibleGames, assignments, selectedBattleTier]);
+  }, [eligibleGames, assignments, selectedBattleTier, eligibleIds]);
 
   // Pick next pair within the selected tier
   useEffect(() => {
@@ -875,21 +876,34 @@ export function LeaderboardTab({ gamesWithMetrics, userId, eloTierConfig }: Lead
               </div>
 
               {/* CTA */}
-              {battleableTiers.length > 0 ? (
-                <button
-                  onClick={() => {
-                    setSelectedBattleTier(battleableTiers[0]);
-                    setTierPhase('battle');
-                  }}
-                  className="w-full py-3 rounded-xl bg-purple-500/20 border border-purple-400/30 text-purple-300 text-sm font-semibold hover:bg-purple-500/30 transition-colors"
-                >
-                  Battle within tiers →
-                </button>
-              ) : (
-                <p className="text-center text-[11px] text-white/25 py-2">
-                  Assign at least 2 games to the same tier to start battling.
-                </p>
-              )}
+              <div className="flex flex-col gap-2">
+                {eligibleGames.length >= 2 && (
+                  <button
+                    onClick={() => {
+                      setSelectedBattleTier('all');
+                      setTierPhase('battle');
+                    }}
+                    className="w-full py-3 rounded-xl bg-white/[0.04] border border-white/10 text-white/70 text-sm font-semibold hover:bg-white/[0.07] hover:border-white/20 transition-colors"
+                  >
+                    Battle All Tiers →
+                  </button>
+                )}
+                {battleableTiers.length > 0 ? (
+                  <button
+                    onClick={() => {
+                      setSelectedBattleTier(battleableTiers[0]);
+                      setTierPhase('battle');
+                    }}
+                    className="w-full py-3 rounded-xl bg-purple-500/20 border border-purple-400/30 text-purple-300 text-sm font-semibold hover:bg-purple-500/30 transition-colors"
+                  >
+                    Battle within tiers →
+                  </button>
+                ) : (
+                  <p className="text-center text-[11px] text-white/25 py-2">
+                    Assign at least 2 games to the same tier to start battling.
+                  </p>
+                )}
+              </div>
             </div>
 
           ) : (
@@ -904,6 +918,23 @@ export function LeaderboardTab({ gamesWithMetrics, userId, eloTierConfig }: Lead
                   <ChevronLeft size={12} /> Edit tiers
                 </button>
                 <div className="flex items-center gap-1 flex-wrap">
+                  {/* All-tiers option */}
+                  {eligibleIds.length >= 2 && (
+                    <button
+                      onClick={() => {
+                        setSelectedBattleTier('all');
+                        setCurrentPair(null);
+                      }}
+                      className={clsx(
+                        'px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all',
+                        selectedBattleTier === 'all'
+                          ? 'bg-white/10 border-white/30 text-white/90'
+                          : 'border-white/[0.08] text-white/30 hover:border-white/20 hover:text-white/50',
+                      )}
+                    >
+                      All <span className="font-normal opacity-60 ml-0.5">{eligibleIds.length}</span>
+                    </button>
+                  )}
                   {GAME_TIERS.map(tier => {
                     const count = tierCounts[tier] || 0;
                     if (count < 2) return null;
@@ -934,9 +965,14 @@ export function LeaderboardTab({ gamesWithMetrics, userId, eloTierConfig }: Lead
               <div className="flex items-start gap-2 p-3 rounded-lg bg-blue-500/5 border border-blue-400/15">
                 <Info size={13} className="text-blue-400 flex-shrink-0 mt-0.5" />
                 <p className="text-[11px] text-white/50 leading-relaxed">
-                  Battling within <span className={clsx('font-bold', selectedBattleTier ? TIER_STYLES[selectedBattleTier].text : '')}>
-                    {selectedBattleTier} tier
-                  </span> — {tierEligibleIds.length} games,{' '}
+                  {selectedBattleTier === 'all' ? (
+                    <>Battling <span className="font-bold text-white/80">all tiers</span> — ELO seeded from within-tier results. </>
+                  ) : (
+                    <>Battling within <span className={clsx('font-bold', selectedBattleTier ? TIER_STYLES[selectedBattleTier].text : '')}>
+                      {selectedBattleTier} tier
+                    </span> — </>
+                  )}
+                  {tierEligibleIds.length} games,{' '}
                   {tierEligibleIds.length * (tierEligibleIds.length - 1) / 2} pairs.
                   <span className="ml-1 text-white/30">{battles.length} battle{battles.length !== 1 ? 's' : ''} recorded for {currentPeriodLabel}.</span>
                 </p>
@@ -949,8 +985,14 @@ export function LeaderboardTab({ gamesWithMetrics, userId, eloTierConfig }: Lead
               ) : !currentPair ? (
                 <div className="text-center py-10 space-y-3">
                   <CheckCircle2 size={32} className="mx-auto text-emerald-400" />
-                  <p className="text-sm font-semibold text-white/70">Tier {selectedBattleTier} is fully ranked!</p>
-                  <p className="text-xs text-white/30">All pairs compared. Switch to another tier or view ELO Rankings.</p>
+                  <p className="text-sm font-semibold text-white/70">
+                    {selectedBattleTier === 'all' ? 'All tiers fully ranked!' : `Tier ${selectedBattleTier} is fully ranked!`}
+                  </p>
+                  <p className="text-xs text-white/30">
+                    {selectedBattleTier === 'all'
+                      ? 'All pairs compared across every tier.'
+                      : 'All pairs compared. Switch to another tier or view ELO Rankings.'}
+                  </p>
                   <button
                     onClick={() => setView('elo-rankings')}
                     className="mt-2 px-4 py-2 rounded-xl bg-purple-500/20 border border-purple-400/30 text-purple-300 text-sm font-medium hover:bg-purple-500/30 transition-colors"
@@ -961,7 +1003,10 @@ export function LeaderboardTab({ gamesWithMetrics, userId, eloTierConfig }: Lead
                   {/* Progress */}
                   <div className="flex items-center justify-between text-[11px] text-white/30">
                     <span>{battles.length} battles recorded this period</span>
-                    <span>{tierEligibleIds.length * (tierEligibleIds.length - 1) / 2} pairs in tier {selectedBattleTier}</span>
+                    <span>
+                      {tierEligibleIds.length * (tierEligibleIds.length - 1) / 2} pairs{' '}
+                      {selectedBattleTier === 'all' ? 'across all tiers' : `in tier ${selectedBattleTier}`}
+                    </span>
                   </div>
 
                   {/* Battle cards */}
