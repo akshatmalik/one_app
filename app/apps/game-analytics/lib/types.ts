@@ -265,6 +265,49 @@ export interface ErrorLogEntry {
   stack?: string;
 }
 
+// ── Purchase Queue ────────────────────────────────────────────────
+
+export interface PurchaseQueueEntry {
+  id: string;
+  userId: string;
+
+  // Game identity (from RAWG search)
+  gameName: string;
+  thumbnail?: string;
+  platform?: string;
+  genre?: string;
+  releaseDate?: string;       // ISO date string from RAWG; undefined = TBA
+  metacriticScore?: number;
+  rawgRating?: number;
+
+  // Purchase intent
+  isDayOneBuy: boolean;       // Buy immediately on release / right now
+  targetPrice?: number;       // "Buy it when it drops to $X"
+  currentPrice?: number;      // Manually entered from PS Store / wherever
+  msrpEstimate?: number;      // Expected full retail price
+  notes?: string;
+
+  // Queue management
+  priority: number;           // Sort order — 1 = top
+
+  // Status
+  purchased: boolean;
+  purchasedAt?: string;
+  purchasePrice?: number;     // What you actually paid
+
+  addedAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PurchaseQueueRepository {
+  setUserId(userId: string): void;
+  getAll(): Promise<PurchaseQueueEntry[]>;
+  create(entry: Omit<PurchaseQueueEntry, 'id' | 'userId' | 'createdAt' | 'updatedAt'>): Promise<PurchaseQueueEntry>;
+  update(id: string, updates: Partial<PurchaseQueueEntry>): Promise<PurchaseQueueEntry>;
+  delete(id: string): Promise<void>;
+}
+
 export interface TasteProfile {
   topGenres: string[];          // Ranked by hours × rating
   avoidGenres: string[];        // Low ratings or high abandonment
