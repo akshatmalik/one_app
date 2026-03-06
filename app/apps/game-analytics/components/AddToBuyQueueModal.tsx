@@ -8,7 +8,7 @@ import { PurchaseQueueEntry } from '../lib/types';
 const PLATFORMS = ['PS5', 'PS4', 'Xbox Series', 'Xbox One', 'Switch', 'PC', 'Other'];
 
 interface Props {
-  onAdd: (data: Omit<PurchaseQueueEntry, 'id' | 'userId' | 'createdAt' | 'updatedAt'>) => Promise<void>;
+  onAdd: (data: Omit<PurchaseQueueEntry, 'id' | 'userId' | 'createdAt' | 'updatedAt'>) => Promise<unknown>;
   onClose: () => void;
   nextPriority: number;
   wishlistGames?: { name: string; platform?: string; genre?: string; thumbnail?: string }[];
