@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { Plus, ShoppingCart, Calendar, TrendingDown, Clock, PackageCheck, ChevronDown, ChevronUp, BarChart2 } from 'lucide-react';
-import { Game } from '../lib/types';
+import { Plus, ShoppingCart, Calendar, TrendingDown, Clock, PackageCheck, ChevronDown, ChevronUp, BarChart2, AlertTriangle, Settings } from 'lucide-react';
+import { Game, BudgetSettings } from '../lib/types';
 import { usePurchaseQueue } from '../hooks/usePurchaseQueue';
 import { AddToBuyQueueModal } from './AddToBuyQueueModal';
 import { BuyQueueCard } from './BuyQueueCard';
@@ -10,13 +10,16 @@ import { BuyQueueCard } from './BuyQueueCard';
 interface Props {
   userId: string | null;
   wishlistGames: Game[];
+  budgets: BudgetSettings[];
+  yearSpent: number;
+  onGoToBudget: () => void;
 }
 
 function formatMoney(n: number): string {
   return `$${n.toFixed(0)}`;
 }
 
-export function BuyQueueTab({ userId, wishlistGames }: Props) {
+export function BuyQueueTab({ userId, wishlistGames, budgets, yearSpent, onGoToBudget }: Props) {
   const {
     activeEntries,
     upcomingEntries,
@@ -35,10 +38,24 @@ export function BuyQueueTab({ userId, wishlistGames }: Props) {
   const [showPurchased, setShowPurchased] = useState(false);
   const [showStats, setShowStats] = useState(false);
 
+  const currentYear = new Date().getFullYear();
+  const yearBudget = budgets.find(b => b.year === currentYear)?.yearlyBudget ?? null;
+
+  // Budget bar math
+  const budgetUsed = yearSpent;
+  const budgetPlanned = plannedSpend;
+  const budgetTotal = yearBudget ?? 0;
+  const budgetRemaining = yearBudget != null ? yearBudget - budgetUsed - budgetPlanned : null;
+  const isOverBudget = yearBudget != null && (budgetUsed + budgetPlanned) > yearBudget;
+  const overBy = yearBudget != null ? Math.max(0, budgetUsed + budgetPlanned - yearBudget) : 0;
+
+  // Bar widths (cap at 100% each, clamp planned so total ≤ 100%)
+  const spentPct = yearBudget ? Math.min(100, (budgetUsed / yearBudget) * 100) : 0;
+  const plannedPct = yearBudget ? Math.min(100 - spentPct, (budgetPlanned / yearBudget) * 100) : 0;
+
   // Stats
   const stats = useMemo(() => {
     const dayOneBuys = activeEntries.filter(e => e.isDayOneBuy).length;
-    const priceWatchers = activeEntries.filter(e => !e.isDayOneBuy && e.targetPrice).length;
     const atTarget = activeEntries.filter(e =>
       e.currentPrice != null && e.targetPrice != null && e.currentPrice <= e.targetPrice
     ).length;
@@ -46,18 +63,11 @@ export function BuyQueueTab({ userId, wishlistGames }: Props) {
       if (!e.msrpEstimate || !e.targetPrice) return sum;
       return sum + Math.max(0, e.msrpEstimate - e.targetPrice);
     }, 0);
-    const genreBreakdown = activeEntries.reduce<Record<string, number>>((acc, e) => {
-      if (e.genre) acc[e.genre] = (acc[e.genre] || 0) + 1;
-      return acc;
-    }, {});
-    const topGenre = Object.entries(genreBreakdown).sort((a, b) => b[1] - a[1])[0];
     const platformBreakdown = activeEntries.reduce<Record<string, number>>((acc, e) => {
       if (e.platform) acc[e.platform] = (acc[e.platform] || 0) + 1;
       return acc;
     }, {});
-    const avgWait = activeEntries.filter(e => e.releaseDate && new Date(e.releaseDate) > new Date()).length;
-
-    return { dayOneBuys, priceWatchers, atTarget, totalSavingsPotential, topGenre, platformBreakdown, avgWait };
+    return { dayOneBuys, atTarget, totalSavingsPotential, platformBreakdown };
   }, [activeEntries]);
 
   const wishlistForModal = wishlistGames.map(g => ({
@@ -87,13 +97,88 @@ export function BuyQueueTab({ userId, wishlistGames }: Props) {
 
   return (
     <div className="space-y-5">
+      {/* Budget Banner */}
+      <div className={`rounded-xl border p-4 space-y-3 ${
+        isOverBudget
+          ? 'bg-red-500/5 border-red-500/20'
+          : yearBudget != null
+            ? 'bg-white/[0.02] border-white/5'
+            : 'bg-white/[0.02] border-white/5'
+      }`}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-medium text-white/50 uppercase tracking-wider">{currentYear} Budget</span>
+            {isOverBudget && (
+              <div className="flex items-center gap-1 text-red-400 text-[11px]">
+                <AlertTriangle size={11} />
+                <span>{formatMoney(overBy)} over</span>
+              </div>
+            )}
+          </div>
+          {yearBudget == null && (
+            <button
+              onClick={onGoToBudget}
+              className="flex items-center gap-1 text-[11px] text-white/30 hover:text-white/60 transition-colors"
+            >
+              <Settings size={11} />
+              Set budget in Stats
+            </button>
+          )}
+          {yearBudget != null && (
+            <span className="text-xs text-white/40">{formatMoney(budgetTotal)} total</span>
+          )}
+        </div>
+
+        {yearBudget != null ? (
+          <>
+            {/* Progress bar */}
+            <div className="h-2 bg-white/5 rounded-full overflow-hidden flex">
+              <div
+                className="h-full bg-emerald-500 rounded-l-full transition-all"
+                style={{ width: `${spentPct}%` }}
+              />
+              <div
+                className={`h-full transition-all ${isOverBudget ? 'bg-red-500' : 'bg-amber-400'}`}
+                style={{ width: `${plannedPct}%` }}
+              />
+            </div>
+
+            {/* Legend */}
+            <div className="flex items-center gap-4 flex-wrap text-[11px]">
+              <div className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0" />
+                <span className="text-white/40">Spent</span>
+                <span className="text-white/70 font-medium">{formatMoney(budgetUsed)}</span>
+              </div>
+              {budgetPlanned > 0 && (
+                <div className="flex items-center gap-1.5">
+                  <span className={`w-2 h-2 rounded-full flex-shrink-0 ${isOverBudget ? 'bg-red-500' : 'bg-amber-400'}`} />
+                  <span className="text-white/40">Queued</span>
+                  <span className="text-white/70 font-medium">{formatMoney(budgetPlanned)}</span>
+                </div>
+              )}
+              <div className="flex items-center gap-1.5 ml-auto">
+                <span className="text-white/40">Remaining</span>
+                <span className={`font-medium ${budgetRemaining != null && budgetRemaining < 0 ? 'text-red-400' : 'text-white/70'}`}>
+                  {budgetRemaining != null ? formatMoney(Math.max(0, budgetRemaining)) : '—'}
+                </span>
+              </div>
+            </div>
+          </>
+        ) : (
+          <p className="text-[11px] text-white/25">
+            No budget set for {currentYear}. Set one in Stats → Budget to track spend vs plan here.
+          </p>
+        )}
+      </div>
+
       {/* Header bar */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4 flex-wrap">
           <div className="flex items-center gap-2">
             <ShoppingCart size={16} className="text-emerald-400" />
             <span className="text-white/70 text-sm">
-              <span className="text-white font-medium">{activeEntries.length}</span> game{activeEntries.length !== 1 ? 's' : ''} in queue
+              <span className="text-white font-medium">{activeEntries.length}</span> game{activeEntries.length !== 1 ? 's' : ''} watching
             </span>
           </div>
           {releasingSoon > 0 && (
@@ -141,7 +226,7 @@ export function BuyQueueTab({ userId, wishlistGames }: Props) {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <div>
               <div className="text-lg font-semibold text-white/90">{activeEntries.length}</div>
-              <div className="text-[11px] text-white/30">Total watching</div>
+              <div className="text-[11px] text-white/30">Watching</div>
             </div>
             <div>
               <div className="text-lg font-semibold text-amber-400">{stats.dayOneBuys}</div>
@@ -159,7 +244,6 @@ export function BuyQueueTab({ userId, wishlistGames }: Props) {
             )}
           </div>
 
-          {/* Genre breakdown */}
           {Object.keys(stats.platformBreakdown).length > 0 && (
             <div>
               <div className="text-[11px] text-white/30 mb-2">By platform</div>
@@ -176,13 +260,12 @@ export function BuyQueueTab({ userId, wishlistGames }: Props) {
             </div>
           )}
 
-          {/* Purchased history */}
           {purchasedEntries.length > 0 && (
             <div className="pt-2 border-t border-white/5">
               <div className="flex items-center gap-1.5 text-[11px] text-white/30">
                 <PackageCheck size={11} />
                 {purchasedEntries.length} game{purchasedEntries.length !== 1 ? 's' : ''} purchased from queue
-                {purchasedEntries.length > 0 && (() => {
+                {(() => {
                   const totalPaid = purchasedEntries.reduce((s, e) => s + (e.purchasePrice || 0), 0);
                   const totalMSRP = purchasedEntries.reduce((s, e) => s + (e.msrpEstimate || 0), 0);
                   const saved = totalMSRP - totalPaid;

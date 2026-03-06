@@ -242,6 +242,15 @@ export default function GameAnalyticsPage() {
     return byMonth[monthKey] || 0;
   }, [games]);
 
+  // This year's spending (for buy queue budget bar)
+  const currentYearSpent = useMemo(() => {
+    const year = new Date().getFullYear();
+    const byMonth = getSpendingByMonth(games);
+    return Object.entries(byMonth)
+      .filter(([key]) => key.startsWith(String(year)))
+      .reduce((sum, [, val]) => sum + val, 0);
+  }, [games]);
+
   // Spending forecast
   const forecast = useMemo(() => {
     if (games.length === 0) return null;
@@ -1222,6 +1231,9 @@ export default function GameAnalyticsPage() {
             <BuyQueueTab
               userId={user?.uid ?? null}
               wishlistGames={games.filter(g => g.status === 'Wishlist')}
+              budgets={budgets}
+              yearSpent={currentYearSpent}
+              onGoToBudget={() => setTabMode('stats')}
             />
           )}
         </div>

@@ -40,7 +40,7 @@ export function AddToBuyQueueModal({ onAdd, onClose, nextPriority, wishlistGames
   const [isDayOneBuy, setIsDayOneBuy] = useState(false);
   const [targetPrice, setTargetPrice] = useState('');
   const [currentPrice, setCurrentPrice] = useState('');
-  const [msrpEstimate, setMsrpEstimate] = useState('');
+  const [msrpEstimate, setMsrpEstimate] = useState('70');
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
   const [showWishlistImport, setShowWishlistImport] = useState(false);
@@ -74,13 +74,6 @@ export function AddToBuyQueueModal({ onAdd, onClose, nextPriority, wishlistGames
     setSelected(game);
     setQuery(game.name);
     setResults([]);
-    if (game.metacritic && game.metacritic >= 60) {
-      // Guess MSRP from metacritic tier as a hint (user can override)
-      setMsrpEstimate(game.metacritic >= 85 ? '70' : game.metacritic >= 70 ? '50' : '30');
-    }
-    if (isUpcoming(game.released)) {
-      setIsDayOneBuy(false);
-    }
   };
 
   const handleWishlistImport = (wg: { name: string; platform?: string; genre?: string; thumbnail?: string }) => {
