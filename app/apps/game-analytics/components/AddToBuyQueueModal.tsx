@@ -1,9 +1,11 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { X, Search, Loader2, Star, Calendar, Check, ShoppingCart } from 'lucide-react';
+import { X, Search, Loader2, Star, Calendar, Check, ShoppingCart, AlertTriangle, Sparkles, Zap } from 'lucide-react';
 import { searchRAWGGames, RAWGGameData } from '../lib/rawg-api';
-import { PurchaseQueueEntry } from '../lib/types';
+import { PurchaseQueueEntry, Game } from '../lib/types';
+import { getImpulseCheckData, getSuggestedTargetPrice } from '../lib/calculations';
+import clsx from 'clsx';
 
 const PLATFORMS = ['PS5', 'PS4', 'Xbox Series', 'Xbox One', 'Switch', 'PC', 'Other'];
 
@@ -12,6 +14,7 @@ interface Props {
   onClose: () => void;
   nextPriority: number;
   wishlistGames?: { name: string; platform?: string; genre?: string; thumbnail?: string }[];
+  allGames?: Game[];
 }
 
 function formatRelease(date: string | undefined): string {
@@ -28,7 +31,7 @@ function isUpcoming(date: string | undefined): boolean {
   return new Date(date) > new Date();
 }
 
-export function AddToBuyQueueModal({ onAdd, onClose, nextPriority, wishlistGames = [] }: Props) {
+export function AddToBuyQueueModal({ onAdd, onClose, nextPriority, wishlistGames = [], allGames = [] }: Props) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<RAWGGameData[]>([]);
   const [searching, setSearching] = useState(false);
@@ -37,10 +40,12 @@ export function AddToBuyQueueModal({ onAdd, onClose, nextPriority, wishlistGames
 
   // Form fields
   const [platform, setPlatform] = useState('PS5');
+  const [genre, setGenre] = useState('');
   const [isDayOneBuy, setIsDayOneBuy] = useState(false);
   const [targetPrice, setTargetPrice] = useState('');
   const [currentPrice, setCurrentPrice] = useState('');
   const [msrpEstimate, setMsrpEstimate] = useState('70');
+  const [releaseDate, setReleaseDate] = useState('');
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
   const [showWishlistImport, setShowWishlistImport] = useState(false);
@@ -74,6 +79,7 @@ export function AddToBuyQueueModal({ onAdd, onClose, nextPriority, wishlistGames
     setSelected(game);
     setQuery(game.name);
     setResults([]);
+    if (game.released) setReleaseDate(game.released);
   };
 
   const handleWishlistImport = (wg: { name: string; platform?: string; genre?: string; thumbnail?: string }) => {
@@ -87,6 +93,7 @@ export function AddToBuyQueueModal({ onAdd, onClose, nextPriority, wishlistGames
     });
     setQuery(wg.name);
     if (wg.platform) setPlatform(wg.platform);
+    if (wg.genre) setGenre(wg.genre);
     setShowWishlistImport(false);
   };
 
@@ -100,7 +107,8 @@ export function AddToBuyQueueModal({ onAdd, onClose, nextPriority, wishlistGames
         gameName: name,
         thumbnail: selected?.backgroundImage || undefined,
         platform,
-        releaseDate: selected?.released || undefined,
+        genre: genre || undefined,
+        releaseDate: releaseDate || selected?.released || undefined,
         metacriticScore: selected?.metacritic || undefined,
         rawgRating: selected?.rating || undefined,
         isDayOneBuy,
@@ -120,11 +128,22 @@ export function AddToBuyQueueModal({ onAdd, onClose, nextPriority, wishlistGames
 
   const displayName = selected?.name || query.trim();
 
+  // Impulse check (Feature #8)
+  const impulseCheck = isDayOneBuy && allGames.length > 0 ? getImpulseCheckData(allGames) : null;
+
+  // Smart price suggestion (Feature #9)
+  const priceSuggestion = allGames.length > 0 && !targetPrice
+    ? getSuggestedTargetPrice(
+        { genre: genre || undefined, msrpEstimate: msrpEstimate ? parseFloat(msrpEstimate) : undefined } as PurchaseQueueEntry,
+        allGames
+      )
+    : null;
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-      <div className="bg-[#1a1a2e] border border-white/10 rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm">
+      <div className="bg-[#1a1a2e] border border-white/10 rounded-t-2xl sm:rounded-2xl w-full sm:max-w-lg max-h-[90vh] overflow-y-auto animate-bottom-sheet-up sm:animate-none">
         {/* Header */}
-        <div className="flex items-center justify-between p-5 border-b border-white/5">
+        <div className="flex items-center justify-between p-5 border-b border-white/5 sticky top-0 bg-[#1a1a2e] z-10">
           <div className="flex items-center gap-2">
             <ShoppingCart size={18} className="text-emerald-400" />
             <h2 className="text-white font-semibold">Add to Buy Queue</h2>
@@ -190,7 +209,7 @@ export function AddToBuyQueueModal({ onAdd, onClose, nextPriority, wishlistGames
 
             {/* Search results */}
             {results.length > 0 && (
-              <div className="mt-1.5 bg-[#0f0f1e] border border-white/10 rounded-xl overflow-hidden">
+              <div className="mt-1.5 bg-[#0f0f1e] border border-white/10 rounded-xl overflow-hidden max-h-60 overflow-y-auto">
                 {results.map(game => (
                   <button
                     key={game.id}
@@ -238,9 +257,11 @@ export function AddToBuyQueueModal({ onAdd, onClose, nextPriority, wishlistGames
                 <div className="min-w-0 flex-1">
                   <div className="text-sm font-medium text-white/90 truncate">{selected.name}</div>
                   <div className="flex items-center gap-2 mt-0.5">
-                    {selected.released && (
+                    {(releaseDate || selected.released) && (
                       <span className="text-[11px] text-white/40">
-                        {isUpcoming(selected.released) ? `Releases ${formatRelease(selected.released)}` : `Released ${formatRelease(selected.released)}`}
+                        {isUpcoming(releaseDate || selected.released)
+                          ? `Releases ${formatRelease(releaseDate || selected.released)}`
+                          : `Released ${formatRelease(releaseDate || selected.released)}`}
                       </span>
                     )}
                     {selected.metacritic && (
@@ -261,16 +282,43 @@ export function AddToBuyQueueModal({ onAdd, onClose, nextPriority, wishlistGames
                 <button
                   key={p}
                   onClick={() => setPlatform(p)}
-                  className={`px-3 py-1.5 rounded-lg text-xs transition-all ${
+                  className={clsx(
+                    'px-3 py-1.5 rounded-lg text-xs transition-all',
                     platform === p
                       ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
                       : 'bg-white/5 text-white/40 border border-transparent hover:text-white/60'
-                  }`}
+                  )}
                 >
                   {p}
                 </button>
               ))}
             </div>
+          </div>
+
+          {/* Genre (manual input) */}
+          <div>
+            <label className="text-xs text-white/40 mb-1.5 block">Genre (optional)</label>
+            <input
+              type="text"
+              value={genre}
+              onChange={e => setGenre(e.target.value)}
+              placeholder="e.g. RPG, Action, Sports..."
+              className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none focus:border-white/20"
+            />
+          </div>
+
+          {/* Release date — manual input (New feature) */}
+          <div>
+            <label className="text-xs text-white/40 mb-1.5 block">Release Date</label>
+            <input
+              type="date"
+              value={releaseDate}
+              onChange={e => setReleaseDate(e.target.value)}
+              className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-white/20"
+            />
+            <p className="text-[10px] text-white/15 mt-1">
+              {releaseDate ? (isUpcoming(releaseDate) ? 'Upcoming release' : 'Already released') : 'Leave blank if TBA'}
+            </p>
           </div>
 
           {/* Day One toggle */}
@@ -281,16 +329,42 @@ export function AddToBuyQueueModal({ onAdd, onClose, nextPriority, wishlistGames
             </div>
             <button
               onClick={() => setIsDayOneBuy(!isDayOneBuy)}
-              className={`w-10 h-5 rounded-full transition-all relative ${isDayOneBuy ? 'bg-emerald-500' : 'bg-white/10'}`}
+              className={clsx('w-10 h-5 rounded-full transition-all relative', isDayOneBuy ? 'bg-emerald-500' : 'bg-white/10')}
             >
-              <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${isDayOneBuy ? 'left-5' : 'left-0.5'}`} />
+              <span className={clsx('absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all', isDayOneBuy ? 'left-5' : 'left-0.5')} />
             </button>
           </div>
+
+          {/* Impulse Check Warning (Feature #8) */}
+          {impulseCheck && isDayOneBuy && impulseCheck.dayOneCount > 0 && (
+            <div className={clsx(
+              'p-3 rounded-xl border text-xs space-y-1.5',
+              impulseCheck.dayOneUnplayedPct > 40
+                ? 'bg-amber-500/5 border-amber-500/20'
+                : 'bg-emerald-500/5 border-emerald-500/20'
+            )}>
+              <div className="flex items-center gap-1.5 font-medium">
+                {impulseCheck.dayOneUnplayedPct > 40
+                  ? <AlertTriangle size={12} className="text-amber-400" />
+                  : <Sparkles size={12} className="text-emerald-400" />
+                }
+                <span className={impulseCheck.dayOneUnplayedPct > 40 ? 'text-amber-400' : 'text-emerald-400'}>
+                  Impulse Check
+                </span>
+              </div>
+              <p className="text-white/40 leading-relaxed">{impulseCheck.verdict}</p>
+              <div className="flex items-center gap-3 text-[11px] text-white/30">
+                <span>{impulseCheck.dayOneCount} full-price buys</span>
+                <span>Avg {impulseCheck.dayOneAvgRating.toFixed(1)}/10</span>
+                <span>{impulseCheck.dayOneUnplayedPct.toFixed(0)}% barely played</span>
+              </div>
+            </div>
+          )}
 
           {/* Prices */}
           <div className="grid grid-cols-3 gap-3">
             <div>
-              <label className="text-xs text-white/40 mb-1.5 block">MSRP / Full price</label>
+              <label className="text-xs text-white/40 mb-1.5 block">MSRP</label>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30 text-sm">$</span>
                 <input
@@ -304,7 +378,7 @@ export function AddToBuyQueueModal({ onAdd, onClose, nextPriority, wishlistGames
               </div>
             </div>
             <div>
-              <label className="text-xs text-white/40 mb-1.5 block">Seen at (now)</label>
+              <label className="text-xs text-white/40 mb-1.5 block">Seen at</label>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30 text-sm">$</span>
                 <input
@@ -332,7 +406,22 @@ export function AddToBuyQueueModal({ onAdd, onClose, nextPriority, wishlistGames
               </div>
             </div>
           </div>
-          <p className="text-[11px] text-white/20 -mt-2">Prices are manual — check PS Store for current deals</p>
+
+          {/* Smart price suggestion (Feature #9) */}
+          {priceSuggestion && !targetPrice && (
+            <button
+              onClick={() => setTargetPrice(priceSuggestion.suggestedPrice.toString())}
+              className="w-full flex items-center gap-2 px-3 py-2 rounded-lg bg-purple-500/[0.08] border border-purple-500/15 text-xs transition-all hover:bg-purple-500/15"
+            >
+              <Sparkles size={12} className="text-purple-400 flex-shrink-0" />
+              <span className="text-white/40 flex-1 text-left">
+                Suggested: <span className="text-purple-400 font-medium">${priceSuggestion.suggestedPrice}</span>
+                {' '}<span className="text-white/25">— {priceSuggestion.reasoning}</span>
+              </span>
+            </button>
+          )}
+
+          <p className="text-[11px] text-white/20 -mt-2">Prices are manual — check stores for current deals</p>
 
           {/* Notes */}
           <div>

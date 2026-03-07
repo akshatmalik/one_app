@@ -1231,9 +1231,29 @@ export default function GameAnalyticsPage() {
             <BuyQueueTab
               userId={user?.uid ?? null}
               wishlistGames={games.filter(g => g.status === 'Wishlist')}
+              allGames={games}
               budgets={budgets}
               yearSpent={currentYearSpent}
               onGoToBudget={() => setTabMode('stats')}
+              onAddGameToLibrary={async (data) => {
+                try {
+                  await addGame({
+                    name: data.name,
+                    price: data.price,
+                    hours: 0,
+                    rating: 0,
+                    status: (data.status || 'Not Started') as GameStatus,
+                    platform: data.platform,
+                    genre: data.genre,
+                    thumbnail: data.thumbnail,
+                    datePurchased: data.datePurchased,
+                    playLogs: [],
+                  });
+                  showToast(`${data.name} added to library`, 'success');
+                } catch {
+                  // Silent fail — the game still got marked as purchased in the queue
+                }
+              }}
             />
           )}
         </div>
