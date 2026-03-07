@@ -4,7 +4,7 @@ import { useState, useMemo } from 'react';
 import {
   Plus, ShoppingCart, Calendar, TrendingDown, Clock, PackageCheck,
   ChevronDown, ChevronUp, AlertTriangle, Settings, Sparkles,
-  Tag, Gift, Target, Zap, BarChart2, Trophy, ArrowRight
+  Tag, Gift, Target, Zap, BarChart2, Trophy, ArrowRight, HelpCircle
 } from 'lucide-react';
 import { Game, BudgetSettings, PurchaseQueueEntry } from '../lib/types';
 import { usePurchaseQueue } from '../hooks/usePurchaseQueue';
@@ -35,16 +35,19 @@ export function BuyQueueTab({ userId, wishlistGames, allGames, budgets, yearSpen
   const {
     entries,
     activeEntries,
+    maybeEntries,
     upcomingEntries,
     availableEntries,
     purchasedEntries,
     loading,
     plannedSpend,
+    maybeSpend,
     releasingSoon,
     addEntry,
     updateEntry,
     deleteEntry,
     markPurchased,
+    toggleMaybe,
   } = usePurchaseQueue(userId);
 
   const [showAddModal, setShowAddModal] = useState(false);
@@ -306,6 +309,12 @@ export function BuyQueueTab({ userId, wishlistGames, allGames, budgets, yearSpen
               <span className="text-white font-medium">{activeEntries.length}</span> watching
             </span>
           </div>
+          {maybeEntries.length > 0 && (
+            <div className="flex items-center gap-1.5 text-xs text-amber-400/70">
+              <HelpCircle size={12} />
+              <span>{maybeEntries.length} maybe</span>
+            </div>
+          )}
           {releasingSoon > 0 && (
             <div className="flex items-center gap-1.5 text-xs text-purple-400">
               <Calendar size={12} />
@@ -369,12 +378,19 @@ export function BuyQueueTab({ userId, wishlistGames, allGames, budgets, yearSpen
               <div className="text-lg font-semibold text-white/90">{formatMoney(plannedSpend)}</div>
               <div className="text-[11px] text-white/30">Planned</div>
             </div>
-            {stats.totalSavingsPotential > 0 && (
+            {maybeEntries.length > 0 ? (
+              <div className="p-3 rounded-lg bg-amber-500/[0.05] border border-amber-500/10">
+                <div className="text-lg font-semibold text-amber-400/80">{maybeEntries.length}</div>
+                <div className="text-[11px] text-white/30">
+                  Maybe{maybeSpend > 0 ? ` · ${formatMoney(maybeSpend)}` : ''}
+                </div>
+              </div>
+            ) : stats.totalSavingsPotential > 0 ? (
               <div className="p-3 rounded-lg bg-white/[0.02]">
                 <div className="text-lg font-semibold text-emerald-400">{formatMoney(stats.totalSavingsPotential)}</div>
                 <div className="text-[11px] text-white/30">Potential Savings</div>
               </div>
-            )}
+            ) : null}
           </div>
 
           {/* "If You Bought Everything" Snapshot (Feature #16) */}
@@ -423,7 +439,7 @@ export function BuyQueueTab({ userId, wishlistGames, allGames, budgets, yearSpen
       )}
 
       {/* Empty state (Feature #18) */}
-      {activeEntries.length === 0 && (
+      {activeEntries.length === 0 && maybeEntries.length === 0 && (
         <div className="text-center py-16 space-y-4">
           <div className="w-16 h-16 rounded-2xl bg-white/[0.03] flex items-center justify-center mx-auto">
             <ShoppingCart size={28} className="text-white/10" />
@@ -475,6 +491,7 @@ export function BuyQueueTab({ userId, wishlistGames, allGames, budgets, yearSpen
                     onUpdate={updateEntry}
                     onMarkPurchased={handleMarkPurchased}
                     onDelete={handleDelete}
+                    onToggleMaybe={() => toggleMaybe(entry.id)}
                   />
                 ))}
               </div>
@@ -500,6 +517,34 @@ export function BuyQueueTab({ userId, wishlistGames, allGames, budgets, yearSpen
                     onUpdate={updateEntry}
                     onMarkPurchased={handleMarkPurchased}
                     onDelete={handleDelete}
+                    onToggleMaybe={() => toggleMaybe(entry.id)}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Maybe section */}
+          {maybeEntries.length > 0 && (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <HelpCircle size={13} className="text-amber-400/70" />
+                <h3 className="text-xs font-medium text-white/50 uppercase tracking-wider">Maybe</h3>
+                <span className="text-[11px] text-white/25">{maybeEntries.length}</span>
+                {maybeSpend > 0 && (
+                  <span className="text-[11px] text-amber-400/40 ml-auto">{formatMoney(maybeSpend)} possible</span>
+                )}
+              </div>
+              <div className="space-y-2">
+                {maybeEntries.map(entry => (
+                  <BuyQueueCard
+                    key={entry.id}
+                    entry={entry}
+                    allGames={allGames}
+                    onUpdate={updateEntry}
+                    onMarkPurchased={handleMarkPurchased}
+                    onDelete={handleDelete}
+                    onToggleMaybe={() => toggleMaybe(entry.id)}
                   />
                 ))}
               </div>
@@ -536,6 +581,7 @@ export function BuyQueueTab({ userId, wishlistGames, allGames, budgets, yearSpen
                       onUpdate={updateEntry}
                       onMarkPurchased={handleMarkPurchased}
                       onDelete={handleDelete}
+                      onToggleMaybe={() => toggleMaybe(entry.id)}
                     />
                   ))}
                 </div>
@@ -617,9 +663,9 @@ export function BuyQueueTab({ userId, wishlistGames, allGames, budgets, yearSpen
       )}
 
       {/* Wishlist nudge (Feature #13) */}
-      {wishlistGames.length > 0 && activeEntries.length > 0 && (
+      {wishlistGames.length > 0 && (activeEntries.length > 0 || maybeEntries.length > 0) && (
         (() => {
-          const queuedNames = new Set(activeEntries.map(e => e.gameName.toLowerCase()));
+          const queuedNames = new Set([...activeEntries, ...maybeEntries].map(e => e.gameName.toLowerCase()));
           const untracked = wishlistGames.filter(g => !queuedNames.has(g.name.toLowerCase()));
           if (untracked.length === 0) return null;
           return (

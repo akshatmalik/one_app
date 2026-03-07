@@ -4,7 +4,7 @@ import { useState } from 'react';
 import {
   ExternalLink, Check, Trash2, ChevronDown, ChevronUp, GripVertical,
   Calendar, Star, Zap, Target, TrendingDown, TrendingUp, Minus,
-  AlertCircle, Clock, Edit3
+  AlertCircle, Clock, Edit3, HelpCircle, ShoppingCart
 } from 'lucide-react';
 import { PurchaseQueueEntry } from '../lib/types';
 import { Game } from '../lib/types';
@@ -22,6 +22,7 @@ interface Props {
   onUpdate: (id: string, updates: Partial<PurchaseQueueEntry>) => Promise<void>;
   onMarkPurchased: (id: string, price?: number) => Promise<void>;
   onDelete: (id: string) => void;
+  onToggleMaybe?: () => void;
 }
 
 function daysUntil(dateStr: string): number {
@@ -63,7 +64,7 @@ function getConfidenceColor(score: number): string {
   return 'text-red-400 bg-red-500/15';
 }
 
-export function BuyQueueCard({ entry, allGames, onUpdate, onMarkPurchased, onDelete }: Props) {
+export function BuyQueueCard({ entry, allGames, onUpdate, onMarkPurchased, onDelete, onToggleMaybe }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [editingCurrentPrice, setEditingCurrentPrice] = useState(false);
   const [editingTargetPrice, setEditingTargetPrice] = useState(false);
@@ -123,9 +124,11 @@ export function BuyQueueCard({ entry, allGames, onUpdate, onMarkPurchased, onDel
   return (
     <div className={clsx(
       'rounded-xl overflow-hidden transition-all',
-      isAtTarget
-        ? 'border-2 border-emerald-500/40 buy-queue-price-glow'
-        : 'border border-white/8 hover:border-white/12'
+      entry.isMaybe
+        ? 'border border-dashed border-amber-500/25 opacity-90'
+        : isAtTarget
+          ? 'border-2 border-emerald-500/40 buy-queue-price-glow'
+          : 'border border-white/8 hover:border-white/12'
     )}>
       {/* Poster Banner (Feature #2) */}
       {entry.thumbnail ? (
@@ -169,6 +172,12 @@ export function BuyQueueCard({ entry, allGames, onUpdate, onMarkPurchased, onDel
                   Day 1
                 </span>
               )}
+              {entry.isMaybe && (
+                <span className="flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 flex-shrink-0 backdrop-blur-sm">
+                  <HelpCircle size={9} />
+                  Maybe
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -186,6 +195,12 @@ export function BuyQueueCard({ entry, allGames, onUpdate, onMarkPurchased, onDel
                   <span className="flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400 flex-shrink-0">
                     <Zap size={9} />
                     Day 1
+                  </span>
+                )}
+                {entry.isMaybe && (
+                  <span className="flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400 flex-shrink-0">
+                    <HelpCircle size={9} />
+                    Maybe
                   </span>
                 )}
               </div>
@@ -437,6 +452,25 @@ export function BuyQueueCard({ entry, allGames, onUpdate, onMarkPurchased, onDel
                   ×
                 </button>
               </div>
+            )}
+
+            {/* Maybe toggle */}
+            {onToggleMaybe && (
+              <button
+                onClick={onToggleMaybe}
+                className={clsx(
+                  'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-all',
+                  entry.isMaybe
+                    ? 'bg-blue-500/10 text-blue-400 hover:bg-blue-500/20'
+                    : 'bg-amber-500/10 text-amber-400/70 hover:bg-amber-500/20 hover:text-amber-400'
+                )}
+              >
+                {entry.isMaybe ? (
+                  <><ShoppingCart size={12} /> Commit</>
+                ) : (
+                  <><HelpCircle size={12} /> Maybe</>
+                )}
+              </button>
             )}
 
             {/* Delete */}

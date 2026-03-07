@@ -60,11 +60,19 @@ export function usePurchaseQueue(userId: string | null) {
     await refresh();
   }, [refresh]);
 
-  // Derived: entries split into upcoming vs released/price-watch
+  const toggleMaybe = useCallback(async (id: string): Promise<void> => {
+    const entry = entries.find(e => e.id === id);
+    if (!entry) return;
+    await purchaseQueueRepository.update(id, { isMaybe: !entry.isMaybe });
+    await refresh();
+  }, [entries, refresh]);
+
+  // Derived: entries split into committed watches, maybes, and purchased
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  const activeEntries = entries.filter(e => !e.purchased);
+  const activeEntries = entries.filter(e => !e.purchased && !e.isMaybe);
+  const maybeEntries = entries.filter(e => !e.purchased && e.isMaybe);
   const purchasedEntries = entries.filter(e => e.purchased);
 
   const upcomingEntries = activeEntries.filter(e => {
@@ -79,32 +87,41 @@ export function usePurchaseQueue(userId: string | null) {
     return rel <= today;
   });
 
-  // Quick stats
+  // Quick stats — plannedSpend is committed watches only (maybes excluded from budget)
   const plannedSpend = activeEntries.reduce((sum, e) => {
     const price = e.targetPrice ?? e.currentPrice ?? e.msrpEstimate ?? 0;
     return sum + price;
   }, 0);
 
-  const releasingSoon = upcomingEntries.filter(e => {
+  const maybeSpend = maybeEntries.reduce((sum, e) => {
+    const price = e.targetPrice ?? e.currentPrice ?? e.msrpEstimate ?? 0;
+    return sum + price;
+  }, 0);
+
+  // releasingSoon includes both committed and maybe (informational)
+  const releasingSoon = [...activeEntries, ...maybeEntries].filter(e => {
     if (!e.releaseDate) return false;
     const rel = new Date(e.releaseDate);
     const diff = (rel.getTime() - today.getTime()) / (1000 * 60 * 60 * 24);
-    return diff <= 90;
+    return diff > 0 && diff <= 90;
   }).length;
 
   return {
     entries,
     activeEntries,
+    maybeEntries,
     upcomingEntries,
     availableEntries,
     purchasedEntries,
     loading,
     plannedSpend,
+    maybeSpend,
     releasingSoon,
     addEntry,
     updateEntry,
     deleteEntry,
     markPurchased,
+    toggleMaybe,
     refresh,
   };
 }
