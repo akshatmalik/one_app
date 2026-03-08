@@ -372,6 +372,7 @@ Respond in this exact JSON format, nothing else:
 export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
+  recommendedGameNames?: string[]; // populated for assistant messages from chat
 }
 
 export interface ChatRecommendation extends AIRecommendation {

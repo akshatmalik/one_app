@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Bookmark, Heart, Check, X, Star, Eye, Clock, Flame, TrendingUp } from 'lucide-react';
+import { Bookmark, Heart, Check, X, Star, Eye, Clock, Flame, TrendingUp, Sparkles } from 'lucide-react';
 import { GameRecommendation, RecommendationCategory } from '../lib/types';
 import { getDaysUntilRelease } from '../lib/calculations';
 import clsx from 'clsx';
@@ -180,9 +180,15 @@ export function RecommendationCard({
         </div>
 
         {/* AI Reason */}
-        <p className="text-xs text-white/50 italic leading-relaxed">
-          &ldquo;{recommendation.aiReason}&rdquo;
-        </p>
+        <div className="space-y-1">
+          <div className="flex items-center gap-1 text-[10px] text-white/25">
+            <Sparkles size={9} />
+            <span>Why for you</span>
+          </div>
+          <p className="text-xs text-white/65 italic leading-relaxed">
+            &ldquo;{recommendation.aiReason}&rdquo;
+          </p>
+        </div>
 
         {/* Already Played Form */}
         {showPlayedForm ? (

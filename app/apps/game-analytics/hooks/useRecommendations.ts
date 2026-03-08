@@ -335,7 +335,11 @@ export function useRecommendations(userId: string | null, games: Game[]) {
         interestedNames
       );
 
-      const assistantMsg: ChatMessage = { role: 'assistant', content: response.reply };
+      const assistantMsg: ChatMessage = {
+        role: 'assistant',
+        content: response.reply,
+        recommendedGameNames: response.recommendations.map(r => r.gameName),
+      };
       setChatHistory(prev => [...prev, assistantMsg]);
 
       // Enrich and save the recommended games

@@ -127,10 +127,18 @@ export function RecommendationChat({
                   : 'bg-purple-500/10 text-purple-100/80 rounded-bl-sm border border-purple-500/10'
               )}>
                 {msg.content}
-                {msg.role === 'assistant' && i === chatHistory.length - 1 && (
-                  <p className="text-[10px] text-purple-400/50 mt-1.5 pt-1.5 border-t border-purple-500/10">
-                    Recommendations added to your For You feed ↓
-                  </p>
+                {msg.role === 'assistant' && msg.recommendedGameNames && msg.recommendedGameNames.length > 0 && (
+                  <div className="mt-2 pt-2 border-t border-purple-500/10 space-y-1">
+                    {msg.recommendedGameNames.map(name => (
+                      <div key={name} className="flex items-center gap-1.5 text-[10px] text-purple-300/60">
+                        <span className="text-purple-400/40">›</span>
+                        <span>{name}</span>
+                      </div>
+                    ))}
+                    <p className="text-[10px] text-purple-400/40 pt-0.5">
+                      Added to your For You feed ↓
+                    </p>
+                  </div>
                 )}
               </div>
             </div>
