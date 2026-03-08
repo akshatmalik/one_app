@@ -10,6 +10,7 @@ import { useRecommendations } from '../hooks/useRecommendations';
 import { TasteProfilePanel } from './TasteProfilePanel';
 import { RecommendationCard } from './RecommendationCard';
 import { AskAboutGame } from './AskAboutGame';
+import { RecommendationChat } from './RecommendationChat';
 import clsx from 'clsx';
 
 type DiscoverSection = 'coming-soon' | 'for-you' | 'interested';
@@ -66,6 +67,11 @@ export function DiscoverTab({ games, userId, onAddGame }: DiscoverTabProps) {
     upcomingNextFewMonths,
     upcomingLater,
     categorizedSuggested,
+    chatHistory,
+    chatGenerating,
+    chatError,
+    sendChatMessage,
+    clearChat,
   } = useRecommendations(userId, games);
 
   const [userPrompt, setUserPrompt] = useState('');
@@ -352,6 +358,16 @@ export function DiscoverTab({ games, userId, onAddGame }: DiscoverTabProps) {
       {/* ── For You Tab ─────────────────────────────────── */}
       {section === 'for-you' && (
         <div className="space-y-6">
+          {/* Chat interface */}
+          <RecommendationChat
+            chatHistory={chatHistory}
+            chatGenerating={chatGenerating}
+            chatError={chatError}
+            onSend={sendChatMessage}
+            onClear={clearChat}
+            hasGames={games.length > 0}
+          />
+
           {/* Generate button */}
           <button
             onClick={handleGenerate}

@@ -8,10 +8,12 @@ import { buildTasteProfile, buildUpcomingFilters, scoreUpcomingMatch } from '../
 import {
   generateRefinedRecommendations,
   generateCategorizedRecommendations,
+  generateChatRecommendations,
   analyzeGameForUser,
   scoreUpcomingGames,
   AIRecommendation,
   GameAnalysis,
+  ChatMessage,
 } from '../lib/ai-recommendation-service';
 import { searchRAWGGame, getUpcomingGames } from '../lib/rawg-api';
 
@@ -22,6 +24,11 @@ export function useRecommendations(userId: string | null, games: Game[]) {
   const [generatingUpcoming, setGeneratingUpcoming] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [error, setError] = useState<Error | null>(null);
+
+  // Chat state
+  const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
+  const [chatGenerating, setChatGenerating] = useState(false);
+  const [chatError, setChatError] = useState<Error | null>(null);
 
   // Auto-computed taste profile from library data
   const autoProfile = useMemo(() => buildTasteProfile(games), [games]);
@@ -308,6 +315,52 @@ export function useRecommendations(userId: string | null, games: Game[]) {
   // Undo dismiss (move back to suggested)
   const undoDismiss = useCallback((id: string) => updateStatus(id, 'suggested'), [updateStatus]);
 
+  // Send a chat message and get back a reply + recommendations
+  const sendChatMessage = useCallback(async (message: string) => {
+    if (games.length === 0 || !message.trim()) return;
+    setChatGenerating(true);
+    setChatError(null);
+
+    const userMsg: ChatMessage = { role: 'user', content: message };
+    setChatHistory(prev => [...prev, userMsg]);
+
+    try {
+      const response = await generateChatRecommendations(
+        message,
+        chatHistory,
+        tasteProfile,
+        games,
+        existingGameNames,
+        dismissedNames,
+        interestedNames
+      );
+
+      const assistantMsg: ChatMessage = { role: 'assistant', content: response.reply };
+      setChatHistory(prev => [...prev, assistantMsg]);
+
+      // Enrich and save the recommended games
+      const saved = await Promise.all(
+        response.recommendations.map(r => enrichAndSave(r, {
+          recommendationCategory: r.category,
+          categoryContext: r.categoryContext,
+        }))
+      );
+      setRecommendations(prev => [...saved, ...prev]);
+    } catch (e) {
+      const err = e instanceof Error ? e : new Error(String(e));
+      setChatError(err);
+      // Remove the user message on error so they can retry
+      setChatHistory(prev => prev.slice(0, -1));
+    } finally {
+      setChatGenerating(false);
+    }
+  }, [games, tasteProfile, chatHistory, existingGameNames, dismissedNames, interestedNames, enrichAndSave]);
+
+  const clearChat = useCallback(() => {
+    setChatHistory([]);
+    setChatError(null);
+  }, []);
+
   return {
     // Data
     recommendations,
@@ -336,6 +389,13 @@ export function useRecommendations(userId: string | null, games: Game[]) {
     profileOverrides,
     updateProfileOverrides,
     resetProfileOverrides,
+
+    // Chat
+    chatHistory,
+    chatGenerating,
+    chatError,
+    sendChatMessage,
+    clearChat,
 
     // Actions
     generate,

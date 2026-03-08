@@ -367,6 +367,111 @@ Respond in this exact JSON format, nothing else:
   }
 }
 
+// ── Recommendation Chat ──────────────────────────────────────────────────────
+
+export interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+export interface ChatRecommendation extends AIRecommendation {
+  category: RecommendationCategory;
+  categoryContext?: string;
+}
+
+export interface ChatResponse {
+  reply: string;
+  recommendations: ChatRecommendation[];
+}
+
+const SIX_DIMENSION_FRAMEWORK = `
+You evaluate games across six dimensions (0-10):
+1. Hook Strength — how immediately engaging the opening experience is
+2. Mechanical Satisfaction — how good executing core gameplay feels (responsiveness, feedback, depth)
+3. Narrative Coherence — whether the story follows internal logic with grounded character motivations
+4. World Logic — whether the world/systems make consistent internal sense
+5. Pacing/Pull Forward — whether something continuously draws the player to keep going
+6. Engagement Without Stopping — whether the game works in short bursts / podcast-friendly sessions
+
+When a user describes what they want, map their words to these dimensions:
+- "gripping story from minute one" → high Hook Strength + Narrative Coherence
+- "tight mechanics, no fluff" → high Mechanical Satisfaction
+- "I can play while watching TV / short sessions" → high Engagement Without Stopping
+- "something to really immerse myself in" → high Narrative Coherence + World Logic + Pacing
+- "atmospheric and dark" → high Narrative Coherence + World Logic
+- "feel something / emotional" → high Narrative Coherence + Hook Strength
+- "chill / relaxing" → high Engagement Without Stopping + lower Mechanical Satisfaction intensity
+- "challenging / mastery" → high Mechanical Satisfaction + Pacing
+
+Use this framework to score candidate games against the user's request and explain picks in dimension language when helpful.
+`;
+
+/**
+ * Generate recommendations in response to a natural language chat message.
+ * Returns both an AI reply and 3-5 recommended games.
+ */
+export async function generateChatRecommendations(
+  userMessage: string,
+  conversationHistory: ChatMessage[],
+  profile: TasteProfile,
+  games: Game[],
+  existingGameNames: string[],
+  dismissedNames: string[],
+  interestedNames: string[]
+): Promise<ChatResponse> {
+  const model = getAIModel();
+
+  const profileContext = buildProfileContext(profile, games, dismissedNames, interestedNames);
+
+  // Format conversation history for the prompt (last 6 messages)
+  const historyText = conversationHistory.slice(-6).map(m =>
+    `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`
+  ).join('\n');
+
+  const prompt = `${profileContext}
+
+${SIX_DIMENSION_FRAMEWORK}
+
+${historyText ? `CONVERSATION HISTORY:\n${historyText}\n` : ''}
+User: ${userMessage}
+
+The user is telling you what kind of game experience they're looking for right now. Your job:
+1. Write a short, conversational reply (2-3 sentences max) that acknowledges what they want and briefly explains why your picks fit
+2. Recommend exactly 3-5 real games that match their request AND align with their personal taste profile
+
+For each game:
+- Write a personalized "reason" referencing BOTH their request AND their specific library data (mention their games, ratings, hours, patterns)
+- Assign a category: "because-you-loved", "hidden-gem", "popular-in-genre", "try-something-different", or "general"
+- If "because-you-loved", add "categoryContext" with the specific game name it connects to
+
+RULES:
+- Only suggest REAL games that exist and are already released
+- Do NOT suggest games already in their library, wishlist, or previously dismissed
+- Be honest — reference the six dimensions when helpful but keep it natural, not robotic
+- The reply should feel like a knowledgeable friend, not a formal system
+
+Respond in this exact JSON format, nothing else:
+{
+  "reply": "Your conversational reply here",
+  "recommendations": [
+    { "gameName": "Game Title", "genre": "Genre", "platform": "Best Platform", "reason": "Personalized reason", "category": "because-you-loved", "categoryContext": "Elden Ring" }
+  ]
+}`;
+
+  const result = await model.generateContent(prompt);
+  const text = result.response.text().trim();
+  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) throw new Error('AI returned invalid response. Response: ' + text.slice(0, 200));
+
+  const parsed = JSON.parse(jsonMatch[0]) as ChatResponse;
+  // Filter out games already in library or dismissed
+  parsed.recommendations = parsed.recommendations.filter(r =>
+    !existingGameNames.some(n => n.toLowerCase() === r.gameName.toLowerCase()) &&
+    !dismissedNames.some(n => n.toLowerCase() === r.gameName.toLowerCase())
+  );
+  return parsed;
+}
+
 // ── Categorized Released Recommendations ────────────────────────────────────
 
 export interface CategorizedRecommendation extends AIRecommendation {
