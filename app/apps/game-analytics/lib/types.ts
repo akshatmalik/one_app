@@ -294,6 +294,7 @@ export interface PurchaseQueueEntry {
   purchased: boolean;
   purchasedAt?: string;
   purchasePrice?: number;     // What you actually paid
+  isMaybe?: boolean;          // Soft interest — not committed to budget/tracking
 
   addedAt: string;
   createdAt: string;
