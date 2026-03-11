@@ -38,6 +38,9 @@ import { ExportPanel } from './components/ExportPanel';
 import { YearlyWrapped } from './components/YearlyWrapped';
 import { FortuneCookie } from './components/FortuneCookie';
 import { AwardsHub } from './components/AwardsHub';
+import { useTrophies } from './hooks/useTrophies';
+import { TrophyShowcase } from './components/TrophyShowcase';
+import { TrophyToast } from './components/TrophyToast';
 import { ErrorLogPanel, ErrorLogButton } from './components/ErrorLogPanel';
 import clsx from 'clsx';
 
@@ -133,6 +136,7 @@ export default function GameAnalyticsPage() {
   const gameColors = useGameColors(games);
   const { quips: gameQuips } = useGameQuips(games, user?.uid ?? null);
   const { rankings: allTimeRankings } = useRankings(user?.uid ?? null, 'all', 'all');
+  const { allTrophies, summary: trophySummary, pinnedTrophies, pinnedIds: pinnedTrophyIds, togglePin: toggleTrophyPin, toastQueue: trophyToastQueue, dismissToast: dismissTrophyToast } = useTrophies(games, user?.uid ?? null);
   const { assignments: allTimeTiers } = useTierAssignments(user?.uid ?? null, 'all');
   const eloByGameId = useMemo(() => {
     const map = new Map<string, GameRanking>();
@@ -464,6 +468,17 @@ export default function GameAnalyticsPage() {
 
   return (
     <div className="min-h-[calc(100vh-60px)] flex flex-col">
+      {/* Trophy Toast Notifications */}
+      {trophyToastQueue.length > 0 && (
+        <TrophyToast
+          key={trophyToastQueue[0].trophyId + trophyToastQueue[0].tier}
+          name={trophyToastQueue[0].name}
+          icon={trophyToastQueue[0].icon}
+          tier={trophyToastQueue[0].tier}
+          isUpgrade={trophyToastQueue[0].isUpgrade}
+          onDismiss={dismissTrophyToast}
+        />
+      )}
       {/* Header */}
       <div className="px-6 pt-8 pb-6 border-b border-white/5">
         <div className="max-w-6xl mx-auto">
@@ -488,6 +503,16 @@ export default function GameAnalyticsPage() {
               </div>
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
+              {/* Trophy Showcase */}
+              {games.length > 0 && (
+                <TrophyShowcase
+                  pinnedTrophies={pinnedTrophies}
+                  totalScore={trophySummary.totalScore}
+                  earnedCount={trophySummary.earnedCount}
+                  totalCount={trophySummary.totalCount}
+                  onOpenTrophyRoom={() => setTabMode('stats')}
+                />
+              )}
               {games.length === 0 && (
                 <button
                   onClick={handleSeedData}
@@ -1137,6 +1162,10 @@ export default function GameAnalyticsPage() {
                   showToast(`Failed to save budget: ${(e as Error).message}`, 'error');
                 }
               }}
+              trophies={allTrophies}
+              trophySummary={trophySummary}
+              pinnedTrophyIds={pinnedTrophyIds}
+              onToggleTrophyPin={toggleTrophyPin}
             />
           )}
 
