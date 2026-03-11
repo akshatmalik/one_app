@@ -60,6 +60,8 @@ import { ExpandedStatsPanel } from './ExpandedStatsPanel';
 import { InsightsPanel } from './InsightsPanel';
 import { AnalyticsPanel } from './AnalyticsPanel';
 import { TrophyRoom } from './TrophyRoom';
+import { TrophyRoomV2 } from './TrophyRoomV2';
+import { TrophyProgress, TrophyScoreSummary } from '../lib/trophy-calculations';
 import { DiscoverPanel } from './DiscoverPanel';
 import { WeeklyDigest } from './WeeklyDigest';
 import clsx from 'clsx';
@@ -69,6 +71,10 @@ interface StatsViewProps {
   summary: AnalyticsSummary;
   budgets?: BudgetSettings[];
   onSetBudget?: (year: number, amount: number) => Promise<void>;
+  trophies?: TrophyProgress[];
+  trophySummary?: TrophyScoreSummary;
+  pinnedTrophyIds?: string[];
+  onToggleTrophyPin?: (trophyId: string) => void;
 }
 
 const STATUS_COLORS: Record<GameStatus, string> = {
@@ -81,7 +87,7 @@ const STATUS_COLORS: Record<GameStatus, string> = {
 
 const CHART_COLORS = ['#8b5cf6', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#3b82f6', '#84cc16'];
 
-export function StatsView({ games, summary, budgets = [], onSetBudget }: StatsViewProps) {
+export function StatsView({ games, summary, budgets = [], onSetBudget, trophies, trophySummary, pinnedTrophyIds = [], onToggleTrophyPin }: StatsViewProps) {
   const currentYear = new Date().getFullYear();
   const [selectedPeriod, setSelectedPeriod] = useState<'all' | number>(currentYear);
   const [isEditingBudget, setIsEditingBudget] = useState(false);
@@ -990,8 +996,17 @@ export function StatsView({ games, summary, budgets = [], onSetBudget }: StatsVi
       {/* Advanced Analytics Panel (Phase 2) */}
       <AnalyticsPanel games={games} />
 
-      {/* Trophy Room (Phase 3) */}
-      <TrophyRoom games={games} />
+      {/* Trophy Room V2 — 100 Trophies */}
+      {trophies && trophySummary && onToggleTrophyPin ? (
+        <TrophyRoomV2
+          trophies={trophies}
+          summary={trophySummary}
+          pinnedIds={pinnedTrophyIds}
+          onTogglePin={onToggleTrophyPin}
+        />
+      ) : (
+        <TrophyRoom games={games} />
+      )}
 
       {/* Discover & Recommend (Phase 4) */}
       <DiscoverPanel games={games} />
