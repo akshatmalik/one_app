@@ -4,7 +4,7 @@ import { getAI, getGenerativeModel, GoogleAIBackend } from 'firebase/ai';
 import { initializeApp, getApps } from 'firebase/app';
 import { TasteProfile, GameRecommendation, Game, RecommendationCategory } from './types';
 import { getTotalHours } from './calculations';
-import { RAWGGameData } from './rawg-api';
+import { RAWGGameData, batchFetchRAWGData } from './rawg-api';
 
 const firebaseConfig = {
   apiKey: "AIzaSyBS3IVvszDrm_zjjXu8TATgs1H-FlegHtM",
@@ -21,11 +21,41 @@ function getAIModel() {
   return getGenerativeModel(ai, { model: "gemini-2.5-flash" });
 }
 
+// Grounded model — uses Google Search to verify real games and find current releases
+function getGroundedAIModel() {
+  const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
+  const ai = getAI(app, { backend: new GoogleAIBackend() });
+  return getGenerativeModel(ai, {
+    model: "gemini-2.5-flash",
+    tools: [{ googleSearch: {} }],
+  } as Parameters<typeof getGenerativeModel>[1]);
+}
+
+// After AI generates game names, batch-fetch RAWG data (thumbnail, metacritic, rating) and attach
+async function enrichWithRAWGData<T extends AIRecommendation>(recommendations: T[]): Promise<T[]> {
+  if (recommendations.length === 0) return recommendations;
+  try {
+    const rawgMap = await batchFetchRAWGData(recommendations.map(r => r.gameName));
+    return recommendations.map(r => {
+      const data = rawgMap.get(r.gameName);
+      if (!data) return r;
+      return { ...r, thumbnail: data.backgroundImage, metacritic: data.metacritic, rawgRating: data.rating, rawgId: data.id };
+    });
+  } catch {
+    return recommendations; // Graceful fallback — enrichment is best-effort
+  }
+}
+
 export interface AIRecommendation {
   gameName: string;
   genre: string;
   platform: string;
   reason: string; // Personalized "why you'd love this"
+  // RAWG-enriched metadata (populated after AI generation via batchFetchRAWGData)
+  thumbnail?: string | null;
+  metacritic?: number | null;
+  rawgRating?: number | null;
+  rawgId?: number | null;
 }
 
 export interface GameAnalysis {
@@ -176,7 +206,7 @@ export async function generateRecommendations(
   userPrompt?: string,
   count: number = 8
 ): Promise<AIRecommendation[]> {
-  const model = getAIModel();
+  const model = getGroundedAIModel();
 
   const profileContext = buildProfileContext(profile, games, dismissedNames, interestedNames, userPrompt);
 
@@ -186,8 +216,10 @@ Based on this gamer's full library and taste profile, suggest exactly ${count} r
 
 For each game, write a personalized "Why you'd love this" line that references THEIR specific data — mention their favorite games, hours, ratings, franchises, or patterns. Not generic marketing copy.
 
+Use your search capability to find currently released games and verify they exist — prioritize recent high-quality titles alongside classics.
+
 IMPORTANT:
-- Only suggest REAL games that actually exist
+- Only suggest REAL games that actually exist and are already released
 - Do NOT suggest games already in their library, wishlist, or previously dismissed
 - Each suggestion must be a different game
 - The "reason" should reference specific things from THEIR profile (e.g., "You put 120hrs into Elden Ring at 10/10 — this has similar...")
@@ -204,10 +236,11 @@ Respond in this exact JSON format, nothing else:
   const jsonMatch = text.match(/\[[\s\S]*\]/);
   if (!jsonMatch) throw new Error('AI returned no recommendations. Response: ' + text.slice(0, 200));
   const parsed = JSON.parse(jsonMatch[0]) as AIRecommendation[];
-  return parsed.filter(r =>
+  const filtered = parsed.filter(r =>
     !existingGameNames.some(n => n.toLowerCase() === r.gameName.toLowerCase()) &&
     !dismissedNames.some(n => n.toLowerCase() === r.gameName.toLowerCase())
   );
+  return enrichWithRAWGData(filtered);
 }
 
 /**
@@ -220,7 +253,7 @@ export async function analyzeGameForUser(
   existingGameNames: string[],
   interestedNames: string[]
 ): Promise<GameAnalysis> {
-  const model = getAIModel();
+  const model = getGroundedAIModel();
 
   const profileContext = buildProfileContext(profile, games, [], interestedNames);
 
@@ -231,6 +264,8 @@ export async function analyzeGameForUser(
 ${alreadyOwned ? `NOTE: This game is already in their library. Analyze based on their existing experience with similar games.\n` : ''}
 
 The user is asking: "Would I like ${gameName}?"
+
+Use your search capability to look up "${gameName}" — confirm it exists, its genre, typical playtime, and critical reception before analyzing.
 
 Analyze whether this specific game matches their taste profile. Consider:
 1. Genre alignment with their preferences
@@ -277,13 +312,15 @@ export async function generateRefinedRecommendations(
     return generateRecommendations(profile, games, existingGameNames, dismissedNames, interestedNames, userPrompt, count);
   }
 
-  const model = getAIModel();
+  const model = getGroundedAIModel();
   const profileContext = buildProfileContext(profile, games, dismissedNames, interestedNames, userPrompt);
 
   const prompt = `${profileContext}
 
 The user has shown INTEREST in these recommended games: ${interestedNames.join(', ')}
 This tells you more about what they want RIGHT NOW. Use these as strong signals alongside their library data.
+
+Use your search capability to find currently released games similar to their interested titles — prioritize real, verified games.
 
 Suggest exactly ${count} more real games that match the pattern of their interested games combined with their taste profile. Each suggestion should explain why it connects to both their library favorites AND the games they've been interested in.
 
@@ -297,11 +334,12 @@ Respond in this exact JSON format, nothing else:
   const jsonMatch = text.match(/\[[\s\S]*\]/);
   if (!jsonMatch) throw new Error('AI returned no recommendations. Response: ' + text.slice(0, 200));
   const parsed = JSON.parse(jsonMatch[0]) as AIRecommendation[];
-  return parsed.filter(r =>
+  const filtered = parsed.filter(r =>
     !existingGameNames.some(n => n.toLowerCase() === r.gameName.toLowerCase()) &&
     !dismissedNames.some(n => n.toLowerCase() === r.gameName.toLowerCase()) &&
     !interestedNames.some(n => n.toLowerCase() === r.gameName.toLowerCase())
   );
+  return enrichWithRAWGData(filtered);
 }
 
 // ── Upcoming Games Scoring ──────────────────────────────────────────────────
@@ -367,6 +405,112 @@ Respond in this exact JSON format, nothing else:
   }
 }
 
+// ── Recommendation Chat ──────────────────────────────────────────────────────
+
+export interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+  recommendedGameNames?: string[]; // populated for assistant messages from chat
+}
+
+export interface ChatRecommendation extends AIRecommendation {
+  category: RecommendationCategory;
+  categoryContext?: string;
+}
+
+export interface ChatResponse {
+  reply: string;
+  recommendations: ChatRecommendation[];
+}
+
+const SIX_DIMENSION_FRAMEWORK = `
+You evaluate games across six dimensions (0-10):
+1. Hook Strength — how immediately engaging the opening experience is
+2. Mechanical Satisfaction — how good executing core gameplay feels (responsiveness, feedback, depth)
+3. Narrative Coherence — whether the story follows internal logic with grounded character motivations
+4. World Logic — whether the world/systems make consistent internal sense
+5. Pacing/Pull Forward — whether something continuously draws the player to keep going
+6. Engagement Without Stopping — whether the game works in short bursts / podcast-friendly sessions
+
+When a user describes what they want, map their words to these dimensions:
+- "gripping story from minute one" → high Hook Strength + Narrative Coherence
+- "tight mechanics, no fluff" → high Mechanical Satisfaction
+- "I can play while watching TV / short sessions" → high Engagement Without Stopping
+- "something to really immerse myself in" → high Narrative Coherence + World Logic + Pacing
+- "atmospheric and dark" → high Narrative Coherence + World Logic
+- "feel something / emotional" → high Narrative Coherence + Hook Strength
+- "chill / relaxing" → high Engagement Without Stopping + lower Mechanical Satisfaction intensity
+- "challenging / mastery" → high Mechanical Satisfaction + Pacing
+
+Use this framework to score candidate games against the user's request and explain picks in dimension language when helpful.
+`;
+
+/**
+ * Generate recommendations in response to a natural language chat message.
+ * Returns both an AI reply and 3-5 recommended games.
+ */
+export async function generateChatRecommendations(
+  userMessage: string,
+  conversationHistory: ChatMessage[],
+  profile: TasteProfile,
+  games: Game[],
+  existingGameNames: string[],
+  dismissedNames: string[],
+  interestedNames: string[]
+): Promise<ChatResponse> {
+  const model = getGroundedAIModel();
+
+  const profileContext = buildProfileContext(profile, games, dismissedNames, interestedNames);
+
+  // Format conversation history for the prompt (last 6 messages)
+  const historyText = conversationHistory.slice(-6).map(m =>
+    `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`
+  ).join('\n');
+
+  const prompt = `${profileContext}
+
+${SIX_DIMENSION_FRAMEWORK}
+
+${historyText ? `CONVERSATION HISTORY:\n${historyText}\n` : ''}
+User: ${userMessage}
+
+The user is telling you what kind of game experience they're looking for right now. Your job:
+1. Write a short, conversational reply (2-3 sentences max) that acknowledges what they want and briefly explains why your picks fit
+2. Recommend exactly 3-5 real games that match their request AND align with their personal taste profile
+
+For each game:
+- Write a personalized "reason" referencing BOTH their request AND their specific library data (mention their games, ratings, hours, patterns)
+- Assign a category: "because-you-loved", "hidden-gem", "popular-in-genre", "try-something-different", or "general"
+- If "because-you-loved", add "categoryContext" with the specific game name it connects to
+
+RULES:
+- Use your search capability to verify recommended games exist and are released — prioritize finding real current titles
+- Do NOT suggest games already in their library, wishlist, or previously dismissed
+- Be honest — reference the six dimensions when helpful but keep it natural, not robotic
+- The reply should feel like a knowledgeable friend, not a formal system
+
+Respond in this exact JSON format, nothing else:
+{
+  "reply": "Your conversational reply here",
+  "recommendations": [
+    { "gameName": "Game Title", "genre": "Genre", "platform": "Best Platform", "reason": "Personalized reason", "category": "because-you-loved", "categoryContext": "Elden Ring" }
+  ]
+}`;
+
+  const result = await model.generateContent(prompt);
+  const text = result.response.text().trim();
+  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) throw new Error('AI returned invalid response. Response: ' + text.slice(0, 200));
+
+  const parsed = JSON.parse(jsonMatch[0]) as ChatResponse;
+  const filtered = parsed.recommendations.filter(r =>
+    !existingGameNames.some(n => n.toLowerCase() === r.gameName.toLowerCase()) &&
+    !dismissedNames.some(n => n.toLowerCase() === r.gameName.toLowerCase())
+  );
+  parsed.recommendations = await enrichWithRAWGData(filtered);
+  return parsed;
+}
+
 // ── Categorized Released Recommendations ────────────────────────────────────
 
 export interface CategorizedRecommendation extends AIRecommendation {
@@ -387,7 +531,7 @@ export async function generateCategorizedRecommendations(
   userPrompt?: string,
   count: number = 8
 ): Promise<CategorizedRecommendation[]> {
-  const model = getAIModel();
+  const model = getGroundedAIModel();
 
   const profileContext = buildProfileContext(profile, games, dismissedNames, interestedNames, userPrompt);
 
@@ -408,6 +552,8 @@ Suggest exactly ${count} real games organized into these categories:
 
 For each game, write a personalized "why you'd love this" reason referencing THEIR specific data.
 
+Use your search capability to verify these are real, currently released games — especially for the hidden-gem category where hallucination risk is highest.
+
 IMPORTANT:
 - Only suggest REAL games that actually exist and are ALREADY RELEASED
 - Do NOT suggest games already in their library, wishlist, or previously dismissed
@@ -424,8 +570,9 @@ Respond in this exact JSON format, nothing else:
   if (!jsonMatch) throw new Error('AI returned no recommendations. Response: ' + text.slice(0, 200));
 
   const parsed = JSON.parse(jsonMatch[0]) as CategorizedRecommendation[];
-  return parsed.filter(r =>
+  const filtered = parsed.filter(r =>
     !existingGameNames.some(n => n.toLowerCase() === r.gameName.toLowerCase()) &&
     !dismissedNames.some(n => n.toLowerCase() === r.gameName.toLowerCase())
   );
+  return enrichWithRAWGData(filtered);
 }

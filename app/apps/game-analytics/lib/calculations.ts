@@ -12313,3 +12313,320 @@ export function getYearInReviewFullData(games: Game[], year: number): YearInRevi
     biggestSurprise,
   };
 }
+
+// ============================================================
+// BUY QUEUE INTELLIGENCE
+// ============================================================
+
+import { PurchaseQueueEntry } from './types';
+
+/**
+ * Buy Confidence Score (Feature #5)
+ * How likely this game purchase will be worthwhile based on your history
+ */
+export function getBuyConfidence(
+  entry: PurchaseQueueEntry,
+  allGames: Game[]
+): { score: number; factors: { label: string; value: number; insight: string }[] } {
+  const factors: { label: string; value: number; insight: string }[] = [];
+  const ownedGames = allGames.filter(g => g.status !== 'Wishlist');
+
+  // Genre match: your average rating for this genre
+  if (entry.genre) {
+    const genreGames = ownedGames.filter(g => g.genre === entry.genre && g.rating > 0);
+    if (genreGames.length > 0) {
+      const avgRating = genreGames.reduce((s, g) => s + g.rating, 0) / genreGames.length;
+      const genreScore = Math.min(100, (avgRating / 10) * 100);
+      factors.push({ label: 'Genre fit', value: genreScore, insight: `Avg ${entry.genre} rating: ${avgRating.toFixed(1)}/10` });
+    }
+  }
+
+  // Completion rate for genre
+  if (entry.genre) {
+    const genreGames = ownedGames.filter(g => g.genre === entry.genre);
+    if (genreGames.length >= 2) {
+      const completed = genreGames.filter(g => g.status === 'Completed').length;
+      const rate = (completed / genreGames.length) * 100;
+      factors.push({ label: 'Completion rate', value: rate, insight: `You complete ${rate.toFixed(0)}% of ${entry.genre} games` });
+    }
+  }
+
+  // Price bracket fit
+  const priceToCheck = entry.targetPrice ?? entry.currentPrice ?? entry.msrpEstimate ?? 0;
+  if (priceToCheck > 0 && ownedGames.length > 0) {
+    const bracket = priceToCheck <= 15 ? 15 : priceToCheck <= 30 ? 30 : priceToCheck <= 50 ? 50 : priceToCheck <= 70 ? 70 : 100;
+    const bracketGames = ownedGames.filter(g => {
+      if (bracket === 15) return g.price <= 15;
+      if (bracket === 30) return g.price > 15 && g.price <= 30;
+      if (bracket === 50) return g.price > 30 && g.price <= 50;
+      if (bracket === 70) return g.price > 50 && g.price <= 70;
+      return g.price > 70;
+    });
+    if (bracketGames.length > 0) {
+      const avgRating = bracketGames.reduce((s, g) => s + g.rating, 0) / bracketGames.length;
+      const bracketScore = Math.min(100, (avgRating / 10) * 100);
+      factors.push({ label: 'Price bracket', value: bracketScore, insight: `Games at ~$${bracket}: avg ${avgRating.toFixed(1)}/10` });
+    }
+  }
+
+  // Day-one track record
+  if (entry.isDayOneBuy) {
+    const recentFullPrice = ownedGames.filter(g => g.price >= 60 && !g.acquiredFree);
+    if (recentFullPrice.length > 0) {
+      const avgRating = recentFullPrice.reduce((s, g) => s + g.rating, 0) / recentFullPrice.length;
+      const playedPct = recentFullPrice.filter(g => getTotalHours(g) > 2).length / recentFullPrice.length * 100;
+      factors.push({ label: 'Full price track record', value: playedPct, insight: `${playedPct.toFixed(0)}% of full-price buys played 2+ hrs` });
+    }
+  }
+
+  // Platform comfort
+  if (entry.platform) {
+    const platGames = ownedGames.filter(g => g.platform === entry.platform && g.rating > 0);
+    if (platGames.length > 0) {
+      const avgRating = platGames.reduce((s, g) => s + g.rating, 0) / platGames.length;
+      const platScore = Math.min(100, (avgRating / 10) * 100);
+      factors.push({ label: 'Platform fit', value: platScore, insight: `Avg ${entry.platform} rating: ${avgRating.toFixed(1)}/10` });
+    }
+  }
+
+  const score = factors.length > 0
+    ? Math.round(factors.reduce((s, f) => s + f.value, 0) / factors.length)
+    : 50;
+
+  return { score: Math.min(100, Math.max(0, score)), factors };
+}
+
+/**
+ * Historical Price Context (Feature #6)
+ * How this price compares to your library
+ */
+export function getPriceContext(
+  entry: PurchaseQueueEntry,
+  allGames: Game[]
+): { insight: string; comparison: 'below' | 'average' | 'above' } {
+  const price = entry.targetPrice ?? entry.currentPrice ?? entry.msrpEstimate ?? 0;
+  const owned = allGames.filter(g => g.status !== 'Wishlist' && g.price > 0);
+  if (owned.length === 0 || price === 0) {
+    return { insight: 'Not enough data yet', comparison: 'average' };
+  }
+
+  // Genre-specific comparison
+  if (entry.genre) {
+    const genreGames = owned.filter(g => g.genre === entry.genre && g.price > 0);
+    if (genreGames.length >= 2) {
+      const avgPrice = genreGames.reduce((s, g) => s + g.price, 0) / genreGames.length;
+      const pct = ((price - avgPrice) / avgPrice) * 100;
+      if (Math.abs(pct) < 10) return { insight: `Near your avg ${entry.genre} spend ($${avgPrice.toFixed(0)})`, comparison: 'average' };
+      if (pct > 0) return { insight: `${pct.toFixed(0)}% above your avg ${entry.genre} spend ($${avgPrice.toFixed(0)})`, comparison: 'above' };
+      return { insight: `${Math.abs(pct).toFixed(0)}% below your avg ${entry.genre} spend ($${avgPrice.toFixed(0)})`, comparison: 'below' };
+    }
+  }
+
+  // Overall comparison
+  const avgPrice = owned.reduce((s, g) => s + g.price, 0) / owned.length;
+  const pct = ((price - avgPrice) / avgPrice) * 100;
+  if (Math.abs(pct) < 10) return { insight: `Near your avg game spend ($${avgPrice.toFixed(0)})`, comparison: 'average' };
+  if (pct > 0) return { insight: `${pct.toFixed(0)}% above your avg spend ($${avgPrice.toFixed(0)})`, comparison: 'above' };
+  return { insight: `${Math.abs(pct).toFixed(0)}% below your avg spend ($${avgPrice.toFixed(0)})`, comparison: 'below' };
+}
+
+/**
+ * Predicted Value Rating (Feature #7)
+ * What value rating will this game likely achieve
+ */
+export function getPredictedValue(
+  entry: PurchaseQueueEntry,
+  allGames: Game[]
+): { predictedCph: number; predictedRating: string; insight: string } | null {
+  const price = entry.targetPrice ?? entry.currentPrice ?? entry.msrpEstimate ?? 0;
+  if (price === 0) return null;
+
+  const owned = allGames.filter(g => g.status !== 'Wishlist');
+  let matchedGames = entry.genre ? owned.filter(g => g.genre === entry.genre) : [];
+  if (matchedGames.length < 3) matchedGames = owned;
+  if (matchedGames.length === 0) return null;
+
+  const avgHours = matchedGames.reduce((s, g) => s + getTotalHours(g), 0) / matchedGames.length;
+  if (avgHours === 0) return null;
+
+  const predictedCph = price / avgHours;
+  const predictedRating = getValueRating(predictedCph);
+  const genreLabel = entry.genre || 'your games';
+  return {
+    predictedCph,
+    predictedRating,
+    insight: `Based on avg ${avgHours.toFixed(0)}h for ${genreLabel}, ~$${predictedCph.toFixed(2)}/hr`,
+  };
+}
+
+/**
+ * Impulse Check Data (Feature #8)
+ */
+export function getImpulseCheckData(allGames: Game[]): {
+  dayOneCount: number;
+  dayOneAvgRating: number;
+  dayOneUnplayedPct: number;
+  dayOneTotalSpent: number;
+  verdict: string;
+} {
+  // Full-price buys as proxy for day-one buys
+  const fullPrice = allGames.filter(g => g.status !== 'Wishlist' && g.price >= 50 && !g.acquiredFree);
+  if (fullPrice.length === 0) {
+    return { dayOneCount: 0, dayOneAvgRating: 0, dayOneUnplayedPct: 0, dayOneTotalSpent: 0, verdict: 'No full-price purchases yet' };
+  }
+
+  const avgRating = fullPrice.filter(g => g.rating > 0).reduce((s, g) => s + g.rating, 0) / Math.max(1, fullPrice.filter(g => g.rating > 0).length);
+  const unplayed = fullPrice.filter(g => getTotalHours(g) < 2).length;
+  const unplayedPct = (unplayed / fullPrice.length) * 100;
+  const totalSpent = fullPrice.reduce((s, g) => s + g.price, 0);
+
+  let verdict = '';
+  if (avgRating >= 7 && unplayedPct < 30) verdict = 'Good instincts — most full-price buys were worth it';
+  else if (unplayedPct > 50) verdict = 'Over half barely played — consider waiting for sales';
+  else if (avgRating < 6) verdict = 'Full-price ratings are low — patience may pay off';
+  else verdict = 'Mixed results — some hits, some misses';
+
+  return { dayOneCount: fullPrice.length, dayOneAvgRating: avgRating, dayOneUnplayedPct: unplayedPct, dayOneTotalSpent: totalSpent, verdict };
+}
+
+/**
+ * Smart Price Suggestion (Feature #9)
+ */
+export function getSuggestedTargetPrice(
+  entry: PurchaseQueueEntry,
+  allGames: Game[]
+): { suggestedPrice: number; reasoning: string } | null {
+  const owned = allGames.filter(g => g.status !== 'Wishlist');
+  let matchedGames = entry.genre ? owned.filter(g => g.genre === entry.genre) : [];
+  if (matchedGames.length < 3) matchedGames = owned;
+  if (matchedGames.length === 0) return null;
+
+  const avgHours = matchedGames.reduce((s, g) => s + getTotalHours(g), 0) / matchedGames.length;
+  if (avgHours <= 0) return null;
+
+  // Target "Good" value = $3/hr
+  const suggestedPrice = Math.round(avgHours * 3);
+  const msrp = entry.msrpEstimate ?? 70;
+  const capped = Math.min(suggestedPrice, msrp);
+  const genreLabel = entry.genre || 'your games';
+
+  return {
+    suggestedPrice: capped,
+    reasoning: `For Good value (~$3/hr) at avg ${avgHours.toFixed(0)}h for ${genreLabel}`,
+  };
+}
+
+/**
+ * Queue Impact Snapshot (Feature #16)
+ */
+export function getQueueImpactSnapshot(
+  entries: PurchaseQueueEntry[],
+  yearBudget: number | null,
+  yearSpent: number
+): {
+  totalCost: number;
+  overBudget: number | null;
+  newLibrarySize: string;
+  genreBreakdown: { genre: string; count: number }[];
+} {
+  const active = entries.filter(e => !e.purchased);
+  const totalCost = active.reduce((s, e) => s + (e.targetPrice ?? e.currentPrice ?? e.msrpEstimate ?? 0), 0);
+  const overBudget = yearBudget != null ? Math.max(0, yearSpent + totalCost - yearBudget) : null;
+
+  const genres: Record<string, number> = {};
+  active.forEach(e => { if (e.genre) genres[e.genre] = (genres[e.genre] || 0) + 1; });
+  const genreBreakdown = Object.entries(genres).map(([genre, count]) => ({ genre, count })).sort((a, b) => b.count - a.count);
+
+  return { totalCost, overBudget, newLibrarySize: `+${active.length}`, genreBreakdown };
+}
+
+/**
+ * Sale Season Indicator (Feature #20)
+ */
+export function getSaleSeasonIndicator(): { inSeason: boolean; label: string; daysUntil: number } | null {
+  const now = new Date();
+  const month = now.getMonth(); // 0-indexed
+  const day = now.getDate();
+
+  // Known major sale periods
+  const salePeriods = [
+    { name: 'Steam Winter Sale', startMonth: 11, startDay: 19, endMonth: 0, endDay: 3 },
+    { name: 'Black Friday', startMonth: 10, startDay: 20, endMonth: 11, endDay: 2 },
+    { name: 'PS Days of Play', startMonth: 4, startDay: 25, endMonth: 5, endDay: 9 },
+    { name: 'Steam Summer Sale', startMonth: 5, startDay: 22, endMonth: 6, endDay: 7 },
+    { name: 'Holiday Sales', startMonth: 11, startDay: 15, endMonth: 0, endDay: 5 },
+  ];
+
+  // Check if we're in a sale period
+  for (const sale of salePeriods) {
+    const inRange = (sale.endMonth >= sale.startMonth)
+      ? (month >= sale.startMonth && month <= sale.endMonth &&
+         (month > sale.startMonth || day >= sale.startDay) &&
+         (month < sale.endMonth || day <= sale.endDay))
+      : ((month >= sale.startMonth && (month > sale.startMonth || day >= sale.startDay)) ||
+         (month <= sale.endMonth && (month < sale.endMonth || day <= sale.endDay)));
+    if (inRange) return { inSeason: true, label: `${sale.name} now!`, daysUntil: 0 };
+  }
+
+  // Find next upcoming sale
+  let closest: { name: string; daysUntil: number } | null = null;
+  for (const sale of salePeriods) {
+    const saleStart = new Date(now.getFullYear(), sale.startMonth, sale.startDay);
+    if (saleStart <= now) saleStart.setFullYear(saleStart.getFullYear() + 1);
+    const diff = Math.round((saleStart.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    if (diff <= 60 && (!closest || diff < closest.daysUntil)) {
+      closest = { name: sale.name, daysUntil: diff };
+    }
+  }
+
+  if (closest) return { inSeason: false, label: `${closest.name} in ${closest.daysUntil}d`, daysUntil: closest.daysUntil };
+  return null;
+}
+
+/**
+ * Purchase History Stats (Feature #17)
+ */
+export function getPurchaseHistoryInsights(entries: PurchaseQueueEntry[]): {
+  totalSaved: number;
+  avgWaitDays: number;
+  gamesFromQueue: number;
+} {
+  const purchased = entries.filter(e => e.purchased);
+  if (purchased.length === 0) return { totalSaved: 0, avgWaitDays: 0, gamesFromQueue: 0 };
+
+  const totalSaved = purchased.reduce((s, e) => {
+    if (!e.msrpEstimate || !e.purchasePrice) return s;
+    return s + Math.max(0, e.msrpEstimate - e.purchasePrice);
+  }, 0);
+
+  const waits = purchased.filter(e => e.addedAt && e.purchasedAt).map(e => {
+    return Math.round((new Date(e.purchasedAt!).getTime() - new Date(e.addedAt).getTime()) / (1000 * 60 * 60 * 24));
+  });
+  const avgWaitDays = waits.length > 0 ? Math.round(waits.reduce((s, w) => s + w, 0) / waits.length) : 0;
+
+  return { totalSaved, avgWaitDays, gamesFromQueue: purchased.length };
+}
+
+/**
+ * Store URL Intelligence (Feature #19)
+ */
+export function getStoreUrl(gameName: string, platform?: string): { label: string; url: string }[] {
+  const encoded = encodeURIComponent(gameName);
+  const stores: { label: string; url: string }[] = [];
+
+  if (!platform || platform.startsWith('PS')) {
+    stores.push({ label: 'PS Store', url: `https://store.playstation.com/search/${encoded}` });
+  }
+  if (!platform || platform.startsWith('Xbox')) {
+    stores.push({ label: 'Xbox Store', url: `https://www.xbox.com/en-US/search?q=${encoded}` });
+  }
+  if (!platform || platform === 'PC' || platform === 'Switch') {
+    if (platform === 'Switch') {
+      stores.push({ label: 'eShop', url: `https://www.nintendo.com/us/search/#q=${encoded}` });
+    } else {
+      stores.push({ label: 'Steam', url: `https://store.steampowered.com/search/?term=${encoded}` });
+    }
+  }
+
+  return stores;
+}

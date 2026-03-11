@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical, Download, Gift } from 'lucide-react';
+import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical, Download, Gift, ShoppingCart } from 'lucide-react';
 import { useGames } from './hooks/useGames';
 import { useAnalytics, GameWithMetrics } from './hooks/useAnalytics';
 import { useBudget } from './hooks/useBudget';
@@ -31,6 +31,7 @@ import { BulkWishlistModal } from './components/BulkWishlistModal';
 import { GameBottomSheet } from './components/GameBottomSheet';
 import { DiscoverTab } from './components/DiscoverTab';
 import { LeaderboardTab } from './components/LeaderboardTab';
+import { BuyQueueTab } from './components/BuyQueueTab';
 import { RatingStars } from './components/RatingStars';
 import { MomentumDots } from './components/MomentumDots';
 import { ProgressRing } from './components/ProgressRing';
@@ -45,7 +46,7 @@ import { ErrorLogPanel, ErrorLogButton } from './components/ErrorLogPanel';
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist';
-type TabMode = 'games' | 'timeline' | 'stats' | 'ai-coach' | 'up-next' | 'discover' | 'leaderboard';
+type TabMode = 'games' | 'timeline' | 'stats' | 'ai-coach' | 'up-next' | 'discover' | 'leaderboard' | 'buy-queue';
 type CardViewMode = 'poster' | 'compact';
 
 function getValueColor(rating: string): string {
@@ -243,6 +244,15 @@ export default function GameAnalyticsPage() {
     const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
     const byMonth = getSpendingByMonth(games);
     return byMonth[monthKey] || 0;
+  }, [games]);
+
+  // This year's spending (for buy queue budget bar)
+  const currentYearSpent = useMemo(() => {
+    const year = new Date().getFullYear();
+    const byMonth = getSpendingByMonth(games);
+    return Object.entries(byMonth)
+      .filter(([key]) => key.startsWith(String(year)))
+      .reduce((sum, [, val]) => sum + val, 0);
   }, [games]);
 
   // Spending forecast
@@ -927,12 +937,13 @@ export default function GameAnalyticsPage() {
                 ))}
               </div>
 
-              {/* Row 2: Up Next, Discover, Leaderboard + utilities */}
+              {/* Row 2: Up Next, Discover, Leaderboard, Buy Queue + utilities */}
               <div className="flex items-center gap-1.5">
                 {([
                   { id: 'up-next',     icon: <ListOrdered size={16} />, title: 'Up Next' },
                   { id: 'discover',    icon: <Compass size={16} />,     title: 'Discover' },
                   { id: 'leaderboard', icon: <Trophy size={16} />,      title: 'Ranks' },
+                  { id: 'buy-queue',   icon: <ShoppingCart size={16} />, title: 'Buy Queue' },
                 ] as const).map((tab) => (
                   <button
                     key={tab.id}
@@ -1243,6 +1254,36 @@ export default function GameAnalyticsPage() {
 
           {tabMode === 'leaderboard' && (
             <LeaderboardTab gamesWithMetrics={gamesWithMetrics} userId={user?.uid ?? null} eloTierConfig={eloTierConfig} />
+          )}
+
+          {tabMode === 'buy-queue' && (
+            <BuyQueueTab
+              userId={user?.uid ?? null}
+              wishlistGames={games.filter(g => g.status === 'Wishlist')}
+              allGames={games}
+              budgets={budgets}
+              yearSpent={currentYearSpent}
+              onGoToBudget={() => setTabMode('stats')}
+              onAddGameToLibrary={async (data) => {
+                try {
+                  await addGame({
+                    name: data.name,
+                    price: data.price,
+                    hours: 0,
+                    rating: 0,
+                    status: (data.status || 'Not Started') as GameStatus,
+                    platform: data.platform,
+                    genre: data.genre,
+                    thumbnail: data.thumbnail,
+                    datePurchased: data.datePurchased,
+                    playLogs: [],
+                  });
+                  showToast(`${data.name} added to library`, 'success');
+                } catch {
+                  // Silent fail — the game still got marked as purchased in the queue
+                }
+              }}
+            />
           )}
         </div>
       </div>
