@@ -9,8 +9,8 @@ export function Navigation() {
   const { user, loading, signIn, signOut } = useAuthContext();
   const pathname = usePathname();
 
-  // Hide navigation for Last Light game (full immersion)
-  if (pathname === '/apps/last-light') {
+  // Hide navigation for full-immersion apps
+  if (pathname === '/apps/last-light' || pathname.startsWith('/apps/todo-app')) {
     return null;
   }
 
