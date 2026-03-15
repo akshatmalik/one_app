@@ -32,15 +32,33 @@ export function useTasks(date: string, userId: string | null) {
   }, [loadTasks]);
 
   const addTask = async (rawText: string) => {
+    const { text, priority, category } = parseTaskText(rawText);
+
+    const maxOrder = tasks.length > 0
+      ? Math.max(...tasks.map(t => t.order || 0))
+      : 0;
+
+    const tempId = `temp-${Date.now()}`;
+    const now = new Date().toISOString();
+
+    // Optimistically add to state immediately
+    const optimisticTask: Task = {
+      id: tempId,
+      userId: userId || 'local-user',
+      text,
+      completed: false,
+      date,
+      order: maxOrder + 1,
+      priority,
+      category,
+      points: 1,
+      createdAt: now,
+      updatedAt: now,
+    };
+    setTasks(prev => [...prev, optimisticTask]);
+
+    // Persist in the background
     try {
-      const tasksForDate = await repository.getByDate(date);
-      const maxOrder = tasksForDate.length > 0
-        ? Math.max(...tasksForDate.map(t => t.order || 0))
-        : 0;
-
-      // Parse text to extract category and priority
-      const { text, priority, category } = parseTaskText(rawText);
-
       await repository.create({
         text,
         completed: false,
@@ -52,6 +70,8 @@ export function useTasks(date: string, userId: string | null) {
       });
       await loadTasks();
     } catch (e) {
+      // Roll back optimistic update on failure
+      setTasks(prev => prev.filter(t => t.id !== tempId));
       setError(e as Error);
       throw e;
     }
