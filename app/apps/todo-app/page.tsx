@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { ChevronLeft, ChevronRight, History, Sparkles, Calendar, BarChart3, CheckSquare, BookOpen } from 'lucide-react';
+import Link from 'next/link';
+import { ChevronLeft, ChevronRight, History, Sparkles, LogIn, LogOut, BarChart3 } from 'lucide-react';
 import { useTasks } from './hooks/useTasks';
 import { useStats } from './hooks/useStats';
 import { useSettings } from './hooks/useSettings';
@@ -20,7 +21,7 @@ import { calculateDayNumber } from './lib/calculations';
 import clsx from 'clsx';
 
 export default function TodoApp() {
-  const { user, loading: authLoading } = useAuthContext();
+  const { user, loading: authLoading, signIn, signOut } = useAuthContext();
   const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState<'tasks' | 'stats' | 'notes'>('tasks');
   const [selectedDate, setSelectedDate] = useState(() => {
@@ -119,6 +120,26 @@ export default function TodoApp() {
     }
   };
 
+  const handleMoveAllToToday = async () => {
+    try {
+      const pastTasks = await getPastIncompleteTasks();
+      for (const task of pastTasks) {
+        await moveTaskToDate(task.id, today);
+      }
+      showToast(`Moved ${pastTasks.length} task${pastTasks.length !== 1 ? 's' : ''} to today`, 'success');
+    } catch (e) {
+      showToast(`Failed to move tasks: ${(e as Error).message}`, 'error');
+    }
+  };
+
+  const handleMoveToDate = async (taskId: string, date: string) => {
+    try {
+      await moveTaskToDate(taskId, date);
+    } catch (e) {
+      showToast(`Failed to move task: ${(e as Error).message}`, 'error');
+    }
+  };
+
   const handleAddTask = async (text: string) => {
     try {
       await addTask(text);
@@ -191,8 +212,8 @@ export default function TodoApp() {
 
   if (authLoading || settingsLoading) {
     return (
-      <div className="min-h-[calc(100vh-60px)] flex items-center justify-center">
-        <div className="text-white/30">Loading...</div>
+      <div className="min-h-screen flex items-center justify-center bg-[#0a0a0f]">
+        <div className="text-white/20 text-sm">Loading...</div>
       </div>
     );
   }
@@ -205,127 +226,129 @@ export default function TodoApp() {
   const progressPercent = stats.total > 0 ? (stats.completed / stats.total) * 100 : 0;
 
   return (
-    <div className="min-h-[calc(100vh-60px)] flex flex-col">
-      {/* Full-width header area */}
-      <div className="px-6 pt-8 pb-6 border-b border-white/5">
-        <div className="max-w-2xl mx-auto">
-          {/* Title & Actions */}
-          <div className="flex items-center justify-between mb-6">
-            <h1 className="text-3xl font-bold text-white tracking-tight">Tasks</h1>
-            <div className="flex items-center gap-2">
+    <div className="min-h-screen flex flex-col bg-[#0a0a0f]">
+      {/* Minimal sticky header */}
+      <div className="sticky top-0 z-40 bg-[#0a0a0f]/95 backdrop-blur-xl border-b border-white/[0.04]">
+        <div className="max-w-2xl mx-auto px-5">
+
+          {/* Top bar: back + actions */}
+          <div className="h-11 flex items-center justify-between">
+            <Link
+              href="/"
+              className="flex items-center gap-1 text-white/25 hover:text-white/50 transition-colors"
+            >
+              <ChevronLeft size={15} />
+              <span className="text-xs font-medium">Home</span>
+            </Link>
+
+            <div className="flex items-center gap-0.5">
               {stats.total === 0 && activeTab === 'tasks' && (
                 <button
                   onClick={handleLoadSampleTasks}
-                  className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-purple-400 hover:text-purple-300 bg-purple-500/10 hover:bg-purple-500/20 rounded-lg transition-all"
+                  className="p-2 text-white/20 hover:text-white/50 transition-colors rounded-lg"
+                  aria-label="Load sample tasks"
                 >
                   <Sparkles size={14} />
-                  Load Samples
                 </button>
               )}
               {isToday && activeTab === 'tasks' && (
                 <button
                   onClick={() => setIsReviewModalOpen(true)}
-                  className="p-2 text-white/40 hover:text-white/70 hover:bg-white/5 rounded-lg transition-all"
+                  className="p-2 text-white/20 hover:text-white/50 transition-colors rounded-lg"
                   aria-label="Review past tasks"
                 >
-                  <History size={18} />
+                  <History size={14} />
+                </button>
+              )}
+              {user ? (
+                <button
+                  onClick={signOut}
+                  className="p-2 text-white/20 hover:text-white/50 transition-colors rounded-lg"
+                  aria-label="Sign out"
+                >
+                  <LogOut size={14} />
+                </button>
+              ) : (
+                <button
+                  onClick={signIn}
+                  className="p-2 text-white/20 hover:text-white/50 transition-colors rounded-lg"
+                  aria-label="Sign in"
+                >
+                  <LogIn size={14} />
                 </button>
               )}
             </div>
           </div>
 
-          {/* Tab Navigation */}
-          <div className="flex gap-2 mb-6">
-            <button
-              onClick={() => setActiveTab('tasks')}
-              className={clsx(
-                'flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all',
-                activeTab === 'tasks'
-                  ? 'bg-purple-600 text-white'
-                  : 'bg-white/[0.03] text-white/60 hover:text-white/80 hover:bg-white/[0.05]'
-              )}
-            >
-              <CheckSquare size={16} />
-              Tasks
-            </button>
-            <button
-              onClick={() => setActiveTab('notes')}
-              className={clsx(
-                'flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all',
-                activeTab === 'notes'
-                  ? 'bg-purple-600 text-white'
-                  : 'bg-white/[0.03] text-white/60 hover:text-white/80 hover:bg-white/[0.05]'
-              )}
-            >
-              <BookOpen size={16} />
-              Notes
-            </button>
-            <button
-              onClick={() => setActiveTab('stats')}
-              className={clsx(
-                'flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all',
-                activeTab === 'stats'
-                  ? 'bg-purple-600 text-white'
-                  : 'bg-white/[0.03] text-white/60 hover:text-white/80 hover:bg-white/[0.05]'
-              )}
-            >
-              <BarChart3 size={16} />
-              Stats
-            </button>
-          </div>
-
-          {/* Date Navigation - Show on Tasks and Notes tabs */}
+          {/* Date navigation — only on tasks/notes tabs */}
           {(activeTab === 'tasks' || activeTab === 'notes') && (
-            <>
-              <div className="flex items-center gap-3">
+            <div className="pb-3">
+              <div className="flex items-center gap-1">
                 <button
                   onClick={handlePreviousDay}
-                  className="p-2 text-white/40 hover:text-white/70 hover:bg-white/5 rounded-lg transition-all"
+                  className="p-2 text-white/20 hover:text-white/50 transition-colors rounded-lg"
                   aria-label="Previous day"
                 >
-                  <ChevronLeft size={20} />
+                  <ChevronLeft size={17} />
                 </button>
 
                 <button
                   onClick={handleTodayClick}
-                  className="flex-1 flex flex-col items-center justify-center py-2 text-white/70 hover:text-white hover:bg-white/5 rounded-lg transition-all group"
+                  className="flex-1 flex flex-col items-center py-1 group"
                 >
+                  <span className="text-xl font-semibold text-white/90 tracking-tight group-hover:text-white transition-colors">
+                    {formatDate(selectedDate)}
+                  </span>
                   {dayNumber !== null && (
-                    <span className="text-xs font-medium text-purple-400 mb-0.5">
-                      Day {dayNumber} • {new Date(selectedDate + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                    <span className="text-[11px] text-white/20 mt-0.5">
+                      {new Date(selectedDate + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric' })} · Day {dayNumber}
                     </span>
                   )}
-                  <div className="flex items-center gap-2">
-                    <Calendar size={16} className="text-white/40 group-hover:text-white/60" />
-                    <span className="text-lg font-medium">{formatDate(selectedDate)}</span>
-                  </div>
                 </button>
 
                 <button
                   onClick={handleNextDay}
-                  className="p-2 text-white/40 hover:text-white/70 hover:bg-white/5 rounded-lg transition-all"
+                  className="p-2 text-white/20 hover:text-white/50 transition-colors rounded-lg"
                   aria-label="Next day"
                 >
-                  <ChevronRight size={20} />
+                  <ChevronRight size={17} />
                 </button>
               </div>
 
-              {/* Progress */}
+              {/* Progress bar */}
               {stats.total > 0 && (
-                <div className="mt-4 flex items-center gap-3">
-                  <div className="flex-1 h-1 bg-white/5 rounded-full overflow-hidden">
+                <div className="mt-2.5 flex items-center gap-3">
+                  <div className="flex-1 h-px bg-white/[0.07] overflow-hidden">
                     <div
-                      className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 transition-all duration-500 ease-out rounded-full"
+                      className="h-full bg-gradient-to-r from-purple-500/50 to-emerald-500/50 transition-all duration-700 ease-out"
                       style={{ width: `${progressPercent}%` }}
                     />
                   </div>
-                  <span className="text-xs text-white/40 font-medium tabular-nums">
+                  <span className="text-[11px] text-white/20 tabular-nums">
                     {stats.completed}/{stats.total}
                   </span>
                 </div>
               )}
-            </>
+            </div>
           )}
+
+          {/* Tab strip */}
+          <div className="flex">
+            {(['tasks', 'notes', 'stats'] as const).map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={clsx(
+                  'px-4 py-2 text-xs font-medium transition-all border-b-2 capitalize tracking-wide',
+                  activeTab === tab
+                    ? 'text-white/80 border-white/30'
+                    : 'text-white/25 border-transparent hover:text-white/45'
+                )}
+              >
+                {tab}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -410,6 +433,8 @@ export default function TodoApp() {
         onClose={() => setIsReviewModalOpen(false)}
         getPastTasks={getPastIncompleteTasks}
         onMoveToToday={handleMoveToToday}
+        onMoveAllToToday={handleMoveAllToToday}
+        onMoveToDate={handleMoveToDate}
         onDelete={handleDeleteTask}
         todayDate={today}
       />
