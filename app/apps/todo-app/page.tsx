@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { ChevronLeft, ChevronRight, History, Sparkles, LogIn, LogOut, BarChart3 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronDown, History, Sparkles, LogIn, LogOut, BarChart3, ChevronsRight, X } from 'lucide-react';
+import { Task } from './lib/types';
 import { useTasks } from './hooks/useTasks';
 import { useStats } from './hooks/useStats';
 import { useSettings } from './hooks/useSettings';
@@ -71,6 +72,49 @@ export default function TodoApp() {
   })();
   const isToday = selectedDate === today;
 
+  // Past incomplete tasks — loaded automatically when viewing today
+  const [pastTasks, setPastTasks] = useState<Task[]>([]);
+  const [pastCollapsed, setPastCollapsed] = useState(false);
+
+  useEffect(() => {
+    if (!isToday || activeTab !== 'tasks' || loading) {
+      if (!isToday) setPastTasks([]);
+      return;
+    }
+    let cancelled = false;
+    getPastIncompleteTasks().then(tasks => {
+      if (!cancelled) setPastTasks(tasks);
+    });
+    return () => { cancelled = true; };
+  }, [isToday, activeTab, loading]); // re-runs whenever today's tasks finish loading
+
+  const handleCompletePastTask = async (id: string) => {
+    try {
+      await repository.update(id, { completed: true, completedAt: new Date().toISOString() });
+      setPastTasks(prev => prev.filter(t => t.id !== id));
+    } catch (e) {
+      showToast(`Failed to complete task: ${(e as Error).message}`, 'error');
+    }
+  };
+
+  const handleMovePastTaskToToday = async (id: string) => {
+    try {
+      await moveTaskToDate(id, today);
+      setPastTasks(prev => prev.filter(t => t.id !== id));
+    } catch (e) {
+      showToast(`Failed to move task: ${(e as Error).message}`, 'error');
+    }
+  };
+
+  const handleDeletePastTask = async (id: string) => {
+    try {
+      await deleteTask(id);
+      setPastTasks(prev => prev.filter(t => t.id !== id));
+    } catch (e) {
+      showToast(`Failed to delete task: ${(e as Error).message}`, 'error');
+    }
+  };
+
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr + 'T12:00:00');
     if (dateStr === today) return 'Today';
@@ -122,11 +166,12 @@ export default function TodoApp() {
 
   const handleMoveAllToToday = async () => {
     try {
-      const pastTasks = await getPastIncompleteTasks();
-      for (const task of pastTasks) {
+      const tasks = await getPastIncompleteTasks();
+      for (const task of tasks) {
         await moveTaskToDate(task.id, today);
       }
-      showToast(`Moved ${pastTasks.length} task${pastTasks.length !== 1 ? 's' : ''} to today`, 'success');
+      setPastTasks([]);
+      showToast(`Moved ${tasks.length} task${tasks.length !== 1 ? 's' : ''} to today`, 'success');
     } catch (e) {
       showToast(`Failed to move tasks: ${(e as Error).message}`, 'error');
     }
@@ -369,6 +414,76 @@ export default function TodoApp() {
           {activeTab === 'tasks' ? (
             <>
               <TaskInput onAdd={handleAddTask} />
+
+              {/* Past incomplete tasks — shown inline on today */}
+              {isToday && pastTasks.length > 0 && (
+                <div className="mb-5">
+                  <button
+                    onClick={() => setPastCollapsed(c => !c)}
+                    className="flex items-center gap-2 w-full mb-2 py-1 group"
+                  >
+                    <span className="text-[10px] font-semibold text-white/25 uppercase tracking-widest">
+                      Previous days
+                    </span>
+                    <span className="text-[10px] text-white/20 bg-white/[0.05] px-1.5 py-0.5 rounded-full">
+                      {pastTasks.length}
+                    </span>
+                    <ChevronDown
+                      size={11}
+                      className={clsx('text-white/20 ml-auto transition-transform duration-200', pastCollapsed && '-rotate-90')}
+                    />
+                  </button>
+
+                  {!pastCollapsed && (
+                    <div className="flex flex-col gap-1">
+                      {pastTasks.map(task => (
+                        <div
+                          key={task.id}
+                          className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-white/[0.02] border border-white/[0.05]"
+                        >
+                          {/* Complete circle */}
+                          <button
+                            onClick={() => handleCompletePastTask(task.id)}
+                            className="w-4 h-4 rounded-full border border-white/15 hover:border-emerald-500/50 hover:bg-emerald-500/10 transition-all shrink-0"
+                            aria-label="Complete"
+                          />
+                          {/* Task text */}
+                          <span className="flex-1 text-sm text-white/45 truncate">{task.text}</span>
+                          {/* Date label */}
+                          <span className="text-[10px] text-white/20 shrink-0">
+                            {new Date(task.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                          </span>
+                          {/* Move to today */}
+                          <button
+                            onClick={() => handleMovePastTaskToToday(task.id)}
+                            className="p-1 text-white/20 hover:text-purple-400 transition-colors shrink-0"
+                            aria-label="Move to today"
+                          >
+                            <ChevronsRight size={13} />
+                          </button>
+                          {/* Delete */}
+                          <button
+                            onClick={() => handleDeletePastTask(task.id)}
+                            className="p-1 text-white/20 hover:text-red-400 transition-colors shrink-0"
+                            aria-label="Delete"
+                          >
+                            <X size={13} />
+                          </button>
+                        </div>
+                      ))}
+
+                      {/* Bulk action */}
+                      <button
+                        onClick={handleMoveAllToToday}
+                        className="text-[11px] text-white/20 hover:text-white/40 transition-colors text-left py-1.5 pl-2 flex items-center gap-1"
+                      >
+                        <ChevronsRight size={12} />
+                        Move all to today
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {loading ? (
                 <div className="text-center py-12 text-white/30 text-sm">Loading...</div>
