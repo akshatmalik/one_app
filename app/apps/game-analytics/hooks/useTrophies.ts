@@ -48,6 +48,9 @@ export function useTrophies(games: Game[], userId: string | null) {
   // Queue of newly earned trophies for toast notifications
   const [toastQueue, setToastQueue] = useState<NewTrophyEvent[]>([]);
   const initialLoadRef = useRef(true);
+  // Ref mirrors earnedState so the detection effect always sees the latest
+  // value even when it runs multiple times before React commits state updates.
+  const earnedStateRef = useRef<EarnedState>(earnedState);
 
   // Evaluate all trophies
   const allTrophies = useMemo(() => evaluateAllTrophies(games), [games]);
@@ -74,10 +77,13 @@ export function useTrophies(games: Game[], userId: string | null) {
 
   // Detect newly earned trophies and tier upgrades
   useEffect(() => {
+    // Always read from the ref so rapid re-runs don't use a stale snapshot
+    const currentEarned = earnedStateRef.current;
+
     if (initialLoadRef.current) {
       // On first load, just sync state without toasts
       initialLoadRef.current = false;
-      const newState: EarnedState = { ...earnedState };
+      const newState: EarnedState = { ...currentEarned };
       let changed = false;
 
       for (const t of trophiesWithHunter) {
@@ -95,6 +101,7 @@ export function useTrophies(games: Game[], userId: string | null) {
       }
 
       if (changed) {
+        earnedStateRef.current = newState;
         setEarnedState(newState);
         localStorage.setItem(storageKey, JSON.stringify(newState));
       }
@@ -103,13 +110,13 @@ export function useTrophies(games: Game[], userId: string | null) {
 
     // After initial load — detect new trophies and show toasts
     const newEvents: NewTrophyEvent[] = [];
-    const newState: EarnedState = { ...earnedState };
+    const newState: EarnedState = { ...currentEarned };
     let changed = false;
 
     for (const t of trophiesWithHunter) {
       if (!t.earned || !t.currentTier) continue;
       const key = t.definition.id;
-      const prev = earnedState[key];
+      const prev = currentEarned[key];
 
       if (!prev) {
         // Newly earned
@@ -137,6 +144,7 @@ export function useTrophies(games: Game[], userId: string | null) {
     }
 
     if (changed) {
+      earnedStateRef.current = newState;
       setEarnedState(newState);
       localStorage.setItem(storageKey, JSON.stringify(newState));
     }
