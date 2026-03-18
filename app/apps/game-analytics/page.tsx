@@ -478,17 +478,6 @@ export default function GameAnalyticsPage() {
 
   return (
     <div className="min-h-[calc(100vh-60px)] flex flex-col">
-      {/* Trophy Toast Notifications */}
-      {trophyToastQueue.length > 0 && (
-        <TrophyToast
-          key={trophyToastQueue[0].trophyId + trophyToastQueue[0].tier}
-          name={trophyToastQueue[0].name}
-          icon={trophyToastQueue[0].icon}
-          tier={trophyToastQueue[0].tier}
-          isUpgrade={trophyToastQueue[0].isUpgrade}
-          onDismiss={dismissTrophyToast}
-        />
-      )}
       {/* Header */}
       <div className="px-6 pt-8 pb-6 border-b border-white/5">
         <div className="max-w-6xl mx-auto">
