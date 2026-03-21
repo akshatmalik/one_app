@@ -235,6 +235,8 @@ export interface HomeBaseState {
   completedRuns: Run[];
   currentRun?: Run;
   rawMaterials: RawMaterials;
+  // Barricade built at home — applies defense bonus to next run
+  homeBarricadeLevel: number; // 0 = none, 1 = built
 }
 
 // Game state

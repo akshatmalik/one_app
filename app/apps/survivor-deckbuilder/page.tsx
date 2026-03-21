@@ -8,6 +8,20 @@ import { PrepareRunScreen } from './components/PrepareRunScreen';
 
 type View = 'home' | 'prepare' | 'run';
 
+const MATERIAL_ICONS: Record<string, string> = {
+  scrapMetal: '⚙',
+  wood: '▤',
+  cloth: '◫',
+  medicalSupplies: '✚',
+};
+
+const MATERIAL_LABELS: Record<string, string> = {
+  scrapMetal: 'Scrap',
+  wood: 'Wood',
+  cloth: 'Cloth',
+  medicalSupplies: 'Meds',
+};
+
 export default function SurvivorDeckBuilder() {
   const {
     gameState,
@@ -25,7 +39,8 @@ export default function SurvivorDeckBuilder() {
     completeRun,
     advanceDay,
     retreatFromExpedition,
-    buildBarricade,
+    buildHomeBarricade,
+    canBuildHomeBarricade,
     resetGame,
   } = useGame();
 
@@ -78,9 +93,6 @@ export default function SurvivorDeckBuilder() {
           onRetreat={async () => {
             await retreatFromExpedition();
           }}
-          onBuildBarricade={async () => {
-            await buildBarricade();
-          }}
         />
       </div>
     );
@@ -118,39 +130,171 @@ export default function SurvivorDeckBuilder() {
   const totalRuns = completedRuns.length;
   const successfulRuns = completedRuns.filter(r => r.status === 'completed').length;
 
+  const rawMats = gameState.homeBase.rawMaterials;
+  const hasMats = rawMats && (Object.values(rawMats) as number[]).some(v => v > 0);
+  const barricadeBuilt = (gameState.homeBase.homeBarricadeLevel ?? 0) > 0;
+  const canBarricade = canBuildHomeBarricade();
+
+  // Last run info for post-run debrief
+  const lastRun = completedRuns[completedRuns.length - 1];
+  type MatAcc = { scrapMetal: number; wood: number; cloth: number; medicalSupplies: number };
+  const lastRunMatsGained: MatAcc | null = lastRun
+    ? (Object.values(lastRun.stagedLoot ?? {}) as Array<{ materials: MatAcc }>).reduce(
+        (acc: MatAcc, loot: { materials: MatAcc }) => {
+          acc.scrapMetal += loot.materials.scrapMetal;
+          acc.wood += loot.materials.wood;
+          acc.cloth += loot.materials.cloth;
+          acc.medicalSupplies += loot.materials.medicalSupplies;
+          return acc;
+        },
+        { scrapMetal: 0, wood: 0, cloth: 0, medicalSupplies: 0 }
+      )
+    : null;
+  const lastRunHasMats = lastRunMatsGained && Object.values(lastRunMatsGained).some((v: number) => v > 0);
+  // Show debrief only if last run was recent (exhausted cards exist — means run just completed)
+  const showDebrief = exhaustedCards.length > 0 && lastRun;
+
   return (
     <div className="fixed inset-0 z-[9999] bg-stone-950 text-stone-300 overflow-y-auto">
       <div className="min-h-full flex flex-col">
+
         {/* Header */}
-        <div className="px-5 pt-8 pb-6 border-b border-stone-900">
-          <p className="text-[9px] text-stone-700 font-mono tracking-widest uppercase mb-2">
-            ── SAFE HOUSE ─────────────────────────
+        <div className="px-5 pt-8 pb-4 border-b border-stone-900">
+          <p className="text-[9px] text-stone-700 font-mono tracking-widest uppercase mb-1">
+            SAFE HOUSE
           </p>
-          <h1 className="text-3xl font-bold text-stone-200 uppercase tracking-wider font-mono mb-1">
-            SURVIVOR
-          </h1>
-          <p className="text-stone-600 text-sm font-mono">
-            Day {totalRuns + 1}. The road isn&apos;t going to clear itself.
-          </p>
+          <div className="flex items-end justify-between">
+            <div>
+              <h1 className="text-2xl font-bold text-stone-200 uppercase tracking-wider font-mono">
+                SURVIVOR
+              </h1>
+              <p className="text-stone-700 text-xs font-mono">
+                Day {totalRuns + 1}
+              </p>
+            </div>
+            {/* Materials — subtle pill row */}
+            {hasMats && (
+              <div className="flex gap-1.5 flex-wrap justify-end">
+                {Object.entries(rawMats).map(([key, val]) => {
+                  if (val === 0) return null;
+                  return (
+                    <span key={key} className="text-[10px] font-mono text-stone-500 flex items-center gap-0.5">
+                      <span className="text-stone-600">{MATERIAL_ICONS[key]}</span>
+                      {val}
+                    </span>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Status grid */}
-        <div className="px-5 py-4 border-b border-stone-900">
+        <div className="px-5 py-3 border-b border-stone-900">
           <div className="grid grid-cols-3 gap-2">
-            <div className="border border-stone-800 bg-stone-900 p-3 text-center">
+            <div className="border border-stone-800 bg-stone-900 p-2.5 text-center">
               <p className="text-xl font-bold text-stone-300 font-mono">{availableCards.length}</p>
               <p className="text-[8px] text-stone-700 font-mono tracking-widest uppercase mt-0.5">READY</p>
             </div>
-            <div className="border border-stone-800 bg-stone-900 p-3 text-center">
+            <div className="border border-stone-800 bg-stone-900 p-2.5 text-center">
               <p className="text-xl font-bold text-stone-300 font-mono">{exhaustedCards.length}</p>
               <p className="text-[8px] text-stone-700 font-mono tracking-widest uppercase mt-0.5">RECOVERING</p>
             </div>
-            <div className="border border-stone-800 bg-stone-900 p-3 text-center">
+            <div className="border border-stone-800 bg-stone-900 p-2.5 text-center">
               <p className="text-xl font-bold text-stone-300 font-mono">{successfulRuns}/{totalRuns}</p>
               <p className="text-[8px] text-stone-700 font-mono tracking-widest uppercase mt-0.5">RUNS</p>
             </div>
           </div>
         </div>
+
+        {/* === POST-RUN DEBRIEF === */}
+        {showDebrief && (
+          <div className="px-5 py-4 border-b border-stone-900 bg-stone-900/30">
+            <p className="text-[9px] text-amber-800 font-mono tracking-widest uppercase mb-3">
+              ── BACK AT BASE ───────────────────────
+            </p>
+
+            {/* Materials brought back */}
+            {lastRunHasMats && (
+              <div className="mb-3">
+                <p className="text-[9px] text-stone-700 font-mono uppercase mb-1.5">SALVAGED</p>
+                <div className="flex gap-2 flex-wrap">
+                  {Object.entries(lastRunMatsGained!).map(([key, val]) => {
+                    if (val === 0) return null;
+                    return (
+                      <div key={key} className="flex items-center gap-1 border border-stone-800 bg-stone-900 px-2 py-1 rounded">
+                        <span className="text-stone-600 text-xs">{MATERIAL_ICONS[key]}</span>
+                        <span className="text-[10px] text-stone-400 font-mono">{MATERIAL_LABELS[key]}</span>
+                        <span className="text-[10px] text-stone-300 font-mono font-bold ml-0.5">+{val}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Building tasks */}
+            <p className="text-[9px] text-stone-700 font-mono uppercase mb-1.5">PENDING TASKS</p>
+
+            {/* Barricade */}
+            {!barricadeBuilt && (
+              <div className="border border-stone-800 bg-stone-900 rounded mb-2">
+                <div className="px-3 py-2.5">
+                  <div className="flex items-center justify-between mb-1">
+                    <div>
+                      <p className="text-xs text-stone-300 font-mono font-bold">BUILD BARRICADE</p>
+                      <p className="text-[9px] text-stone-600 font-mono">+30 defense on next run · costs ▤2 ⚙1</p>
+                    </div>
+                    <button
+                      onClick={buildHomeBarricade}
+                      disabled={!canBarricade}
+                      className={`px-3 py-1.5 font-mono text-[10px] tracking-widest uppercase border transition-colors ${
+                        canBarricade
+                          ? 'border-amber-800 text-amber-700 hover:bg-amber-900/20 active:scale-[0.97]'
+                          : 'border-stone-800 text-stone-700 cursor-not-allowed'
+                      }`}
+                    >
+                      {canBarricade ? 'BUILD' : 'NEED MATS'}
+                    </button>
+                  </div>
+                  {!canBarricade && (
+                    <p className="text-[9px] text-stone-700 font-mono">
+                      Need: 2 wood ({rawMats.wood} available) · 1 scrap ({rawMats.scrapMetal} available)
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {barricadeBuilt && (
+              <div className="border border-amber-900/50 bg-amber-950/20 px-3 py-2 rounded mb-2 flex items-center gap-2">
+                <span className="text-amber-700 text-sm">▦</span>
+                <div>
+                  <p className="text-[10px] text-amber-700 font-mono font-bold">BARRICADE READY</p>
+                  <p className="text-[9px] text-stone-600 font-mono">Next run starts fortified (+30 DEF)</p>
+                </div>
+              </div>
+            )}
+
+            {/* Rest — advance day */}
+            {exhaustedCards.length > 0 && (
+              <div className="border border-stone-800 bg-stone-900 rounded">
+                <div className="px-3 py-2.5 flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-stone-300 font-mono font-bold">REST TEAM</p>
+                    <p className="text-[9px] text-stone-600 font-mono">{exhaustedCards.length} recovering · advance day</p>
+                  </div>
+                  <button
+                    onClick={advanceDay}
+                    className="px-3 py-1.5 font-mono text-[10px] tracking-widest uppercase border border-stone-700 text-stone-500 hover:text-stone-400 hover:border-stone-600 transition-colors active:scale-[0.97]"
+                  >
+                    REST
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Survivors roster */}
         <div className="px-5 py-4 border-b border-stone-900">
@@ -167,16 +311,16 @@ export default function SurvivorDeckBuilder() {
                       {s.name}
                     </p>
                     <p className="text-[9px] text-stone-600 font-mono uppercase">
-                      {s.role} {s.exhausted ? `· RECOVERING (${s.recoveryTime}d)` : '· READY'}
+                      {s.role}{s.exhausted ? ` · ${s.recoveryTime}d` : ' · READY'}
                     </p>
                   </div>
-                  <div className="w-16 h-0.5 bg-stone-800">
+                  <div className="w-14 h-0.5 bg-stone-800 rounded-full overflow-hidden">
                     <div
-                      className={`h-full ${pct > 60 ? 'bg-stone-500' : pct > 30 ? 'bg-amber-800' : 'bg-red-900'}`}
+                      className={`h-full ${pct > 60 ? 'bg-stone-500' : pct > 30 ? 'bg-amber-700' : 'bg-red-800'}`}
                       style={{ width: `${pct}%` }}
                     />
                   </div>
-                  <span className="text-[9px] text-stone-600 font-mono w-10 text-right">{hp}/{maxHp}</span>
+                  <span className="text-[9px] text-stone-600 font-mono w-10 text-right tabular-nums">{hp}/{maxHp}</span>
                 </div>
               );
             })}
@@ -186,23 +330,74 @@ export default function SurvivorDeckBuilder() {
         {/* Gear inventory */}
         <div className="px-5 py-4 border-b border-stone-900">
           <p className="text-[9px] text-stone-700 font-mono tracking-widest uppercase mb-2">
-            INVENTORY ({availableCards.filter(c => c.type !== 'survivor').length} ready)
+            GEAR ({availableCards.filter(c => c.type !== 'survivor').length} ready)
           </p>
           <div className="flex flex-wrap gap-1">
-            {[...items, ...actions].map(card => (
-              <span
-                key={card.id}
-                className={`text-[10px] font-mono border px-2 py-0.5 ${
-                  card.exhausted
-                    ? 'border-stone-900 text-stone-700 bg-stone-900/30'
-                    : 'border-stone-800 text-stone-500 bg-stone-900'
-                }`}
-              >
-                {card.name}{card.exhausted ? ` (${card.recoveryTime}d)` : ''}
-              </span>
-            ))}
+            {[...items, ...actions].map(card => {
+              const isWeapon = card.maxAmmo !== undefined;
+              return (
+                <div
+                  key={card.id}
+                  className={`text-[10px] font-mono border px-2 py-1 rounded ${
+                    card.exhausted
+                      ? 'border-stone-900 text-stone-700 bg-stone-900/30'
+                      : 'border-stone-800 text-stone-500 bg-stone-900'
+                  }`}
+                >
+                  <span>{card.name}</span>
+                  {isWeapon && card.maxAmmo && (
+                    <span className="ml-1 text-stone-600">
+                      {Array.from({ length: card.maxAmmo }).map((_, i) => (
+                        <span key={i} className="text-[8px]">●</span>
+                      ))}
+                    </span>
+                  )}
+                  {card.exhausted && <span className="text-stone-700 ml-1">({card.recoveryTime}d)</span>}
+                </div>
+              );
+            })}
           </div>
         </div>
+
+        {/* Materials store — full breakdown when not in debrief */}
+        {hasMats && !showDebrief && (
+          <div className="px-5 py-4 border-b border-stone-900">
+            <p className="text-[9px] text-stone-700 font-mono tracking-widest uppercase mb-2">MATERIALS</p>
+            <div className="grid grid-cols-2 gap-1">
+              {Object.entries(rawMats).map(([key, val]) => {
+                if (val === 0) return null;
+                return (
+                  <div key={key} className="border border-stone-800 bg-stone-900 px-3 py-2 flex items-center gap-2 rounded">
+                    <span className="text-stone-600 text-xs">{MATERIAL_ICONS[key]}</span>
+                    <span className="text-[10px] text-stone-500 font-mono">{MATERIAL_LABELS[key]}</span>
+                    <span className="ml-auto text-xs font-mono font-bold text-stone-300">{val}</span>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Barricade option when debrief isn't showing */}
+            {!barricadeBuilt && (
+              <button
+                onClick={buildHomeBarricade}
+                disabled={!canBarricade}
+                className={`mt-2 w-full py-2 font-mono text-xs tracking-widest uppercase border transition-colors ${
+                  canBarricade
+                    ? 'border-amber-800 text-amber-700 hover:bg-amber-900/20'
+                    : 'border-stone-900 text-stone-700 cursor-not-allowed'
+                }`}
+              >
+                {canBarricade ? '▦ BUILD BARRICADE (▤2 ⚙1)' : '▦ BARRICADE — NEED ▤2 ⚙1'}
+              </button>
+            )}
+            {barricadeBuilt && (
+              <div className="mt-2 border border-amber-900/40 px-3 py-1.5 rounded flex items-center gap-2">
+                <span className="text-amber-700 text-xs">▦</span>
+                <span className="text-[10px] text-amber-700 font-mono">FORTIFIED — next run +30 DEF</span>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Actions */}
         <div className="px-5 py-4 space-y-2">
@@ -221,11 +416,10 @@ export default function SurvivorDeckBuilder() {
           {!canLaunch && (
             <p className="text-[9px] text-stone-700 font-mono text-center">
               Need 2 survivors + 2 gear ready.
-              {availableSurvivors.length < 2 ? ` ${2 - availableSurvivors.length} survivor(s) still recovering.` : ''}
             </p>
           )}
 
-          {exhaustedCards.length > 0 && (
+          {exhaustedCards.length > 0 && !showDebrief && (
             <button
               onClick={advanceDay}
               className="w-full py-2.5 font-mono text-xs tracking-widest uppercase border border-stone-900 text-stone-600 hover:text-stone-500 hover:border-stone-800 transition-colors"

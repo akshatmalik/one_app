@@ -30,6 +30,9 @@ export function useGame() {
         if (state.homeBase && !state.homeBase.rawMaterials) {
           state.homeBase.rawMaterials = { scrapMetal: 0, wood: 0, cloth: 0, medicalSupplies: 0 };
         }
+        if (state.homeBase && state.homeBase.homeBarricadeLevel === undefined) {
+          state.homeBase.homeBarricadeLevel = 0;
+        }
         setGameState(state);
         setCurrentRun(state.currentRun || null);
       } catch (e) {
@@ -93,6 +96,8 @@ export function useGame() {
         if (c.maxAmmo !== undefined) weaponAmmo[c.id] = c.maxAmmo;
       });
 
+      const homeBarricadeLevel = gameState.homeBase.homeBarricadeLevel ?? 0;
+
       const run: Run = {
         runId: `run_${Date.now()}`,
         status: 'in_progress',
@@ -110,9 +115,15 @@ export function useGame() {
         itemsFound: [],
         survivorStats: {},
         activeSurvivors: survivors,
+        // Apply barricade built at home (persists for this full run)
+        isBarricaded: homeBarricadeLevel > 0,
       };
 
       const state = { ...gameState };
+      // Consume the home barricade — it was used for this run
+      if (homeBarricadeLevel > 0) {
+        state.homeBase = { ...state.homeBase, homeBarricadeLevel: 0 };
+      }
       state.currentRun = run;
       state.updatedAt = new Date().toISOString();
       await repository.setGameState(state);
@@ -428,6 +439,7 @@ export function useGame() {
           survivors: finalDeck.filter(c => c.type === 'survivor'),
           items: finalDeck.filter(c => c.type === 'item'),
           rawMaterials: newMats,
+          homeBarricadeLevel: gameState.homeBase.homeBarricadeLevel ?? 0,
           completedRuns: [...gameState.homeBase.completedRuns, completedRun],
         },
         currentRun: undefined,
@@ -473,22 +485,47 @@ export function useGame() {
     }
   }, [currentRun, gameState]);
 
-  const buildBarricade = useCallback(async () => {
+  // Cost: 2 wood + 1 scrap metal → barricades the home base (+30 defense for next run)
+  const BARRICADE_COST = { wood: 2, scrapMetal: 1 };
+
+  const canBuildHomeBarricade = useCallback((): boolean => {
+    if (!gameState) return false;
+    const mats = gameState.homeBase.rawMaterials;
+    return (
+      (gameState.homeBase.homeBarricadeLevel ?? 0) === 0 &&
+      mats.wood >= BARRICADE_COST.wood &&
+      mats.scrapMetal >= BARRICADE_COST.scrapMetal
+    );
+  }, [gameState]);
+
+  const buildHomeBarricade = useCallback(async () => {
     try {
-      if (!currentRun || !gameState) throw new Error('No active run');
+      if (!gameState) throw new Error('Game state not loaded');
+      const mats = gameState.homeBase.rawMaterials;
+      if (mats.wood < BARRICADE_COST.wood || mats.scrapMetal < BARRICADE_COST.scrapMetal) {
+        throw new Error('Not enough materials');
+      }
 
-      const updatedRun: Run = { ...currentRun, isBarricaded: true };
-
-      const state = { ...gameState, currentRun: updatedRun, updatedAt: new Date().toISOString() };
+      const state: GameState = {
+        ...gameState,
+        homeBase: {
+          ...gameState.homeBase,
+          homeBarricadeLevel: 1,
+          rawMaterials: {
+            ...mats,
+            wood: mats.wood - BARRICADE_COST.wood,
+            scrapMetal: mats.scrapMetal - BARRICADE_COST.scrapMetal,
+          },
+        },
+        updatedAt: new Date().toISOString(),
+      };
       await repository.setGameState(state);
       setGameState(state);
-      setCurrentRun(updatedRun);
-      return updatedRun;
     } catch (e) {
       setError(e as Error);
       throw e;
     }
-  }, [currentRun, gameState]);
+  }, [gameState]);
 
   const advanceDay = useCallback(async () => {
     try {
@@ -537,7 +574,10 @@ export function useGame() {
 
     // Tactical
     retreatFromExpedition,
-    buildBarricade,
+
+    // Home building
+    buildHomeBarricade,
+    canBuildHomeBarricade,
 
     // Utilities
     refreshGameState,

@@ -180,6 +180,7 @@ export class LocalStorageRepository implements DeckBuilderRepository {
         inventory: [],
         completedRuns: [],
         rawMaterials: { scrapMetal: 0, wood: 0, cloth: 0, medicalSupplies: 0 },
+        homeBarricadeLevel: 0,
       },
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),

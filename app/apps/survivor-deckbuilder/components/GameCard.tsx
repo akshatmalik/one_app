@@ -12,19 +12,31 @@ interface GameCardProps {
   className?: string;
 }
 
-const ROLE_CONFIG: Record<string, { icon: string; gradient: string; accent: string }> = {
-  healer: { icon: '✚', gradient: 'from-emerald-900 to-emerald-950', accent: 'border-emerald-500' },
-  fighter: { icon: '⚔', gradient: 'from-red-900 to-red-950', accent: 'border-red-500' },
-  scout: { icon: '◎', gradient: 'from-sky-900 to-sky-950', accent: 'border-sky-500' },
-  mechanic: { icon: '⚙', gradient: 'from-amber-900 to-amber-950', accent: 'border-amber-500' },
-  scientist: { icon: '⚗', gradient: 'from-violet-900 to-violet-950', accent: 'border-violet-500' },
+const ROLE_CONFIG: Record<string, { icon: string; gradient: string; accent: string; color: string }> = {
+  healer:    { icon: '✚', gradient: 'from-emerald-900 to-emerald-950', accent: 'border-emerald-500', color: 'text-emerald-400' },
+  fighter:   { icon: '⚔', gradient: 'from-red-900 to-red-950',         accent: 'border-red-500',     color: 'text-red-400'     },
+  scout:     { icon: '◎', gradient: 'from-sky-900 to-sky-950',         accent: 'border-sky-500',     color: 'text-sky-400'     },
+  mechanic:  { icon: '⚙', gradient: 'from-amber-900 to-amber-950',     accent: 'border-amber-500',   color: 'text-amber-400'   },
+  scientist: { icon: '⚗', gradient: 'from-violet-900 to-violet-950',   accent: 'border-violet-500',  color: 'text-violet-400'  },
 };
 
 const TYPE_CONFIG: Record<string, { icon: string; gradient: string; accent: string; label: string }> = {
-  equipment: { icon: '🛡', gradient: 'from-slate-800 to-slate-900', accent: 'border-blue-400', label: 'EQUIPMENT' },
-  consumable: { icon: '◈', gradient: 'from-orange-900/80 to-slate-900', accent: 'border-orange-400', label: 'CONSUMABLE' },
-  action: { icon: '⚡', gradient: 'from-purple-900/80 to-slate-900', accent: 'border-purple-400', label: 'ACTION' },
+  equipment:  { icon: '🛡', gradient: 'from-slate-800 to-slate-900',      accent: 'border-blue-400',   label: 'EQUIPMENT'   },
+  consumable: { icon: '◈',  gradient: 'from-orange-900/80 to-slate-900',  accent: 'border-orange-400', label: 'CONSUMABLE'  },
+  action:     { icon: '⚡', gradient: 'from-purple-900/80 to-slate-900',  accent: 'border-purple-400', label: 'ACTION'      },
 };
+
+function AmmoDots({ current, max }: { current: number; max: number }) {
+  return (
+    <div className="flex gap-0.5 items-center">
+      {Array.from({ length: max }).map((_, i) => (
+        <span key={i} className={`${i < current ? 'text-red-400' : 'text-stone-700'} text-[9px]`}>
+          {i < current ? '●' : '○'}
+        </span>
+      ))}
+    </div>
+  );
+}
 
 export function GameCard({ card, selected, disabled, compact, onClick, className }: GameCardProps) {
   const isSurvivor = card.type === 'survivor';
@@ -34,22 +46,33 @@ export function GameCard({ card, selected, disabled, compact, onClick, className
   const gradient = roleConf?.gradient ?? typeConf?.gradient ?? 'from-slate-800 to-slate-900';
   const accent = roleConf?.accent ?? typeConf?.accent ?? 'border-slate-600';
   const icon = roleConf?.icon ?? typeConf?.icon ?? '?';
+  const roleColor = roleConf?.color ?? 'text-stone-400';
 
-  // Stat pills for the card
-  const stats: { label: string; value: number; color: string }[] = [];
+  const isWeapon = card.maxAmmo !== undefined;
+  const ammo = card.ammo ?? card.maxAmmo;
+
+  // Primary stat — the big number shown prominently
+  let primaryStat = { value: '', label: '', color: 'text-stone-300' };
   if (isSurvivor && card.attributes) {
-    if (card.attributes.combat > 0) stats.push({ label: 'ATK', value: card.attributes.combat, color: 'text-red-400' });
-    if (card.attributes.defense > 0) stats.push({ label: 'DEF', value: card.attributes.defense, color: 'text-blue-400' });
-    if (card.attributes.healing > 0) stats.push({ label: 'HLG', value: card.attributes.healing, color: 'text-emerald-400' });
-    if (card.attributes.speed > 0) stats.push({ label: 'SPD', value: card.attributes.speed, color: 'text-yellow-400' });
-    if (card.attributes.perception > 0) stats.push({ label: 'PER', value: card.attributes.perception, color: 'text-purple-400' });
+    const a = card.attributes;
+    if (a.combat > 0)       primaryStat = { value: `+${a.combat}%`, label: 'ATK', color: 'text-red-400' };
+    else if (a.healing > 0) primaryStat = { value: `+${a.healing}%`, label: 'HLG', color: 'text-emerald-400' };
+    else if (a.defense > 0) primaryStat = { value: `+${a.defense}%`, label: 'DEF', color: 'text-blue-400' };
+  } else if (card.bonusAttributes) {
+    const b = card.bonusAttributes;
+    if (b.combat && b.combat > 0)   primaryStat = { value: `+${b.combat}`, label: 'DMG', color: 'text-red-400' };
+    else if (b.healing && b.healing > 0) primaryStat = { value: `+${b.healing}`, label: 'HLG', color: 'text-emerald-400' };
+    else if (b.defense && b.defense > 0) primaryStat = { value: `+${b.defense}%`, label: 'DEF', color: 'text-blue-400' };
   }
-  if (card.bonusAttributes) {
-    if (card.bonusAttributes.combat) stats.push({ label: 'ATK', value: card.bonusAttributes.combat, color: 'text-red-400' });
-    if (card.bonusAttributes.defense) stats.push({ label: 'DEF', value: card.bonusAttributes.defense, color: 'text-blue-400' });
-    if (card.bonusAttributes.healing) stats.push({ label: 'HLG', value: card.bonusAttributes.healing, color: 'text-emerald-400' });
-    if (card.bonusAttributes.perception) stats.push({ label: 'PER', value: card.bonusAttributes.perception, color: 'text-purple-400' });
-    if (card.bonusAttributes.speed) stats.push({ label: 'SPD', value: card.bonusAttributes.speed, color: 'text-yellow-400' });
+
+  // Secondary attributes (small icons) — for survivors
+  const secondaryAttrs: { icon: string; color: string }[] = [];
+  if (isSurvivor && card.attributes) {
+    const a = card.attributes;
+    if (a.defense > 0) secondaryAttrs.push({ icon: '🛡', color: 'text-blue-600' });
+    if (a.healing > 0) secondaryAttrs.push({ icon: '✚', color: 'text-emerald-600' });
+    if (a.speed > 0)   secondaryAttrs.push({ icon: '▶', color: 'text-yellow-600' });
+    if (a.perception > 0) secondaryAttrs.push({ icon: '◉', color: 'text-purple-600' });
   }
 
   if (compact) {
@@ -67,10 +90,20 @@ export function GameCard({ card, selected, disabled, compact, onClick, className
         )}
       >
         <div className="flex items-center gap-2">
-          <span className="text-lg opacity-60">{icon}</span>
-          <span className="font-semibold text-sm text-white/90">{card.name}</span>
-          {selected && <span className="ml-auto text-xs text-green-400 font-bold">✓</span>}
+          <span className="text-base opacity-60">{icon}</span>
+          <span className="font-semibold text-sm text-white/90 flex-1 truncate">{card.name}</span>
+          {primaryStat.value && (
+            <span className={`text-xs font-bold font-mono ${primaryStat.color}`}>
+              {primaryStat.value}
+            </span>
+          )}
+          {selected && <span className="text-xs text-green-400 font-bold ml-1">✓</span>}
         </div>
+        {isWeapon && ammo !== undefined && card.maxAmmo !== undefined && (
+          <div className="mt-1 ml-6">
+            <AmmoDots current={ammo} max={card.maxAmmo} />
+          </div>
+        )}
       </button>
     );
   }
@@ -90,9 +123,9 @@ export function GameCard({ card, selected, disabled, compact, onClick, className
         className
       )}
     >
-      {/* Card top — type label */}
+      {/* Top row: type label + exhausted badge */}
       <div className="flex items-center justify-between px-4 pt-3 pb-1">
-        <span className="text-[10px] font-bold uppercase tracking-widest text-white/30">
+        <span className={`text-[10px] font-bold uppercase tracking-widest ${isSurvivor ? roleColor : 'text-white/30'}`}>
           {isSurvivor ? card.role : typeConf?.label}
         </span>
         {card.exhausted && (
@@ -102,90 +135,83 @@ export function GameCard({ card, selected, disabled, compact, onClick, className
         )}
       </div>
 
-      {/* Card icon + name */}
+      {/* Icon + name + primary stat */}
       <div className="px-4 pb-2">
-        <div className="flex items-center gap-3">
-          <div className={clsx(
-            'w-12 h-12 rounded-xl flex items-center justify-center text-2xl',
-            'bg-white/5 border border-white/10'
-          )}>
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl bg-white/5 border border-white/10 flex-shrink-0">
             {icon}
           </div>
           <div className="flex-1 min-w-0">
-            <h3 className="font-bold text-white text-lg leading-tight">{card.name}</h3>
+            <h3 className="font-bold text-white text-base leading-tight">{card.name}</h3>
             {card.special && (
               <p className="text-[10px] text-amber-400/70 mt-0.5">✦ {card.special.name}</p>
             )}
           </div>
+          {/* Primary stat — big and obvious */}
+          {primaryStat.value && (
+            <div className="text-right flex-shrink-0">
+              <p className={`text-xl font-bold font-mono leading-none ${primaryStat.color}`}>
+                {primaryStat.value}
+              </p>
+              <p className="text-[9px] text-white/20 font-mono">{primaryStat.label}</p>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Stats row */}
-      {stats.length > 0 && (
-        <div className="px-4 pb-2">
-          <div className="flex flex-wrap gap-1.5">
-            {stats.map((stat, i) => (
-              <span
-                key={i}
-                className={clsx(
-                  'text-[11px] font-mono font-bold px-2 py-0.5 rounded-md bg-black/30',
-                  stat.color
-                )}
-              >
-                {stat.label[0]}+{Math.abs(stat.value)}
-              </span>
-            ))}
-          </div>
+      {/* Secondary attributes — subtle dots for survivors */}
+      {secondaryAttrs.length > 0 && (
+        <div className="px-4 pb-1.5 flex gap-1">
+          {secondaryAttrs.map((a, i) => (
+            <span key={i} className={`text-[10px] opacity-50 ${a.color}`}>{a.icon}</span>
+          ))}
         </div>
       )}
 
       {/* Bottom bar — HP / ammo / use type */}
-      <div className="border-t border-white/5 px-4 py-2 flex items-center justify-between">
+      <div className="border-t border-white/5 px-4 py-2">
         {isSurvivor ? (
-          <>
-            <div className="w-full flex items-center gap-2">
-              <div className="flex-1 h-1.5 bg-black/40 rounded-full overflow-hidden">
-                <div
-                  className={clsx(
-                    'h-full rounded-full',
-                    (card.currentHealth ?? 100) / (card.maxHealth ?? 100) > 0.6
-                      ? 'bg-emerald-500'
-                      : (card.currentHealth ?? 100) / (card.maxHealth ?? 100) > 0.3
-                        ? 'bg-amber-500'
-                        : 'bg-red-600'
-                  )}
-                  style={{ width: `${((card.currentHealth ?? 100) / (card.maxHealth ?? 100)) * 100}%` }}
-                />
-              </div>
-              <span className="text-[10px] font-mono text-white/40 tabular-nums">
-                {card.currentHealth ?? 100}/{card.maxHealth ?? 100}
-              </span>
+          <div className="flex items-center gap-2">
+            <div className="flex-1 h-1.5 bg-black/40 rounded-full overflow-hidden">
+              <div
+                className={clsx(
+                  'h-full rounded-full',
+                  (card.currentHealth ?? 100) / (card.maxHealth ?? 100) > 0.6
+                    ? 'bg-emerald-500'
+                    : (card.currentHealth ?? 100) / (card.maxHealth ?? 100) > 0.3
+                      ? 'bg-amber-500'
+                      : 'bg-red-600'
+                )}
+                style={{ width: `${((card.currentHealth ?? 100) / (card.maxHealth ?? 100)) * 100}%` }}
+              />
             </div>
-          </>
-        ) : card.maxAmmo !== undefined ? (
-          <>
-            <span className="text-[10px] text-white/30 uppercase font-semibold">Ammo</span>
-            <span className={clsx(
-              'text-[11px] font-mono font-bold tabular-nums',
-              (card.ammo ?? card.maxAmmo) === 0 ? 'text-red-500' :
-              (card.ammo ?? card.maxAmmo) <= 2 ? 'text-amber-400' : 'text-white/60'
-            )}>
-              {card.ammo ?? card.maxAmmo}/{card.maxAmmo}
+            <span className="text-[10px] font-mono text-white/40 tabular-nums">
+              {card.currentHealth ?? 100}/{card.maxHealth ?? 100}
             </span>
-          </>
+          </div>
+        ) : isWeapon && ammo !== undefined && card.maxAmmo !== undefined ? (
+          <div className="flex items-center justify-between">
+            <AmmoDots current={ammo} max={card.maxAmmo} />
+            <span className={clsx(
+              'text-[10px] font-mono font-bold tabular-nums',
+              ammo === 0 ? 'text-red-500' : ammo <= 2 ? 'text-amber-400' : 'text-white/40'
+            )}>
+              {ammo}/{card.maxAmmo}
+            </span>
+          </div>
         ) : (
-          <>
-            <span className="text-[10px] text-white/30 uppercase font-semibold">
-              {card.itemType === 'consumable' ? '1× use' : card.itemType === 'action' ? '1× use' : 'Reusable'}
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] text-white/20 uppercase font-mono">
+              {card.itemType === 'consumable' || card.itemType === 'action' ? '1× use' : 'Reusable'}
             </span>
             {!card.exhausted && (
-              <span className="text-[10px] text-green-400/60 font-semibold">READY</span>
+              <span className="text-[10px] text-green-400/50 font-mono">READY</span>
             )}
-          </>
+          </div>
         )}
       </div>
 
-      {/* Selected overlay */}
+      {/* Selected checkmark */}
       {selected && (
         <div className="absolute top-3 right-3 w-6 h-6 rounded-full bg-green-500 flex items-center justify-center text-white text-xs font-bold shadow-lg">
           ✓
