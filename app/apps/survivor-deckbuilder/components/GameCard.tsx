@@ -113,7 +113,9 @@ export function GameCard({ card, selected, disabled, compact, onClick, className
           </div>
           <div className="flex-1 min-w-0">
             <h3 className="font-bold text-white text-lg leading-tight">{card.name}</h3>
-            <p className="text-xs text-white/40 mt-0.5 line-clamp-2">{card.description}</p>
+            {card.special && (
+              <p className="text-[10px] text-amber-400/70 mt-0.5">✦ {card.special.name}</p>
+            )}
           </div>
         </div>
       </div>
@@ -130,46 +132,54 @@ export function GameCard({ card, selected, disabled, compact, onClick, className
                   stat.color
                 )}
               >
-                {stat.label} +{stat.value}
+                {stat.label[0]}+{Math.abs(stat.value)}
               </span>
             ))}
           </div>
         </div>
       )}
 
-      {/* Special ability */}
-      {card.special && (
-        <div className="px-4 pb-3">
-          <p className="text-[10px] text-amber-400/80 italic">
-            ✦ {card.special.name} — {card.special.description}
-          </p>
-        </div>
-      )}
-
-      {/* Bottom bar — HP for survivors, type indicator for items */}
+      {/* Bottom bar — HP / ammo / use type */}
       <div className="border-t border-white/5 px-4 py-2 flex items-center justify-between">
         {isSurvivor ? (
           <>
-            <span className="text-[10px] text-white/30 uppercase font-semibold">HP</span>
-            <div className="flex items-center gap-2">
-              <div className="w-16 h-1.5 bg-black/40 rounded-full overflow-hidden">
+            <div className="w-full flex items-center gap-2">
+              <div className="flex-1 h-1.5 bg-black/40 rounded-full overflow-hidden">
                 <div
-                  className="h-full bg-emerald-500 rounded-full"
+                  className={clsx(
+                    'h-full rounded-full',
+                    (card.currentHealth ?? 100) / (card.maxHealth ?? 100) > 0.6
+                      ? 'bg-emerald-500'
+                      : (card.currentHealth ?? 100) / (card.maxHealth ?? 100) > 0.3
+                        ? 'bg-amber-500'
+                        : 'bg-red-600'
+                  )}
                   style={{ width: `${((card.currentHealth ?? 100) / (card.maxHealth ?? 100)) * 100}%` }}
                 />
               </div>
-              <span className="text-[10px] font-mono text-white/40">
+              <span className="text-[10px] font-mono text-white/40 tabular-nums">
                 {card.currentHealth ?? 100}/{card.maxHealth ?? 100}
               </span>
             </div>
           </>
+        ) : card.maxAmmo !== undefined ? (
+          <>
+            <span className="text-[10px] text-white/30 uppercase font-semibold">Ammo</span>
+            <span className={clsx(
+              'text-[11px] font-mono font-bold tabular-nums',
+              (card.ammo ?? card.maxAmmo) === 0 ? 'text-red-500' :
+              (card.ammo ?? card.maxAmmo) <= 2 ? 'text-amber-400' : 'text-white/60'
+            )}>
+              {card.ammo ?? card.maxAmmo}/{card.maxAmmo}
+            </span>
+          </>
         ) : (
           <>
             <span className="text-[10px] text-white/30 uppercase font-semibold">
-              {card.itemType === 'consumable' ? 'Single use' : 'Reusable'}
+              {card.itemType === 'consumable' ? '1× use' : card.itemType === 'action' ? '1× use' : 'Reusable'}
             </span>
             {!card.exhausted && (
-              <span className="text-[10px] text-green-400/60 font-semibold">Ready</span>
+              <span className="text-[10px] text-green-400/60 font-semibold">READY</span>
             )}
           </>
         )}

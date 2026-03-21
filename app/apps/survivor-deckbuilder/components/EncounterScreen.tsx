@@ -11,69 +11,28 @@ interface EncounterScreenProps {
   survivors: CardInstance[];
   cardsRemaining: number;
   totalCards: number;
+  isBarricaded?: boolean;
   onEnterCombat: () => void;
+  onRetreat: () => void;
 }
 
-const LOCATION_SCENES: Record<string, { emoji: string; mood: string; arrivalText: string }> = {
-  'Abandoned Pharmacy': {
-    emoji: '🏥',
-    mood: 'The air smells of antiseptic and decay.',
-    arrivalText: 'You approach the pharmacy. The front door hangs off its hinges.',
-  },
-  'Highway Gas Station': {
-    emoji: '⛽',
-    mood: 'Heat shimmers off the asphalt. Something moves inside.',
-    arrivalText: 'The gas station sits alone on the highway. Looks quiet — too quiet.',
-  },
-  'Elementary School': {
-    emoji: '🏫',
-    mood: 'Tiny desks overturned. Crayon drawings on the walls.',
-    arrivalText: 'The school cafeteria. There could be food inside.',
-  },
-  'Military Warehouse': {
-    emoji: '🏭',
-    mood: 'Concrete walls. Chain-link fencing. Something valuable inside.',
-    arrivalText: 'A military supply depot. The lock is broken.',
-  },
-  'City Hospital': {
-    emoji: '🏨',
-    mood: 'Monitors still beeping in the dark. The infected roam the halls.',
-    arrivalText: 'The east wing. Quarantine ground zero.',
-  },
-  'Police Station': {
-    emoji: '🚔',
-    mood: 'Sirens long dead. The armory door is reinforced glass.',
-    arrivalText: 'The police station. The armory could change everything.',
-  },
-  'Subway Tunnel': {
-    emoji: '🚇',
-    mood: 'Total darkness. The sound of skittering echoes.',
-    arrivalText: 'Down into the tunnels. The nest is here somewhere.',
-  },
-  'River Bridge': {
-    emoji: '🌉',
-    mood: 'The bridge groans under its own weight. No other way across.',
-    arrivalText: 'The only bridge back. Something massive blocks the way.',
-  },
-  'Research Laboratory': {
-    emoji: '🔬',
-    mood: 'Emergency lights pulse red. Containment has failed.',
-    arrivalText: 'The lab still has power. The subjects have escaped.',
-  },
+const STAGE_LOOT: Record<number, string> = {
+  1: 'Basic supplies — food, bandages, spare ammo.',
+  2: 'Equipment cache — building materials, tactical gear.',
+  3: 'Rare find — military-grade weapons and med kits.',
 };
 
-function getLocationBackground(location: string): string {
-  const loc = location.toLowerCase();
-  if (loc.includes('pharmacy') || loc.includes('hospital')) return 'bg-gradient-to-b from-teal-950 via-slate-900 to-slate-950';
-  if (loc.includes('gas') || loc.includes('highway')) return 'bg-gradient-to-b from-amber-950/80 via-slate-900 to-slate-950';
-  if (loc.includes('school')) return 'bg-gradient-to-b from-slate-800 via-slate-900 to-slate-950';
-  if (loc.includes('warehouse') || loc.includes('military')) return 'bg-gradient-to-b from-green-950/60 via-slate-900 to-slate-950';
-  if (loc.includes('police')) return 'bg-gradient-to-b from-blue-950/60 via-slate-900 to-slate-950';
-  if (loc.includes('subway') || loc.includes('tunnel')) return 'bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950';
-  if (loc.includes('bridge') || loc.includes('river')) return 'bg-gradient-to-b from-cyan-950/50 via-slate-900 to-slate-950';
-  if (loc.includes('lab') || loc.includes('research')) return 'bg-gradient-to-b from-violet-950/60 via-slate-900 to-slate-950';
-  return 'bg-gradient-to-b from-slate-800 via-slate-900 to-slate-950';
-}
+const APPROACH_LINES: Record<string, string> = {
+  'Abandoned Pharmacy': 'The front door hangs off its hinges. Broken glass. The medicine cabinet is just past them.',
+  'Highway Gas Station': 'Heat off the asphalt. Flies circling a window. Something moving inside.',
+  'Elementary School': 'Tiny shoes in the hallway. Crayon drawings on the walls. The cafeteria door is stuck.',
+  'Military Warehouse': 'Razor wire. Broken padlock. Whatever\'s inside, someone wanted it protected.',
+  'City Hospital': 'Emergency lights pulse red. The quarantine tape is shredded.',
+  'Police Station': 'Armory door is reinforced glass. Two dead officers still wear their kevlar.',
+  'Subway Tunnel': 'Total darkness below. The sound of skittering echoes up the stairs.',
+  'River Bridge': 'No other way across. The bridge groans. Something massive waits at the midspan.',
+  'Research Laboratory': 'The containment seals are blown. Something got out.',
+};
 
 export function EncounterScreen({
   encounter,
@@ -82,34 +41,37 @@ export function EncounterScreen({
   survivors,
   cardsRemaining,
   totalCards,
+  isBarricaded,
   onEnterCombat,
+  onRetreat,
 }: EncounterScreenProps) {
   const [revealed, setRevealed] = useState(false);
 
   useEffect(() => {
-    const timer = setTimeout(() => setRevealed(true), 400);
+    const timer = setTimeout(() => setRevealed(true), 300);
     return () => clearTimeout(timer);
   }, []);
 
-  const scene = LOCATION_SCENES[encounter.location ?? ''] ?? {
-    emoji: '📍',
-    mood: 'An unknown place. Stay alert.',
-    arrivalText: 'You arrive at your destination.',
-  };
-
+  const approachLine = APPROACH_LINES[encounter.location ?? ''] ?? 'Unknown ground. Stay sharp.';
+  const stageLoot = STAGE_LOOT[stageNumber] ?? '';
   const totalHP = (encounter.enemies ?? []).reduce((sum, e) => sum + e.health, 0);
-  const bg = getLocationBackground(encounter.location ?? '');
+
+  const diffLabel = {
+    easy: 'LOW THREAT',
+    medium: 'MODERATE',
+    hard: 'DANGER',
+    very_hard: 'CRITICAL',
+  }[encounter.difficulty ?? 'easy'];
 
   const diffColor = {
-    easy: 'text-green-400 bg-green-400/10 border-green-400/20',
-    medium: 'text-amber-400 bg-amber-400/10 border-amber-400/20',
-    hard: 'text-red-400 bg-red-400/10 border-red-400/20',
-    very_hard: 'text-red-500 bg-red-500/10 border-red-500/20',
+    easy: 'text-stone-500',
+    medium: 'text-amber-700',
+    hard: 'text-red-700',
+    very_hard: 'text-red-600',
   }[encounter.difficulty ?? 'easy'];
 
   return (
-    <div className={`min-h-screen flex flex-col ${bg} transition-all duration-1000`}>
-      {/* Status bar */}
+    <div className="min-h-screen flex flex-col bg-stone-950 text-stone-300">
       <RunStatusBar
         stageNumber={stageNumber}
         totalStages={totalStages}
@@ -117,106 +79,96 @@ export function EncounterScreen({
         cardsRemaining={cardsRemaining}
         totalCards={totalCards}
         location={encounter.location}
+        isBarricaded={isBarricaded}
       />
 
-      {/* Arrival scene */}
       <div className="flex-1 px-5 py-6 flex flex-col">
-        {/* Location arrival */}
-        <div className={`transition-all duration-700 ${revealed ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
-          {/* Big location emoji */}
-          <div className="text-center mb-6">
-            <span className="text-6xl">{scene.emoji}</span>
-          </div>
-
-          {/* Arrival text — narrative */}
-          <p className="text-white/50 text-sm italic text-center mb-1">
-            {scene.arrivalText}
-          </p>
-          <p className="text-white/30 text-xs italic text-center mb-6">
-            {scene.mood}
+        {/* Stage context */}
+        <div className={`transition-opacity duration-500 ${revealed ? 'opacity-100' : 'opacity-0'}`}>
+          <p className="text-[9px] text-stone-700 font-mono tracking-widest uppercase mb-4">
+            ── STAGE {stageNumber} OF {totalStages} ──────────────────
           </p>
 
-          {/* Encounter name */}
-          <h1 className="text-2xl font-bold text-white text-center mb-1">
+          {/* Location name */}
+          <h1 className="text-2xl font-bold text-stone-200 uppercase tracking-wide mb-1">
             {encounter.name}
           </h1>
-          <div className="flex items-center justify-center gap-2 mb-6">
-            <span className={`text-[10px] px-3 py-1 rounded-full border font-semibold ${diffColor}`}>
-              {(encounter.difficulty ?? 'easy').toUpperCase()}
+          <div className="flex items-center gap-3 mb-5">
+            <span className={`text-[10px] font-mono tracking-widest ${diffColor}`}>
+              {diffLabel}
             </span>
-            <span className="text-[10px] text-white/30">·</span>
-            <span className="text-[10px] text-white/40 font-mono">
-              {(encounter.enemies ?? []).length} hostiles · {totalHP} HP
+            <span className="text-stone-700 text-[10px]">·</span>
+            <span className="text-[10px] text-stone-600 font-mono">
+              {(encounter.enemies ?? []).length} HOSTILES · {totalHP} HP TOTAL
             </span>
           </div>
-        </div>
 
-        {/* Encounter description */}
-        <div className={`transition-all duration-700 delay-300 ${revealed ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
-          <div className="bg-black/30 backdrop-blur-sm rounded-2xl border border-white/5 p-5 mb-4">
-            <p className="text-white/70 text-sm leading-relaxed">
-              {encounter.description}
+          {/* Approach description */}
+          <div className="border-l-2 border-stone-800 pl-4 mb-5">
+            <p className="text-stone-500 text-sm leading-relaxed italic">
+              {approachLine}
             </p>
           </div>
+
+          {/* Encounter description */}
+          <p className="text-stone-400 text-sm leading-relaxed mb-6">
+            {encounter.description}
+          </p>
         </div>
 
-        {/* Enemy cards */}
-        <div className={`transition-all duration-700 delay-500 ${revealed ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
-          <p className="text-[10px] text-red-400/60 uppercase tracking-wider font-semibold mb-2 px-1">
-            Threats
+        {/* Threats */}
+        <div className={`transition-opacity duration-500 delay-200 ${revealed ? 'opacity-100' : 'opacity-0'}`}>
+          <p className="text-[9px] text-stone-700 font-mono tracking-widest uppercase mb-2">
+            THREATS
           </p>
-          <div className="space-y-2">
+          <div className="space-y-1 mb-5">
             {(encounter.enemies ?? []).map((enemy, i) => (
               <div
                 key={i}
-                className="bg-red-950/30 backdrop-blur-sm rounded-xl border border-red-500/10 px-4 py-3 flex items-center justify-between"
+                className="flex items-center justify-between border border-stone-800 bg-stone-900 px-3 py-2"
               >
-                <div className="flex items-center gap-3">
-                  <span className="text-xl">💀</span>
-                  <div>
-                    <p className="font-semibold text-sm text-white/80">{enemy.name}</p>
-                    <div className="flex gap-2 mt-0.5">
-                      <span className="text-[10px] text-orange-400 font-mono">ATK {enemy.damage}</span>
-                      {enemy.defense > 0 && (
-                        <span className="text-[10px] text-blue-400 font-mono">DEF {enemy.defense}</span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-14 h-1.5 bg-black/40 rounded-full overflow-hidden">
-                    <div className="h-full bg-red-500 rounded-full w-full" />
-                  </div>
-                  <span className="text-xs font-mono text-red-400">{enemy.health}</span>
+                <span className="text-sm text-stone-400 font-mono">{enemy.name}</span>
+                <div className="flex gap-3 text-[10px] font-mono">
+                  <span className="text-red-800">ATK {enemy.damage}</span>
+                  {enemy.defense > 0 && (
+                    <span className="text-stone-600">DEF {enemy.defense}</span>
+                  )}
+                  <span className="text-stone-500">HP {enemy.health}</span>
                 </div>
               </div>
             ))}
           </div>
         </div>
 
-        {/* Reward hint */}
-        {encounter.rewardsText && (
-          <div className={`mt-4 transition-all duration-700 delay-700 ${revealed ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
-            <div className="bg-amber-500/5 border border-amber-500/10 rounded-xl px-4 py-2">
-              <p className="text-[11px] text-amber-400/70">
-                ◆ Reward: {encounter.rewardsText}
+        {/* Loot hint */}
+        <div className={`transition-opacity duration-500 delay-300 ${revealed ? 'opacity-100' : 'opacity-0'}`}>
+          {stageLoot && (
+            <div className="border border-stone-800 px-3 py-2 mb-6">
+              <p className="text-[10px] text-stone-600 font-mono tracking-wider uppercase mb-0.5">
+                IF SECURED
               </p>
+              <p className="text-[11px] text-amber-800">{stageLoot}</p>
             </div>
-          </div>
-        )}
+          )}
+        </div>
+
+        <div className="flex-1" />
       </div>
 
-      {/* Enter combat button */}
-      <div className="px-5 pb-8 pt-2">
+      {/* Action buttons */}
+      <div className="px-5 pb-8 pt-2 space-y-2">
         <button
           onClick={onEnterCombat}
-          className="w-full py-4 bg-red-700 hover:bg-red-600 text-white font-bold text-lg rounded-2xl transition-all active:scale-[0.97] shadow-lg shadow-red-900/30"
+          className="w-full py-3.5 bg-stone-800 hover:bg-stone-700 text-stone-200 font-mono font-bold text-sm tracking-widest uppercase border border-stone-700 transition-colors active:scale-[0.98]"
         >
-          Choose Cards
+          ADVANCE →
         </button>
-        <p className="text-center text-[10px] text-white/20 mt-2">
-          {cardsRemaining} card{cardsRemaining !== 1 ? 's' : ''} remaining &mdash; choose wisely
-        </p>
+        <button
+          onClick={onRetreat}
+          className="w-full py-2.5 bg-transparent hover:bg-stone-900 text-stone-600 hover:text-stone-500 font-mono text-xs tracking-widest uppercase border border-stone-800 transition-colors"
+        >
+          FALL BACK (RETREAT)
+        </button>
       </div>
     </div>
   );

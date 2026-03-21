@@ -48,6 +48,9 @@ export interface Card {
   itemType?: 'equipment' | 'consumable' | 'action';
   bonusAttributes?: Partial<Attributes>;
 
+  // For weapons — how many times they can be used before running dry
+  maxAmmo?: number;
+
   // Special ability
   special?: SpecialAbility;
 
@@ -65,6 +68,8 @@ export interface CardInstance extends Card {
   exhausted: boolean;
   recoveryTime: number;
   damageTaken?: number;
+  // Current ammo remaining (weapons only, undefined = unlimited)
+  ammo?: number;
 }
 
 // Hand (cards drawn for current encounter)
@@ -165,6 +170,20 @@ export interface StageHistory {
   itemsFound?: CardInstance[];
 }
 
+// Raw materials collected during runs
+export interface RawMaterials {
+  scrapMetal: number;
+  wood: number;
+  cloth: number;
+  medicalSupplies: number;
+}
+
+// Loot rolled on stage victory
+export interface StageLoot {
+  items: CardInstance[];
+  materials: RawMaterials;
+}
+
 // Run
 export interface Run {
   runId: string;
@@ -176,7 +195,13 @@ export interface Run {
   // Deck
   deck: CardInstance[];
   currentHand: CardInstance[];
-  playedCardsThisRun: string[]; // card IDs already played
+
+  // One-time use tracking: consumables and actions only.
+  // Survivors and equipment are available every stage.
+  consumedCardIds: string[];
+
+  // Weapon ammo tracking during the run: cardId → shots remaining
+  weaponAmmo: Record<string, number>;
 
   // Current encounter
   currentEncounter?: Encounter;
@@ -187,12 +212,19 @@ export interface Run {
   totalStages: number;
   stages: StageHistory[];
 
-  // Rewards
+  // Loot rolled per stage on victory
+  stagedLoot: Record<number, StageLoot>;
+
+  // Rewards accumulated across all stages
   itemsFound: CardInstance[];
   survivorStats: Record<string, { expGained: number }>;
 
   // Survivors in this run
   activeSurvivors: CardInstance[];
+
+  // Tactical options
+  isBarricaded?: boolean;   // Built a barricade after stage 2 — +30 defense in stage 3
+  isRetreat?: boolean;      // Player chose to retreat before engaging
 }
 
 // Home base state
@@ -202,6 +234,7 @@ export interface HomeBaseState {
   inventory: CardInstance[];
   completedRuns: Run[];
   currentRun?: Run;
+  rawMaterials: RawMaterials;
 }
 
 // Game state

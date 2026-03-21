@@ -14,6 +14,8 @@ interface RunScreenProps {
   onContinueAfterCombat: () => void;
   onAdvanceStage: () => void;
   onCompleteRun: () => void;
+  onRetreat: () => void;
+  onBuildBarricade: () => void;
 }
 
 export function RunScreen({
@@ -23,8 +25,21 @@ export function RunScreen({
   onContinueAfterCombat,
   onAdvanceStage,
   onCompleteRun,
+  onRetreat,
+  onBuildBarricade,
 }: RunScreenProps) {
-  const cardsRemaining = run.deck.length - run.playedCardsThisRun.length;
+  // Cards still available: survivors alive + equipment with ammo + unconsumed consumables/actions
+  const cardsRemaining = run.deck.filter(c => {
+    if (c.type === 'survivor') {
+      const live = run.activeSurvivors.find(s => s.id === c.id);
+      return (live?.currentHealth ?? c.currentHealth ?? 0) > 0;
+    }
+    if (c.itemType === 'equipment') {
+      if (c.maxAmmo !== undefined) return (run.weaponAmmo[c.id] ?? 0) > 0;
+      return true;
+    }
+    return !run.consumedCardIds.includes(c.id);
+  }).length;
   const totalCards = run.deck.length;
 
   switch (run.phase) {
@@ -38,7 +53,9 @@ export function RunScreen({
           survivors={run.activeSurvivors}
           cardsRemaining={cardsRemaining}
           totalCards={totalCards}
+          isBarricaded={run.isBarricaded}
           onEnterCombat={onEnterCombat}
+          onRetreat={onRetreat}
         />
       );
 
@@ -53,6 +70,7 @@ export function RunScreen({
           totalCards={totalCards}
           stageNumber={run.currentStage}
           totalStages={run.totalStages}
+          isBarricaded={run.isBarricaded}
           onPlayCards={onPlayCards}
         />
       );
@@ -69,6 +87,7 @@ export function RunScreen({
           totalStages={run.totalStages}
           cardsRemaining={cardsRemaining}
           totalCards={totalCards}
+          isBarricaded={run.isBarricaded}
           onContinue={onContinueAfterCombat}
         />
       );
@@ -84,10 +103,17 @@ export function RunScreen({
           survivors={run.activeSurvivors}
           cardsRemaining={cardsRemaining}
           totalCards={totalCards}
+          isBarricaded={run.isBarricaded}
+          loot={run.stagedLoot[run.currentStage]}
           onNextStage={
             run.currentStage >= run.totalStages
               ? onCompleteRun
               : onAdvanceStage
+          }
+          onBuildBarricade={
+            run.currentStage === 2 && !run.isBarricaded
+              ? onBuildBarricade
+              : undefined
           }
           isLastStage={run.currentStage >= run.totalStages}
         />

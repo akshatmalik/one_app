@@ -8,118 +8,128 @@ interface RunCompleteScreenProps {
   onReturnHome: () => void;
 }
 
-export function RunCompleteScreen({
-  run,
-  isSuccess,
-  onReturnHome,
-}: RunCompleteScreenProps) {
+export function RunCompleteScreen({ run, isSuccess, onReturnHome }: RunCompleteScreenProps) {
   const stagesWon = run.stages.filter(s => s.result === 'completed').length;
+  const isRetreat = run.isRetreat;
 
-  const survivorStatus = run.activeSurvivors.map(s => ({
-    name: s.name,
-    hp: s.currentHealth ?? 0,
-    maxHp: s.maxHealth ?? 100,
-    alive: (s.currentHealth ?? 0) > 0,
-  }));
+  const headline = isRetreat
+    ? 'PULLED OUT'
+    : isSuccess
+      ? 'BACK ALIVE'
+      : 'LOST OUT THERE';
+
+  const subline = isRetreat
+    ? 'Your team fell back before engaging. Live to fight another day.'
+    : isSuccess
+      ? `All ${run.totalStages} stages cleared. Your people made it home.`
+      : 'The run ended badly. Cards need time to recover.';
 
   return (
-    <div className="min-h-screen flex flex-col bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950">
-      <div className="flex-1 px-5 py-8 flex flex-col items-center justify-center">
-        {/* Hero */}
-        <div className="text-center mb-8">
-          <p className="text-7xl mb-4">{isSuccess ? '🏠' : '💀'}</p>
-          <h1 className="text-3xl font-bold text-white mb-2">
-            {isSuccess ? 'Home Safe' : 'Expedition Lost'}
+    <div className="min-h-screen flex flex-col bg-stone-950 text-stone-300">
+      <div className="flex-1 px-5 py-8 flex flex-col">
+        {/* Hero headline */}
+        <div className="mb-8">
+          <p className="text-[9px] text-stone-700 font-mono tracking-widest uppercase mb-3">
+            ── EXPEDITION COMPLETE ──────────────────
+          </p>
+          <h1 className={`text-4xl font-bold font-mono uppercase tracking-widest mb-2 ${
+            isSuccess && !isRetreat ? 'text-stone-200' : isRetreat ? 'text-amber-800' : 'text-red-800'
+          }`}>
+            {headline}
           </h1>
-          <p className="text-white/40 text-sm max-w-xs mx-auto">
-            {isSuccess
-              ? 'Your team made it back. Rest up. There\'s always tomorrow.'
-              : 'Sometimes you don\'t make it home. Dust off and try again.'
-            }
+          <p className="text-stone-500 text-sm font-mono leading-relaxed">
+            {subline}
           </p>
         </div>
 
-        {/* Stage results */}
-        <div className="w-full bg-black/20 rounded-2xl border border-white/5 p-4 mb-6">
-          <p className="text-[10px] text-white/30 uppercase tracking-wider font-semibold mb-3">
-            Expedition Log
+        {/* Stage log */}
+        <div className="mb-5">
+          <p className="text-[9px] text-stone-700 font-mono tracking-widest uppercase mb-2">
+            EXPEDITION LOG
           </p>
-          <div className="space-y-2">
+          <div className="border border-stone-800">
             {run.stages.map((stage, i) => (
-              <div key={i} className="flex items-center gap-3 bg-black/20 rounded-xl px-4 py-3">
-                <span className="text-xl">
-                  {stage.result === 'completed' ? '✅' : stage.result === 'skipped' ? '⏭' : '❌'}
+              <div
+                key={i}
+                className={`flex items-center gap-3 px-3 py-2.5 ${i > 0 ? 'border-t border-stone-800' : ''} bg-stone-900`}
+              >
+                <span className={`text-[10px] font-mono w-4 ${
+                  stage.result === 'completed' ? 'text-stone-400' : stage.result === 'skipped' ? 'text-amber-800' : 'text-red-800'
+                }`}>
+                  {stage.result === 'completed' ? '✓' : stage.result === 'skipped' ? '→' : '✕'}
                 </span>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-white/70 truncate">
+                  <p className="text-xs text-stone-400 font-mono truncate">
                     {stage.encounter?.name ?? `Stage ${stage.stageNum}`}
                   </p>
-                  <p className="text-[10px] text-white/30 capitalize">{stage.result}</p>
+                  <p className="text-[9px] text-stone-700 font-mono uppercase">
+                    {stage.result === 'completed' ? 'CLEARED' : stage.result === 'skipped' ? 'BYPASSED' : 'FAILED'}
+                  </p>
                 </div>
               </div>
             ))}
-
-            {/* Unvisited stages */}
             {Array.from({ length: Math.max(0, run.totalStages - run.stages.length) }).map((_, i) => (
-              <div key={`empty-${i}`} className="flex items-center gap-3 bg-black/10 rounded-xl px-4 py-3 opacity-30">
-                <span className="text-xl">⬜</span>
-                <p className="text-sm text-white/30">Not reached</p>
+              <div key={`empty-${i}`} className="flex items-center gap-3 px-3 py-2.5 border-t border-stone-800 bg-stone-900 opacity-30">
+                <span className="text-[10px] font-mono text-stone-700 w-4">—</span>
+                <p className="text-xs text-stone-700 font-mono">NOT REACHED</p>
               </div>
             ))}
           </div>
         </div>
 
         {/* Stats */}
-        <div className="w-full grid grid-cols-2 gap-3 mb-6">
-          <div className="bg-black/20 rounded-xl border border-white/5 p-4 text-center">
-            <p className="text-3xl font-bold text-white/80">{stagesWon}/{run.totalStages}</p>
-            <p className="text-[9px] text-white/30 uppercase mt-1">Stages Cleared</p>
+        <div className="grid grid-cols-2 gap-2 mb-5">
+          <div className="border border-stone-800 bg-stone-900 p-3 text-center">
+            <p className="text-2xl font-bold text-stone-300 font-mono">{stagesWon}/{run.totalStages}</p>
+            <p className="text-[8px] text-stone-700 font-mono tracking-widest uppercase mt-0.5">STAGES CLEARED</p>
           </div>
-          <div className="bg-black/20 rounded-xl border border-white/5 p-4 text-center">
-            <p className="text-3xl font-bold text-white/80">{new Set(run.playedCardsThisRun).size}</p>
-            <p className="text-[9px] text-white/30 uppercase mt-1">Cards Used</p>
+          <div className="border border-stone-800 bg-stone-900 p-3 text-center">
+            <p className="text-2xl font-bold text-stone-300 font-mono">{run.consumedCardIds.length}</p>
+            <p className="text-[8px] text-stone-700 font-mono tracking-widest uppercase mt-0.5">CONSUMED</p>
           </div>
         </div>
 
         {/* Survivors */}
-        <div className="w-full bg-black/20 rounded-2xl border border-white/5 p-4 mb-6">
-          <p className="text-[10px] text-white/30 uppercase tracking-wider font-semibold mb-3">Survivors</p>
-          {survivorStatus.map((s, i) => (
-            <div key={i} className="flex items-center gap-3 mb-2 last:mb-0">
-              <span className="text-lg">{s.alive ? '👤' : '💀'}</span>
-              <span className={`text-sm w-24 truncate ${s.alive ? 'text-white/60' : 'text-white/20'}`}>{s.name}</span>
-              <div className="flex-1 h-1.5 bg-white/5 rounded-full overflow-hidden">
-                <div
-                  className={`h-full rounded-full ${
-                    s.hp / s.maxHp > 0.6 ? 'bg-emerald-500' : s.hp / s.maxHp > 0.3 ? 'bg-amber-500' : s.hp > 0 ? 'bg-red-500' : 'bg-white/5'
-                  }`}
-                  style={{ width: `${(s.hp / s.maxHp) * 100}%` }}
-                />
-              </div>
-              <span className="text-[10px] font-mono text-white/20 w-12 text-right">{s.hp}/{s.maxHp}</span>
-            </div>
-          ))}
+        <div className="mb-5">
+          <p className="text-[9px] text-stone-700 font-mono tracking-widest uppercase mb-2">SURVIVORS</p>
+          <div className="border border-stone-800">
+            {run.activeSurvivors.map((s, i) => {
+              const hp = s.currentHealth ?? 0;
+              const maxHp = s.maxHealth ?? 100;
+              const alive = hp > 0;
+              return (
+                <div key={i} className={`flex items-center gap-3 px-3 py-2 ${i > 0 ? 'border-t border-stone-800' : ''} bg-stone-900`}>
+                  <span className={`text-xs font-mono uppercase w-24 truncate ${alive ? 'text-stone-400' : 'text-stone-700'}`}>
+                    {alive ? '' : '✕ '}{s.name}
+                  </span>
+                  <div className="flex-1 h-0.5 bg-stone-800">
+                    <div
+                      className={`h-full ${!alive ? '' : hp / maxHp > 0.6 ? 'bg-stone-500' : hp / maxHp > 0.3 ? 'bg-amber-800' : 'bg-red-900'}`}
+                      style={{ width: `${(hp / maxHp) * 100}%` }}
+                    />
+                  </div>
+                  <span className="text-[9px] font-mono text-stone-700 w-14 text-right">{hp}/{maxHp}</span>
+                </div>
+              );
+            })}
+          </div>
         </div>
 
         {/* Recovery notice */}
-        <div className="w-full bg-orange-500/5 border border-orange-500/10 rounded-xl px-4 py-3">
-          <p className="text-xs text-orange-400/60">
-            ⏰ Cards used need 1 day to recover before next expedition.
+        <div className="border border-stone-900 px-3 py-2">
+          <p className="text-[9px] text-stone-700 font-mono">
+            Cards used will need 1 day to recover before next expedition.
           </p>
         </div>
       </div>
 
-      {/* Return home */}
+      {/* Return */}
       <div className="px-5 pb-8 pt-2">
         <button
           onClick={onReturnHome}
-          className={`w-full py-4 font-bold text-lg rounded-2xl transition-all active:scale-[0.97] shadow-lg ${
-            isSuccess
-              ? 'bg-green-700 hover:bg-green-600 text-white shadow-green-900/30'
-              : 'bg-slate-700 hover:bg-slate-600 text-white shadow-slate-900/30'
-          }`}
+          className="w-full py-3.5 bg-stone-800 hover:bg-stone-700 text-stone-200 font-mono font-bold text-sm tracking-widest uppercase border border-stone-700 transition-colors active:scale-[0.98]"
         >
-          Return to Home Base
+          RETURN TO BASE →
         </button>
       </div>
     </div>
