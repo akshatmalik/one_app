@@ -27,7 +27,7 @@ const TYPE_CONFIG: Record<string, { icon: string; color: string; bgFrom: string;
 };
 
 const SIZES = {
-  sm: { w: 'w-[100px]', h: 'h-[140px]', icon: 'text-2xl', name: 'text-[9px]', stat: 'text-[7px]', pad: 'p-1.5' },
+  sm: { w: 'w-[100px]', h: 'h-[140px]', icon: 'text-2xl', name: 'text-[9px]', stat: 'text-[6px]', pad: 'p-1.5' },
   md: { w: 'w-[120px]', h: 'h-[170px]', icon: 'text-3xl', name: 'text-[10px]', stat: 'text-[8px]', pad: 'p-2' },
   lg: { w: 'w-[140px]', h: 'h-[200px]', icon: 'text-4xl', name: 'text-xs', stat: 'text-[9px]', pad: 'p-2.5' },
 };
@@ -61,8 +61,8 @@ export function PlayingCard({ card, selected, disabled, onClick, size = 'md', cl
     if (card.bonusAttributes.perception && card.bonusAttributes.perception > 0) stats.push({ label: 'PER', value: card.bonusAttributes.perception, color: 'text-purple-400' });
   }
 
-  // Show top 3 stats max
-  const displayStats = stats.slice(0, 3);
+  // Show top 2 stats max
+  const displayStats = stats.slice(0, 2);
 
   return (
     <button

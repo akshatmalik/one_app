@@ -235,6 +235,7 @@ export interface HomeBaseState {
   completedRuns: Run[];
   currentRun?: Run;
   rawMaterials: RawMaterials;
+  isBarricaded?: boolean;
 }
 
 // Game state

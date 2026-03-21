@@ -110,6 +110,7 @@ export function useGame() {
         itemsFound: [],
         survivorStats: {},
         activeSurvivors: survivors,
+        isBarricaded: gameState.homeBase.isBarricaded ?? false,
       };
 
       const state = { ...gameState };
@@ -202,12 +203,17 @@ export function useGame() {
       const newConsumedIds = [...currentRun.consumedCardIds];
       const newWeaponAmmo = { ...currentRun.weaponAmmo };
 
+      // Pre-compute total enemy HP once for ammo calculations
+      const totalEnemyHP = (currentRun.currentEncounter?.enemies ?? []).reduce((sum, e) => sum + e.health, 0);
+
       selectedCards.forEach(card => {
         if (card.type === 'survivor') return; // survivors are never consumed
         if (card.itemType === 'equipment' && card.maxAmmo !== undefined) {
-          // Weapon: use one shot
-          const ammo = (newWeaponAmmo[card.id] ?? card.maxAmmo) - 1;
-          newWeaponAmmo[card.id] = Math.max(0, ammo);
+          // Weapon: use ammo based on total enemy HP
+          const weaponDamage = Math.max(1, card.bonusAttributes?.combat ?? 1);
+          const shotsNeeded = Math.max(1, Math.ceil(totalEnemyHP / weaponDamage));
+          const currentAmmo = newWeaponAmmo[card.id] ?? card.maxAmmo ?? 0;
+          newWeaponAmmo[card.id] = Math.max(0, currentAmmo - shotsNeeded);
           if (newWeaponAmmo[card.id] === 0) {
             newConsumedIds.push(card.id); // out of ammo — treat as consumed
           }
@@ -428,6 +434,7 @@ export function useGame() {
           survivors: finalDeck.filter(c => c.type === 'survivor'),
           items: finalDeck.filter(c => c.type === 'item'),
           rawMaterials: newMats,
+          isBarricaded: false,
           completedRuns: [...gameState.homeBase.completedRuns, completedRun],
         },
         currentRun: undefined,
@@ -490,6 +497,29 @@ export function useGame() {
     }
   }, [currentRun, gameState]);
 
+  const buildHomeBarricade = useCallback(async () => {
+    try {
+      if (!gameState) throw new Error('No game state');
+      const mats = gameState.homeBase.rawMaterials;
+      if (mats.wood < 3 || mats.scrapMetal < 2) throw new Error('Not enough materials');
+      const updatedMats = {
+        ...mats,
+        wood: mats.wood - 3,
+        scrapMetal: mats.scrapMetal - 2,
+      };
+      const state: GameState = {
+        ...gameState,
+        homeBase: { ...gameState.homeBase, rawMaterials: updatedMats, isBarricaded: true },
+        updatedAt: new Date().toISOString(),
+      };
+      await repository.setGameState(state);
+      setGameState(state);
+    } catch (e) {
+      setError(e as Error);
+      throw e;
+    }
+  }, [gameState]);
+
   const advanceDay = useCallback(async () => {
     try {
       await repository.advanceRecovery(1);
@@ -538,6 +568,7 @@ export function useGame() {
     // Tactical
     retreatFromExpedition,
     buildBarricade,
+    buildHomeBarricade,
 
     // Utilities
     refreshGameState,
