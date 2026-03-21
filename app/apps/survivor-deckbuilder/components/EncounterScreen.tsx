@@ -212,10 +212,10 @@ export function EncounterScreen({
           onClick={onEnterCombat}
           className="w-full py-4 bg-red-700 hover:bg-red-600 text-white font-bold text-lg rounded-2xl transition-all active:scale-[0.97] shadow-lg shadow-red-900/30"
         >
-          Draw Cards
+          Choose Cards
         </button>
         <p className="text-center text-[10px] text-white/20 mt-2">
-          You&apos;ll draw {Math.min(2, cardsRemaining)} cards from your deck
+          {cardsRemaining} card{cardsRemaining !== 1 ? 's' : ''} remaining &mdash; choose wisely
         </p>
       </div>
     </div>

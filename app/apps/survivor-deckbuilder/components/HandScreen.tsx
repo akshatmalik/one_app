@@ -27,25 +27,50 @@ export function HandScreen({
   totalStages,
   onPlayCards,
 }: HandScreenProps) {
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [confirming, setConfirming] = useState(false);
 
-  const selectedCard = hand.find(c => c.id === selectedId) ?? null;
-  const synergies = selectedCard ? detectSynergies([selectedCard, ...activeSurvivors]) : [];
+  const selectedCards = hand.filter(c => selectedIds.has(c.id));
+  const allSelected = selectedCards.length === hand.length && hand.length > 0;
 
-  const handleSelect = (cardId: string) => {
+  // Detect synergies across all selected cards + active survivors
+  const synergies = selectedCards.length > 0
+    ? detectSynergies([...selectedCards, ...activeSurvivors])
+    : [];
+
+  const handleToggle = (cardId: string) => {
     if (confirming) return;
-    setSelectedId(prev => prev === cardId ? null : cardId);
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(cardId)) {
+        next.delete(cardId);
+      } else {
+        next.add(cardId);
+      }
+      return next;
+    });
+  };
+
+  const handleSelectAll = () => {
+    if (confirming) return;
+    if (allSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(hand.map(c => c.id)));
+    }
   };
 
   const handleConfirm = () => {
-    if (!selectedCard) return;
+    if (selectedCards.length === 0) return;
     setConfirming(true);
-    // Small delay for feel
     setTimeout(() => {
-      onPlayCards([selectedCard]);
+      onPlayCards(selectedCards);
     }, 300);
   };
+
+  // How many cards will be left after this encounter
+  const cardsAfter = cardsRemaining - selectedCards.length;
+  const stagesLeft = totalStages - stageNumber;
 
   // Location-based background
   const locationBg = getLocationBackground(encounter.location ?? '');
@@ -85,38 +110,52 @@ export function HandScreen({
         <div className="border-t border-white/10" />
       </div>
 
-      {/* Hand — draw 2, pick 1 */}
-      <div className="flex-1 px-5">
+      {/* Cards — select any number */}
+      <div className="flex-1 px-5 overflow-y-auto">
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-lg font-bold text-white">Your Hand</h2>
-          <span className="text-xs text-white/30 bg-white/5 px-3 py-1 rounded-full">
-            Pick 1 of {hand.length}
-          </span>
+          <h2 className="text-lg font-bold text-white">Your Cards</h2>
+          <div className="flex items-center gap-2">
+            {hand.length > 1 && (
+              <button
+                onClick={handleSelectAll}
+                disabled={confirming}
+                className="text-[10px] text-white/40 hover:text-white/70 bg-white/5 hover:bg-white/10 px-2.5 py-1 rounded-full transition-colors"
+              >
+                {allSelected ? 'Deselect All' : 'Select All'}
+              </button>
+            )}
+            <span className="text-xs text-white/30 bg-white/5 px-3 py-1 rounded-full">
+              {selectedCards.length} / {hand.length} selected
+            </span>
+          </div>
         </div>
 
         {hand.length > 0 ? (
-          <div className="space-y-3">
-            {hand.map(card => (
-              <div
-                key={card.id}
-                className={`transition-all duration-200 ${
-                  confirming && card.id !== selectedId ? 'opacity-20 scale-95' : ''
-                } ${confirming && card.id === selectedId ? 'scale-[1.03]' : ''}`}
-              >
-                <GameCard
-                  card={card}
-                  selected={card.id === selectedId}
-                  onClick={() => handleSelect(card.id)}
-                />
-              </div>
-            ))}
+          <div className="space-y-3 pb-2">
+            {hand.map(card => {
+              const isSelected = selectedIds.has(card.id);
+              return (
+                <div
+                  key={card.id}
+                  className={`transition-all duration-200 ${
+                    confirming && !isSelected ? 'opacity-20 scale-95' : ''
+                  } ${confirming && isSelected ? 'scale-[1.02]' : ''}`}
+                >
+                  <GameCard
+                    card={card}
+                    selected={isSelected}
+                    onClick={() => handleToggle(card.id)}
+                  />
+                </div>
+              );
+            })}
           </div>
         ) : (
           <div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-6 text-center">
             <p className="text-2xl mb-2">💀</p>
-            <p className="text-red-300 font-bold">Deck Exhausted</p>
+            <p className="text-red-300 font-bold">No Cards Left</p>
             <p className="text-red-300/60 text-sm mt-1">
-              No cards left. Your team faces this unarmed.
+              All cards spent. Your team faces this unarmed.
             </p>
           </div>
         )}
@@ -129,14 +168,40 @@ export function HandScreen({
             </p>
           </div>
         )}
+
+        {/* Resource warning — cards remaining for future stages */}
+        {selectedCards.length > 0 && stagesLeft > 0 && (
+          <div className={`mt-3 rounded-xl px-4 py-2.5 border ${
+            cardsAfter === 0
+              ? 'bg-red-500/10 border-red-500/20'
+              : cardsAfter <= stagesLeft
+                ? 'bg-amber-500/10 border-amber-500/20'
+                : 'bg-white/5 border-white/10'
+          }`}>
+            <p className={`text-[11px] font-medium ${
+              cardsAfter === 0
+                ? 'text-red-300'
+                : cardsAfter <= stagesLeft
+                  ? 'text-amber-300'
+                  : 'text-white/40'
+            }`}>
+              {cardsAfter === 0
+                ? `⚠ No cards left for ${stagesLeft} remaining encounter${stagesLeft > 1 ? 's' : ''}!`
+                : `${cardsAfter} card${cardsAfter !== 1 ? 's' : ''} remaining for ${stagesLeft} more encounter${stagesLeft > 1 ? 's' : ''}`
+              }
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Action area */}
       <div className="px-5 pb-8 pt-4">
-        {selectedCard ? (
+        {selectedCards.length > 0 ? (
           <div className="space-y-2">
             <p className="text-center text-xs text-white/40">
-              Play <span className="text-white/80 font-semibold">{selectedCard.name}</span> this encounter?
+              Send <span className="text-white/80 font-semibold">
+                {selectedCards.length} card{selectedCards.length !== 1 ? 's' : ''}
+              </span> into combat?
             </p>
             <button
               onClick={handleConfirm}
@@ -147,7 +212,10 @@ export function HandScreen({
                   : 'bg-amber-600 hover:bg-amber-500 text-white shadow-lg shadow-amber-600/20'
               }`}
             >
-              {confirming ? 'Playing...' : `Play ${selectedCard.name}`}
+              {confirming
+                ? 'Deploying...'
+                : `Deploy ${selectedCards.length} Card${selectedCards.length !== 1 ? 's' : ''}`
+              }
             </button>
           </div>
         ) : (
@@ -155,7 +223,7 @@ export function HandScreen({
             disabled
             className="w-full py-4 font-bold text-lg rounded-2xl bg-white/5 text-white/20 cursor-not-allowed"
           >
-            Select a card
+            Select cards to deploy
           </button>
         )}
       </div>

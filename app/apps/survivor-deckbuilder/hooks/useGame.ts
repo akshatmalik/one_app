@@ -3,12 +3,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import { GameState, Run, CardInstance, RunPhase, Encounter, CombatResult } from '../lib/types';
 import { repository } from '../lib/storage';
-import { resolveCombat, drawCards, isTacticalRetreat, validateDeck } from '../lib/combat-engine';
+import { resolveCombat, isTacticalRetreat, validateDeck } from '../lib/combat-engine';
 import { getRandomEncounter } from '../lib/encounters';
 import { detectSynergies } from '../lib/synergies';
 
 const TOTAL_STAGES = 3;
-const HAND_SIZE = 2;
 
 export function useGame() {
   const [gameState, setGameState] = useState<GameState | null>(null);
@@ -113,17 +112,20 @@ export function useGame() {
   }, [gameState]);
 
   /**
-   * Transition to hand draw phase — draw 2 cards from remaining deck
+   * Transition to card selection — show all remaining (unplayed) cards
    */
   const enterCombat = useCallback(async () => {
     try {
       if (!currentRun || !gameState) throw new Error('No active run');
 
-      const hand = drawCards(currentRun.deck, currentRun.playedCardsThisRun, HAND_SIZE);
+      // Show ALL remaining cards — player picks how many to use
+      const remaining = currentRun.deck.filter(
+        c => !currentRun.playedCardsThisRun.includes(c.id)
+      );
       const updatedRun: Run = {
         ...currentRun,
         phase: 'card_selection',
-        currentHand: hand,
+        currentHand: remaining,
       };
 
       const state = { ...gameState, currentRun: updatedRun, updatedAt: new Date().toISOString() };
