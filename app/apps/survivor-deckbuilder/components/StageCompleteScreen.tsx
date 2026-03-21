@@ -1,6 +1,5 @@
 'use client';
 
-import { useState } from 'react';
 import { CombatResult, CardInstance, Encounter, StageLoot } from '../lib/types';
 import { RunStatusBar } from './RunStatusBar';
 
@@ -15,7 +14,6 @@ interface StageCompleteScreenProps {
   isBarricaded?: boolean;
   loot?: StageLoot;
   onNextStage: () => void;
-  onBuildBarricade?: () => void;
   isLastStage: boolean;
 }
 
@@ -37,23 +35,10 @@ export function StageCompleteScreen({
   isBarricaded,
   loot,
   onNextStage,
-  onBuildBarricade,
   isLastStage,
 }: StageCompleteScreenProps) {
   const isVictory = result.result === 'player-victory';
-  const [barricadeChoice, setBarricadeChoice] = useState<'none' | 'building' | 'done'>('none');
-
-  const canBarricade = stageNumber === 2 && isVictory && !isLastStage && !isBarricaded && onBuildBarricade;
   const hasMaterials = loot && Object.values(loot.materials).some(v => v > 0);
-
-  const handleBuildBarricade = () => {
-    if (!onBuildBarricade) return;
-    setBarricadeChoice('building');
-    setTimeout(() => {
-      onBuildBarricade();
-      setBarricadeChoice('done');
-    }, 400);
-  };
 
   return (
     <div className="min-h-screen flex flex-col bg-stone-950 text-stone-300">
@@ -171,33 +156,14 @@ export function StageCompleteScreen({
           </div>
         )}
 
-        {/* Barricade option — only at stage 2 victory, before stage 3 */}
-        {canBarricade && barricadeChoice !== 'done' && (
-          <div>
-            <p className="text-[9px] text-stone-700 font-mono tracking-widest uppercase mb-2">
-              TACTICAL OPTION
+        {isVictory && !isLastStage && (
+          <div className="border border-stone-900 bg-stone-900/60 px-3 py-3">
+            <p className="text-[9px] text-stone-700 font-mono tracking-widest uppercase mb-1">
+              SAFE HOUSE LOOP
             </p>
-            <div className="border border-amber-900 bg-stone-900 p-4">
-              <p className="text-xs text-stone-400 font-mono mb-1">
-                You found lumber and wire. Stage 3 is the hardest. Build a barricade now?
-              </p>
-              <p className="text-[9px] text-amber-800 font-mono mb-3">
-                BARRICADE: +30 DEFENSE for your team in Stage 3
-              </p>
-              <button
-                onClick={handleBuildBarricade}
-                disabled={barricadeChoice !== 'none'}
-                className="w-full py-2.5 bg-amber-900/30 hover:bg-amber-900/50 border border-amber-800 text-amber-600 font-mono text-xs tracking-widest uppercase transition-colors"
-              >
-                {barricadeChoice !== 'none' ? 'BUILDING...' : 'BUILD BARRICADE'}
-              </button>
-            </div>
-          </div>
-        )}
-
-        {barricadeChoice === 'done' && (
-          <div className="border border-stone-700 bg-stone-900 px-3 py-2">
-            <p className="text-xs text-stone-400 font-mono">▦ Barricade erected. Stage 3 team gets +30 defense.</p>
+            <p className="text-xs text-stone-500 font-mono">
+              Bank the haul, then handle fortification and prep back at home base before the next expedition.
+            </p>
           </div>
         )}
 

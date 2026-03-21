@@ -8,6 +8,13 @@ import { PrepareRunScreen } from './components/PrepareRunScreen';
 
 type View = 'home' | 'prepare' | 'run';
 
+const MATERIAL_LABELS: Record<string, { icon: string; label: string }> = {
+  scrapMetal: { icon: '⚙', label: 'Scrap Metal' },
+  wood: { icon: '▤', label: 'Wood' },
+  cloth: { icon: '◫', label: 'Cloth' },
+  medicalSupplies: { icon: '✚', label: 'Medical Supplies' },
+};
+
 export default function SurvivorDeckBuilder() {
   const {
     gameState,
@@ -25,7 +32,6 @@ export default function SurvivorDeckBuilder() {
     completeRun,
     advanceDay,
     retreatFromExpedition,
-    buildBarricade,
     resetGame,
   } = useGame();
 
@@ -78,9 +84,6 @@ export default function SurvivorDeckBuilder() {
           onRetreat={async () => {
             await retreatFromExpedition();
           }}
-          onBuildBarricade={async () => {
-            await buildBarricade();
-          }}
         />
       </div>
     );
@@ -107,9 +110,11 @@ export default function SurvivorDeckBuilder() {
   const availableCards = getAvailableCards();
   const exhaustedCards = gameState.deck.filter(c => c.exhausted);
   const completedRuns = gameState.homeBase.completedRuns;
+  const rawMaterials = gameState.homeBase.rawMaterials;
   const survivors = getSurvivors();
   const items = getItems();
   const actions = getActions();
+  const hasMaterials = Object.values(rawMaterials).some(value => value > 0);
 
   const availableSurvivors = availableCards.filter(c => c.type === 'survivor');
   const canLaunch = availableSurvivors.length >= 2
@@ -149,6 +154,38 @@ export default function SurvivorDeckBuilder() {
               <p className="text-xl font-bold text-stone-300 font-mono">{successfulRuns}/{totalRuns}</p>
               <p className="text-[8px] text-stone-700 font-mono tracking-widest uppercase mt-0.5">RUNS</p>
             </div>
+          </div>
+        </div>
+
+        <div className="px-5 py-4 border-b border-stone-900">
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <div>
+              <p className="text-[9px] text-stone-700 font-mono tracking-widest uppercase mb-1">
+                FORTIFICATIONS
+              </p>
+              <p className="text-xs text-stone-500 font-mono">
+                Scavenge outside. Fortify and prep here between runs.
+              </p>
+            </div>
+            <span className="text-[10px] text-stone-600 font-mono uppercase whitespace-nowrap">
+              {hasMaterials ? 'MATERIALS BANKED' : 'NO MATERIALS YET'}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            {Object.entries(rawMaterials).map(([key, value]) => {
+              const material = MATERIAL_LABELS[key];
+              return (
+                <div
+                  key={key}
+                  className="border border-stone-800 bg-stone-900 px-3 py-2 flex items-center gap-2"
+                >
+                  <span className="text-stone-600 text-xs">{material.icon}</span>
+                  <span className="text-[10px] text-stone-500 font-mono">{material.label}</span>
+                  <span className="ml-auto text-xs font-mono font-bold text-stone-300">{value}</span>
+                </div>
+              );
+            })}
           </div>
         </div>
 
