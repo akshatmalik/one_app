@@ -244,7 +244,7 @@ export function HandScreen({
                   marginLeft: `-${CARD_WIDTH / 2}px`,
                 }}
               >
-                <div className={`w-[80px] h-[112px] rounded-sm bg-gradient-to-b ${getCardGradient(card)} flex flex-col overflow-hidden border ${
+                <div style={{ width: `${CARD_WIDTH}px`, height: '112px' }} className={`rounded-sm bg-gradient-to-b ${getCardGradient(card)} flex flex-col overflow-hidden border ${
                   isSelected
                     ? 'border-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.4)]'
                     : isBareHands

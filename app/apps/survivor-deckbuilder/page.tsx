@@ -30,6 +30,7 @@ export default function SurvivorDeckBuilder() {
   } = useGame();
 
   const [view, setView] = useState<View>('home');
+  const [barricadeError, setBarricadeError] = useState<string | null>(null);
 
   const activeView = currentRun ? 'run' : view;
 
@@ -235,7 +236,10 @@ export default function SurvivorDeckBuilder() {
                 <p className="text-[9px] text-stone-700 font-mono mt-0.5">Costs: 3 Wood · 2 Scrap Metal</p>
               </div>
               <button
-                onClick={async () => { try { await buildHomeBarricade(); } catch {} }}
+                onClick={async () => {
+                    setBarricadeError(null);
+                    try { await buildHomeBarricade(); } catch (e) { setBarricadeError('Not enough materials.'); }
+                  }}
                 disabled={!canBarricade}
                 className={`w-full py-2 font-mono text-xs tracking-widest uppercase border transition-colors ${
                   canBarricade
@@ -245,6 +249,9 @@ export default function SurvivorDeckBuilder() {
               >
                 BUILD BARRICADE
               </button>
+              {barricadeError && (
+                <p className="text-[9px] text-red-800 font-mono">{barricadeError}</p>
+              )}
             </div>
           )}
         </div>
