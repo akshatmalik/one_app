@@ -24,6 +24,9 @@ export function RunScreen({
   onAdvanceStage,
   onCompleteRun,
 }: RunScreenProps) {
+  const cardsRemaining = run.deck.length - run.playedCardsThisRun.length;
+  const totalCards = run.deck.length;
+
   switch (run.phase) {
     case 'stage_start':
       if (!run.currentEncounter) return null;
@@ -32,6 +35,9 @@ export function RunScreen({
           encounter={run.currentEncounter}
           stageNumber={run.currentStage}
           totalStages={run.totalStages}
+          survivors={run.activeSurvivors}
+          cardsRemaining={cardsRemaining}
+          totalCards={totalCards}
           onEnterCombat={onEnterCombat}
         />
       );
@@ -43,16 +49,26 @@ export function RunScreen({
           hand={run.currentHand}
           encounter={run.currentEncounter}
           activeSurvivors={run.activeSurvivors}
+          cardsRemaining={cardsRemaining}
+          totalCards={totalCards}
+          stageNumber={run.currentStage}
+          totalStages={run.totalStages}
           onPlayCards={onPlayCards}
         />
       );
 
     case 'combat_resolution':
-      if (!run.lastCombatResult) return null;
+      if (!run.lastCombatResult || !run.currentEncounter) return null;
       return (
         <CombatResolutionScreen
           result={run.lastCombatResult}
           cardsPlayed={run.currentHand}
+          encounter={run.currentEncounter}
+          survivors={run.activeSurvivors}
+          stageNumber={run.currentStage}
+          totalStages={run.totalStages}
+          cardsRemaining={cardsRemaining}
+          totalCards={totalCards}
           onContinue={onContinueAfterCombat}
         />
       );
@@ -66,6 +82,8 @@ export function RunScreen({
           result={run.lastCombatResult}
           encounter={run.currentEncounter}
           survivors={run.activeSurvivors}
+          cardsRemaining={cardsRemaining}
+          totalCards={totalCards}
           onNextStage={
             run.currentStage >= run.totalStages
               ? onCompleteRun
@@ -77,20 +95,12 @@ export function RunScreen({
 
     case 'run_complete':
       return (
-        <RunCompleteScreen
-          run={run}
-          isSuccess={true}
-          onReturnHome={onCompleteRun}
-        />
+        <RunCompleteScreen run={run} isSuccess={true} onReturnHome={onCompleteRun} />
       );
 
     case 'run_failed':
       return (
-        <RunCompleteScreen
-          run={run}
-          isSuccess={false}
-          onReturnHome={onCompleteRun}
-        />
+        <RunCompleteScreen run={run} isSuccess={false} onReturnHome={onCompleteRun} />
       );
 
     default:

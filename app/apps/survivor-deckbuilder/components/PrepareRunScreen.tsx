@@ -3,7 +3,8 @@
 import { useState, useMemo } from 'react';
 import { CardInstance } from '../lib/types';
 import { validateDeck } from '../lib/combat-engine';
-import { checkPotentialSynergies, detectSynergies } from '../lib/synergies';
+import { detectSynergies, checkPotentialSynergies } from '../lib/synergies';
+import { GameCard } from './GameCard';
 
 interface PrepareRunScreenProps {
   survivors: CardInstance[];
@@ -37,152 +38,84 @@ export function PrepareRunScreen({
       if (next.has(card.id)) {
         next.delete(card.id);
       } else {
-        // Enforce limits
-        if (card.type === 'survivor' && selectedSurvivors.length >= 2 && !next.has(card.id)) {
-          return prev; // Can't select more than 2 survivors
-        }
-        if (card.type !== 'survivor' && selectedNonSurvivors.length >= 5 && !next.has(card.id)) {
-          return prev; // Max 5 non-survivors
-        }
+        if (card.type === 'survivor' && selectedSurvivors.length >= 2 && !next.has(card.id)) return prev;
+        if (card.type !== 'survivor' && selectedNonSurvivors.length >= 5 && !next.has(card.id)) return prev;
         next.add(card.id);
       }
       return next;
     });
   };
 
-  const renderCard = (card: CardInstance) => {
-    const isSelected = selectedIds.has(card.id);
-    const isExhausted = card.exhausted;
-    const potentialSynergies = isSelected ? [] : checkPotentialSynergies(selectedCards, card);
-
-    let borderColor = 'border-slate-600';
-    if (isExhausted) borderColor = 'border-red-800';
-    else if (isSelected) {
-      borderColor = card.type === 'survivor' ? 'border-blue-500 ring-2 ring-blue-500/30' : 'border-amber-500 ring-2 ring-amber-500/30';
-    }
-
-    const roleIcons: Record<string, string> = {
-      healer: '💚', fighter: '⚔️', scout: '🔍', mechanic: '🔧', scientist: '🔬',
-    };
-
-    const typeIcon = card.type === 'survivor'
-      ? (roleIcons[card.role ?? ''] ?? '👤')
-      : card.itemType === 'equipment' ? '🛡️'
-      : card.itemType === 'consumable' ? '💊'
-      : card.itemType === 'action' ? '⚡'
-      : '📦';
-
-    return (
-      <button
-        key={card.id}
-        onClick={() => toggleCard(card)}
-        disabled={isExhausted}
-        className={`w-full text-left rounded-xl border-2 p-3 transition-all ${borderColor} ${
-          isExhausted ? 'opacity-40 bg-slate-800/30 cursor-not-allowed' : 'bg-slate-800/50 hover:bg-slate-800'
-        }`}
-      >
-        <div className="flex items-center gap-3">
-          <span className="text-2xl">{typeIcon}</span>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <h4 className="font-semibold text-sm">{card.name}</h4>
-              {isSelected && (
-                <span className="text-[10px] bg-green-500 text-white px-1.5 py-0.5 rounded font-bold">
-                  ✓
-                </span>
-              )}
-              {isExhausted && (
-                <span className="text-[10px] bg-red-500/30 text-red-400 px-1.5 py-0.5 rounded">
-                  {card.recoveryTime}d recovery
-                </span>
-              )}
-            </div>
-            <p className="text-xs text-slate-400 truncate">{card.description}</p>
-            {/* Stats preview */}
-            <div className="flex flex-wrap gap-1 mt-1">
-              {card.type === 'survivor' && card.attributes && (
-                <>
-                  {card.attributes.combat > 0 && <span className="text-[10px] text-red-400 bg-red-400/10 px-1.5 rounded">ATK +{card.attributes.combat}</span>}
-                  {card.attributes.defense > 0 && <span className="text-[10px] text-blue-400 bg-blue-400/10 px-1.5 rounded">DEF +{card.attributes.defense}</span>}
-                  {card.attributes.healing > 0 && <span className="text-[10px] text-green-400 bg-green-400/10 px-1.5 rounded">HEAL +{card.attributes.healing}</span>}
-                </>
-              )}
-              {card.bonusAttributes && (
-                <>
-                  {card.bonusAttributes.combat && <span className="text-[10px] text-red-400 bg-red-400/10 px-1.5 rounded">ATK +{card.bonusAttributes.combat}</span>}
-                  {card.bonusAttributes.defense && <span className="text-[10px] text-blue-400 bg-blue-400/10 px-1.5 rounded">DEF +{card.bonusAttributes.defense}</span>}
-                  {card.bonusAttributes.healing && <span className="text-[10px] text-green-400 bg-green-400/10 px-1.5 rounded">HEAL +{card.bonusAttributes.healing}</span>}
-                </>
-              )}
-            </div>
-            {/* Potential synergies hint */}
-            {potentialSynergies.length > 0 && (
-              <p className="text-[10px] text-purple-400 mt-1">
-                ⚡ {potentialSynergies.map(s => s.name).join(', ')}
-              </p>
-            )}
-          </div>
-        </div>
-      </button>
-    );
-  };
-
   return (
-    <div className="min-h-screen bg-slate-900 text-white flex flex-col">
+    <div className="min-h-screen flex flex-col bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950">
       {/* Header */}
-      <div className="px-6 pt-6 pb-4">
-        <button onClick={onBack} className="text-slate-400 hover:text-white text-sm mb-3">
-          ← Back to Home Base
+      <div className="bg-black/40 backdrop-blur-md border-b border-white/10 px-5 pt-6 pb-4">
+        <button onClick={onBack} className="text-white/30 hover:text-white/60 text-sm mb-3 transition-colors">
+          ← Back
         </button>
-        <h1 className="text-2xl font-bold">Prepare Expedition</h1>
-        <p className="text-slate-400 text-sm mt-1">
-          Select 2 survivors + 2-5 items/actions for your deck
+        <h1 className="text-2xl font-bold text-white">Prepare Expedition</h1>
+        <p className="text-white/30 text-sm mt-1">
+          Pick 2 survivors + 2-5 items for your deck
         </p>
-      </div>
 
-      {/* Selection summary */}
-      <div className="px-6 pb-3">
-        <div className="flex gap-3 text-sm">
-          <span className={`px-3 py-1 rounded-full ${
+        {/* Selection pills */}
+        <div className="flex gap-2 mt-3">
+          <span className={`text-xs px-3 py-1.5 rounded-full font-semibold border ${
             selectedSurvivors.length === 2
-              ? 'bg-green-500/20 text-green-400 border border-green-500/30'
-              : 'bg-slate-800 text-slate-400 border border-slate-700'
+              ? 'bg-green-500/10 text-green-400 border-green-500/20'
+              : 'bg-white/5 text-white/30 border-white/10'
           }`}>
             {selectedSurvivors.length}/2 Survivors
           </span>
-          <span className={`px-3 py-1 rounded-full ${
+          <span className={`text-xs px-3 py-1.5 rounded-full font-semibold border ${
             selectedNonSurvivors.length >= 2
-              ? 'bg-green-500/20 text-green-400 border border-green-500/30'
-              : 'bg-slate-800 text-slate-400 border border-slate-700'
+              ? 'bg-green-500/10 text-green-400 border-green-500/20'
+              : 'bg-white/5 text-white/30 border-white/10'
           }`}>
-            {selectedNonSurvivors.length}/2-5 Items
+            {selectedNonSurvivors.length}/2-5 Gear
           </span>
-          <span className="px-3 py-1 rounded-full bg-slate-800 text-slate-400 border border-slate-700">
+          <span className="text-xs px-3 py-1.5 rounded-full font-semibold bg-white/5 text-white/30 border border-white/10">
             {selectedCards.length} total
           </span>
         </div>
       </div>
 
       {/* Card selection */}
-      <div className="flex-1 px-6 space-y-4 overflow-y-auto pb-4">
+      <div className="flex-1 px-5 py-4 space-y-5 overflow-y-auto">
         {/* Survivors */}
         <div>
-          <h3 className="text-sm font-semibold text-blue-400 uppercase tracking-wider mb-2">
-            Survivors (pick 2)
-          </h3>
+          <p className="text-[10px] text-blue-400/60 uppercase tracking-wider font-semibold mb-2">
+            Survivors — pick 2
+          </p>
           <div className="space-y-2">
-            {survivors.map(renderCard)}
+            {survivors.map(card => (
+              <GameCard
+                key={card.id}
+                card={card}
+                selected={selectedIds.has(card.id)}
+                disabled={card.exhausted}
+                onClick={() => toggleCard(card)}
+              />
+            ))}
           </div>
         </div>
 
-        {/* Items */}
+        {/* Equipment */}
         {items.length > 0 && (
           <div>
-            <h3 className="text-sm font-semibold text-amber-400 uppercase tracking-wider mb-2">
+            <p className="text-[10px] text-amber-400/60 uppercase tracking-wider font-semibold mb-2">
               Equipment & Consumables
-            </h3>
+            </p>
             <div className="space-y-2">
-              {items.map(renderCard)}
+              {items.map(card => (
+                <GameCard
+                  key={card.id}
+                  card={card}
+                  selected={selectedIds.has(card.id)}
+                  disabled={card.exhausted}
+                  onClick={() => toggleCard(card)}
+                />
+              ))}
             </div>
           </div>
         )}
@@ -190,48 +123,58 @@ export function PrepareRunScreen({
         {/* Actions */}
         {actions.length > 0 && (
           <div>
-            <h3 className="text-sm font-semibold text-purple-400 uppercase tracking-wider mb-2">
+            <p className="text-[10px] text-purple-400/60 uppercase tracking-wider font-semibold mb-2">
               Actions
-            </h3>
+            </p>
             <div className="space-y-2">
-              {actions.map(renderCard)}
+              {actions.map(card => (
+                <GameCard
+                  key={card.id}
+                  card={card}
+                  selected={selectedIds.has(card.id)}
+                  disabled={card.exhausted}
+                  onClick={() => toggleCard(card)}
+                />
+              ))}
             </div>
           </div>
         )}
 
-        {/* Synergy preview */}
+        {/* Synergies */}
         {synergies.length > 0 && (
-          <div className="bg-purple-500/10 border border-purple-500/30 rounded-xl p-4">
-            <h3 className="text-sm font-semibold text-purple-400 mb-2">⚡ Active Synergies</h3>
+          <div className="bg-purple-500/5 border border-purple-500/10 rounded-2xl px-4 py-3">
+            <p className="text-[10px] text-purple-400/60 uppercase tracking-wider font-semibold mb-2">
+              ⚡ Synergies Active
+            </p>
             {synergies.map(syn => (
-              <div key={syn.id} className="text-sm text-purple-300 mb-1">
-                <span className="font-semibold">{syn.name}:</span> {syn.description}
-                <span className="text-purple-400/70 text-xs ml-1">
+              <p key={syn.id} className="text-xs text-purple-300/70">
+                {syn.name}: {syn.description}
+                <span className="text-purple-400/50 ml-1">
                   {syn.damageBonus > 0 && `+${syn.damageBonus} DMG `}
                   {syn.defenseBonus > 0 && `+${syn.defenseBonus} DEF `}
                   {syn.healingBonus > 0 && `+${syn.healingBonus} HEAL`}
                 </span>
-              </div>
+              </p>
             ))}
           </div>
         )}
       </div>
 
-      {/* Launch button */}
-      <div className="px-6 pb-8 pt-4 space-y-2">
+      {/* Launch */}
+      <div className="px-5 pb-8 pt-4 bg-gradient-to-t from-slate-950 to-transparent">
         {!validation.valid && selectedCards.length > 0 && (
-          <p className="text-xs text-red-400 text-center">{validation.error}</p>
+          <p className="text-xs text-red-400/60 text-center mb-2">{validation.error}</p>
         )}
         <button
           onClick={() => validation.valid && onLaunch(selectedCards)}
           disabled={!validation.valid}
-          className={`w-full py-4 font-bold text-lg rounded-xl transition-all active:scale-[0.98] ${
+          className={`w-full py-4 font-bold text-lg rounded-2xl transition-all active:scale-[0.97] ${
             validation.valid
-              ? 'bg-green-600 hover:bg-green-700 text-white'
-              : 'bg-slate-700 text-slate-500 cursor-not-allowed'
+              ? 'bg-green-700 hover:bg-green-600 text-white shadow-lg shadow-green-900/30'
+              : 'bg-white/5 text-white/20 cursor-not-allowed'
           }`}
         >
-          {validation.valid ? '🚀 LAUNCH EXPEDITION' : 'SELECT YOUR DECK'}
+          {validation.valid ? 'Launch Expedition' : 'Select Your Deck'}
         </button>
       </div>
     </div>

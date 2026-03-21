@@ -1,50 +1,48 @@
-import { Encounter, CardInstance } from './types';
+import { Encounter } from './types';
 
-// ===== STAGE 1 ENCOUNTERS (Easy — 60 total HP) =====
+// ===== STAGE 1 ENCOUNTERS (Easy — ~30-40 total HP, low damage) =====
+// Balanced so a single survivor + item card can win cleanly
 export const STAGE_1_ENCOUNTERS: Encounter[] = [
   {
     id: 'enc_pharmacy_zombies',
     stage: 1,
     type: 'combat',
     name: 'Pharmacy Raid',
-    description: 'Three shambling zombies stand between you and a supply of medicine. The pharmacy shelves are mostly empty, but there\'s enough to make the fight worth it.',
+    description: 'Two shambling corpses drag themselves between the aisles. They haven\'t noticed you yet. The medicine cabinet is right there — just past them.',
     location: 'Abandoned Pharmacy',
     enemies: [
-      { name: 'Shambler', health: 20, maxHealth: 20, damage: 8, defense: 0 },
-      { name: 'Shambler', health: 20, maxHealth: 20, damage: 8, defense: 0 },
-      { name: 'Shambler', health: 20, maxHealth: 20, damage: 10, defense: 0 },
+      { name: 'Shambler', health: 15, maxHealth: 15, damage: 5, defense: 0 },
+      { name: 'Shambler', health: 15, maxHealth: 15, damage: 5, defense: 0 },
     ],
     difficulty: 'easy',
-    rewardsText: 'Medical supplies scavenged',
+    rewardsText: 'First aid supplies scavenged',
     itemsToFind: ['card_antibiotics_001'],
   },
   {
     id: 'enc_gas_station',
     stage: 1,
     type: 'combat',
-    name: 'Gas Station Ambush',
-    description: 'You thought the gas station was empty. It wasn\'t. Two runners burst from behind the counter, and a bloated one blocks the exit.',
+    name: 'Gas Station Stop',
+    description: 'Quick in-and-out. One runner paces behind the counter, another slumps by the broken fridge. Snacks and fuel — grab what you can.',
     location: 'Highway Gas Station',
     enemies: [
-      { name: 'Runner', health: 15, maxHealth: 15, damage: 12, defense: 0 },
-      { name: 'Runner', health: 15, maxHealth: 15, damage: 12, defense: 0 },
-      { name: 'Bloater', health: 30, maxHealth: 30, damage: 6, defense: 5 },
+      { name: 'Runner', health: 12, maxHealth: 12, damage: 6, defense: 0 },
+      { name: 'Lurker', health: 18, maxHealth: 18, damage: 4, defense: 0 },
     ],
     difficulty: 'easy',
-    rewardsText: 'Fuel and supplies found',
+    rewardsText: 'Fuel and food found',
     itemsToFind: ['card_food_001'],
   },
   {
     id: 'enc_school_cafeteria',
     stage: 1,
     type: 'combat',
-    name: 'School Cafeteria',
-    description: 'The school cafeteria still has canned goods. But the janitor and two lunch ladies have other plans for visitors. They shuffle between the overturned tables.',
+    name: 'Cafeteria Scavenge',
+    description: 'Overturned lunch trays. The vending machine is smashed open. One zombie stands in the kitchen doorway, swaying gently. Easy pickings.',
     location: 'Elementary School',
     enemies: [
-      { name: 'Cafeteria Zombie', health: 18, maxHealth: 18, damage: 8, defense: 2 },
-      { name: 'Cafeteria Zombie', health: 18, maxHealth: 18, damage: 8, defense: 2 },
-      { name: 'Janitor Zombie', health: 24, maxHealth: 24, damage: 10, defense: 3 },
+      { name: 'Cafeteria Zombie', health: 20, maxHealth: 20, damage: 4, defense: 2 },
+      { name: 'Small Zombie', health: 10, maxHealth: 10, damage: 3, defense: 0 },
     ],
     difficulty: 'easy',
     rewardsText: 'Canned food recovered',
@@ -52,19 +50,20 @@ export const STAGE_1_ENCOUNTERS: Encounter[] = [
   },
 ];
 
-// ===== STAGE 2 ENCOUNTERS (Medium — 90 total HP) =====
+// ===== STAGE 2 ENCOUNTERS (Medium — ~50-65 total HP, moderate damage) =====
+// Requires good card choice. Survivable but you'll take some hits.
 export const STAGE_2_ENCOUNTERS: Encounter[] = [
   {
     id: 'enc_warehouse',
     stage: 2,
     type: 'combat',
     name: 'Warehouse Breach',
-    description: 'A military supply warehouse. The good news: weapons inside. The bad news: a pack of fast-moving infected guards the entrance. They move in coordinated patterns.',
+    description: 'Military crates stacked floor to ceiling. Two infected guards still patrol their posts — muscle memory from a life before. A sergeant in the back has full body armor.',
     location: 'Military Warehouse',
     enemies: [
-      { name: 'Infected Guard', health: 25, maxHealth: 25, damage: 14, defense: 5 },
-      { name: 'Infected Guard', health: 25, maxHealth: 25, damage: 14, defense: 5 },
-      { name: 'Infected Sergeant', health: 40, maxHealth: 40, damage: 18, defense: 8 },
+      { name: 'Infected Guard', health: 20, maxHealth: 20, damage: 8, defense: 3 },
+      { name: 'Infected Guard', health: 20, maxHealth: 20, damage: 8, defense: 3 },
+      { name: 'Armored Sergeant', health: 25, maxHealth: 25, damage: 10, defense: 6 },
     ],
     difficulty: 'medium',
     rewardsText: 'Military equipment secured',
@@ -75,15 +74,15 @@ export const STAGE_2_ENCOUNTERS: Encounter[] = [
     stage: 2,
     type: 'combat',
     name: 'Hospital East Wing',
-    description: 'The hospital\'s east wing was quarantine ground zero. The infected here are fresher, stronger, and more aggressive. But the supply room has what you need.',
+    description: 'The quarantine tape is shredded. Two fresh infected — faster, angrier — pace the hallway. A third crouches behind the nurse\'s station. The supply room door is open.',
     location: 'City Hospital',
     enemies: [
-      { name: 'Fresh Infected', health: 30, maxHealth: 30, damage: 16, defense: 3 },
-      { name: 'Fresh Infected', health: 30, maxHealth: 30, damage: 16, defense: 3 },
-      { name: 'Nurse Infected', health: 30, maxHealth: 30, damage: 12, defense: 5 },
+      { name: 'Fresh Infected', health: 22, maxHealth: 22, damage: 10, defense: 2 },
+      { name: 'Fresh Infected', health: 22, maxHealth: 22, damage: 10, defense: 2 },
+      { name: 'Nurse Infected', health: 18, maxHealth: 18, damage: 6, defense: 3 },
     ],
     difficulty: 'medium',
-    rewardsText: 'Advanced medical supplies found',
+    rewardsText: 'Advanced medical supplies',
     itemsToFind: ['card_medkit_001'],
   },
   {
@@ -91,12 +90,11 @@ export const STAGE_2_ENCOUNTERS: Encounter[] = [
     stage: 2,
     type: 'combat',
     name: 'Police Station Armory',
-    description: 'The armory is locked behind reinforced glass. The infected officers still patrol the halls, some still wearing kevlar that makes them tougher to put down.',
+    description: 'The armory lock is smashed. Two officers still wear their kevlar — tough to put down. One has a baton it swings wildly. The weapons rack behind them has what you need.',
     location: 'Police Station',
     enemies: [
-      { name: 'Armored Zombie', health: 35, maxHealth: 35, damage: 12, defense: 10 },
-      { name: 'Officer Zombie', health: 25, maxHealth: 25, damage: 15, defense: 5 },
-      { name: 'Officer Zombie', health: 25, maxHealth: 25, damage: 15, defense: 5 },
+      { name: 'Armored Officer', health: 25, maxHealth: 25, damage: 7, defense: 8 },
+      { name: 'Officer Zombie', health: 20, maxHealth: 20, damage: 9, defense: 3 },
     ],
     difficulty: 'medium',
     rewardsText: 'Weapons and ammo recovered',
@@ -104,20 +102,21 @@ export const STAGE_2_ENCOUNTERS: Encounter[] = [
   },
 ];
 
-// ===== STAGE 3 ENCOUNTERS (Hard — 130+ total HP) =====
+// ===== STAGE 3 ENCOUNTERS (Hard — ~80-100 total HP, high damage) =====
+// The big fight. Need synergies and good cards to win clean.
 export const STAGE_3_ENCOUNTERS: Encounter[] = [
   {
     id: 'enc_the_nest',
     stage: 3,
     type: 'combat',
     name: 'The Nest',
-    description: 'You\'ve found a nest. Dozens of cocoons line the walls, but only a few have hatched. The alpha is massive — twice the size of a normal infected. It screeches and the others charge.',
+    description: 'Cocoons cover the tunnel walls. Three hatchlings skitter toward you while the alpha — twice normal size — watches from the shadows. It screeches. They charge.',
     location: 'Subway Tunnel',
     enemies: [
-      { name: 'Hatchling', health: 20, maxHealth: 20, damage: 15, defense: 0 },
-      { name: 'Hatchling', health: 20, maxHealth: 20, damage: 15, defense: 0 },
-      { name: 'Hatchling', health: 20, maxHealth: 20, damage: 15, defense: 0 },
-      { name: 'Alpha Infected', health: 70, maxHealth: 70, damage: 25, defense: 12 },
+      { name: 'Hatchling', health: 12, maxHealth: 12, damage: 8, defense: 0 },
+      { name: 'Hatchling', health: 12, maxHealth: 12, damage: 8, defense: 0 },
+      { name: 'Hatchling', health: 12, maxHealth: 12, damage: 8, defense: 0 },
+      { name: 'Alpha', health: 45, maxHealth: 45, damage: 15, defense: 8 },
     ],
     difficulty: 'hard',
     rewardsText: 'Rare research samples obtained',
@@ -128,15 +127,15 @@ export const STAGE_3_ENCOUNTERS: Encounter[] = [
     stage: 3,
     type: 'combat',
     name: 'Bridge Standoff',
-    description: 'The bridge is the only way back. A hulking brute blocks the center, flanked by its pack. The river churns below. There\'s no going around — only through.',
+    description: 'The only way home. A massive brute blocks the center span, flanked by two fast runners. The river churns below. No going around — only through.',
     location: 'River Bridge',
     enemies: [
-      { name: 'Pack Runner', health: 25, maxHealth: 25, damage: 18, defense: 3 },
-      { name: 'Pack Runner', health: 25, maxHealth: 25, damage: 18, defense: 3 },
-      { name: 'Brute', health: 80, maxHealth: 80, damage: 30, defense: 15 },
+      { name: 'Pack Runner', health: 18, maxHealth: 18, damage: 10, defense: 2 },
+      { name: 'Pack Runner', health: 18, maxHealth: 18, damage: 10, defense: 2 },
+      { name: 'Brute', health: 50, maxHealth: 50, damage: 18, defense: 10 },
     ],
     difficulty: 'hard',
-    rewardsText: 'Safe passage home secured',
+    rewardsText: 'Safe passage home',
     itemsToFind: ['card_shotgun_001'],
   },
   {
@@ -144,15 +143,15 @@ export const STAGE_3_ENCOUNTERS: Encounter[] = [
     stage: 3,
     type: 'combat',
     name: 'Lab Outbreak',
-    description: 'The research lab still has power. The containment units have failed, releasing experimental subjects. These aren\'t normal infected — they\'re faster, stronger, wrong.',
+    description: 'Emergency lights strobe red. Two experimental subjects have escaped containment — they\'re wrong, fast, wrong. Subject-0 blocks the exit, dripping something dark.',
     location: 'Research Laboratory',
     enemies: [
-      { name: 'Subject-7', health: 35, maxHealth: 35, damage: 20, defense: 8 },
-      { name: 'Subject-12', health: 35, maxHealth: 35, damage: 22, defense: 8 },
-      { name: 'Subject-0 (Boss)', health: 60, maxHealth: 60, damage: 28, defense: 12 },
+      { name: 'Subject-7', health: 25, maxHealth: 25, damage: 12, defense: 5 },
+      { name: 'Subject-12', health: 25, maxHealth: 25, damage: 14, defense: 5 },
+      { name: 'Subject-0', health: 35, maxHealth: 35, damage: 16, defense: 8 },
     ],
     difficulty: 'hard',
-    rewardsText: 'Research data and samples secured',
+    rewardsText: 'Research data secured',
     itemsToFind: ['card_antibiotics_001'],
   },
 ];
@@ -173,7 +172,6 @@ export function getRandomEncounter(stage: 1 | 2 | 3): Encounter {
     STAGE_3_ENCOUNTERS;
 
   const index = Math.floor(Math.random() * encounters.length);
-  // Deep clone enemies so combat doesn't mutate the source
   const encounter = encounters[index];
   return {
     ...encounter,
