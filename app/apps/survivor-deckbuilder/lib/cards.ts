@@ -204,11 +204,27 @@ export const STARTER_CARDS: Card[] = [
     id: 'card_food_001',
     type: 'item',
     name: 'Canned Food',
-    description: 'Restores energy and health',
+    description: 'Restores energy and health to all survivors',
     status: 'healthy',
     exhausted: false,
     recoveryTime: 0,
     itemType: 'consumable',
+    bonusAttributes: {
+      healing: 15,
+    },
+  },
+  {
+    id: 'card_gasoline_001',
+    type: 'item',
+    name: 'Gasoline Can',
+    description: 'Explosive area damage when thrown at enemies',
+    status: 'healthy',
+    exhausted: false,
+    recoveryTime: 0,
+    itemType: 'consumable',
+    bonusAttributes: {
+      combat: 35,
+    },
   },
 
   // ACTIONS
