@@ -172,11 +172,25 @@ export function useGame() {
         return updatedRun;
       }
 
+      // Apply barricade bonus: add +30 defense to survivors if barricaded (stage 3 only)
+      const activeSurvivorsForCombat = currentRun.isBarricaded
+        ? currentRun.activeSurvivors.map(s => ({
+            ...s,
+            attributes: {
+              combat: s.attributes?.combat ?? 0,
+              defense: (s.attributes?.defense ?? 0) + 30,
+              healing: s.attributes?.healing ?? 0,
+              speed: s.attributes?.speed ?? 0,
+              perception: s.attributes?.perception ?? 0,
+            },
+          }))
+        : currentRun.activeSurvivors;
+
       // Resolve combat — go to combat_resolution phase first
       const result = resolveCombat(
         selectedCards,
         currentRun.currentEncounter,
-        currentRun.activeSurvivors
+        activeSurvivorsForCombat
       );
 
       const updatedRun: Run = {
@@ -326,6 +340,62 @@ export function useGame() {
   }, [currentRun, gameState]);
 
   /**
+   * Retreat from the current expedition before engaging combat
+   * Marks current stage as skipped and fails the run
+   */
+  const retreatFromExpedition = useCallback(async () => {
+    try {
+      if (!currentRun || !gameState) throw new Error('No active run');
+
+      const updatedRun: Run = {
+        ...currentRun,
+        phase: 'run_failed',
+        isRetreat: true,
+        stages: [
+          ...currentRun.stages,
+          {
+            stageNum: currentRun.currentStage,
+            encounter: currentRun.currentEncounter!,
+            result: 'skipped',
+          },
+        ],
+      };
+
+      const state = { ...gameState, currentRun: updatedRun, updatedAt: new Date().toISOString() };
+      await repository.setGameState(state);
+      setGameState(state);
+      setCurrentRun(updatedRun);
+      return updatedRun;
+    } catch (e) {
+      setError(e as Error);
+      throw e;
+    }
+  }, [currentRun, gameState]);
+
+  /**
+   * Build a barricade after stage 2 — provides +30 defense in stage 3
+   */
+  const buildBarricade = useCallback(async () => {
+    try {
+      if (!currentRun || !gameState) throw new Error('No active run');
+
+      const updatedRun: Run = {
+        ...currentRun,
+        isBarricaded: true,
+      };
+
+      const state = { ...gameState, currentRun: updatedRun, updatedAt: new Date().toISOString() };
+      await repository.setGameState(state);
+      setGameState(state);
+      setCurrentRun(updatedRun);
+      return updatedRun;
+    } catch (e) {
+      setError(e as Error);
+      throw e;
+    }
+  }, [currentRun, gameState]);
+
+  /**
    * Advance recovery timers by 1 day
    */
   const advanceDay = useCallback(async () => {
@@ -375,6 +445,10 @@ export function useGame() {
 
     // Recovery management
     advanceDay,
+
+    // Tactical
+    retreatFromExpedition,
+    buildBarricade,
 
     // Utilities
     refreshGameState,

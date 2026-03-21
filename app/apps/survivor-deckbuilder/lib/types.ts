@@ -193,6 +193,10 @@ export interface Run {
 
   // Survivors in this run
   activeSurvivors: CardInstance[];
+
+  // Tactical options
+  isBarricaded?: boolean;   // Built a barricade after stage 2 — +30 defense in stage 3
+  isRetreat?: boolean;      // Player chose to retreat before engaging
 }
 
 // Home base state

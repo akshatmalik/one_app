@@ -5,7 +5,6 @@ import { useGame } from './hooks/useGame';
 import { CardInstance } from './lib/types';
 import { RunScreen } from './components/RunScreen';
 import { PrepareRunScreen } from './components/PrepareRunScreen';
-import { PlayingCard } from './components/PlayingCard';
 
 type View = 'home' | 'prepare' | 'run';
 
@@ -25,6 +24,8 @@ export default function SurvivorDeckBuilder() {
     advanceToNextStage,
     completeRun,
     advanceDay,
+    retreatFromExpedition,
+    buildBarricade,
     resetGame,
   } = useGame();
 
@@ -34,27 +35,24 @@ export default function SurvivorDeckBuilder() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-slate-950 text-white">
-        <div className="text-center">
-          <div className="text-5xl mb-4 animate-pulse">🧟</div>
-          <p className="text-white/30 text-sm">Loading...</p>
-        </div>
+      <div className="fixed inset-0 z-[9999] bg-stone-950 flex items-center justify-center">
+        <p className="text-stone-700 font-mono text-xs tracking-widest uppercase animate-pulse">
+          LOADING...
+        </p>
       </div>
     );
   }
 
   if (!gameState) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-slate-950 text-white">
-        <div className="text-center">
-          <p className="text-white/30 text-sm mb-4">Failed to load game</p>
-          <button
-            onClick={resetGame}
-            className="px-4 py-2 bg-white/10 rounded-xl hover:bg-white/20 text-sm transition-colors"
-          >
-            Reset
-          </button>
-        </div>
+      <div className="fixed inset-0 z-[9999] bg-stone-950 flex flex-col items-center justify-center px-8">
+        <p className="text-red-900 font-mono text-sm mb-4">SYSTEM FAILURE</p>
+        <button
+          onClick={resetGame}
+          className="px-6 py-2 border border-stone-700 text-stone-400 font-mono text-xs tracking-widest uppercase hover:bg-stone-900 transition-colors"
+        >
+          RESET
+        </button>
       </div>
     );
   }
@@ -62,178 +60,218 @@ export default function SurvivorDeckBuilder() {
   // === RUN VIEW ===
   if (activeView === 'run' && currentRun) {
     return (
-      <RunScreen
-        run={currentRun}
-        onEnterCombat={enterCombat}
-        onPlayCards={async (cards: CardInstance[]) => {
-          await playCards(cards);
-        }}
-        onContinueAfterCombat={continueAfterCombat}
-        onAdvanceStage={async () => {
-          await advanceToNextStage();
-        }}
-        onCompleteRun={async () => {
-          await completeRun();
-          setView('home');
-        }}
-      />
+      <div className="fixed inset-0 z-[9999] bg-stone-950 overflow-y-auto">
+        <RunScreen
+          run={currentRun}
+          onEnterCombat={enterCombat}
+          onPlayCards={async (cards: CardInstance[]) => {
+            await playCards(cards);
+          }}
+          onContinueAfterCombat={continueAfterCombat}
+          onAdvanceStage={async () => {
+            await advanceToNextStage();
+          }}
+          onCompleteRun={async () => {
+            await completeRun();
+            setView('home');
+          }}
+          onRetreat={async () => {
+            await retreatFromExpedition();
+          }}
+          onBuildBarricade={async () => {
+            await buildBarricade();
+          }}
+        />
+      </div>
     );
   }
 
   // === PREPARE VIEW ===
   if (activeView === 'prepare') {
     return (
-      <PrepareRunScreen
-        survivors={getSurvivors()}
-        items={getItems()}
-        actions={getActions()}
-        onLaunch={async (deck: CardInstance[]) => {
-          await startRun(deck);
-        }}
-        onBack={() => setView('home')}
-      />
+      <div className="fixed inset-0 z-[9999] bg-stone-950 overflow-y-auto">
+        <PrepareRunScreen
+          survivors={getSurvivors()}
+          items={getItems()}
+          actions={getActions()}
+          onLaunch={async (deck: CardInstance[]) => {
+            await startRun(deck);
+          }}
+          onBack={() => setView('home')}
+        />
+      </div>
     );
   }
 
   // === HOME BASE ===
-  const survivors = getSurvivors();
-  const items = getItems();
-  const actions = getActions();
   const availableCards = getAvailableCards();
   const exhaustedCards = gameState.deck.filter(c => c.exhausted);
   const completedRuns = gameState.homeBase.completedRuns;
-  const canLaunch = availableCards.filter(c => c.type === 'survivor').length >= 2
+  const survivors = getSurvivors();
+  const items = getItems();
+  const actions = getActions();
+
+  const availableSurvivors = availableCards.filter(c => c.type === 'survivor');
+  const canLaunch = availableSurvivors.length >= 2
     && availableCards.filter(c => c.type !== 'survivor').length >= 2;
 
+  const totalRuns = completedRuns.length;
+  const successfulRuns = completedRuns.filter(r => r.status === 'completed').length;
+
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-white">
-      {/* Header */}
-      <div className="px-5 pt-8 pb-6">
-        <p className="text-[10px] text-white/20 uppercase tracking-[0.3em] font-semibold mb-1">Home Base</p>
-        <h1 className="text-3xl font-bold text-white mb-1">Survivor</h1>
-        <p className="text-white/30 text-sm">Build your deck. Survive the run.</p>
-      </div>
-
-      {/* Quick stats */}
-      <div className="px-5 pb-4">
-        <div className="grid grid-cols-3 gap-2">
-          <div className="bg-black/30 rounded-xl border border-white/5 p-3 text-center">
-            <p className="text-xl font-bold text-emerald-400">{availableCards.length}</p>
-            <p className="text-[9px] text-white/20 uppercase mt-0.5">Ready</p>
-          </div>
-          <div className="bg-black/30 rounded-xl border border-white/5 p-3 text-center">
-            <p className="text-xl font-bold text-red-400">{exhaustedCards.length}</p>
-            <p className="text-[9px] text-white/20 uppercase mt-0.5">Recovering</p>
-          </div>
-          <div className="bg-black/30 rounded-xl border border-white/5 p-3 text-center">
-            <p className="text-xl font-bold text-amber-400">{completedRuns.length}</p>
-            <p className="text-[9px] text-white/20 uppercase mt-0.5">Runs</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Launch / Recovery */}
-      <div className="px-5 pb-6 space-y-2">
-        <button
-          onClick={() => setView('prepare')}
-          disabled={!canLaunch}
-          className={`w-full py-4 font-bold text-lg rounded-2xl transition-all active:scale-[0.97] ${
-            canLaunch
-              ? 'bg-green-700 hover:bg-green-600 text-white shadow-lg shadow-green-900/30'
-              : 'bg-white/5 text-white/20 cursor-not-allowed'
-          }`}
-        >
-          {canLaunch ? 'Prepare Expedition' : 'Cards Recovering...'}
-        </button>
-
-        {exhaustedCards.length > 0 && (
-          <button
-            onClick={advanceDay}
-            className="w-full py-3 bg-black/30 border border-white/5 text-white/40 font-semibold rounded-2xl hover:bg-black/40 transition-colors text-sm"
-          >
-            Advance Day ({exhaustedCards.length} recovering)
-          </button>
-        )}
-      </div>
-
-      {/* Cards — horizontal scrollable hands */}
-      <div className="space-y-5 pb-8">
-        {/* Survivors */}
-        <div>
-          <p className="text-[10px] text-blue-400/50 uppercase tracking-wider font-semibold mb-2 px-5">
-            Survivors
+    <div className="fixed inset-0 z-[9999] bg-stone-950 text-stone-300 overflow-y-auto">
+      <div className="min-h-full flex flex-col">
+        {/* Header */}
+        <div className="px-5 pt-8 pb-6 border-b border-stone-900">
+          <p className="text-[9px] text-stone-700 font-mono tracking-widest uppercase mb-2">
+            ── SAFE HOUSE ─────────────────────────
           </p>
-          <div
-            className="flex gap-3 overflow-x-auto pb-2 px-5 scrollbar-hide"
-            style={{ WebkitOverflowScrolling: 'touch' }}
-          >
-            {survivors.map(card => (
-              <PlayingCard key={card.id} card={card} size="md" disabled={card.exhausted} />
-            ))}
+          <h1 className="text-3xl font-bold text-stone-200 uppercase tracking-wider font-mono mb-1">
+            SURVIVOR
+          </h1>
+          <p className="text-stone-600 text-sm font-mono">
+            Day {totalRuns + 1}. The road isn&apos;t going to clear itself.
+          </p>
+        </div>
+
+        {/* Status grid */}
+        <div className="px-5 py-4 border-b border-stone-900">
+          <div className="grid grid-cols-3 gap-2">
+            <div className="border border-stone-800 bg-stone-900 p-3 text-center">
+              <p className="text-xl font-bold text-stone-300 font-mono">{availableCards.length}</p>
+              <p className="text-[8px] text-stone-700 font-mono tracking-widest uppercase mt-0.5">READY</p>
+            </div>
+            <div className="border border-stone-800 bg-stone-900 p-3 text-center">
+              <p className="text-xl font-bold text-stone-300 font-mono">{exhaustedCards.length}</p>
+              <p className="text-[8px] text-stone-700 font-mono tracking-widest uppercase mt-0.5">RECOVERING</p>
+            </div>
+            <div className="border border-stone-800 bg-stone-900 p-3 text-center">
+              <p className="text-xl font-bold text-stone-300 font-mono">{successfulRuns}/{totalRuns}</p>
+              <p className="text-[8px] text-stone-700 font-mono tracking-widest uppercase mt-0.5">RUNS</p>
+            </div>
           </div>
         </div>
 
-        {/* Equipment & Consumables */}
-        <div>
-          <p className="text-[10px] text-amber-400/50 uppercase tracking-wider font-semibold mb-2 px-5">
-            Equipment & Consumables
+        {/* Survivors roster */}
+        <div className="px-5 py-4 border-b border-stone-900">
+          <p className="text-[9px] text-stone-700 font-mono tracking-widest uppercase mb-2">SURVIVORS</p>
+          <div className="space-y-1">
+            {survivors.map(s => {
+              const hp = s.currentHealth ?? s.maxHealth ?? 100;
+              const maxHp = s.maxHealth ?? 100;
+              const pct = (hp / maxHp) * 100;
+              return (
+                <div key={s.id} className={`flex items-center gap-3 border border-stone-800 px-3 py-2 ${s.exhausted ? 'bg-stone-900/40 opacity-50' : 'bg-stone-900'}`}>
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-xs font-mono uppercase font-bold ${s.exhausted ? 'text-stone-600' : 'text-stone-300'}`}>
+                      {s.name}
+                    </p>
+                    <p className="text-[9px] text-stone-600 font-mono uppercase">
+                      {s.role} {s.exhausted ? `· RECOVERING (${s.recoveryTime}d)` : '· READY'}
+                    </p>
+                  </div>
+                  <div className="w-16 h-0.5 bg-stone-800">
+                    <div
+                      className={`h-full ${pct > 60 ? 'bg-stone-500' : pct > 30 ? 'bg-amber-800' : 'bg-red-900'}`}
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                  <span className="text-[9px] text-stone-600 font-mono w-10 text-right">{hp}/{maxHp}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Gear inventory */}
+        <div className="px-5 py-4 border-b border-stone-900">
+          <p className="text-[9px] text-stone-700 font-mono tracking-widest uppercase mb-2">
+            INVENTORY ({availableCards.filter(c => c.type !== 'survivor').length} ready)
           </p>
-          <div
-            className="flex gap-3 overflow-x-auto pb-2 px-5 scrollbar-hide"
-            style={{ WebkitOverflowScrolling: 'touch' }}
-          >
-            {items.map(card => (
-              <PlayingCard key={card.id} card={card} size="sm" disabled={card.exhausted} />
+          <div className="flex flex-wrap gap-1">
+            {[...items, ...actions].map(card => (
+              <span
+                key={card.id}
+                className={`text-[10px] font-mono border px-2 py-0.5 ${
+                  card.exhausted
+                    ? 'border-stone-900 text-stone-700 bg-stone-900/30'
+                    : 'border-stone-800 text-stone-500 bg-stone-900'
+                }`}
+              >
+                {card.name}{card.exhausted ? ` (${card.recoveryTime}d)` : ''}
+              </span>
             ))}
           </div>
         </div>
 
         {/* Actions */}
-        {actions.length > 0 && (
-          <div>
-            <p className="text-[10px] text-purple-400/50 uppercase tracking-wider font-semibold mb-2 px-5">
-              Actions
-            </p>
-            <div
-              className="flex gap-3 overflow-x-auto pb-2 px-5 scrollbar-hide"
-              style={{ WebkitOverflowScrolling: 'touch' }}
-            >
-              {actions.map(card => (
-                <PlayingCard key={card.id} card={card} size="sm" disabled={card.exhausted} />
-              ))}
-            </div>
-          </div>
-        )}
+        <div className="px-5 py-4 space-y-2">
+          <button
+            onClick={() => setView('prepare')}
+            disabled={!canLaunch}
+            className={`w-full py-3.5 font-mono font-bold text-sm tracking-widest uppercase border transition-colors ${
+              canLaunch
+                ? 'bg-stone-800 hover:bg-stone-700 border-stone-700 text-stone-200 active:scale-[0.98]'
+                : 'bg-stone-900 border-stone-900 text-stone-700 cursor-not-allowed'
+            }`}
+          >
+            {canLaunch ? 'PREPARE EXPEDITION →' : 'CARDS RECOVERING...'}
+          </button>
 
-        {/* Run history */}
-        {completedRuns.length > 0 && (
-          <div className="px-5">
-            <p className="text-[10px] text-white/20 uppercase tracking-wider font-semibold mb-2">
-              Expedition Log
+          {!canLaunch && (
+            <p className="text-[9px] text-stone-700 font-mono text-center">
+              Need 2 survivors + 2 gear ready.
+              {availableSurvivors.length < 2 ? ` ${2 - availableSurvivors.length} survivor(s) still recovering.` : ''}
             </p>
-            <div className="space-y-1.5">
-              {completedRuns.slice(-5).reverse().map((run, i) => (
-                <div key={run.runId} className="flex items-center gap-3 bg-black/20 rounded-xl border border-white/5 px-4 py-2.5">
-                  <span className="text-sm">{run.status === 'completed' ? '✅' : '❌'}</span>
-                  <span className="text-xs text-white/50 font-semibold">
-                    Run #{completedRuns.length - i}
-                  </span>
-                  <span className="text-[10px] text-white/20 ml-auto font-mono">
-                    {run.stages.filter(s => s.result === 'completed').length}/{run.totalStages}
-                  </span>
-                </div>
-              ))}
+          )}
+
+          {exhaustedCards.length > 0 && (
+            <button
+              onClick={advanceDay}
+              className="w-full py-2.5 font-mono text-xs tracking-widest uppercase border border-stone-900 text-stone-600 hover:text-stone-500 hover:border-stone-800 transition-colors"
+            >
+              ADVANCE DAY ({exhaustedCards.length} recovering)
+            </button>
+          )}
+        </div>
+
+        {/* Run log */}
+        {completedRuns.length > 0 && (
+          <div className="px-5 pb-4 border-t border-stone-900 mt-2">
+            <p className="text-[9px] text-stone-700 font-mono tracking-widest uppercase mb-2 mt-4">
+              EXPEDITION LOG
+            </p>
+            <div className="border border-stone-800">
+              {completedRuns.slice(-5).reverse().map((run, i) => {
+                const stages = run.stages.filter(s => s.result === 'completed').length;
+                return (
+                  <div
+                    key={run.runId}
+                    className={`flex items-center gap-3 px-3 py-2 bg-stone-900 ${i > 0 ? 'border-t border-stone-800' : ''}`}
+                  >
+                    <span className={`text-[10px] font-mono w-3 ${run.status === 'completed' ? 'text-stone-400' : 'text-stone-700'}`}>
+                      {run.status === 'completed' ? '✓' : run.isRetreat ? '→' : '✕'}
+                    </span>
+                    <span className="text-[10px] text-stone-500 font-mono">
+                      Run #{completedRuns.length - i}
+                    </span>
+                    <span className="text-[9px] text-stone-700 font-mono ml-auto">
+                      {stages}/{run.totalStages} stages
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
 
         {/* Reset */}
-        <div className="px-5">
+        <div className="px-5 pb-8 mt-auto">
           <button
             onClick={resetGame}
-            className="w-full py-2 text-[10px] text-white/10 hover:text-white/20 transition-colors"
+            className="w-full py-2 text-[9px] text-stone-800 hover:text-stone-700 font-mono tracking-widest uppercase transition-colors"
           >
-            Reset Game
+            RESET GAME
           </button>
         </div>
       </div>
