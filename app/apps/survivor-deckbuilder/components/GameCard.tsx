@@ -1,6 +1,7 @@
 'use client';
 
-import { CardInstance, CardCategory } from '../lib/types';
+import { CardInstance } from '../lib/types';
+import { CATEGORY_DEFS, ROLE_DEFS } from '../lib/registry';
 import { clsx } from 'clsx';
 
 interface GameCardProps {
@@ -12,27 +13,7 @@ interface GameCardProps {
   className?: string;
 }
 
-const ROLE_CONFIG: Record<string, { icon: string; gradient: string; accent: string; color: string }> = {
-  healer:    { icon: '✚', gradient: 'from-emerald-900 to-emerald-950', accent: 'border-emerald-500', color: 'text-emerald-400' },
-  fighter:   { icon: '⚔', gradient: 'from-red-900 to-red-950',         accent: 'border-red-500',     color: 'text-red-400'     },
-  scout:     { icon: '◎', gradient: 'from-sky-900 to-sky-950',         accent: 'border-sky-500',     color: 'text-sky-400'     },
-  mechanic:  { icon: '⚙', gradient: 'from-amber-900 to-amber-950',     accent: 'border-amber-500',   color: 'text-amber-400'   },
-  scientist: { icon: '⚗', gradient: 'from-violet-900 to-violet-950',   accent: 'border-violet-500',  color: 'text-violet-400'  },
-};
-
-// Category-based visual tinge for non-survivor cards
-const CATEGORY_CONFIG: Partial<Record<CardCategory, { icon: string; gradient: string; accent: string; label: string; color: string }>> = {
-  weapon:   { icon: '⚔', gradient: 'from-red-950 to-slate-900',      accent: 'border-red-700',     label: 'WEAPON',    color: 'text-red-500'     },
-  gear:     { icon: '🛡', gradient: 'from-slate-800 to-slate-900',    accent: 'border-blue-700',    label: 'GEAR',      color: 'text-blue-400'    },
-  medical:  { icon: '✚', gradient: 'from-emerald-950 to-slate-900',  accent: 'border-emerald-700', label: 'MEDICAL',   color: 'text-emerald-400' },
-  food:     { icon: '◆', gradient: 'from-amber-950 to-slate-900',    accent: 'border-amber-700',   label: 'FOOD',      color: 'text-amber-400'   },
-  action:   { icon: '⚡', gradient: 'from-purple-950 to-slate-900',  accent: 'border-purple-700',  label: 'ACTION',    color: 'text-purple-400'  },
-  upgrade:  { icon: '▲', gradient: 'from-teal-950 to-slate-900',     accent: 'border-teal-700',    label: 'UPGRADE',   color: 'text-teal-400'    },
-  building: { icon: '⬡', gradient: 'from-orange-950 to-slate-900',   accent: 'border-orange-700',  label: 'BUILDING',  color: 'text-orange-400'  },
-  seed:     { icon: '🌱', gradient: 'from-lime-950 to-slate-900',     accent: 'border-lime-700',    label: 'SEED',      color: 'text-lime-400'    },
-};
-
-// Legacy item type fallback
+// Legacy item type fallback (for cards without a category)
 const TYPE_CONFIG: Record<string, { icon: string; gradient: string; accent: string; label: string; color: string }> = {
   equipment:  { icon: '🛡', gradient: 'from-slate-800 to-slate-900',      accent: 'border-blue-400',   label: 'EQUIPMENT',  color: 'text-blue-400'   },
   consumable: { icon: '◈',  gradient: 'from-orange-900/80 to-slate-900',  accent: 'border-orange-400', label: 'CONSUMABLE', color: 'text-orange-400' },
@@ -53,11 +34,11 @@ function AmmoDots({ current, max }: { current: number; max: number }) {
 
 export function GameCard({ card, selected, disabled, compact, onClick, className }: GameCardProps) {
   const isSurvivor = card.type === 'survivor';
-  const roleConf = isSurvivor ? ROLE_CONFIG[card.role ?? ''] : null;
+  const roleConf = isSurvivor && card.role ? ROLE_DEFS[card.role] : null;
 
   // Use category config first, then fall back to item type config
-  const catConf = !isSurvivor && card.category ? CATEGORY_CONFIG[card.category] : null;
-  const typeConf = !isSurvivor ? (catConf ?? TYPE_CONFIG[card.itemType ?? 'equipment']) : null;
+  const catConf = !isSurvivor && card.category ? CATEGORY_DEFS[card.category] : null;
+  const typeConf = !isSurvivor ? (catConf ? { ...catConf, label: catConf.label.toUpperCase() } : TYPE_CONFIG[card.itemType ?? 'equipment']) : null;
 
   const gradient = roleConf?.gradient ?? typeConf?.gradient ?? 'from-slate-800 to-slate-900';
   const accent = roleConf?.accent ?? typeConf?.accent ?? 'border-slate-600';

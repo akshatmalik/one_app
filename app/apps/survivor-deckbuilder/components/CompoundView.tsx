@@ -1,6 +1,7 @@
 'use client';
 
 import { CardInstance, RawMaterials, CardCategory } from '../lib/types';
+import { CATEGORY_DEFS, CRAFT_RECIPES, RESOURCE_DEFS, CARD_BY_ID, type ResourceKey } from '../lib/registry';
 import { clsx } from 'clsx';
 
 interface CompoundViewProps {
@@ -8,18 +9,6 @@ interface CompoundViewProps {
   rawMaterials: RawMaterials;
   onBack: () => void;
 }
-
-const CATEGORY_CONFIG: Record<CardCategory, { label: string; gradient: string; accent: string; icon: string }> = {
-  survivor:  { label: 'Survivors',  gradient: 'from-stone-900 to-stone-950',    accent: 'border-stone-600',   icon: '◉' },
-  weapon:    { label: 'Weapons',    gradient: 'from-red-950 to-stone-950',      accent: 'border-red-800',     icon: '⚔' },
-  gear:      { label: 'Gear',       gradient: 'from-slate-900 to-stone-950',    accent: 'border-blue-800',    icon: '🛡' },
-  medical:   { label: 'Medical',    gradient: 'from-emerald-950 to-stone-950',  accent: 'border-emerald-800', icon: '✚' },
-  food:      { label: 'Food',       gradient: 'from-amber-950 to-stone-950',    accent: 'border-amber-800',   icon: '◆' },
-  action:    { label: 'Actions',    gradient: 'from-purple-950 to-stone-950',   accent: 'border-purple-800',  icon: '⚡' },
-  upgrade:   { label: 'Upgrades',   gradient: 'from-teal-950 to-stone-950',     accent: 'border-teal-800',    icon: '▲' },
-  building:  { label: 'Buildings',  gradient: 'from-orange-950 to-stone-950',   accent: 'border-orange-800',  icon: '⬡' },
-  seed:      { label: 'Seeds',      gradient: 'from-lime-950 to-stone-950',     accent: 'border-lime-800',    icon: '🌱' },
-};
 
 // Infer category from card if not explicitly set
 function inferCategory(card: CardInstance): CardCategory {
@@ -32,34 +21,8 @@ function inferCategory(card: CardInstance): CardCategory {
   return 'action';
 }
 
-const MAT_ICONS: Record<string, string> = {
-  scrapMetal: '⚙',
-  wood: '▤',
-  cloth: '◫',
-  medicalSupplies: '✚',
-  food: '◆',
-};
-
-const MAT_LABELS: Record<string, string> = {
-  scrapMetal: 'Scrap',
-  wood: 'Wood',
-  cloth: 'Cloth',
-  medicalSupplies: 'Meds',
-  food: 'Food',
-};
-
-// Workshop recipes
-const CRAFT_RECIPES = [
-  { id: 'r_medkit', name: 'Medical Kit', cost: { cloth: 3, medicalSupplies: 2 }, output: 'Heals +50', category: 'medical' as CardCategory },
-  { id: 'r_bandages', name: 'Bandages', cost: { cloth: 1, medicalSupplies: 1 }, output: 'Heals +15', category: 'medical' as CardCategory },
-  { id: 'r_shotgun', name: 'Improv. Shotgun', cost: { scrapMetal: 4, wood: 2 }, output: 'ATK +60, 4 shots', category: 'weapon' as CardCategory },
-  { id: 'r_vest', name: 'Reinforced Vest', cost: { scrapMetal: 3, cloth: 2 }, output: 'DEF +30', category: 'gear' as CardCategory },
-  { id: 'r_ration', name: 'Food Can', cost: { cloth: 1, medicalSupplies: 1 }, output: '+2 food', category: 'food' as CardCategory },
-  { id: 'r_molotov', name: 'Molotov', cost: { food: 2, cloth: 1 }, output: 'ATK +35 AOE', category: 'action' as CardCategory },
-];
-
-function canCraft(recipe: typeof CRAFT_RECIPES[0], mats: RawMaterials): boolean {
-  return Object.entries(recipe.cost).every(([key, val]) => {
+function canCraft(cost: Partial<Record<ResourceKey, number>>, mats: RawMaterials): boolean {
+  return Object.entries(cost).every(([key, val]) => {
     const have = (mats as unknown as Record<string, number>)[key] ?? 0;
     return have >= (val as number);
   });
@@ -95,14 +58,16 @@ export function CompoundView({ deck, rawMaterials, onBack }: CompoundViewProps) 
           </div>
         </div>
 
-        {/* Materials summary */}
+        {/* Materials summary — driven by RESOURCE_DEFS */}
         <div className="flex gap-2 mt-3 flex-wrap">
-          {Object.entries(rawMaterials).map(([key, val]) => {
-            if ((val ?? 0) === 0) return null;
+          {(Object.keys(RESOURCE_DEFS) as ResourceKey[]).map(key => {
+            const val = (rawMaterials as unknown as Record<string, number>)[key] ?? 0;
+            if (val === 0) return null;
+            const def = RESOURCE_DEFS[key];
             return (
-              <div key={key} className="flex items-center gap-1 border border-stone-800 bg-stone-900 px-2 py-1 rounded">
-                <span className="text-stone-600 text-xs">{MAT_ICONS[key] ?? '?'}</span>
-                <span className="text-[9px] text-stone-500 font-mono">{MAT_LABELS[key]}</span>
+              <div key={key} className={`flex items-center gap-1 border ${def.borderColor} bg-stone-900 px-2 py-1 rounded`}>
+                <span className={`text-xs ${def.color}`}>{def.icon}</span>
+                <span className="text-[9px] text-stone-500 font-mono">{def.label}</span>
                 <span className="text-xs font-mono font-bold text-stone-300 ml-0.5">{val}</span>
               </div>
             );
@@ -112,13 +77,15 @@ export function CompoundView({ deck, rawMaterials, onBack }: CompoundViewProps) 
 
       <div className="flex-1 px-5 pb-8">
 
-        {/* Workshop — crafting section */}
+        {/* Workshop — crafting section, driven by CRAFT_RECIPES from registry */}
         <div className="mt-5">
           <p className="text-[8px] text-stone-700 font-mono tracking-widest uppercase mb-2">WORKSHOP · CRAFT</p>
           <div className="space-y-1.5">
             {CRAFT_RECIPES.map(recipe => {
-              const catConf = CATEGORY_CONFIG[recipe.category];
-              const craftable = canCraft(recipe, rawMaterials);
+              const outputCard = CARD_BY_ID.get(recipe.outputCardId);
+              const cat = outputCard?.category ?? 'action';
+              const catConf = CATEGORY_DEFS[cat];
+              const craftable = canCraft(recipe.cost, rawMaterials);
               return (
                 <div
                   key={recipe.id}
@@ -131,19 +98,20 @@ export function CompoundView({ deck, rawMaterials, onBack }: CompoundViewProps) 
                   <span className="text-base opacity-50">{catConf.icon}</span>
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-mono font-bold text-stone-300 uppercase">{recipe.name}</p>
-                    <p className="text-[9px] text-stone-600 font-mono">{recipe.output}</p>
+                    <p className="text-[9px] text-stone-600 font-mono">{recipe.description}</p>
                   </div>
                   <div className="text-right">
                     <div className="flex gap-1 flex-wrap justify-end mb-1">
-                      {Object.entries(recipe.cost).map(([mat, val]) => {
+                      {(Object.entries(recipe.cost) as [ResourceKey, number][]).map(([mat, val]) => {
                         const have = (rawMaterials as unknown as Record<string, number>)[mat] ?? 0;
-                        const enough = have >= (val as number);
+                        const enough = have >= val;
+                        const resDef = RESOURCE_DEFS[mat];
                         return (
                           <span
                             key={mat}
                             className={`text-[9px] font-mono ${enough ? 'text-stone-500' : 'text-red-800'}`}
                           >
-                            {MAT_ICONS[mat]}{val as number}
+                            {resDef?.icon ?? '?'}{val}
                           </span>
                         );
                       })}
@@ -158,11 +126,11 @@ export function CompoundView({ deck, rawMaterials, onBack }: CompoundViewProps) 
           </div>
         </div>
 
-        {/* Card categories */}
+        {/* Card categories — driven by CATEGORY_DEFS from registry */}
         {categoryOrder.map(cat => {
           const cards = grouped[cat];
           if (!cards || cards.length === 0) return null;
-          const conf = CATEGORY_CONFIG[cat];
+          const conf = CATEGORY_DEFS[cat];
 
           return (
             <div key={cat} className="mt-5">
@@ -223,7 +191,7 @@ export function CompoundView({ deck, rawMaterials, onBack }: CompoundViewProps) 
 
                       {/* Food value */}
                       {card.foodValue !== undefined && (
-                        <span className="text-[10px] text-amber-700 font-mono">+{card.foodValue}◆</span>
+                        <span className="text-[10px] text-amber-700 font-mono">+{card.foodValue}{RESOURCE_DEFS.food.icon}</span>
                       )}
 
                       {/* Status badge */}

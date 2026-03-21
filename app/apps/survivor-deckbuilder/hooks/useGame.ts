@@ -6,7 +6,8 @@ import { repository } from '../lib/storage';
 import { resolveCombat, isTacticalRetreat, validateDeck } from '../lib/combat-engine';
 import { getRandomEncounter } from '../lib/encounters';
 import { rollStageLoot } from '../lib/loot';
-import { STARTER_CARDS } from '../lib/cards';
+import { GARDEN_OUTPUTS } from '../lib/registry';
+import { makeLootInstance } from '../lib/card-factory';
 
 const TOTAL_STAGES = 3;
 
@@ -592,10 +593,12 @@ export function useGame() {
       const seedCard = gameState.deck.find(c => c.id === seedCardId);
       if (!seedCard) throw new Error('Seed card not found');
 
-      const isHerb = seedCard.id.includes('herb');
-      const outputCardIds = isHerb
-        ? ['card_food_001', 'card_food_001', 'card_antibiotics_001']
+      // Look up garden output from registry — no hardcoded card IDs
+      const gardenOutput = GARDEN_OUTPUTS[seedCardId as keyof typeof GARDEN_OUTPUTS];
+      const outputCardIds: string[] = gardenOutput?.outputCardIds
+        ? [...gardenOutput.outputCardIds]
         : ['card_food_001', 'card_food_001', 'card_ration_001'];
+      const daysRequired = gardenOutput?.daysRequired ?? 4;
 
       const chain: ProductionChain = {
         id: `garden_${Date.now()}`,
@@ -603,7 +606,7 @@ export function useGame() {
         survivorId,
         seedCardId,
         startDay: gameState.homeBase.day,
-        daysRequired: 4,
+        daysRequired,
         outputCardIds,
         completed: false,
       };
@@ -701,20 +704,10 @@ export function useGame() {
         if (chain.completed) return chain;
         const elapsed = currentDay - chain.startDay;
         if (elapsed >= chain.daysRequired) {
-          // Complete — generate output cards
+          // Complete — generate output cards via card-factory (uses registry)
           chain.outputCardIds.forEach(cardId => {
-            const template = STARTER_CARDS.find(c => c.id === cardId);
-            if (template) {
-              lootCards.push({
-                ...template,
-                id: `prod_${cardId}_${Date.now()}_${Math.floor(Math.random() * 9999)}`,
-                currentHealth: template.maxHealth ?? 100,
-                status: 'healthy',
-                exhausted: false,
-                recoveryTime: 0,
-                ammo: template.maxAmmo,
-              });
-            }
+            const card = makeLootInstance(cardId);
+            if (card) lootCards.push(card);
           });
 
           // Free the survivor
