@@ -128,17 +128,31 @@ export function PlayingCard({ card, selected, disabled, onClick, size = 'md', cl
         </div>
       )}
 
-      {/* HP bar for survivors */}
-      {isSurvivor && (
+      {/* HP bar for survivors / ammo for weapons */}
+      {isSurvivor ? (
         <div className="px-2 pb-1.5">
           <div className="w-full h-1 bg-black/40 rounded-full overflow-hidden">
             <div
-              className="h-full bg-emerald-500 rounded-full transition-all"
+              className={clsx(
+                'h-full rounded-full transition-all',
+                (card.currentHealth ?? 100) / (card.maxHealth ?? 100) > 0.6 ? 'bg-emerald-500' :
+                (card.currentHealth ?? 100) / (card.maxHealth ?? 100) > 0.3 ? 'bg-amber-500' : 'bg-red-600'
+              )}
               style={{ width: `${((card.currentHealth ?? 100) / (card.maxHealth ?? 100)) * 100}%` }}
             />
           </div>
         </div>
-      )}
+      ) : card.maxAmmo !== undefined ? (
+        <div className={clsx('px-2 pb-1.5 text-center', size === 'sm' ? 'text-[6px]' : 'text-[7px]')}>
+          <span className={clsx(
+            'font-mono font-bold',
+            (card.ammo ?? card.maxAmmo) === 0 ? 'text-red-500' :
+            (card.ammo ?? card.maxAmmo) <= 2 ? 'text-amber-400' : 'text-white/40'
+          )}>
+            {card.ammo ?? card.maxAmmo}/{card.maxAmmo}
+          </span>
+        </div>
+      ) : null}
 
       {/* Selected checkmark */}
       {selected && (

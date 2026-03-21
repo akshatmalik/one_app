@@ -133,6 +133,7 @@ export const STARTER_CARDS: Card[] = [
     exhausted: false,
     recoveryTime: 1,
     itemType: 'equipment',
+    maxAmmo: 6,
     bonusAttributes: {
       combat: 40,
     },
@@ -159,6 +160,7 @@ export const STARTER_CARDS: Card[] = [
     exhausted: false,
     recoveryTime: 1,
     itemType: 'equipment',
+    maxAmmo: 4,
     bonusAttributes: {
       combat: 60,
     },

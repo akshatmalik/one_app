@@ -84,8 +84,8 @@ export function RunCompleteScreen({ run, isSuccess, onReturnHome }: RunCompleteS
             <p className="text-[8px] text-stone-700 font-mono tracking-widest uppercase mt-0.5">STAGES CLEARED</p>
           </div>
           <div className="border border-stone-800 bg-stone-900 p-3 text-center">
-            <p className="text-2xl font-bold text-stone-300 font-mono">{new Set(run.playedCardsThisRun).size}</p>
-            <p className="text-[8px] text-stone-700 font-mono tracking-widest uppercase mt-0.5">CARDS USED</p>
+            <p className="text-2xl font-bold text-stone-300 font-mono">{run.consumedCardIds.length}</p>
+            <p className="text-[8px] text-stone-700 font-mono tracking-widest uppercase mt-0.5">CONSUMED</p>
           </div>
         </div>
 

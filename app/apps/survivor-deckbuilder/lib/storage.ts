@@ -1,5 +1,6 @@
 import { GameState, Run, CardInstance, DeckBuilderRepository } from './types';
 import { STARTER_CARDS } from './cards';
+import { EMPTY_MATERIALS } from './loot';
 
 const STORAGE_KEY = 'survivor-deckbuilder-state';
 
@@ -38,6 +39,11 @@ export class LocalStorageRepository implements DeckBuilderRepository {
 
   async createRun(deck: CardInstance[]): Promise<Run> {
     const runId = `run_${Date.now()}`;
+    // Initialize ammo for weapons in the deck
+    const weaponAmmo: Record<string, number> = {};
+    deck.forEach(c => {
+      if (c.maxAmmo !== undefined) weaponAmmo[c.id] = c.maxAmmo;
+    });
     const run: Run = {
       runId,
       status: 'in_progress',
@@ -45,7 +51,9 @@ export class LocalStorageRepository implements DeckBuilderRepository {
       createdAt: new Date().toISOString(),
       deck,
       currentHand: [],
-      playedCardsThisRun: [],
+      consumedCardIds: [],
+      weaponAmmo,
+      stagedLoot: {},
       currentStage: 1,
       totalStages: 3,
       stages: [],
@@ -77,22 +85,51 @@ export class LocalStorageRepository implements DeckBuilderRepository {
       state.currentRun.status = 'completed';
       state.currentRun.completedAt = new Date().toISOString();
 
-      // Mark played cards as exhausted
+      // Mark cards in the expedition deck as exhausted (they need recovery)
+      // Consumables that were actually consumed get removed entirely
+      const consumedIds = new Set(state.currentRun.consumedCardIds);
       state.currentRun.deck.forEach((card) => {
+        // Consumables/actions that were used are gone — remove from deck
+        if (consumedIds.has(card.id)) {
+          const idx = state.deck.findIndex(c => c.id === card.id);
+          if (idx !== -1) state.deck.splice(idx, 1);
+          return;
+        }
+        // Everything else just needs recovery time
         const stateCard = state.deck.find((c) => c.id === card.id);
         if (stateCard) {
           stateCard.exhausted = true;
-          stateCard.recoveryTime =
-            card.type === 'survivor'
-              ? 1
-              : card.itemType === 'consumable'
-                ? 0
-                : 1;
+          stateCard.recoveryTime = card.type === 'survivor' ? 1 : 1;
+          // Restore weapon ammo for next run
+          if (stateCard.maxAmmo !== undefined) {
+            stateCard.ammo = stateCard.maxAmmo;
+          }
         }
+      });
+
+      // Add loot items to the deck
+      const allLoot = Object.values(state.currentRun.stagedLoot);
+      allLoot.forEach(loot => {
+        loot.items.forEach(item => {
+          state.deck.push({ ...item, exhausted: false, recoveryTime: 0 });
+        });
+      });
+
+      // Accumulate raw materials
+      const existingMaterials = state.homeBase.rawMaterials ?? { scrapMetal: 0, wood: 0, cloth: 0, medicalSupplies: 0 };
+      const newMaterials = { ...existingMaterials };
+      allLoot.forEach(loot => {
+        newMaterials.scrapMetal += loot.materials.scrapMetal;
+        newMaterials.wood += loot.materials.wood;
+        newMaterials.cloth += loot.materials.cloth;
+        newMaterials.medicalSupplies += loot.materials.medicalSupplies;
       });
 
       // Add to completed runs
       state.homeBase.completedRuns.push(state.currentRun);
+      state.homeBase.rawMaterials = newMaterials;
+      state.homeBase.survivors = state.deck.filter(c => c.type === 'survivor');
+      state.homeBase.items = state.deck.filter(c => c.type === 'item');
       state.currentRun = undefined;
 
       await this.setGameState(state);
@@ -131,6 +168,7 @@ export class LocalStorageRepository implements DeckBuilderRepository {
       status: 'healthy' as const,
       exhausted: false,
       recoveryTime: 0,
+      ammo: card.maxAmmo,
     }));
 
     return {
@@ -141,6 +179,7 @@ export class LocalStorageRepository implements DeckBuilderRepository {
         items: deck.filter((c) => c.type === 'item'),
         inventory: [],
         completedRuns: [],
+        rawMaterials: { scrapMetal: 0, wood: 0, cloth: 0, medicalSupplies: 0 },
       },
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),

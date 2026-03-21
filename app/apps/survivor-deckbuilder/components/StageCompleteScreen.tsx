@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { CombatResult, CardInstance, Encounter } from '../lib/types';
+import { CombatResult, CardInstance, Encounter, StageLoot } from '../lib/types';
 import { RunStatusBar } from './RunStatusBar';
 
 interface StageCompleteScreenProps {
@@ -13,24 +13,17 @@ interface StageCompleteScreenProps {
   cardsRemaining: number;
   totalCards: number;
   isBarricaded?: boolean;
+  loot?: StageLoot;
   onNextStage: () => void;
   onBuildBarricade?: () => void;
   isLastStage: boolean;
 }
 
-const STAGE_LOOT_ITEMS: Record<number, { title: string; items: string[] }> = {
-  1: {
-    title: 'SCAVENGED',
-    items: ['Canned food (3 days)', 'Field dressing × 4', 'Spare rounds (pistol)'],
-  },
-  2: {
-    title: 'SECURED',
-    items: ['Tactical vest (medium)', 'Lumber and wire (barricade materials)', 'Medical pack'],
-  },
-  3: {
-    title: 'RECOVERED',
-    items: ['Military-grade rifle', 'Trauma kit', 'Radio batteries'],
-  },
+const MATERIAL_LABELS: Record<string, { icon: string; label: string }> = {
+  scrapMetal:      { icon: '⚙', label: 'Scrap Metal' },
+  wood:            { icon: '▤', label: 'Wood' },
+  cloth:           { icon: '◫', label: 'Cloth' },
+  medicalSupplies: { icon: '✚', label: 'Medical Supplies' },
 };
 
 export function StageCompleteScreen({
@@ -42,6 +35,7 @@ export function StageCompleteScreen({
   cardsRemaining,
   totalCards,
   isBarricaded,
+  loot,
   onNextStage,
   onBuildBarricade,
   isLastStage,
@@ -49,8 +43,8 @@ export function StageCompleteScreen({
   const isVictory = result.result === 'player-victory';
   const [barricadeChoice, setBarricadeChoice] = useState<'none' | 'building' | 'done'>('none');
 
-  const loot = STAGE_LOOT_ITEMS[stageNumber];
   const canBarricade = stageNumber === 2 && isVictory && !isLastStage && !isBarricaded && onBuildBarricade;
+  const hasMaterials = loot && Object.values(loot.materials).some(v => v > 0);
 
   const handleBuildBarricade = () => {
     if (!onBuildBarricade) return;
@@ -136,18 +130,43 @@ export function StageCompleteScreen({
           </div>
         </div>
 
-        {/* Loot */}
-        {isVictory && loot && (
+        {/* Loot — real items dropped */}
+        {isVictory && loot && loot.items.length > 0 && (
           <div>
             <p className="text-[9px] text-stone-700 font-mono tracking-widest uppercase mb-2">
-              {loot.title}
+              ITEMS FOUND
             </p>
             <div className="border border-stone-800 bg-stone-900">
               {loot.items.map((item, i) => (
-                <div key={i} className={`px-3 py-2 text-xs text-stone-500 font-mono ${i > 0 ? 'border-t border-stone-800' : ''}`}>
-                  — {item}
+                <div key={item.id} className={`flex items-center justify-between px-3 py-2 ${i > 0 ? 'border-t border-stone-800' : ''}`}>
+                  <span className="text-xs text-stone-300 font-mono font-semibold">{item.name}</span>
+                  <span className="text-[9px] text-stone-600 font-mono uppercase">
+                    {item.itemType === 'consumable' ? '1× use' : item.maxAmmo ? `${item.maxAmmo} shots` : 'gear'}
+                  </span>
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+
+        {/* Raw materials */}
+        {isVictory && hasMaterials && (
+          <div>
+            <p className="text-[9px] text-stone-700 font-mono tracking-widest uppercase mb-2">
+              MATERIALS SALVAGED
+            </p>
+            <div className="grid grid-cols-2 gap-1">
+              {Object.entries(loot!.materials).map(([key, val]) => {
+                if (val === 0) return null;
+                const m = MATERIAL_LABELS[key];
+                return (
+                  <div key={key} className="border border-stone-800 bg-stone-900 px-3 py-2 flex items-center gap-2">
+                    <span className="text-stone-600 text-xs">{m.icon}</span>
+                    <span className="text-[10px] text-stone-400 font-mono">{m.label}</span>
+                    <span className="ml-auto text-xs font-mono font-bold text-stone-300">+{val}</span>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}

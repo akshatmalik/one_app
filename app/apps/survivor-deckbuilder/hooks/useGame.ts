@@ -1,11 +1,12 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { GameState, Run, CardInstance, RunPhase, Encounter, CombatResult } from '../lib/types';
+import { GameState, Run, CardInstance, RunPhase, Encounter, CombatResult, StageLoot } from '../lib/types';
 import { repository } from '../lib/storage';
 import { resolveCombat, isTacticalRetreat, validateDeck } from '../lib/combat-engine';
 import { getRandomEncounter } from '../lib/encounters';
 import { detectSynergies } from '../lib/synergies';
+import { rollStageLoot } from '../lib/loot';
 
 const TOTAL_STAGES = 3;
 
@@ -15,12 +16,20 @@ export function useGame() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
-  // Load game state on mount
   useEffect(() => {
     const loadGame = async () => {
       try {
         setLoading(true);
         const state = await repository.getGameState();
+        // Migrate old saves that used playedCardsThisRun
+        if (state.currentRun && !state.currentRun.consumedCardIds) {
+          (state.currentRun as any).consumedCardIds = (state.currentRun as any).playedCardsThisRun ?? [];
+          (state.currentRun as any).weaponAmmo = (state.currentRun as any).weaponAmmo ?? {};
+          (state.currentRun as any).stagedLoot = (state.currentRun as any).stagedLoot ?? {};
+        }
+        if (state.homeBase && !state.homeBase.rawMaterials) {
+          state.homeBase.rawMaterials = { scrapMetal: 0, wood: 0, cloth: 0, medicalSupplies: 0 };
+        }
         setGameState(state);
         setCurrentRun(state.currentRun || null);
       } catch (e) {
@@ -66,9 +75,6 @@ export function useGame() {
 
   // ===== RUN MANAGEMENT =====
 
-  /**
-   * Start a new expedition run with selected deck
-   */
   const startRun = useCallback(async (selectedCards: CardInstance[]) => {
     try {
       if (!gameState) throw new Error('Game state not loaded');
@@ -81,6 +87,12 @@ export function useGame() {
         currentHealth: s.maxHealth ?? 100,
       }));
 
+      // Initialize weapon ammo from each weapon's maxAmmo
+      const weaponAmmo: Record<string, number> = {};
+      selectedCards.forEach(c => {
+        if (c.maxAmmo !== undefined) weaponAmmo[c.id] = c.maxAmmo;
+      });
+
       const run: Run = {
         runId: `run_${Date.now()}`,
         status: 'in_progress',
@@ -88,7 +100,9 @@ export function useGame() {
         createdAt: new Date().toISOString(),
         deck: selectedCards,
         currentHand: [],
-        playedCardsThisRun: [],
+        consumedCardIds: [],
+        weaponAmmo,
+        stagedLoot: {},
         currentEncounter: getRandomEncounter(1),
         currentStage: 1,
         totalStages: TOTAL_STAGES,
@@ -112,20 +126,53 @@ export function useGame() {
   }, [gameState]);
 
   /**
-   * Transition to card selection — show all remaining (unplayed) cards
+   * Build the available hand for the current stage.
+   *
+   * Availability rules:
+   *  - Survivors: available if currentHealth > 0 (they fight every stage they're alive)
+   *  - Equipment: available every stage, UNLESS weapon ammo has run out
+   *  - Consumables / Actions: one-time use — hidden once in consumedCardIds
    */
   const enterCombat = useCallback(async () => {
     try {
       if (!currentRun || !gameState) throw new Error('No active run');
 
-      // Show ALL remaining cards — player picks how many to use
-      const remaining = currentRun.deck.filter(
-        c => !currentRun.playedCardsThisRun.includes(c.id)
-      );
+      const available = currentRun.deck.filter(card => {
+        if (card.type === 'survivor') {
+          // Use activeSurvivors for up-to-date HP
+          const live = currentRun.activeSurvivors.find(s => s.id === card.id);
+          return (live?.currentHealth ?? card.currentHealth ?? 0) > 0;
+        }
+        if (card.itemType === 'equipment') {
+          // Weapons: available while they still have ammo
+          if (card.maxAmmo !== undefined) {
+            const ammoLeft = currentRun.weaponAmmo[card.id] ?? 0;
+            return ammoLeft > 0;
+          }
+          // Other gear (Vest, Med Kit, Goggles): always available
+          return true;
+        }
+        // Consumables and actions: once consumed, gone
+        return !currentRun.consumedCardIds.includes(card.id);
+      });
+
+      // Merge live HP from activeSurvivors into the hand
+      const handWithLiveHP = available.map(card => {
+        if (card.type === 'survivor') {
+          const live = currentRun.activeSurvivors.find(s => s.id === card.id);
+          return live ?? card;
+        }
+        // Attach current ammo to weapon cards so the UI can display it
+        if (card.maxAmmo !== undefined) {
+          return { ...card, ammo: currentRun.weaponAmmo[card.id] ?? 0 };
+        }
+        return card;
+      });
+
       const updatedRun: Run = {
         ...currentRun,
         phase: 'card_selection',
-        currentHand: remaining,
+        currentHand: handWithLiveHP,
       };
 
       const state = { ...gameState, currentRun: updatedRun, updatedAt: new Date().toISOString() };
@@ -140,19 +187,44 @@ export function useGame() {
   }, [currentRun, gameState]);
 
   /**
-   * Play selected cards and resolve combat
+   * Play selected cards and resolve combat.
+   * After playing:
+   *  - Consumables/actions → added to consumedCardIds (gone)
+   *  - Weapons → ammo decremented; if 0 → added to consumedCardIds
+   *  - Survivors → never consumed, just carry HP state
    */
   const playCards = useCallback(async (selectedCards: CardInstance[]) => {
     try {
       if (!currentRun || !gameState) throw new Error('No active run');
       if (!currentRun.currentEncounter) throw new Error('No encounter');
 
+      // Track what gets consumed this play
+      const newConsumedIds = [...currentRun.consumedCardIds];
+      const newWeaponAmmo = { ...currentRun.weaponAmmo };
+
+      selectedCards.forEach(card => {
+        if (card.type === 'survivor') return; // survivors are never consumed
+        if (card.itemType === 'equipment' && card.maxAmmo !== undefined) {
+          // Weapon: use one shot
+          const ammo = (newWeaponAmmo[card.id] ?? card.maxAmmo) - 1;
+          newWeaponAmmo[card.id] = Math.max(0, ammo);
+          if (newWeaponAmmo[card.id] === 0) {
+            newConsumedIds.push(card.id); // out of ammo — treat as consumed
+          }
+        } else if (card.itemType === 'consumable' || card.type === 'action' || card.itemType === 'action') {
+          if (!newConsumedIds.includes(card.id)) {
+            newConsumedIds.push(card.id);
+          }
+        }
+      });
+
       // Check for tactical retreat
       if (isTacticalRetreat(selectedCards)) {
         const updatedRun: Run = {
           ...currentRun,
           phase: 'stage_complete',
-          playedCardsThisRun: [...currentRun.playedCardsThisRun, ...selectedCards.map(c => c.id)],
+          consumedCardIds: newConsumedIds,
+          weaponAmmo: newWeaponAmmo,
           lastCombatResult: undefined,
           stages: [
             ...currentRun.stages,
@@ -172,7 +244,7 @@ export function useGame() {
         return updatedRun;
       }
 
-      // Apply barricade bonus: add +30 defense to survivors if barricaded (stage 3 only)
+      // Apply barricade bonus to survivors in stage 3
       const activeSurvivorsForCombat = currentRun.isBarricaded
         ? currentRun.activeSurvivors.map(s => ({
             ...s,
@@ -186,7 +258,6 @@ export function useGame() {
           }))
         : currentRun.activeSurvivors;
 
-      // Resolve combat — go to combat_resolution phase first
       const result = resolveCombat(
         selectedCards,
         currentRun.currentEncounter,
@@ -196,10 +267,11 @@ export function useGame() {
       const updatedRun: Run = {
         ...currentRun,
         phase: 'combat_resolution',
-        playedCardsThisRun: [...currentRun.playedCardsThisRun, ...selectedCards.map(c => c.id)],
+        consumedCardIds: newConsumedIds,
+        weaponAmmo: newWeaponAmmo,
         lastCombatResult: result,
         activeSurvivors: result.survivorsAfter,
-        currentHand: selectedCards, // Keep selected cards for display
+        currentHand: selectedCards,
       };
 
       const state = { ...gameState, currentRun: updatedRun, updatedAt: new Date().toISOString() };
@@ -214,7 +286,8 @@ export function useGame() {
   }, [currentRun, gameState]);
 
   /**
-   * After viewing combat resolution, transition to appropriate next phase
+   * After viewing combat resolution, move to next phase.
+   * On victory: roll stage loot and store it.
    */
   const continueAfterCombat = useCallback(async () => {
     try {
@@ -233,9 +306,16 @@ export function useGame() {
         nextPhase = 'run_complete';
       }
 
+      // Roll loot on victory
+      const newStagedLoot = { ...currentRun.stagedLoot };
+      if (isVictory && !newStagedLoot[currentRun.currentStage]) {
+        newStagedLoot[currentRun.currentStage] = rollStageLoot(currentRun.currentStage as 1 | 2 | 3);
+      }
+
       const updatedRun: Run = {
         ...currentRun,
         phase: nextPhase,
+        stagedLoot: newStagedLoot,
         stages: [
           ...currentRun.stages,
           {
@@ -243,7 +323,7 @@ export function useGame() {
             encounter: currentRun.currentEncounter,
             cardsPlayed: currentRun.currentHand,
             result: isVictory ? 'completed' : isLoss ? 'failed' : 'completed',
-            itemsFound: isVictory ? [] : undefined,
+            itemsFound: isVictory ? newStagedLoot[currentRun.currentStage]?.items : undefined,
           },
         ],
       };
@@ -259,9 +339,6 @@ export function useGame() {
     }
   }, [currentRun, gameState]);
 
-  /**
-   * Advance to the next stage after completing current one
-   */
   const advanceToNextStage = useCallback(async () => {
     try {
       if (!currentRun || !gameState) throw new Error('No active run');
@@ -290,7 +367,8 @@ export function useGame() {
   }, [currentRun, gameState]);
 
   /**
-   * Complete the run (success or failure) and return to home base
+   * Complete the run and return to home base.
+   * Loot gets applied to the deck / raw materials in completeRun (storage).
    */
   const completeRun = useCallback(async () => {
     try {
@@ -303,26 +381,53 @@ export function useGame() {
         completedAt: new Date().toISOString(),
       };
 
-      // Mark played cards as exhausted in the main deck
-      const updatedDeck = gameState.deck.map(card => {
-        const wasPlayed = currentRun.deck.some(d => d.id === card.id);
-        if (wasPlayed) {
+      // Apply loot to deck and raw materials
+      const consumedIds = new Set(currentRun.consumedCardIds);
+
+      const updatedDeck = (gameState.deck as CardInstance[]).filter((card: CardInstance) => {
+        if (consumedIds.has(card.id)) return false;
+        return true;
+      }).map((card: CardInstance) => {
+        const wasInRun = (currentRun.deck as CardInstance[]).some((d: CardInstance) => d.id === card.id);
+        if (wasInRun) {
           return {
             ...card,
             exhausted: true,
-            recoveryTime: card.type === 'survivor' ? 1 : card.itemType === 'consumable' ? 0 : 1,
+            recoveryTime: 1,
+            ammo: card.maxAmmo ?? card.ammo,
           };
         }
         return card;
       });
 
+      // Add loot cards (new additions to collection)
+      const allLoot = Object.values(currentRun.stagedLoot) as StageLoot[];
+      const lootCards = allLoot.flatMap((l: StageLoot) => l.items.map((item: CardInstance) => ({
+        ...item,
+        exhausted: false,
+        recoveryTime: 0,
+      })));
+
+      const finalDeck = [...updatedDeck, ...lootCards];
+
+      // Accumulate raw materials
+      const existingMats = gameState.homeBase.rawMaterials ?? { scrapMetal: 0, wood: 0, cloth: 0, medicalSupplies: 0 };
+      const newMats = { ...existingMats };
+      allLoot.forEach((loot: StageLoot) => {
+        newMats.scrapMetal += loot.materials.scrapMetal;
+        newMats.wood += loot.materials.wood;
+        newMats.cloth += loot.materials.cloth;
+        newMats.medicalSupplies += loot.materials.medicalSupplies;
+      });
+
       const state: GameState = {
         ...gameState,
-        deck: updatedDeck,
+        deck: finalDeck,
         homeBase: {
           ...gameState.homeBase,
-          survivors: updatedDeck.filter(c => c.type === 'survivor'),
-          items: updatedDeck.filter(c => c.type === 'item'),
+          survivors: finalDeck.filter(c => c.type === 'survivor'),
+          items: finalDeck.filter(c => c.type === 'item'),
+          rawMaterials: newMats,
           completedRuns: [...gameState.homeBase.completedRuns, completedRun],
         },
         currentRun: undefined,
@@ -339,10 +444,6 @@ export function useGame() {
     }
   }, [currentRun, gameState]);
 
-  /**
-   * Retreat from the current expedition before engaging combat
-   * Marks current stage as skipped and fails the run
-   */
   const retreatFromExpedition = useCallback(async () => {
     try {
       if (!currentRun || !gameState) throw new Error('No active run');
@@ -372,17 +473,11 @@ export function useGame() {
     }
   }, [currentRun, gameState]);
 
-  /**
-   * Build a barricade after stage 2 — provides +30 defense in stage 3
-   */
   const buildBarricade = useCallback(async () => {
     try {
       if (!currentRun || !gameState) throw new Error('No active run');
 
-      const updatedRun: Run = {
-        ...currentRun,
-        isBarricaded: true,
-      };
+      const updatedRun: Run = { ...currentRun, isBarricaded: true };
 
       const state = { ...gameState, currentRun: updatedRun, updatedAt: new Date().toISOString() };
       await repository.setGameState(state);
@@ -395,9 +490,6 @@ export function useGame() {
     }
   }, [currentRun, gameState]);
 
-  /**
-   * Advance recovery timers by 1 day
-   */
   const advanceDay = useCallback(async () => {
     try {
       await repository.advanceRecovery(1);
@@ -408,9 +500,6 @@ export function useGame() {
     }
   }, [refreshGameState]);
 
-  /**
-   * Reset game state to defaults (new game)
-   */
   const resetGame = useCallback(async () => {
     try {
       if (typeof window !== 'undefined') {
