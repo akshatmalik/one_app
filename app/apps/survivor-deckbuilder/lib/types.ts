@@ -3,6 +3,12 @@ export type CardType = 'survivor' | 'item' | 'action';
 export type CardStatus = 'healthy' | 'exhausted' | 'injured' | 'infected' | 'traumatized';
 export type SurvivorRole = 'healer' | 'fighter' | 'scout' | 'mechanic' | 'scientist';
 
+// Survivor hunger/condition states
+export type SurvivorCondition = 'healthy' | 'hungry' | 'starving';
+
+// Daily assignments at home base
+export type SurvivorAssignment = 'guard' | 'garden' | 'workshop' | 'infirmary' | 'scavenge' | 'rest' | null;
+
 // Run phase state machine
 export type RunPhase =
   | 'preparation'       // Selecting deck
@@ -31,6 +37,9 @@ export interface SpecialAbility {
   effect: (context: any) => void;
 }
 
+// Card category for visual tinge
+export type CardCategory = 'survivor' | 'weapon' | 'gear' | 'medical' | 'food' | 'action' | 'upgrade' | 'building' | 'seed';
+
 // Card data
 export interface Card {
   id: string;
@@ -38,6 +47,7 @@ export interface Card {
   name: string;
   description: string;
   imageUrl?: string;
+  category?: CardCategory; // visual tinge category
 
   // For survivors
   role?: SurvivorRole;
@@ -50,6 +60,9 @@ export interface Card {
 
   // For weapons — how many times they can be used before running dry
   maxAmmo?: number;
+
+  // Food value (consumables that provide food)
+  foodValue?: number;
 
   // Special ability
   special?: SpecialAbility;
@@ -70,6 +83,34 @@ export interface CardInstance extends Card {
   damageTaken?: number;
   // Current ammo remaining (weapons only, undefined = unlimited)
   ammo?: number;
+  // Survivor daily state
+  condition?: SurvivorCondition;
+  hungerDays?: number; // consecutive days hungry/starving
+  assignment?: SurvivorAssignment; // current home assignment
+  assignedToProduction?: string; // production chain ID if assigned to garden/workshop
+}
+
+// Production chain (garden or workshop slot)
+export interface ProductionChain {
+  id: string;
+  type: 'garden' | 'workshop';
+  survivorId: string;
+  seedCardId?: string; // for garden
+  craftRecipeId?: string; // for workshop
+  startDay: number;
+  daysRequired: number;
+  outputCardIds: string[]; // what gets produced
+  completed: boolean;
+}
+
+// Craft recipe for workshop
+export interface CraftRecipe {
+  id: string;
+  name: string;
+  outputCardId: string;
+  cost: Partial<RawMaterials>;
+  daysRequired: number;
+  requiresMechanic?: boolean;
 }
 
 // Hand (cards drawn for current encounter)
@@ -176,6 +217,7 @@ export interface RawMaterials {
   wood: number;
   cloth: number;
   medicalSupplies: number;
+  food?: number; // food rations
 }
 
 // Loot rolled on stage victory
@@ -237,6 +279,15 @@ export interface HomeBaseState {
   rawMaterials: RawMaterials;
   // Barricade built at home — applies defense bonus to next run
   homeBarricadeLevel: number; // 0 = none, 1 = built
+
+  // Daily survival systems
+  day: number; // current day number (starts 1)
+  food: number; // food rations available
+  baseHP: number; // home base integrity 0-100
+  morale: number; // group morale 0-100
+
+  // Active production chains
+  productionChains: ProductionChain[];
 }
 
 // Game state

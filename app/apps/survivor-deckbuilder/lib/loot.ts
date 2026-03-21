@@ -3,42 +3,51 @@ import { STARTER_CARDS } from './cards';
 
 // ── Loot pools per stage difficulty ──────────────────────────────────────────
 
-// Stage 1 — Common drops (meds, food, basic supplies)
+// Stage 1 — Common drops (meds, food, basic supplies, seeds)
 const STAGE_1_POOL: string[] = [
   'card_antibiotics_001',
   'card_food_001',
+  'card_ration_001',
+  'card_ration_001', // higher weight
+  'card_food_001',   // higher weight
   'card_gasoline_001',
+  'card_vegseeds_001',
 ];
 
-// Stage 2 — Mid drops (gear, protection, medical)
+// Stage 2 — Mid drops (gear, protection, medical, seeds)
 const STAGE_2_POOL: string[] = [
   'card_flak_001',
   'card_medkit_001',
   'card_antibiotics_001',
   'card_food_001',
+  'card_ration_001',
+  'card_vegseeds_001',
+  'card_herbseeds_001',
 ];
 
-// Stage 3 — Rare drops (weapons, optics)
+// Stage 3 — Rare drops (weapons, optics, seeds)
 const STAGE_3_POOL: string[] = [
   'card_rifle_001',
   'card_shotgun_001',
   'card_goggles_001',
   'card_medkit_001',
+  'card_herbseeds_001',
+  'card_vegseeds_001',
 ];
 
 // Raw material drops per stage
 const STAGE_MATERIALS: Record<number, { min: RawMaterials; max: RawMaterials }> = {
   1: {
-    min: { scrapMetal: 0, wood: 0, cloth: 1, medicalSupplies: 1 },
-    max: { scrapMetal: 1, wood: 1, cloth: 2, medicalSupplies: 2 },
+    min: { scrapMetal: 0, wood: 0, cloth: 1, medicalSupplies: 1, food: 1 },
+    max: { scrapMetal: 1, wood: 1, cloth: 2, medicalSupplies: 2, food: 3 },
   },
   2: {
-    min: { scrapMetal: 1, wood: 1, cloth: 0, medicalSupplies: 1 },
-    max: { scrapMetal: 3, wood: 2, cloth: 1, medicalSupplies: 2 },
+    min: { scrapMetal: 1, wood: 1, cloth: 0, medicalSupplies: 1, food: 1 },
+    max: { scrapMetal: 3, wood: 2, cloth: 1, medicalSupplies: 2, food: 3 },
   },
   3: {
-    min: { scrapMetal: 2, wood: 1, cloth: 1, medicalSupplies: 2 },
-    max: { scrapMetal: 4, wood: 3, cloth: 2, medicalSupplies: 3 },
+    min: { scrapMetal: 2, wood: 1, cloth: 1, medicalSupplies: 2, food: 2 },
+    max: { scrapMetal: 4, wood: 3, cloth: 2, medicalSupplies: 3, food: 4 },
   },
 };
 
@@ -99,6 +108,7 @@ export function rollStageLoot(stage: 1 | 2 | 3): StageLoot {
     wood: randInt(matRange.min.wood, matRange.max.wood),
     cloth: randInt(matRange.min.cloth, matRange.max.cloth),
     medicalSupplies: randInt(matRange.min.medicalSupplies, matRange.max.medicalSupplies),
+    food: randInt(matRange.min.food ?? 0, matRange.max.food ?? 0),
   };
 
   return { items, materials };
@@ -113,6 +123,7 @@ export function addMaterials(a: RawMaterials, b: RawMaterials): RawMaterials {
     wood: a.wood + b.wood,
     cloth: a.cloth + b.cloth,
     medicalSupplies: a.medicalSupplies + b.medicalSupplies,
+    food: (a.food ?? 0) + (b.food ?? 0),
   };
 }
 
@@ -121,4 +132,5 @@ export const EMPTY_MATERIALS: RawMaterials = {
   wood: 0,
   cloth: 0,
   medicalSupplies: 0,
+  food: 0,
 };

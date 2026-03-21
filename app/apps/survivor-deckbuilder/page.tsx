@@ -1,26 +1,46 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useGame } from './hooks/useGame';
-import { CardInstance } from './lib/types';
+import { CardInstance, SurvivorAssignment } from './lib/types';
 import { RunScreen } from './components/RunScreen';
 import { PrepareRunScreen } from './components/PrepareRunScreen';
+import { CompoundView } from './components/CompoundView';
 
-type View = 'home' | 'prepare' | 'run';
+type View = 'home' | 'prepare' | 'run' | 'compound';
 
-const MATERIAL_ICONS: Record<string, string> = {
+const MAT_ICONS: Record<string, string> = {
   scrapMetal: '⚙',
   wood: '▤',
   cloth: '◫',
   medicalSupplies: '✚',
+  food: '◆',
 };
 
-const MATERIAL_LABELS: Record<string, string> = {
-  scrapMetal: 'Scrap',
-  wood: 'Wood',
-  cloth: 'Cloth',
-  medicalSupplies: 'Meds',
+const ASSIGNMENT_CONFIG: Record<NonNullable<SurvivorAssignment>, { label: string; icon: string; color: string }> = {
+  guard:     { label: 'Guard',     icon: '🛡', color: 'text-red-600 border-red-900/60' },
+  garden:    { label: 'Garden',    icon: '🌱', color: 'text-green-600 border-green-900/60' },
+  workshop:  { label: 'Workshop',  icon: '⚙', color: 'text-amber-600 border-amber-900/60' },
+  infirmary: { label: 'Infirmary', icon: '✚', color: 'text-emerald-600 border-emerald-900/60' },
+  scavenge:  { label: 'Scavenge',  icon: '◎', color: 'text-sky-600 border-sky-900/60' },
+  rest:      { label: 'Rest',      icon: '◒', color: 'text-stone-500 border-stone-700' },
 };
+
+const CONDITION_CONFIG = {
+  healthy:  { icon: '', color: '' },
+  hungry:   { icon: '⚠', color: 'text-amber-600' },
+  starving: { icon: '☠', color: 'text-red-600' },
+};
+
+interface NightReport {
+  day: number;
+  foodConsumed: number;
+  shortfall: number;
+  raidHappened: boolean;
+  raidResult: 'none' | 'defended' | 'damaged';
+  productionsCompleted: number;
+  scavengeGain: number;
+}
 
 export default function SurvivorDeckBuilder() {
   const {
@@ -37,16 +57,37 @@ export default function SurvivorDeckBuilder() {
     continueAfterCombat,
     advanceToNextStage,
     completeRun,
-    advanceDay,
     retreatFromExpedition,
     buildHomeBarricade,
     canBuildHomeBarricade,
+    endDay,
+    assignSurvivor,
+    startGarden,
     resetGame,
   } = useGame();
 
   const [view, setView] = useState<View>('home');
+  const [nightReport, setNightReport] = useState<NightReport | null>(null);
+  const [assigningId, setAssigningId] = useState<string | null>(null);
+  const [gardenSurvivorId, setGardenSurvivorId] = useState<string | null>(null);
 
   const activeView = currentRun ? 'run' : view;
+
+  const handleEndDay = useCallback(async () => {
+    const report = await endDay();
+    setNightReport(report);
+    setAssigningId(null);
+  }, [endDay]);
+
+  const handleAssign = useCallback(async (survivorId: string, assignment: SurvivorAssignment) => {
+    await assignSurvivor(survivorId, assignment);
+    setAssigningId(null);
+  }, [assignSurvivor]);
+
+  const handleStartGarden = useCallback(async (survivorId: string, seedId: string) => {
+    await startGarden(survivorId, seedId);
+    setGardenSurvivorId(null);
+  }, [startGarden]);
 
   if (loading) {
     return (
@@ -100,12 +141,15 @@ export default function SurvivorDeckBuilder() {
 
   // === PREPARE VIEW ===
   if (activeView === 'prepare') {
+    const unassignedSurvivors = getSurvivors().filter(s => !s.assignment || s.assignment === null);
+    const unassignedItems = getItems().filter(c => !c.exhausted);
+    const unassignedActions = getActions().filter(c => !c.exhausted);
     return (
       <div className="fixed inset-0 z-[9999] bg-stone-950 overflow-y-auto">
         <PrepareRunScreen
-          survivors={getSurvivors()}
-          items={getItems()}
-          actions={getActions()}
+          survivors={unassignedSurvivors}
+          items={unassignedItems}
+          actions={unassignedActions}
           onLaunch={async (deck: CardInstance[]) => {
             await startRun(deck);
           }}
@@ -115,343 +159,445 @@ export default function SurvivorDeckBuilder() {
     );
   }
 
+  // === COMPOUND VIEW ===
+  if (activeView === 'compound') {
+    return (
+      <div className="fixed inset-0 z-[9999] bg-stone-950 overflow-y-auto">
+        <CompoundView
+          deck={gameState.deck}
+          rawMaterials={gameState.homeBase.rawMaterials}
+          onBack={() => setView('home')}
+        />
+      </div>
+    );
+  }
+
   // === HOME BASE ===
-  const availableCards = getAvailableCards();
-  const exhaustedCards = gameState.deck.filter(c => c.exhausted);
-  const completedRuns = gameState.homeBase.completedRuns;
+  const hb = gameState.homeBase;
   const survivors = getSurvivors();
   const items = getItems();
   const actions = getActions();
+  const availableCards = getAvailableCards();
+  const exhaustedCards = gameState.deck.filter(c => c.exhausted);
+  const completedRuns = hb.completedRuns;
+  const rawMats = hb.rawMaterials;
+  const barricadeBuilt = (hb.homeBarricadeLevel ?? 0) > 0;
+  const canBarricade = canBuildHomeBarricade();
 
-  const availableSurvivors = availableCards.filter(c => c.type === 'survivor');
-  const canLaunch = availableSurvivors.length >= 2
-    && availableCards.filter(c => c.type !== 'survivor').length >= 2;
+  // Seeds in inventory
+  const seedCards = gameState.deck.filter(c => c.category === 'seed' && !c.exhausted);
 
+  // Survivors available for expedition (not assigned)
+  const freeSurvivors = survivors.filter(s => !s.assignment && !s.exhausted);
+  const freeItems = availableCards.filter(c => c.type !== 'survivor');
+  const canLaunch = freeSurvivors.length >= 2 && freeItems.length >= 2;
+
+  // Active production
+  const activeProductions = hb.productionChains.filter(p => !p.completed);
   const totalRuns = completedRuns.length;
   const successfulRuns = completedRuns.filter(r => r.status === 'completed').length;
 
-  const rawMats = gameState.homeBase.rawMaterials;
-  const hasMats = rawMats && (Object.values(rawMats) as number[]).some(v => v > 0);
-  const barricadeBuilt = (gameState.homeBase.homeBarricadeLevel ?? 0) > 0;
-  const canBarricade = canBuildHomeBarricade();
-
-  // Last run info for post-run debrief
-  const lastRun = completedRuns[completedRuns.length - 1];
-  type MatAcc = { scrapMetal: number; wood: number; cloth: number; medicalSupplies: number };
-  const lastRunMatsGained: MatAcc | null = lastRun
-    ? (Object.values(lastRun.stagedLoot ?? {}) as Array<{ materials: MatAcc }>).reduce(
-        (acc: MatAcc, loot: { materials: MatAcc }) => {
-          acc.scrapMetal += loot.materials.scrapMetal;
-          acc.wood += loot.materials.wood;
-          acc.cloth += loot.materials.cloth;
-          acc.medicalSupplies += loot.materials.medicalSupplies;
-          return acc;
-        },
-        { scrapMetal: 0, wood: 0, cloth: 0, medicalSupplies: 0 }
-      )
-    : null;
-  const lastRunHasMats = lastRunMatsGained && Object.values(lastRunMatsGained).some((v: number) => v > 0);
-  // Show debrief only if last run was recent (exhausted cards exist — means run just completed)
-  const showDebrief = exhaustedCards.length > 0 && lastRun;
+  const moralePct = hb.morale ?? 70;
+  const basePct = hb.baseHP ?? 100;
+  const foodCount = hb.food ?? 0;
+  const currentDay = hb.day ?? 1;
+  const foodNeeded = survivors.length;
+  const foodColor = foodCount >= foodNeeded * 2 ? 'text-green-500' : foodCount >= foodNeeded ? 'text-amber-500' : 'text-red-500';
 
   return (
     <div className="fixed inset-0 z-[9999] bg-stone-950 text-stone-300 overflow-y-auto">
-      <div className="min-h-full flex flex-col">
+      <div className="min-h-full flex flex-col pb-6">
 
-        {/* Header */}
-        <div className="px-5 pt-8 pb-4 border-b border-stone-900">
-          <p className="text-[9px] text-stone-700 font-mono tracking-widest uppercase mb-1">
-            SAFE HOUSE
-          </p>
-          <div className="flex items-end justify-between">
+        {/* ── HEADER ── */}
+        <div className="px-5 pt-6 pb-3 border-b border-stone-900">
+          <div className="flex items-start justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-stone-200 uppercase tracking-wider font-mono">
-                SURVIVOR
+              <p className="text-[8px] text-stone-700 font-mono tracking-widest uppercase">SAFE HOUSE</p>
+              <h1 className="text-xl font-bold text-stone-200 uppercase tracking-wider font-mono leading-none mt-0.5">
+                DAY {currentDay}
               </h1>
-              <p className="text-stone-700 text-xs font-mono">
-                Day {totalRuns + 1}
+              <p className="text-[9px] text-stone-600 font-mono mt-0.5">
+                {successfulRuns}/{totalRuns} expeditions
               </p>
             </div>
-            {/* Materials — subtle pill row */}
-            {hasMats && (
-              <div className="flex gap-1.5 flex-wrap justify-end">
-                {Object.entries(rawMats).map(([key, val]) => {
-                  if (val === 0) return null;
-                  return (
-                    <span key={key} className="text-[10px] font-mono text-stone-500 flex items-center gap-0.5">
-                      <span className="text-stone-600">{MATERIAL_ICONS[key]}</span>
-                      {val}
-                    </span>
-                  );
-                })}
+            {/* Food — prominent */}
+            <div className="text-right">
+              <p className={`text-3xl font-bold font-mono leading-none ${foodColor}`}>{foodCount}</p>
+              <p className="text-[9px] text-stone-600 font-mono">FOOD</p>
+              <p className="text-[8px] text-stone-700 font-mono">needs {foodNeeded}/day</p>
+            </div>
+          </div>
+
+          {/* Vital bars */}
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <div>
+              <div className="flex items-center justify-between mb-0.5">
+                <span className="text-[8px] text-stone-700 font-mono uppercase">BASE</span>
+                <span className="text-[8px] text-stone-600 font-mono">{basePct}</span>
               </div>
-            )}
+              <div className="h-0.5 bg-stone-800 rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full ${basePct > 60 ? 'bg-stone-500' : basePct > 30 ? 'bg-amber-700' : 'bg-red-700'}`}
+                  style={{ width: `${basePct}%` }}
+                />
+              </div>
+            </div>
+            <div>
+              <div className="flex items-center justify-between mb-0.5">
+                <span className="text-[8px] text-stone-700 font-mono uppercase">MORALE</span>
+                <span className="text-[8px] text-stone-600 font-mono">{moralePct}</span>
+              </div>
+              <div className="h-0.5 bg-stone-800 rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full ${moralePct > 60 ? 'bg-emerald-700' : moralePct > 30 ? 'bg-amber-700' : 'bg-red-700'}`}
+                  style={{ width: `${moralePct}%` }}
+                />
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Status grid */}
-        <div className="px-5 py-3 border-b border-stone-900">
-          <div className="grid grid-cols-3 gap-2">
-            <div className="border border-stone-800 bg-stone-900 p-2.5 text-center">
-              <p className="text-xl font-bold text-stone-300 font-mono">{availableCards.length}</p>
-              <p className="text-[8px] text-stone-700 font-mono tracking-widest uppercase mt-0.5">READY</p>
+        {/* ── NIGHT REPORT ── */}
+        {nightReport && (
+          <div className="mx-5 mt-3 border border-stone-700 bg-stone-900/60 rounded p-3">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-[9px] text-stone-500 font-mono uppercase tracking-widest">
+                NIGHT REPORT — Day {nightReport.day}
+              </p>
+              <button
+                onClick={() => setNightReport(null)}
+                className="text-[9px] text-stone-700 font-mono hover:text-stone-500"
+              >
+                ✕
+              </button>
             </div>
-            <div className="border border-stone-800 bg-stone-900 p-2.5 text-center">
-              <p className="text-xl font-bold text-stone-300 font-mono">{exhaustedCards.length}</p>
-              <p className="text-[8px] text-stone-700 font-mono tracking-widest uppercase mt-0.5">RECOVERING</p>
+            <div className="space-y-1 text-[10px] font-mono">
+              <p className={nightReport.shortfall > 0 ? 'text-amber-600' : 'text-stone-500'}>
+                ◆ Food: {nightReport.shortfall > 0 ? `−${nightReport.shortfall} short` : `−${nightReport.foodConsumed} consumed`}
+              </p>
+              {nightReport.raidHappened && (
+                <p className={nightReport.raidResult === 'defended' ? 'text-green-600' : 'text-red-600'}>
+                  {nightReport.raidResult === 'defended' ? '🛡 Raid repelled' : '💥 Raid hit base −15 HP'}
+                </p>
+              )}
+              {nightReport.productionsCompleted > 0 && (
+                <p className="text-green-600">🌱 {nightReport.productionsCompleted} item(s) harvested</p>
+              )}
+              {nightReport.scavengeGain > 0 && (
+                <p className="text-sky-600">◎ Scavenged +{nightReport.scavengeGain} food</p>
+              )}
             </div>
-            <div className="border border-stone-800 bg-stone-900 p-2.5 text-center">
-              <p className="text-xl font-bold text-stone-300 font-mono">{successfulRuns}/{totalRuns}</p>
-              <p className="text-[8px] text-stone-700 font-mono tracking-widest uppercase mt-0.5">RUNS</p>
-            </div>
-          </div>
-        </div>
-
-        {/* === POST-RUN DEBRIEF === */}
-        {showDebrief && (
-          <div className="px-5 py-4 border-b border-stone-900 bg-stone-900/30">
-            <p className="text-[9px] text-amber-800 font-mono tracking-widest uppercase mb-3">
-              ── BACK AT BASE ───────────────────────
-            </p>
-
-            {/* Materials brought back */}
-            {lastRunHasMats && (
-              <div className="mb-3">
-                <p className="text-[9px] text-stone-700 font-mono uppercase mb-1.5">SALVAGED</p>
-                <div className="flex gap-2 flex-wrap">
-                  {Object.entries(lastRunMatsGained!).map(([key, val]) => {
-                    if (val === 0) return null;
-                    return (
-                      <div key={key} className="flex items-center gap-1 border border-stone-800 bg-stone-900 px-2 py-1 rounded">
-                        <span className="text-stone-600 text-xs">{MATERIAL_ICONS[key]}</span>
-                        <span className="text-[10px] text-stone-400 font-mono">{MATERIAL_LABELS[key]}</span>
-                        <span className="text-[10px] text-stone-300 font-mono font-bold ml-0.5">+{val}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* Building tasks */}
-            <p className="text-[9px] text-stone-700 font-mono uppercase mb-1.5">PENDING TASKS</p>
-
-            {/* Barricade */}
-            {!barricadeBuilt && (
-              <div className="border border-stone-800 bg-stone-900 rounded mb-2">
-                <div className="px-3 py-2.5">
-                  <div className="flex items-center justify-between mb-1">
-                    <div>
-                      <p className="text-xs text-stone-300 font-mono font-bold">BUILD BARRICADE</p>
-                      <p className="text-[9px] text-stone-600 font-mono">+30 defense on next run · costs ▤2 ⚙1</p>
-                    </div>
-                    <button
-                      onClick={buildHomeBarricade}
-                      disabled={!canBarricade}
-                      className={`px-3 py-1.5 font-mono text-[10px] tracking-widest uppercase border transition-colors ${
-                        canBarricade
-                          ? 'border-amber-800 text-amber-700 hover:bg-amber-900/20 active:scale-[0.97]'
-                          : 'border-stone-800 text-stone-700 cursor-not-allowed'
-                      }`}
-                    >
-                      {canBarricade ? 'BUILD' : 'NEED MATS'}
-                    </button>
-                  </div>
-                  {!canBarricade && (
-                    <p className="text-[9px] text-stone-700 font-mono">
-                      Need: 2 wood ({rawMats.wood} available) · 1 scrap ({rawMats.scrapMetal} available)
-                    </p>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {barricadeBuilt && (
-              <div className="border border-amber-900/50 bg-amber-950/20 px-3 py-2 rounded mb-2 flex items-center gap-2">
-                <span className="text-amber-700 text-sm">▦</span>
-                <div>
-                  <p className="text-[10px] text-amber-700 font-mono font-bold">BARRICADE READY</p>
-                  <p className="text-[9px] text-stone-600 font-mono">Next run starts fortified (+30 DEF)</p>
-                </div>
-              </div>
-            )}
-
-            {/* Rest — advance day */}
-            {exhaustedCards.length > 0 && (
-              <div className="border border-stone-800 bg-stone-900 rounded">
-                <div className="px-3 py-2.5 flex items-center justify-between">
-                  <div>
-                    <p className="text-xs text-stone-300 font-mono font-bold">REST TEAM</p>
-                    <p className="text-[9px] text-stone-600 font-mono">{exhaustedCards.length} recovering · advance day</p>
-                  </div>
-                  <button
-                    onClick={advanceDay}
-                    className="px-3 py-1.5 font-mono text-[10px] tracking-widest uppercase border border-stone-700 text-stone-500 hover:text-stone-400 hover:border-stone-600 transition-colors active:scale-[0.97]"
-                  >
-                    REST
-                  </button>
-                </div>
-              </div>
-            )}
           </div>
         )}
 
-        {/* Survivors roster */}
-        <div className="px-5 py-4 border-b border-stone-900">
-          <p className="text-[9px] text-stone-700 font-mono tracking-widest uppercase mb-2">SURVIVORS</p>
-          <div className="space-y-1">
+        {/* ── SURVIVORS + ASSIGNMENTS ── */}
+        <div className="px-5 pt-4">
+          <p className="text-[8px] text-stone-700 font-mono tracking-widest uppercase mb-2">SURVIVORS</p>
+          <div className="space-y-1.5">
             {survivors.map(s => {
               const hp = s.currentHealth ?? s.maxHealth ?? 100;
               const maxHp = s.maxHealth ?? 100;
               const pct = (hp / maxHp) * 100;
+              const assignment = s.assignment as NonNullable<SurvivorAssignment> | null;
+              const assConf = assignment ? ASSIGNMENT_CONFIG[assignment] : null;
+              const condConf = CONDITION_CONFIG[(s.condition ?? 'healthy') as keyof typeof CONDITION_CONFIG];
+              const isExpanded = assigningId === s.id;
+              const isGardenSetup = gardenSurvivorId === s.id;
+              const inProduction = !!s.assignedToProduction;
+
               return (
-                <div key={s.id} className={`flex items-center gap-3 border border-stone-800 px-3 py-2 ${s.exhausted ? 'bg-stone-900/40 opacity-50' : 'bg-stone-900'}`}>
-                  <div className="flex-1 min-w-0">
-                    <p className={`text-xs font-mono uppercase font-bold ${s.exhausted ? 'text-stone-600' : 'text-stone-300'}`}>
-                      {s.name}
-                    </p>
-                    <p className="text-[9px] text-stone-600 font-mono uppercase">
-                      {s.role}{s.exhausted ? ` · ${s.recoveryTime}d` : ' · READY'}
-                    </p>
+                <div key={s.id}>
+                  <div
+                    className={`border rounded overflow-hidden ${
+                      s.exhausted ? 'border-stone-800 bg-stone-900/30 opacity-60' : 'border-stone-800 bg-stone-900'
+                    }`}
+                  >
+                    <div className="px-3 py-2 flex items-center gap-3">
+                      {/* Name + role */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <p className="text-xs font-mono font-bold text-stone-300 uppercase truncate">
+                            {s.name?.split(' ')[0]}
+                          </p>
+                          {condConf.icon && (
+                            <span className={`text-[10px] ${condConf.color}`}>{condConf.icon}</span>
+                          )}
+                        </div>
+                        <p className="text-[8px] text-stone-600 font-mono uppercase">
+                          {s.role} {s.exhausted ? `· ${s.recoveryTime}d` : ''}
+                        </p>
+                      </div>
+
+                      {/* HP bar */}
+                      <div className="w-12 h-0.5 bg-stone-800 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full ${pct > 60 ? 'bg-stone-500' : pct > 30 ? 'bg-amber-700' : 'bg-red-800'}`}
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                      <span className="text-[9px] text-stone-600 font-mono tabular-nums w-8 text-right">{hp}</span>
+
+                      {/* Assignment badge / button */}
+                      {!s.exhausted && !inProduction && (
+                        <button
+                          onClick={() => setAssigningId(isExpanded ? null : s.id)}
+                          className={`text-[9px] font-mono border px-2 py-0.5 rounded transition-colors ${
+                            assConf
+                              ? assConf.color
+                              : 'border-stone-800 text-stone-600 hover:border-stone-700'
+                          }`}
+                        >
+                          {assConf ? `${assConf.icon} ${assConf.label}` : '+ ASSIGN'}
+                        </button>
+                      )}
+                      {inProduction && (
+                        <span className="text-[9px] font-mono text-green-700 border border-green-900/40 px-2 py-0.5 rounded">
+                          🌱 WORKING
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Assignment panel */}
+                    {isExpanded && !s.exhausted && !inProduction && (
+                      <div className="border-t border-stone-800 bg-stone-950/40 px-3 py-2">
+                        <div className="flex flex-wrap gap-1.5">
+                          {(Object.keys(ASSIGNMENT_CONFIG) as NonNullable<SurvivorAssignment>[]).map(asgn => {
+                            const conf = ASSIGNMENT_CONFIG[asgn];
+                            const isGarden = asgn === 'garden';
+                            const hasSeed = seedCards.length > 0;
+                            const isActive = s.assignment === asgn;
+                            return (
+                              <button
+                                key={asgn}
+                                disabled={isGarden && !hasSeed}
+                                onClick={() => {
+                                  if (isActive) {
+                                    handleAssign(s.id, null);
+                                  } else if (isGarden && hasSeed) {
+                                    setGardenSurvivorId(s.id);
+                                    setAssigningId(null);
+                                  } else {
+                                    handleAssign(s.id, asgn);
+                                  }
+                                }}
+                                className={`text-[9px] font-mono border px-2 py-1 rounded transition-colors ${
+                                  isActive
+                                    ? conf.color + ' bg-stone-800'
+                                    : isGarden && !hasSeed
+                                      ? 'border-stone-900 text-stone-700 cursor-not-allowed'
+                                      : 'border-stone-800 text-stone-500 hover:text-stone-300 hover:border-stone-600'
+                                }`}
+                              >
+                                {conf.icon} {conf.label}
+                                {isGarden && !hasSeed && ' (no seeds)'}
+                              </button>
+                            );
+                          })}
+                          {s.assignment && (
+                            <button
+                              onClick={() => handleAssign(s.id, null)}
+                              className="text-[9px] font-mono border border-stone-800 text-stone-600 px-2 py-1 rounded hover:text-stone-400"
+                            >
+                              ✕ CLEAR
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Garden seed selection */}
+                    {isGardenSetup && (
+                      <div className="border-t border-stone-800 bg-stone-950/40 px-3 py-2">
+                        <p className="text-[8px] text-stone-600 font-mono uppercase mb-1.5">CHOOSE SEED</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {seedCards.map(seed => (
+                            <button
+                              key={seed.id}
+                              onClick={() => handleStartGarden(s.id, seed.id)}
+                              className="text-[9px] font-mono border border-green-900/50 text-green-700 px-2 py-1 rounded hover:bg-green-950/20"
+                            >
+                              🌱 {seed.name}
+                            </button>
+                          ))}
+                          <button
+                            onClick={() => setGardenSurvivorId(null)}
+                            className="text-[9px] font-mono border border-stone-800 text-stone-600 px-2 py-1 rounded"
+                          >
+                            CANCEL
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                  <div className="w-14 h-0.5 bg-stone-800 rounded-full overflow-hidden">
-                    <div
-                      className={`h-full ${pct > 60 ? 'bg-stone-500' : pct > 30 ? 'bg-amber-700' : 'bg-red-800'}`}
-                      style={{ width: `${pct}%` }}
-                    />
-                  </div>
-                  <span className="text-[9px] text-stone-600 font-mono w-10 text-right tabular-nums">{hp}/{maxHp}</span>
                 </div>
               );
             })}
           </div>
         </div>
 
-        {/* Gear inventory */}
-        <div className="px-5 py-4 border-b border-stone-900">
-          <p className="text-[9px] text-stone-700 font-mono tracking-widest uppercase mb-2">
-            GEAR ({availableCards.filter(c => c.type !== 'survivor').length} ready)
-          </p>
-          <div className="flex flex-wrap gap-1">
-            {[...items, ...actions].map(card => {
-              const isWeapon = card.maxAmmo !== undefined;
-              return (
-                <div
-                  key={card.id}
-                  className={`text-[10px] font-mono border px-2 py-1 rounded ${
-                    card.exhausted
-                      ? 'border-stone-900 text-stone-700 bg-stone-900/30'
-                      : 'border-stone-800 text-stone-500 bg-stone-900'
-                  }`}
-                >
-                  <span>{card.name}</span>
-                  {isWeapon && card.maxAmmo && (
-                    <span className="ml-1 text-stone-600">
-                      {Array.from({ length: card.maxAmmo }).map((_, i) => (
-                        <span key={i} className="text-[8px]">●</span>
-                      ))}
-                    </span>
-                  )}
-                  {card.exhausted && <span className="text-stone-700 ml-1">({card.recoveryTime}d)</span>}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Materials store — full breakdown when not in debrief */}
-        {hasMats && !showDebrief && (
-          <div className="px-5 py-4 border-b border-stone-900">
-            <p className="text-[9px] text-stone-700 font-mono tracking-widest uppercase mb-2">MATERIALS</p>
-            <div className="grid grid-cols-2 gap-1">
-              {Object.entries(rawMats).map(([key, val]) => {
-                if (val === 0) return null;
+        {/* ── ACTIVE PRODUCTION ── */}
+        {activeProductions.length > 0 && (
+          <div className="px-5 pt-4">
+            <p className="text-[8px] text-stone-700 font-mono tracking-widest uppercase mb-2">PRODUCTION</p>
+            <div className="space-y-1.5">
+              {activeProductions.map(chain => {
+                const elapsed = currentDay - chain.startDay;
+                const pct = Math.min(100, (elapsed / chain.daysRequired) * 100);
+                const remaining = Math.max(0, chain.daysRequired - elapsed);
+                const producer = survivors.find(s => s.id === chain.survivorId);
                 return (
-                  <div key={key} className="border border-stone-800 bg-stone-900 px-3 py-2 flex items-center gap-2 rounded">
-                    <span className="text-stone-600 text-xs">{MATERIAL_ICONS[key]}</span>
-                    <span className="text-[10px] text-stone-500 font-mono">{MATERIAL_LABELS[key]}</span>
-                    <span className="ml-auto text-xs font-mono font-bold text-stone-300">{val}</span>
+                  <div key={chain.id} className="border border-green-900/40 bg-green-950/10 px-3 py-2 rounded">
+                    <div className="flex items-center justify-between mb-1">
+                      <p className="text-[10px] text-green-700 font-mono font-bold uppercase">
+                        🌱 {chain.type} · {producer?.name?.split(' ')[0] ?? '?'}
+                      </p>
+                      <p className="text-[9px] text-stone-600 font-mono">{remaining}d left</p>
+                    </div>
+                    <div className="h-0.5 bg-stone-800 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-green-800 rounded-full transition-all"
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
                   </div>
                 );
               })}
             </div>
-
-            {/* Barricade option when debrief isn't showing */}
-            {!barricadeBuilt && (
-              <button
-                onClick={buildHomeBarricade}
-                disabled={!canBarricade}
-                className={`mt-2 w-full py-2 font-mono text-xs tracking-widest uppercase border transition-colors ${
-                  canBarricade
-                    ? 'border-amber-800 text-amber-700 hover:bg-amber-900/20'
-                    : 'border-stone-900 text-stone-700 cursor-not-allowed'
-                }`}
-              >
-                {canBarricade ? '▦ BUILD BARRICADE (▤2 ⚙1)' : '▦ BARRICADE — NEED ▤2 ⚙1'}
-              </button>
-            )}
-            {barricadeBuilt && (
-              <div className="mt-2 border border-amber-900/40 px-3 py-1.5 rounded flex items-center gap-2">
-                <span className="text-amber-700 text-xs">▦</span>
-                <span className="text-[10px] text-amber-700 font-mono">FORTIFIED — next run +30 DEF</span>
-              </div>
-            )}
           </div>
         )}
 
-        {/* Actions */}
-        <div className="px-5 py-4 space-y-2">
-          <button
-            onClick={() => setView('prepare')}
-            disabled={!canLaunch}
-            className={`w-full py-3.5 font-mono font-bold text-sm tracking-widest uppercase border transition-colors ${
-              canLaunch
-                ? 'bg-stone-800 hover:bg-stone-700 border-stone-700 text-stone-200 active:scale-[0.98]'
-                : 'bg-stone-900 border-stone-900 text-stone-700 cursor-not-allowed'
-            }`}
-          >
-            {canLaunch ? 'PREPARE EXPEDITION →' : 'CARDS RECOVERING...'}
-          </button>
+        {/* ── BARRICADE STATUS ── */}
+        {barricadeBuilt && (
+          <div className="px-5 pt-3">
+            <div className="border border-amber-900/40 bg-amber-950/10 px-3 py-2 rounded flex items-center gap-2">
+              <span className="text-amber-700 text-sm">▦</span>
+              <p className="text-[10px] text-amber-700 font-mono">FORTIFIED · next run +30 DEF</p>
+            </div>
+          </div>
+        )}
 
-          {!canLaunch && (
-            <p className="text-[9px] text-stone-700 font-mono text-center">
-              Need 2 survivors + 2 gear ready.
-            </p>
-          )}
-
-          {exhaustedCards.length > 0 && !showDebrief && (
+        {/* ── MATERIALS ── */}
+        <div className="px-5 pt-4">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-[8px] text-stone-700 font-mono tracking-widest uppercase">STORES</p>
             <button
-              onClick={advanceDay}
-              className="w-full py-2.5 font-mono text-xs tracking-widest uppercase border border-stone-900 text-stone-600 hover:text-stone-500 hover:border-stone-800 transition-colors"
+              onClick={() => setView('compound')}
+              className="text-[8px] text-stone-600 font-mono uppercase hover:text-stone-400 transition-colors"
             >
-              ADVANCE DAY ({exhaustedCards.length} recovering)
+              COMPOUND →
+            </button>
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            {Object.entries(rawMats).map(([key, val]) => {
+              if ((val ?? 0) === 0) return null;
+              return (
+                <div key={key} className="flex items-center gap-1 border border-stone-800 bg-stone-900 px-2 py-1.5 rounded">
+                  <span className="text-stone-600 text-xs">{MAT_ICONS[key] ?? '?'}</span>
+                  <span className="text-xs font-mono font-bold text-stone-300">{val}</span>
+                </div>
+              );
+            })}
+            {Object.values(rawMats).every(v => (v ?? 0) === 0) && (
+              <p className="text-[9px] text-stone-700 font-mono">No materials</p>
+            )}
+          </div>
+
+          {/* Barricade build option */}
+          {!barricadeBuilt && canBarricade && (
+            <button
+              onClick={buildHomeBarricade}
+              className="mt-2 w-full py-2 font-mono text-xs tracking-widest uppercase border border-amber-900/60 text-amber-800 hover:bg-amber-950/20 transition-colors rounded"
+            >
+              ▦ BUILD BARRICADE (▤2 ⚙1)
             </button>
           )}
         </div>
 
-        {/* Run log */}
-        {completedRuns.length > 0 && (
-          <div className="px-5 pb-4 border-t border-stone-900 mt-2">
-            <p className="text-[9px] text-stone-700 font-mono tracking-widest uppercase mb-2 mt-4">
-              EXPEDITION LOG
+        {/* ── GEAR OVERVIEW ── */}
+        {(items.length > 0 || actions.length > 0) && (
+          <div className="px-5 pt-4">
+            <p className="text-[8px] text-stone-700 font-mono tracking-widest uppercase mb-2">
+              GEAR ({freeItems.length} ready)
             </p>
+            <div className="flex flex-wrap gap-1">
+              {[...items, ...actions].slice(0, 8).map(card => (
+                <div
+                  key={card.id}
+                  className={`text-[9px] font-mono border px-1.5 py-0.5 rounded ${
+                    card.exhausted
+                      ? 'border-stone-900 text-stone-700'
+                      : 'border-stone-800 text-stone-500'
+                  }`}
+                >
+                  {card.name?.split(' ')[0]}
+                  {card.exhausted && <span className="text-stone-700 ml-0.5">({card.recoveryTime}d)</span>}
+                  {card.maxAmmo !== undefined && !card.exhausted && (
+                    <span className="ml-0.5 text-red-900">
+                      {Array.from({ length: Math.min(card.ammo ?? card.maxAmmo, 6) }).map((_, i) => (
+                        <span key={i} className="text-[7px]">●</span>
+                      ))}
+                    </span>
+                  )}
+                </div>
+              ))}
+              {[...items, ...actions].length > 8 && (
+                <span className="text-[9px] text-stone-700 font-mono px-1.5 py-0.5">
+                  +{[...items, ...actions].length - 8} more
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ── ACTIONS ── */}
+        <div className="px-5 pt-5 space-y-2">
+          {/* End Day — primary CTA */}
+          <button
+            onClick={handleEndDay}
+            className="w-full py-3.5 bg-stone-800 hover:bg-stone-700 border border-stone-700 text-stone-200 font-mono font-bold text-sm tracking-widest uppercase transition-colors active:scale-[0.98]"
+          >
+            END DAY →
+          </button>
+
+          {/* Launch expedition */}
+          <button
+            onClick={() => setView('prepare')}
+            disabled={!canLaunch}
+            className={`w-full py-3 font-mono font-bold text-sm tracking-widest uppercase border transition-colors ${
+              canLaunch
+                ? 'border-stone-600 text-stone-400 hover:bg-stone-900 active:scale-[0.98]'
+                : 'border-stone-900 text-stone-700 cursor-not-allowed'
+            }`}
+          >
+            {canLaunch ? 'LAUNCH EXPEDITION' : 'EXPEDITION UNAVAILABLE'}
+          </button>
+
+          {!canLaunch && (
+            <p className="text-[8px] text-stone-700 font-mono text-center">
+              {freeSurvivors.length < 2
+                ? `${freeSurvivors.length}/2 survivors free (${survivors.filter(s => s.assignment).length} assigned)`
+                : 'Need 2 gear cards ready'}
+            </p>
+          )}
+        </div>
+
+        {/* ── RUN LOG ── */}
+        {completedRuns.length > 0 && (
+          <div className="px-5 pt-5 border-t border-stone-900 mt-5">
+            <p className="text-[8px] text-stone-700 font-mono tracking-widest uppercase mb-2">LOG</p>
             <div className="border border-stone-800">
-              {completedRuns.slice(-5).reverse().map((run, i) => {
+              {completedRuns.slice(-4).reverse().map((run, i) => {
                 const stages = run.stages.filter(s => s.result === 'completed').length;
                 return (
                   <div
                     key={run.runId}
                     className={`flex items-center gap-3 px-3 py-2 bg-stone-900 ${i > 0 ? 'border-t border-stone-800' : ''}`}
                   >
-                    <span className={`text-[10px] font-mono w-3 ${run.status === 'completed' ? 'text-stone-400' : 'text-stone-700'}`}>
+                    <span className={`text-[10px] font-mono ${run.status === 'completed' ? 'text-stone-400' : 'text-stone-700'}`}>
                       {run.status === 'completed' ? '✓' : run.isRetreat ? '→' : '✕'}
                     </span>
-                    <span className="text-[10px] text-stone-500 font-mono">
-                      Run #{completedRuns.length - i}
-                    </span>
-                    <span className="text-[9px] text-stone-700 font-mono ml-auto">
-                      {stages}/{run.totalStages} stages
-                    </span>
+                    <span className="text-[10px] text-stone-500 font-mono">Run #{completedRuns.length - i}</span>
+                    <span className="text-[9px] text-stone-700 font-mono ml-auto">{stages}/{run.totalStages}</span>
                   </div>
                 );
               })}
@@ -460,7 +606,7 @@ export default function SurvivorDeckBuilder() {
         )}
 
         {/* Reset */}
-        <div className="px-5 pb-8 mt-auto">
+        <div className="px-5 pt-4 mt-auto">
           <button
             onClick={resetGame}
             className="w-full py-2 text-[9px] text-stone-800 hover:text-stone-700 font-mono tracking-widest uppercase transition-colors"
@@ -468,6 +614,7 @@ export default function SurvivorDeckBuilder() {
             RESET GAME
           </button>
         </div>
+
       </div>
     </div>
   );

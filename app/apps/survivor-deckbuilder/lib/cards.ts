@@ -133,6 +133,7 @@ export const STARTER_CARDS: Card[] = [
     exhausted: false,
     recoveryTime: 1,
     itemType: 'equipment',
+    category: 'weapon',
     maxAmmo: 6,
     bonusAttributes: {
       combat: 40,
@@ -147,6 +148,7 @@ export const STARTER_CARDS: Card[] = [
     exhausted: false,
     recoveryTime: 1,
     itemType: 'equipment',
+    category: 'medical',
     bonusAttributes: {
       healing: 50,
     },
@@ -160,6 +162,7 @@ export const STARTER_CARDS: Card[] = [
     exhausted: false,
     recoveryTime: 1,
     itemType: 'equipment',
+    category: 'weapon',
     maxAmmo: 4,
     bonusAttributes: {
       combat: 60,
@@ -174,6 +177,7 @@ export const STARTER_CARDS: Card[] = [
     exhausted: false,
     recoveryTime: 1,
     itemType: 'equipment',
+    category: 'gear',
     bonusAttributes: {
       defense: 30,
     },
@@ -187,6 +191,7 @@ export const STARTER_CARDS: Card[] = [
     exhausted: false,
     recoveryTime: 1,
     itemType: 'equipment',
+    category: 'gear',
     bonusAttributes: {
       perception: 50,
       speed: -10,
@@ -201,6 +206,7 @@ export const STARTER_CARDS: Card[] = [
     exhausted: false,
     recoveryTime: 0,
     itemType: 'consumable',
+    category: 'medical',
   },
   {
     id: 'card_food_001',
@@ -211,9 +217,23 @@ export const STARTER_CARDS: Card[] = [
     exhausted: false,
     recoveryTime: 0,
     itemType: 'consumable',
+    category: 'food',
+    foodValue: 2,
     bonusAttributes: {
       healing: 15,
     },
+  },
+  {
+    id: 'card_ration_001',
+    type: 'item',
+    name: 'Field Ration',
+    description: 'Compact emergency food supply',
+    status: 'healthy',
+    exhausted: false,
+    recoveryTime: 0,
+    itemType: 'consumable',
+    category: 'food',
+    foodValue: 1,
   },
   {
     id: 'card_gasoline_001',
@@ -224,9 +244,34 @@ export const STARTER_CARDS: Card[] = [
     exhausted: false,
     recoveryTime: 0,
     itemType: 'consumable',
+    category: 'action',
     bonusAttributes: {
       combat: 35,
     },
+  },
+
+  // SEEDS
+  {
+    id: 'card_vegseeds_001',
+    type: 'item',
+    name: 'Vegetable Seeds',
+    description: 'Plant at home — grows into 3 food in 4 days',
+    status: 'healthy',
+    exhausted: false,
+    recoveryTime: 0,
+    itemType: 'consumable',
+    category: 'seed',
+  },
+  {
+    id: 'card_herbseeds_001',
+    type: 'item',
+    name: 'Herb Seeds',
+    description: 'Medicinal plants — yields 2 food + 1 medical supply in 4 days',
+    status: 'healthy',
+    exhausted: false,
+    recoveryTime: 0,
+    itemType: 'consumable',
+    category: 'seed',
   },
 
   // ACTIONS
