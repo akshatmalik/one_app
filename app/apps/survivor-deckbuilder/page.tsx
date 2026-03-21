@@ -5,7 +5,7 @@ import { useGame } from './hooks/useGame';
 import { CardInstance } from './lib/types';
 import { RunScreen } from './components/RunScreen';
 import { PrepareRunScreen } from './components/PrepareRunScreen';
-import { GameCard } from './components/GameCard';
+import { PlayingCard } from './components/PlayingCard';
 
 type View = 'home' | 'prepare' | 'run';
 
@@ -151,33 +151,39 @@ export default function SurvivorDeckBuilder() {
             onClick={advanceDay}
             className="w-full py-3 bg-black/30 border border-white/5 text-white/40 font-semibold rounded-2xl hover:bg-black/40 transition-colors text-sm"
           >
-            ⏰ Advance Day ({exhaustedCards.length} recovering)
+            Advance Day ({exhaustedCards.length} recovering)
           </button>
         )}
       </div>
 
-      {/* Cards */}
-      <div className="px-5 space-y-5 pb-8">
+      {/* Cards — horizontal scrollable hands */}
+      <div className="space-y-5 pb-8">
         {/* Survivors */}
         <div>
-          <p className="text-[10px] text-blue-400/50 uppercase tracking-wider font-semibold mb-2">
+          <p className="text-[10px] text-blue-400/50 uppercase tracking-wider font-semibold mb-2 px-5">
             Survivors
           </p>
-          <div className="space-y-2">
+          <div
+            className="flex gap-3 overflow-x-auto pb-2 px-5 scrollbar-hide"
+            style={{ WebkitOverflowScrolling: 'touch' }}
+          >
             {survivors.map(card => (
-              <GameCard key={card.id} card={card} disabled={card.exhausted} />
+              <PlayingCard key={card.id} card={card} size="md" disabled={card.exhausted} />
             ))}
           </div>
         </div>
 
-        {/* Equipment */}
+        {/* Equipment & Consumables */}
         <div>
-          <p className="text-[10px] text-amber-400/50 uppercase tracking-wider font-semibold mb-2">
+          <p className="text-[10px] text-amber-400/50 uppercase tracking-wider font-semibold mb-2 px-5">
             Equipment & Consumables
           </p>
-          <div className="grid grid-cols-2 gap-2">
+          <div
+            className="flex gap-3 overflow-x-auto pb-2 px-5 scrollbar-hide"
+            style={{ WebkitOverflowScrolling: 'touch' }}
+          >
             {items.map(card => (
-              <GameCard key={card.id} card={card} compact disabled={card.exhausted} />
+              <PlayingCard key={card.id} card={card} size="sm" disabled={card.exhausted} />
             ))}
           </div>
         </div>
@@ -185,12 +191,15 @@ export default function SurvivorDeckBuilder() {
         {/* Actions */}
         {actions.length > 0 && (
           <div>
-            <p className="text-[10px] text-purple-400/50 uppercase tracking-wider font-semibold mb-2">
+            <p className="text-[10px] text-purple-400/50 uppercase tracking-wider font-semibold mb-2 px-5">
               Actions
             </p>
-            <div className="grid grid-cols-2 gap-2">
+            <div
+              className="flex gap-3 overflow-x-auto pb-2 px-5 scrollbar-hide"
+              style={{ WebkitOverflowScrolling: 'touch' }}
+            >
               {actions.map(card => (
-                <GameCard key={card.id} card={card} compact disabled={card.exhausted} />
+                <PlayingCard key={card.id} card={card} size="sm" disabled={card.exhausted} />
               ))}
             </div>
           </div>
@@ -198,7 +207,7 @@ export default function SurvivorDeckBuilder() {
 
         {/* Run history */}
         {completedRuns.length > 0 && (
-          <div>
+          <div className="px-5">
             <p className="text-[10px] text-white/20 uppercase tracking-wider font-semibold mb-2">
               Expedition Log
             </p>
@@ -219,12 +228,14 @@ export default function SurvivorDeckBuilder() {
         )}
 
         {/* Reset */}
-        <button
-          onClick={resetGame}
-          className="w-full py-2 text-[10px] text-white/10 hover:text-white/20 transition-colors"
-        >
-          Reset Game
-        </button>
+        <div className="px-5">
+          <button
+            onClick={resetGame}
+            className="w-full py-2 text-[10px] text-white/10 hover:text-white/20 transition-colors"
+          >
+            Reset Game
+          </button>
+        </div>
       </div>
     </div>
   );
