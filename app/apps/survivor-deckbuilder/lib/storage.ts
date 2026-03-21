@@ -90,11 +90,11 @@ export class LocalStorageRepository implements DeckBuilderRepository {
       });
 
       // Add to completed runs
-      state.completedRuns.push(state.currentRun);
+      state.homeBase.completedRuns.push(state.currentRun);
       state.currentRun = undefined;
 
       await this.setGameState(state);
-      return state.completedRuns[state.completedRuns.length - 1];
+      return state.homeBase.completedRuns[state.homeBase.completedRuns.length - 1];
     }
     throw new Error(`Run ${runId} not found`);
   }
