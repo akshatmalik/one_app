@@ -51,6 +51,16 @@ export const MINI_APPS: MiniApp[] = [
     tags: ['game', 'story', 'ai'],
     isNew: true,
   },
+  {
+    id: 'survivor-deckbuilder',
+    name: 'Survivor Deck-Builder',
+    description: 'Tactical deck-building zombie survival game with expeditions and card synergies',
+    icon: '🎯',
+    path: '/apps/survivor-deckbuilder',
+    color: '#DC2626',
+    tags: ['game', 'cards', 'strategy'],
+    isNew: true,
+  },
 ];
 
 export function getMiniAppById(id: string): MiniApp | undefined {
