@@ -20,6 +20,7 @@ export default function SurvivorDeckBuilder() {
     startRun,
     enterCombat,
     playCards,
+    continueAfterCombat,
     advanceToNextStage,
     completeRun,
     advanceDay,
@@ -68,21 +69,7 @@ export default function SurvivorDeckBuilder() {
         onPlayCards={async (cards: CardInstance[]) => {
           await playCards(cards);
         }}
-        onContinueAfterCombat={async () => {
-          if (!currentRun) return;
-          const result = currentRun.lastCombatResult;
-          if (!result) return;
-
-          if (result.result === 'player-victory') {
-            if (currentRun.currentStage >= currentRun.totalStages) {
-              // Last stage — show run complete
-              // Phase already set to 'run_complete' by playCards
-            }
-            // Phase already set to 'stage_complete' by playCards
-          }
-          // For loss, phase is already 'run_failed'
-          // Nothing to do here — just let the phase render the right screen
-        }}
+        onContinueAfterCombat={continueAfterCombat}
         onAdvanceStage={async () => {
           await advanceToNextStage();
         }}

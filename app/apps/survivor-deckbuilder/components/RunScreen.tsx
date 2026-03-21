@@ -52,9 +52,7 @@ export function RunScreen({
       return (
         <CombatResolutionScreen
           result={run.lastCombatResult}
-          cardsPlayed={run.currentHand.filter(c =>
-            run.playedCardsThisRun.includes(c.id)
-          )}
+          cardsPlayed={run.currentHand}
           onContinue={onContinueAfterCombat}
         />
       );

@@ -170,18 +170,46 @@ export function useGame() {
         return updatedRun;
       }
 
-      // Resolve combat
+      // Resolve combat — go to combat_resolution phase first
       const result = resolveCombat(
         selectedCards,
         currentRun.currentEncounter,
         currentRun.activeSurvivors
       );
 
+      const updatedRun: Run = {
+        ...currentRun,
+        phase: 'combat_resolution',
+        playedCardsThisRun: [...currentRun.playedCardsThisRun, ...selectedCards.map(c => c.id)],
+        lastCombatResult: result,
+        activeSurvivors: result.survivorsAfter,
+        currentHand: selectedCards, // Keep selected cards for display
+      };
+
+      const state = { ...gameState, currentRun: updatedRun, updatedAt: new Date().toISOString() };
+      await repository.setGameState(state);
+      setGameState(state);
+      setCurrentRun(updatedRun);
+      return updatedRun;
+    } catch (e) {
+      setError(e as Error);
+      throw e;
+    }
+  }, [currentRun, gameState]);
+
+  /**
+   * After viewing combat resolution, transition to appropriate next phase
+   */
+  const continueAfterCombat = useCallback(async () => {
+    try {
+      if (!currentRun || !gameState) throw new Error('No active run');
+      if (!currentRun.lastCombatResult || !currentRun.currentEncounter) throw new Error('No combat result');
+
+      const result = currentRun.lastCombatResult;
       const isVictory = result.result === 'player-victory';
       const isLoss = result.result === 'player-loss';
       const isLastStage = currentRun.currentStage >= TOTAL_STAGES;
 
-      // Determine next phase
       let nextPhase: RunPhase = 'stage_complete';
       if (isLoss) {
         nextPhase = 'run_failed';
@@ -192,17 +220,14 @@ export function useGame() {
       const updatedRun: Run = {
         ...currentRun,
         phase: nextPhase,
-        playedCardsThisRun: [...currentRun.playedCardsThisRun, ...selectedCards.map(c => c.id)],
-        lastCombatResult: result,
-        activeSurvivors: result.survivorsAfter,
         stages: [
           ...currentRun.stages,
           {
             stageNum: currentRun.currentStage,
             encounter: currentRun.currentEncounter,
-            cardsPlayed: selectedCards,
+            cardsPlayed: currentRun.currentHand,
             result: isVictory ? 'completed' : isLoss ? 'failed' : 'completed',
-            itemsFound: isVictory ? [] : undefined, // Loot handled in advanceStage
+            itemsFound: isVictory ? [] : undefined,
           },
         ],
       };
@@ -342,6 +367,7 @@ export function useGame() {
     startRun,
     enterCombat,
     playCards,
+    continueAfterCombat,
     advanceToNextStage,
     completeRun,
 
