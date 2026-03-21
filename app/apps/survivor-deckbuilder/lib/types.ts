@@ -3,6 +3,17 @@ export type CardType = 'survivor' | 'item' | 'action';
 export type CardStatus = 'healthy' | 'exhausted' | 'injured' | 'infected' | 'traumatized';
 export type SurvivorRole = 'healer' | 'fighter' | 'scout' | 'mechanic' | 'scientist';
 
+// Run phase state machine
+export type RunPhase =
+  | 'preparation'       // Selecting deck
+  | 'stage_start'       // Show encounter description
+  | 'hand_draw'         // Draw 2 cards
+  | 'card_selection'    // Player chooses cards to play
+  | 'combat_resolution' // Calculate damage
+  | 'stage_complete'    // Victory or loss for this stage
+  | 'run_complete'      // All 3 stages done or party wiped
+  | 'run_failed';       // Total party wipe
+
 // Attributes
 export interface Attributes {
   combat: number;
@@ -102,6 +113,40 @@ export interface Encounter {
   rewardsText?: string;
 }
 
+// Synergy
+export interface Synergy {
+  id: string;
+  cardIds: string[];
+  name: string;
+  description: string;
+  damageBonus: number;
+  defenseBonus: number;
+  healingBonus: number;
+}
+
+// Combat result
+export interface CombatResult {
+  damageDealt: number;
+  damageTaken: number;
+  healingDone: number;
+  enemiesAfter: Enemy[];
+  survivorsAfter: CardInstance[];
+  synergiesTriggered: Synergy[];
+  damageBreakdown: DamageBreakdown;
+  result: 'player-victory' | 'player-loss' | 'combat-continues';
+}
+
+export interface DamageBreakdown {
+  baseSurvivorDamage: number;
+  attributeBonus: number;
+  itemBonus: number;
+  synergyBonus: number;
+  totalDamageDealt: number;
+  totalEnemyDamage: number;
+  defenseReduction: number;
+  netDamageTaken: number;
+}
+
 // Combat action
 export interface CombatAction {
   cardsPlayed: CardInstance[];
@@ -124,12 +169,18 @@ export interface StageHistory {
 export interface Run {
   runId: string;
   status: 'in_progress' | 'completed' | 'failed';
+  phase: RunPhase;
   createdAt: string;
   completedAt?: string;
 
   // Deck
   deck: CardInstance[];
   currentHand: CardInstance[];
+  playedCardsThisRun: string[]; // card IDs already played
+
+  // Current encounter
+  currentEncounter?: Encounter;
+  lastCombatResult?: CombatResult;
 
   // Progress
   currentStage: number;
