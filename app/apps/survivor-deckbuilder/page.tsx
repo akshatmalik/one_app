@@ -25,17 +25,18 @@ export default function SurvivorDeckBuilder() {
     completeRun,
     advanceDay,
     retreatFromExpedition,
-    buildBarricade,
+    buildHomeBarricade,
     resetGame,
   } = useGame();
 
   const [view, setView] = useState<View>('home');
+  const [barricadeError, setBarricadeError] = useState<string | null>(null);
 
   const activeView = currentRun ? 'run' : view;
 
   if (loading) {
     return (
-      <div className="fixed inset-0 z-[9999] bg-stone-950 flex items-center justify-center">
+      <div className="min-h-screen bg-stone-950 flex items-center justify-center">
         <p className="text-stone-700 font-mono text-xs tracking-widest uppercase animate-pulse">
           LOADING...
         </p>
@@ -45,7 +46,7 @@ export default function SurvivorDeckBuilder() {
 
   if (!gameState) {
     return (
-      <div className="fixed inset-0 z-[9999] bg-stone-950 flex flex-col items-center justify-center px-8">
+      <div className="min-h-screen bg-stone-950 flex flex-col items-center justify-center px-8">
         <p className="text-red-900 font-mono text-sm mb-4">SYSTEM FAILURE</p>
         <button
           onClick={resetGame}
@@ -60,46 +61,39 @@ export default function SurvivorDeckBuilder() {
   // === RUN VIEW ===
   if (activeView === 'run' && currentRun) {
     return (
-      <div className="fixed inset-0 z-[9999] bg-stone-950 overflow-y-auto">
-        <RunScreen
-          run={currentRun}
-          onEnterCombat={enterCombat}
-          onPlayCards={async (cards: CardInstance[]) => {
-            await playCards(cards);
-          }}
-          onContinueAfterCombat={continueAfterCombat}
-          onAdvanceStage={async () => {
-            await advanceToNextStage();
-          }}
-          onCompleteRun={async () => {
-            await completeRun();
-            setView('home');
-          }}
-          onRetreat={async () => {
-            await retreatFromExpedition();
-          }}
-          onBuildBarricade={async () => {
-            await buildBarricade();
-          }}
-        />
-      </div>
+      <RunScreen
+        run={currentRun}
+        onEnterCombat={enterCombat}
+        onPlayCards={async (cards: CardInstance[]) => {
+          await playCards(cards);
+        }}
+        onContinueAfterCombat={continueAfterCombat}
+        onAdvanceStage={async () => {
+          await advanceToNextStage();
+        }}
+        onCompleteRun={async () => {
+          await completeRun();
+          setView('home');
+        }}
+        onRetreat={async () => {
+          await retreatFromExpedition();
+        }}
+      />
     );
   }
 
   // === PREPARE VIEW ===
   if (activeView === 'prepare') {
     return (
-      <div className="fixed inset-0 z-[9999] bg-stone-950 overflow-y-auto">
-        <PrepareRunScreen
-          survivors={getSurvivors()}
-          items={getItems()}
-          actions={getActions()}
-          onLaunch={async (deck: CardInstance[]) => {
-            await startRun(deck);
-          }}
-          onBack={() => setView('home')}
-        />
-      </div>
+      <PrepareRunScreen
+        survivors={getSurvivors()}
+        items={getItems()}
+        actions={getActions()}
+        onLaunch={async (deck: CardInstance[]) => {
+          await startRun(deck);
+        }}
+        onBack={() => setView('home')}
+      />
     );
   }
 
@@ -118,8 +112,11 @@ export default function SurvivorDeckBuilder() {
   const totalRuns = completedRuns.length;
   const successfulRuns = completedRuns.filter(r => r.status === 'completed').length;
 
+  const mats = gameState.homeBase.rawMaterials ?? { scrapMetal: 0, wood: 0, cloth: 0, medicalSupplies: 0 };
+  const canBarricade = (mats.wood ?? 0) >= 3 && (mats.scrapMetal ?? 0) >= 2;
+
   return (
-    <div className="fixed inset-0 z-[9999] bg-stone-950 text-stone-300 overflow-y-auto">
+    <div className="min-h-screen bg-stone-950 text-stone-300">
       <div className="min-h-full flex flex-col">
         {/* Header */}
         <div className="px-5 pt-8 pb-6 border-b border-stone-900">
@@ -152,7 +149,7 @@ export default function SurvivorDeckBuilder() {
           </div>
         </div>
 
-        {/* Survivors roster */}
+        {/* Survivors roster — compact: name, role, HP bar only */}
         <div className="px-5 py-4 border-b border-stone-900">
           <p className="text-[9px] text-stone-700 font-mono tracking-widest uppercase mb-2">SURVIVORS</p>
           <div className="space-y-1">
@@ -202,6 +199,61 @@ export default function SurvivorDeckBuilder() {
               </span>
             ))}
           </div>
+        </div>
+
+        {/* Raw materials */}
+        {(mats.wood > 0 || mats.scrapMetal > 0 || mats.cloth > 0 || mats.medicalSupplies > 0) && (
+          <div className="px-5 py-3 border-b border-stone-900">
+            <p className="text-[9px] text-stone-700 font-mono tracking-widest uppercase mb-1.5">MATERIALS</p>
+            <div className="flex gap-3 flex-wrap">
+              {mats.wood > 0 && (
+                <span className="text-[9px] text-stone-600 font-mono">▤ Wood ×{mats.wood}</span>
+              )}
+              {mats.scrapMetal > 0 && (
+                <span className="text-[9px] text-stone-600 font-mono">⚙ Scrap ×{mats.scrapMetal}</span>
+              )}
+              {mats.cloth > 0 && (
+                <span className="text-[9px] text-stone-600 font-mono">◫ Cloth ×{mats.cloth}</span>
+              )}
+              {mats.medicalSupplies > 0 && (
+                <span className="text-[9px] text-stone-600 font-mono">✚ Med ×{mats.medicalSupplies}</span>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Base defenses — barricade */}
+        <div className="px-5 py-4 border-b border-stone-900">
+          <p className="text-[9px] text-stone-700 font-mono tracking-widest uppercase mb-2">BASE DEFENSES</p>
+          {gameState.homeBase.isBarricaded ? (
+            <div className="border border-stone-700 bg-stone-900 px-3 py-2">
+              <p className="text-xs text-stone-400 font-mono">▦ Barricade ready — next expedition gets +30 defense</p>
+            </div>
+          ) : (
+            <div className="space-y-1">
+              <div className="border border-stone-800 bg-stone-900 px-3 py-2">
+                <p className="text-[10px] text-stone-600 font-mono">Build a barricade before the next run for +30 defense</p>
+                <p className="text-[9px] text-stone-700 font-mono mt-0.5">Costs: 3 Wood · 2 Scrap Metal</p>
+              </div>
+              <button
+                onClick={async () => {
+                    setBarricadeError(null);
+                    try { await buildHomeBarricade(); } catch (e) { setBarricadeError('Not enough materials.'); }
+                  }}
+                disabled={!canBarricade}
+                className={`w-full py-2 font-mono text-xs tracking-widest uppercase border transition-colors ${
+                  canBarricade
+                    ? 'border-stone-700 text-stone-400 hover:bg-stone-900'
+                    : 'border-stone-900 text-stone-700 cursor-not-allowed'
+                }`}
+              >
+                BUILD BARRICADE
+              </button>
+              {barricadeError && (
+                <p className="text-[9px] text-red-800 font-mono">{barricadeError}</p>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Actions */}

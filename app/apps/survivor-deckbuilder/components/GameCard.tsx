@@ -122,9 +122,9 @@ export function GameCard({ card, selected, disabled, compact, onClick, className
 
       {/* Stats row */}
       {stats.length > 0 && (
-        <div className="px-4 pb-2">
+        <div className="px-4 pb-2 opacity-70">
           <div className="flex flex-wrap gap-1.5">
-            {stats.map((stat, i) => (
+            {stats.slice(0, 2).map((stat, i) => (
               <span
                 key={i}
                 className={clsx(

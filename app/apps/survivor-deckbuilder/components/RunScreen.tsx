@@ -15,7 +15,6 @@ interface RunScreenProps {
   onAdvanceStage: () => void;
   onCompleteRun: () => void;
   onRetreat: () => void;
-  onBuildBarricade: () => void;
 }
 
 export function RunScreen({
@@ -26,7 +25,6 @@ export function RunScreen({
   onAdvanceStage,
   onCompleteRun,
   onRetreat,
-  onBuildBarricade,
 }: RunScreenProps) {
   // Cards still available: survivors alive + equipment with ammo + unconsumed consumables/actions
   const cardsRemaining = run.deck.filter(c => {
@@ -109,11 +107,6 @@ export function RunScreen({
             run.currentStage >= run.totalStages
               ? onCompleteRun
               : onAdvanceStage
-          }
-          onBuildBarricade={
-            run.currentStage === 2 && !run.isBarricaded
-              ? onBuildBarricade
-              : undefined
           }
           isLastStage={run.currentStage >= run.totalStages}
         />

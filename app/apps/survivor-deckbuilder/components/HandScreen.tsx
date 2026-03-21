@@ -31,30 +31,61 @@ interface HandScreenProps {
   onPlayCards: (cards: CardInstance[]) => void;
 }
 
-function getCardTypeLabel(card: CardInstance): string {
-  if (card.type === 'survivor') return card.role?.toUpperCase() ?? 'SURVIVOR';
-  if (card.id === 'bare_fists') return 'ALWAYS AVAILABLE';
-  return (card.itemType ?? 'ITEM').toUpperCase();
+const FAN_ROTATION_DEGREES = 6;     // degrees of tilt per card offset from center
+const FAN_HORIZONTAL_SPACING = 52;  // px between card centers
+const FAN_VERTICAL_ARC = 5;         // px of downward arc per offset unit (edges sit lower)
+const FAN_SELECTED_LIFT = 30;       // px upward lift when a card is selected
+const CARD_WIDTH = 80;              // px — must match w-[80px] in JSX
+
+const ROLE_COLORS: Record<string, string> = {
+  fighter: 'from-red-950 to-stone-950',
+  healer: 'from-emerald-950 to-stone-950',
+  scout: 'from-sky-950 to-stone-950',
+  mechanic: 'from-amber-950 to-stone-950',
+  scientist: 'from-violet-950 to-stone-950',
+};
+
+const ROLE_ICONS: Record<string, string> = {
+  fighter: '⚔',
+  healer: '✚',
+  scout: '◎',
+  mechanic: '⚙',
+  scientist: '⚗',
+};
+
+function getCardGradient(card: CardInstance): string {
+  if (card.id === 'bare_fists') return 'from-stone-900 to-stone-950';
+  if (card.type === 'survivor') return ROLE_COLORS[card.role ?? ''] ?? 'from-stone-900 to-stone-950';
+  if (card.itemType === 'equipment') return 'from-slate-800 to-stone-950';
+  if (card.itemType === 'consumable') return 'from-orange-950 to-stone-950';
+  return 'from-stone-900 to-stone-950';
 }
 
-function getCardStatLines(card: CardInstance): { label: string; value: string; color: string }[] {
-  const lines: { label: string; value: string; color: string }[] = [];
+function getCardIcon(card: CardInstance): string {
+  if (card.id === 'bare_fists') return '✊';
+  if (card.type === 'survivor') return ROLE_ICONS[card.role ?? ''] ?? '◈';
+  if (card.itemType === 'equipment' && card.maxAmmo !== undefined) return '⊕';
+  if (card.itemType === 'equipment') return '🛡';
+  if (card.itemType === 'consumable') return '◈';
+  return '⚡';
+}
+
+// Stat pills — top 2 non-zero stats only, colored dots
+function getStatPills(card: CardInstance): { color: string; value: number }[] {
+  const pills: { color: string; value: number }[] = [];
   if (card.type === 'survivor' && card.attributes) {
     const a = card.attributes;
-    if (a.combat > 0) lines.push({ label: 'COMBAT', value: `+${a.combat}%`, color: 'text-red-700' });
-    if (a.defense > 0) lines.push({ label: 'DEFENSE', value: `+${a.defense}%`, color: 'text-stone-500' });
-    if (a.healing > 0) lines.push({ label: 'HEALING', value: `+${a.healing}%`, color: 'text-stone-500' });
+    if (a.combat > 0) pills.push({ color: 'bg-red-700', value: a.combat });
+    if (a.defense > 0) pills.push({ color: 'bg-blue-700', value: a.defense });
+    if (a.healing > 0) pills.push({ color: 'bg-emerald-700', value: a.healing });
   }
   if (card.bonusAttributes) {
     const b = card.bonusAttributes;
-    if (b.combat && b.combat > 0) lines.push({ label: 'DAMAGE', value: `+${b.combat}`, color: 'text-red-700' });
-    if (b.defense && b.defense > 0) lines.push({ label: 'DEFENSE', value: `+${b.defense}%`, color: 'text-stone-500' });
-    if (b.healing && b.healing > 0) lines.push({ label: 'HEALING', value: `+${b.healing}`, color: 'text-stone-500' });
+    if (b.combat && b.combat > 0) pills.push({ color: 'bg-red-700', value: b.combat });
+    if (b.defense && b.defense > 0) pills.push({ color: 'bg-blue-700', value: b.defense });
+    if (b.healing && b.healing > 0) pills.push({ color: 'bg-emerald-700', value: b.healing });
   }
-  if (card.maxHealth) {
-    lines.push({ label: 'HP', value: `${card.currentHealth ?? card.maxHealth}/${card.maxHealth}`, color: 'text-stone-600' });
-  }
-  return lines;
+  return pills.slice(0, 2);
 }
 
 export function HandScreen({
@@ -68,60 +99,49 @@ export function HandScreen({
   isBarricaded,
   onPlayCards,
 }: HandScreenProps) {
-  // Always append bare fists as fallback
   const allCards = [...hand, BARE_FISTS];
+  const n = allCards.length;
 
-  const [cursor, setCursor] = useState(0);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [confirming, setConfirming] = useState(false);
 
-  const currentCard = allCards[Math.min(cursor, allCards.length - 1)];
   const selectedCards = allCards.filter(c => selectedIds.has(c.id));
 
   const synergies = selectedCards.length > 0
     ? detectSynergies([...selectedCards.filter(c => c.type !== 'action' || c.id === 'bare_fists'), ...activeSurvivors])
     : [];
 
-  const goLeft = useCallback(() => {
-    setCursor(prev => Math.max(0, prev - 1));
-  }, []);
-
-  const goRight = useCallback(() => {
-    setCursor(prev => Math.min(allCards.length - 1, prev + 1));
-  }, [allCards.length]);
-
-  const toggleCurrent = useCallback(() => {
-    if (!currentCard || confirming) return;
+  const toggleCard = useCallback((card: CardInstance) => {
+    if (confirming) return;
     setSelectedIds(prev => {
       const next = new Set(prev);
-      if (next.has(currentCard.id)) {
-        next.delete(currentCard.id);
+      if (next.has(card.id)) {
+        next.delete(card.id);
       } else {
-        next.add(currentCard.id);
+        next.add(card.id);
       }
       return next;
     });
-  }, [currentCard, confirming]);
+  }, [confirming]);
 
-  // Keyboard navigation
+  // Keyboard: Enter/Space to confirm deploy
   useEffect(() => {
     const handle = (e: KeyboardEvent) => {
-      if (e.key === 'ArrowLeft') { e.preventDefault(); goLeft(); }
-      if (e.key === 'ArrowRight') { e.preventDefault(); goRight(); }
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleCurrent(); }
+      if ((e.key === 'Enter' || e.key === ' ') && selectedCards.length > 0 && !confirming) {
+        e.preventDefault();
+        setConfirming(true);
+        setTimeout(() => onPlayCards(selectedCards), 300);
+      }
     };
     window.addEventListener('keydown', handle);
     return () => window.removeEventListener('keydown', handle);
-  }, [goLeft, goRight, toggleCurrent]);
+  }, [selectedCards, confirming, onPlayCards]);
 
   const handleConfirm = () => {
     if (selectedCards.length === 0 || confirming) return;
     setConfirming(true);
     setTimeout(() => onPlayCards(selectedCards), 300);
   };
-
-  const isCurrentSelected = selectedIds.has(currentCard?.id ?? '');
-  const isBareHands = allCards.length === 1 && allCards[0].id === 'bare_fists';
 
   return (
     <div className="min-h-screen flex flex-col bg-stone-950 text-stone-300">
@@ -135,12 +155,12 @@ export function HandScreen({
         isBarricaded={isBarricaded}
       />
 
-      {/* Facing */}
-      <div className="px-5 pt-4 pb-2">
+      {/* Encounter context — compact */}
+      <div className="px-5 pt-3 pb-2">
         <p className="text-[9px] text-stone-700 font-mono tracking-widest uppercase">
           FACING: {encounter.name.toUpperCase()}
         </p>
-        <div className="flex gap-2 mt-1">
+        <div className="flex gap-1.5 mt-1 flex-wrap">
           {(encounter.enemies ?? []).map((e, i) => (
             <span key={i} className="text-[9px] text-red-900 font-mono border border-stone-800 px-1.5 py-0.5">
               {e.name} ({e.health}hp)
@@ -149,128 +169,14 @@ export function HandScreen({
         </div>
       </div>
 
-      <div className="border-t border-stone-900 mx-5 mt-2" />
+      <div className="border-t border-stone-900 mx-5" />
 
-      {/* Card browser */}
-      <div className="flex-1 flex flex-col justify-center px-5 py-4">
-        <p className="text-[9px] text-stone-700 font-mono tracking-widest uppercase mb-3 text-center">
-          SELECT YOUR ACTION — {cursor + 1}/{allCards.length}
-          {isBareHands ? ' · NO GEAR REMAINING' : ''}
-        </p>
+      {/* Spacer pushes fan to bottom */}
+      <div className="flex-1" />
 
-        {/* Navigation arrows + current card */}
-        <div className="flex items-center gap-3">
-          {/* Left arrow */}
-          <button
-            onClick={goLeft}
-            disabled={cursor === 0}
-            className="w-8 h-8 flex items-center justify-center text-stone-700 hover:text-stone-400 disabled:opacity-20 transition-colors flex-shrink-0 font-mono text-lg"
-          >
-            ←
-          </button>
-
-          {/* Current card display */}
-          <div
-            className={`flex-1 border transition-all duration-200 cursor-pointer ${
-              isCurrentSelected
-                ? 'border-amber-700 bg-stone-900'
-                : currentCard?.id === 'bare_fists'
-                  ? 'border-stone-800 bg-stone-900/50'
-                  : 'border-stone-800 bg-stone-900'
-            }`}
-            onClick={toggleCurrent}
-          >
-            {/* Card header */}
-            <div className="flex items-center justify-between px-4 pt-3 pb-1 border-b border-stone-800">
-              <span className="text-[9px] text-stone-600 font-mono tracking-widest uppercase">
-                {getCardTypeLabel(currentCard)}
-              </span>
-              {isCurrentSelected && (
-                <span className="text-[9px] text-amber-600 font-mono tracking-wider">
-                  ✓ SELECTED
-                </span>
-              )}
-              {currentCard?.id === 'bare_fists' && (
-                <span className="text-[9px] text-stone-700 font-mono">FALLBACK</span>
-              )}
-            </div>
-
-            {/* Card body */}
-            <div className="px-4 py-3">
-              <h2 className="text-lg font-bold text-stone-200 uppercase tracking-wide mb-1">
-                {currentCard?.name}
-              </h2>
-              <p className="text-sm text-stone-500 leading-relaxed mb-3">
-                {currentCard?.description}
-              </p>
-
-              {/* Stats */}
-              <div className="space-y-1">
-                {getCardStatLines(currentCard).map((stat, i) => (
-                  <div key={i} className="flex items-center justify-between">
-                    <span className="text-[9px] text-stone-700 font-mono tracking-widest uppercase">
-                      {stat.label}
-                    </span>
-                    <span className={`text-[11px] font-mono font-bold ${stat.color}`}>
-                      {stat.value}
-                    </span>
-                  </div>
-                ))}
-              </div>
-
-              {/* Special ability */}
-              {currentCard?.special && (
-                <div className="mt-2 pt-2 border-t border-stone-800">
-                  <p className="text-[9px] text-amber-800 font-mono">
-                    ✦ {currentCard.special.name}: {currentCard.special.description}
-                  </p>
-                </div>
-              )}
-            </div>
-
-            <div className="px-4 pb-3">
-              <p className="text-[9px] text-stone-700 font-mono text-center">
-                {isCurrentSelected ? 'TAP TO DESELECT' : 'TAP TO SELECT · ENTER'}
-              </p>
-            </div>
-          </div>
-
-          {/* Right arrow */}
-          <button
-            onClick={goRight}
-            disabled={cursor === allCards.length - 1}
-            className="w-8 h-8 flex items-center justify-center text-stone-700 hover:text-stone-400 disabled:opacity-20 transition-colors flex-shrink-0 font-mono text-lg"
-          >
-            →
-          </button>
-        </div>
-
-        {/* Card dots indicator */}
-        <div className="flex justify-center gap-1 mt-3">
-          {allCards.map((c, i) => (
-            <div
-              key={c.id}
-              onClick={() => setCursor(i)}
-              className={`cursor-pointer transition-all ${
-                i === cursor
-                  ? 'w-4 h-1 bg-stone-500'
-                  : selectedIds.has(c.id)
-                    ? 'w-1.5 h-1 bg-amber-700'
-                    : c.id === 'bare_fists'
-                      ? 'w-1.5 h-1 bg-stone-800'
-                      : 'w-1.5 h-1 bg-stone-800'
-              }`}
-            />
-          ))}
-        </div>
-      </div>
-
-      {/* Selected cards summary */}
+      {/* Selected summary + synergy */}
       {selectedCards.length > 0 && (
-        <div className="px-5 pb-2">
-          <p className="text-[9px] text-stone-700 font-mono tracking-widest uppercase mb-1">
-            DEPLOYING
-          </p>
+        <div className="px-5 pb-1.5">
           <div className="flex flex-wrap gap-1">
             {selectedCards.map(c => (
               <span key={c.id} className="text-[10px] text-stone-400 font-mono border border-stone-800 px-2 py-0.5 bg-stone-900">
@@ -287,34 +193,115 @@ export function HandScreen({
       )}
 
       {/* Deploy button */}
-      <div className="px-5 pb-8 pt-2">
+      <div className="px-5 pt-1.5 pb-2">
         {selectedCards.length > 0 ? (
           <button
             onClick={handleConfirm}
             disabled={confirming}
-            className={`w-full py-3.5 font-mono font-bold text-sm tracking-widest uppercase border transition-colors ${
+            className={`w-full py-3 font-mono font-bold text-sm tracking-widest uppercase border transition-colors ${
               confirming
                 ? 'bg-stone-800 border-stone-700 text-stone-500'
                 : 'bg-stone-800 hover:bg-stone-700 border-stone-700 text-stone-200 active:scale-[0.98]'
             }`}
           >
-            {confirming
-              ? 'MOVING OUT...'
-              : `DEPLOY (${selectedCards.length} SELECTED)`
-            }
+            {confirming ? 'MOVING OUT...' : `DEPLOY (${selectedCards.length})`}
           </button>
         ) : (
           <button
             disabled
-            className="w-full py-3.5 font-mono text-sm tracking-widest uppercase border border-stone-900 text-stone-700 cursor-not-allowed"
+            className="w-full py-3 font-mono text-sm tracking-widest uppercase border border-stone-900 text-stone-700 cursor-not-allowed"
           >
             SELECT A CARD TO DEPLOY
           </button>
         )}
-        <p className="text-center text-[9px] text-stone-800 font-mono mt-1.5 tracking-wider">
-          ← → NAVIGATE · ENTER SELECT · ↵ DEPLOY
-        </p>
       </div>
+
+      {/* Fan card row */}
+      <div className="relative overflow-hidden" style={{ height: '168px' }}>
+        <div className="absolute inset-0 flex items-end justify-center pb-4">
+          {allCards.map((card, i) => {
+            const mid = (n - 1) / 2;
+            const offset = i - mid;
+            const rotateZ = offset * FAN_ROTATION_DEGREES;
+            const translateX = offset * FAN_HORIZONTAL_SPACING;
+            const translateY = Math.abs(offset) * FAN_VERTICAL_ARC;
+            const isSelected = selectedIds.has(card.id);
+            const finalY = translateY + (isSelected ? -FAN_SELECTED_LIFT : 0);
+            const isBareHands = card.id === 'bare_fists';
+            const pills = getStatPills(card);
+
+            return (
+              <div
+                key={card.id}
+                onClick={() => toggleCard(card)}
+                className="absolute bottom-4 cursor-pointer select-none"
+                style={{
+                  transform: `translateX(${translateX}px) translateY(${finalY}px) rotate(${rotateZ}deg)`,
+                  transformOrigin: 'bottom center',
+                  transition: 'transform 0.2s ease',
+                  zIndex: isSelected ? 20 : 10 + i,
+                  left: '50%',
+                  marginLeft: `-${CARD_WIDTH / 2}px`,
+                }}
+              >
+                <div style={{ width: `${CARD_WIDTH}px`, height: '112px' }} className={`rounded-sm bg-gradient-to-b ${getCardGradient(card)} flex flex-col overflow-hidden border ${
+                  isSelected
+                    ? 'border-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.4)]'
+                    : isBareHands
+                      ? 'border-stone-800 opacity-60'
+                      : 'border-stone-700'
+                }`}>
+                  {/* Type label */}
+                  <div className="px-1.5 pt-1.5">
+                    <p className="text-[6px] text-stone-600 font-mono tracking-widest uppercase truncate">
+                      {card.type === 'survivor' ? (card.role ?? 'surv') : (card.itemType ?? 'item')}
+                    </p>
+                  </div>
+
+                  {/* Icon */}
+                  <div className="flex-1 flex items-center justify-center">
+                    <span className="text-2xl opacity-60">{getCardIcon(card)}</span>
+                  </div>
+
+                  {/* Bottom section */}
+                  <div className="px-1.5 pb-1.5">
+                    {/* Ammo for weapons */}
+                    {card.maxAmmo !== undefined && card.ammo !== undefined && (
+                      <p className="text-[7px] text-stone-500 font-mono text-right mb-0.5">
+                        {card.ammo}/{card.maxAmmo}
+                      </p>
+                    )}
+                    {/* HP bar for survivors */}
+                    {card.type === 'survivor' && card.maxHealth && (
+                      <div className="w-full h-0.5 bg-stone-800 mb-0.5 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-stone-500 rounded-full"
+                          style={{ width: `${((card.currentHealth ?? card.maxHealth) / card.maxHealth) * 100}%` }}
+                        />
+                      </div>
+                    )}
+                    {/* Card name */}
+                    <p className="text-[8px] text-stone-300 font-mono font-bold leading-tight truncate uppercase">
+                      {card.name}
+                    </p>
+                    {/* Stat pills — 2 tiny colored dots */}
+                    {pills.length > 0 && (
+                      <div className="flex gap-1 mt-0.5">
+                        {pills.map((p, pi) => (
+                          <span key={pi} className={`inline-block w-1.5 h-1.5 rounded-full ${p.color} opacity-70`} />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Bottom safe area */}
+      <div className="h-4" />
     </div>
   );
 }
