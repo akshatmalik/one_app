@@ -89,29 +89,33 @@ function calculateHealing(cardsPlayed: CardInstance[]): number {
 }
 
 /**
- * Distribute damage across enemies (spread evenly, then focus remaining)
+ * Distribute damage across enemies (focus fire: kill weakest first, then move to next)
  */
 function applyDamageToEnemies(enemies: Enemy[], totalDamage: number): Enemy[] {
-  const alive = enemies.filter(e => e.health > 0);
-  if (alive.length === 0 || totalDamage <= 0) return enemies;
+  if (totalDamage <= 0) return enemies;
 
-  // Distribute damage evenly then apply remainder to first alive enemy
-  const damagePerEnemy = Math.floor(totalDamage / alive.length);
-  let remainingDamage = totalDamage - damagePerEnemy * alive.length;
+  // Sort alive enemies by health ascending (kill weakest first)
+  const result = enemies.map(e => ({ ...e }));
+  let remaining = totalDamage;
 
-  return enemies.map(enemy => {
-    if (enemy.health <= 0) return { ...enemy, health: 0 };
+  // Sort indices by health (ascending) for targeting
+  const aliveIndices = result
+    .map((e, i) => ({ index: i, health: e.health }))
+    .filter(e => e.health > 0)
+    .sort((a, b) => a.health - b.health);
 
-    let dmg = damagePerEnemy;
-    if (remainingDamage > 0) {
-      // Apply defense reduction per enemy
-      const effectiveDmg = Math.max(1, dmg - enemy.defense);
-      remainingDamage--;
-      return { ...enemy, health: Math.max(0, enemy.health - effectiveDmg - 1) };
-    }
-    const effectiveDmg = Math.max(1, dmg - enemy.defense);
-    return { ...enemy, health: Math.max(0, enemy.health - effectiveDmg) };
-  });
+  for (const { index } of aliveIndices) {
+    if (remaining <= 0) break;
+    const enemy = result[index];
+    const effectiveDmg = Math.max(1, remaining - enemy.defense);
+    const actualDmg = Math.min(enemy.health, effectiveDmg);
+    enemy.health = Math.max(0, enemy.health - actualDmg);
+    // Damage "used up" includes defense absorption
+    remaining -= actualDmg + Math.min(enemy.defense, remaining);
+    remaining = Math.max(0, remaining);
+  }
+
+  return result;
 }
 
 /**
