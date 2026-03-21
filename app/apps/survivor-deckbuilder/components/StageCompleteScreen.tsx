@@ -153,7 +153,7 @@ export function StageCompleteScreen({
         )}
 
         {/* Barricade option — only at stage 2 victory, before stage 3 */}
-        {canBarricade && barricadeChoice === 'none' && (
+        {canBarricade && barricadeChoice !== 'done' && (
           <div>
             <p className="text-[9px] text-stone-700 font-mono tracking-widest uppercase mb-2">
               TACTICAL OPTION
@@ -167,10 +167,10 @@ export function StageCompleteScreen({
               </p>
               <button
                 onClick={handleBuildBarricade}
-                disabled={barricadeChoice === 'building'}
+                disabled={barricadeChoice !== 'none'}
                 className="w-full py-2.5 bg-amber-900/30 hover:bg-amber-900/50 border border-amber-800 text-amber-600 font-mono text-xs tracking-widest uppercase transition-colors"
               >
-                {barricadeChoice === 'building' ? 'BUILDING...' : 'BUILD BARRICADE'}
+                {barricadeChoice !== 'none' ? 'BUILDING...' : 'BUILD BARRICADE'}
               </button>
             </div>
           </div>
