@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from 'react';
 import { useGame } from './hooks/useGame';
-import { CardInstance, SurvivorAssignment } from './lib/types';
+import { CardInstance, SurvivorAssignment, RunMode } from './lib/types';
 import { RunScreen } from './components/RunScreen';
 import { PrepareRunScreen } from './components/PrepareRunScreen';
 import { CompoundView } from './components/CompoundView';
@@ -63,6 +63,8 @@ export default function SurvivorDeckBuilder() {
     endDay,
     assignSurvivor,
     startGarden,
+    activateMomentumCard,
+    splitParty,
     resetGame,
   } = useGame();
 
@@ -150,10 +152,12 @@ export default function SurvivorDeckBuilder() {
           survivors={unassignedSurvivors}
           items={unassignedItems}
           actions={unassignedActions}
-          onLaunch={async (deck: CardInstance[]) => {
-            await startRun(deck);
+          onLaunch={async (deck: CardInstance[], mode: RunMode) => {
+            await startRun(deck, mode);
           }}
           onBack={() => setView('home')}
+          momentumCard={gameState.homeBase.momentumCard}
+          onActivateMomentum={activateMomentumCard}
         />
       </div>
     );
@@ -287,6 +291,53 @@ export default function SurvivorDeckBuilder() {
                 <p className="text-sky-600">◎ Scavenged +{nightReport.scavengeGain} food</p>
               )}
             </div>
+          </div>
+        )}
+
+        {/* ── DAILY EVENT CARD ── */}
+        {hb.currentEvent && (
+          <div className={`mx-5 mt-3 border rounded p-3 ${
+            hb.currentEvent.type === 'threat' ? 'border-red-900/60 bg-red-950/20' :
+            hb.currentEvent.type === 'opportunity' ? 'border-amber-900/60 bg-amber-950/20' :
+            'border-violet-900/60 bg-violet-950/20'
+          }`}>
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex-1">
+                <p className={`text-[8px] font-mono tracking-widest uppercase mb-1 ${
+                  hb.currentEvent.type === 'threat' ? 'text-red-800' :
+                  hb.currentEvent.type === 'opportunity' ? 'text-amber-800' :
+                  'text-violet-800'
+                }`}>
+                  {hb.currentEvent.type === 'threat' ? '⚠ THREAT' :
+                   hb.currentEvent.type === 'opportunity' ? '◆ OPPORTUNITY' :
+                   '? CHOICE'} · TODAY ONLY
+                </p>
+                <p className="text-xs font-mono font-bold text-stone-300 uppercase">{hb.currentEvent.title}</p>
+                <p className="text-[9px] text-stone-600 font-mono mt-0.5">{hb.currentEvent.description}</p>
+              </div>
+              {hb.currentEvent.actionLabel && (
+                <button className={`text-[9px] font-mono border px-2 py-1 transition-colors whitespace-nowrap ${
+                  hb.currentEvent.type === 'threat' ? 'border-red-900 text-red-600 hover:text-red-400' :
+                  hb.currentEvent.type === 'opportunity' ? 'border-amber-900 text-amber-600 hover:text-amber-400' :
+                  'border-violet-900 text-violet-600 hover:text-violet-400'
+                }`}>
+                  {hb.currentEvent.actionLabel}
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ── MOMENTUM CARD ── */}
+        {hb.momentumCard && !hb.momentumCard.used && (
+          <div className="mx-5 mt-2 border border-stone-700/60 bg-stone-900/40 rounded px-3 py-2 flex items-center gap-3">
+            <span className="text-base opacity-70">{hb.momentumCard.icon}</span>
+            <div className="flex-1 min-w-0">
+              <p className="text-[8px] font-mono tracking-widest uppercase text-stone-700 mb-0.5">TODAY'S BONUS</p>
+              <p className="text-xs font-mono font-bold text-stone-300 uppercase">{hb.momentumCard.title}</p>
+              <p className="text-[9px] text-stone-600 font-mono">{hb.momentumCard.description}</p>
+            </div>
+            <span className="text-[8px] font-mono text-stone-700 uppercase">ACTIVATE IN PREP</span>
           </div>
         )}
 

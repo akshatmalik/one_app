@@ -16,7 +16,7 @@
 //
 // =====================================================================
 
-import type { Card, CardCategory, SurvivorRole, CardStatus } from './types';
+import type { Card, CardCategory, SurvivorRole, CardStatus, EnemyType, StageCondition, DailyEvent, MomentumCard } from './types';
 
 // ── RESOURCES ─────────────────────────────────────────────────────────
 //
@@ -673,6 +673,422 @@ export const GARDEN_OUTPUTS: Partial<Record<CardId, {
     description: '2× Canned Food + 1× Antibiotics',
   },
 };
+
+// ── COMBO DEFINITIONS ─────────────────────────────────────────────────
+//
+// Card pair/trio combos detected during card selection.
+// Flash banner displayed 0.5s after selection — informational, not a gate.
+// Bonuses feed into resolveCombat as flat additions on top of synergies.
+
+export interface ComboDef {
+  id: string;
+  cardIds: string[];      // ALL must be present in selected cards
+  label: string;          // "SUPPRESSION SHOT"
+  icon: string;           // "⚡" / "✦" / "◎" / "⚙" / "★"
+  dmgBonus: number;       // flat damage addition
+  hlgBonus: number;       // flat healing addition
+  defBonus: number;       // flat defense addition
+  specialEffect?: string; // narrative description of special effect
+}
+
+export const COMBO_DEFS: ComboDef[] = [
+  {
+    id: 'combo_marcus_rifle',
+    cardIds: [CARD_IDS.MARCUS, CARD_IDS.RIFLE],
+    label: 'SUPPRESSION SHOT',
+    icon: '⚡',
+    dmgBonus: 20, hlgBonus: 0, defBonus: 0,
+  },
+  {
+    id: 'combo_marcus_shotgun',
+    cardIds: [CARD_IDS.MARCUS, CARD_IDS.SHOTGUN],
+    label: 'CLOSE QUARTERS',
+    icon: '⚡',
+    dmgBonus: 15, hlgBonus: 0, defBonus: 0,
+    specialEffect: 'AOE damage to all enemies',
+  },
+  {
+    id: 'combo_sarah_medkit',
+    cardIds: [CARD_IDS.SARAH, CARD_IDS.MED_KIT],
+    label: 'SURGICAL CARE',
+    icon: '✦',
+    dmgBonus: 0, hlgBonus: 20, defBonus: 0,
+  },
+  {
+    id: 'combo_sarah_antibiotics',
+    cardIds: [CARD_IDS.SARAH, CARD_IDS.ANTIBIOTICS],
+    label: 'FIELD MEDICINE',
+    icon: '✦',
+    dmgBonus: 0, hlgBonus: 0, defBonus: 0,
+    specialEffect: 'Clears all infections',
+  },
+  {
+    id: 'combo_james_goggles',
+    cardIds: [CARD_IDS.JAMES, CARD_IDS.GOGGLES],
+    label: 'GHOST PROTOCOL',
+    icon: '◎',
+    dmgBonus: 0, hlgBonus: 0, defBonus: 10,
+    specialEffect: '+30% dodge vs ambush encounters',
+  },
+  {
+    id: 'combo_james_scout',
+    cardIds: [CARD_IDS.JAMES, CARD_IDS.SCOUT_AHEAD],
+    label: 'DEEP RECON',
+    icon: '◎',
+    dmgBonus: 0, hlgBonus: 0, defBonus: 0,
+    specialEffect: 'Reveals next encounter enemy type',
+  },
+  {
+    id: 'combo_elena_any_weapon',
+    cardIds: [CARD_IDS.ELENA, CARD_IDS.RIFLE],
+    label: 'JURY RIG',
+    icon: '⚙',
+    dmgBonus: 0, hlgBonus: 0, defBonus: 0,
+    specialEffect: 'Weapon uses -1 ammo this stage',
+  },
+  {
+    id: 'combo_elena_shotgun',
+    cardIds: [CARD_IDS.ELENA, CARD_IDS.SHOTGUN],
+    label: 'JURY RIG',
+    icon: '⚙',
+    dmgBonus: 0, hlgBonus: 0, defBonus: 0,
+    specialEffect: 'Weapon uses -1 ammo this stage',
+  },
+  {
+    id: 'combo_lisa_medkit',
+    cardIds: [CARD_IDS.LISA, CARD_IDS.MED_KIT],
+    label: 'ADVANCED TRIAGE',
+    icon: '⚗',
+    dmgBonus: 0, hlgBonus: 35, defBonus: 0,
+    specialEffect: 'Remove 1 debuff from all survivors',
+  },
+  {
+    id: 'combo_marcus_barricade',
+    cardIds: [CARD_IDS.MARCUS, CARD_IDS.BARRICADE_ACTION],
+    label: 'HOLD THE LINE',
+    icon: '⚡',
+    dmgBonus: 15, hlgBonus: 0, defBonus: 15,
+  },
+  {
+    id: 'combo_full_squad',
+    cardIds: [CARD_IDS.SARAH, CARD_IDS.MARCUS, CARD_IDS.ELENA],
+    label: 'FULL SQUAD',
+    icon: '★',
+    dmgBonus: 10, hlgBonus: 10, defBonus: 10,
+    specialEffect: '+10% all stats',
+  },
+];
+
+// ── ENEMY TYPE DEFINITIONS ────────────────────────────────────────────
+//
+// Weakness = card category that counters this enemy type.
+// counterBonus = multiplier when weakness is played (1.4 = +40% DMG)
+// failPenalty = multiplier when no counter cards played (0.8 = -20% DMG)
+
+export interface EnemyTypeDef {
+  icon: string;
+  label: string;
+  description: string;
+  // Card categories that count as counters
+  weaknesses: string[];
+  // Specific card IDs that are strong counters
+  counterCardIds: string[];
+  counterBonus: number;     // damage multiplier if countered
+  failPenalty: number;      // damage multiplier if no counter (1.0 = no penalty)
+  infectOnHit?: boolean;    // 30% chance to infect survivor per surviving enemy
+  infectChance?: number;    // 0-1
+}
+
+export const ENEMY_TYPE_DEFS: Record<EnemyType, EnemyTypeDef> = {
+  straggler: {
+    icon: '☠',
+    label: 'Stragglers',
+    description: 'Lone undead — anything works.',
+    weaknesses: [],
+    counterCardIds: [],
+    counterBonus: 1.0,
+    failPenalty: 1.0,
+  },
+  horde: {
+    icon: '💀',
+    label: 'Horde',
+    description: 'Dozens of undead — area damage wins.',
+    weaknesses: ['action'],
+    counterCardIds: [CARD_IDS.GASOLINE, CARD_IDS.BARRICADE_ACTION],
+    counterBonus: 1.4,
+    failPenalty: 0.8,
+  },
+  infected: {
+    icon: '☣',
+    label: 'Infected',
+    description: 'Carriers — bring medical cards or risk infection.',
+    weaknesses: ['medical'],
+    counterCardIds: [CARD_IDS.MED_KIT, CARD_IDS.ANTIBIOTICS, CARD_IDS.MEDICAL_PROTOCOLS],
+    counterBonus: 1.3,
+    failPenalty: 1.0,
+    infectOnHit: true,
+    infectChance: 0.3,
+  },
+  armored: {
+    icon: '🛡',
+    label: 'Armored',
+    description: 'Heavy plating — high ATK weapons only.',
+    weaknesses: ['weapon'],
+    counterCardIds: [CARD_IDS.RIFLE, CARD_IDS.SHOTGUN],
+    counterBonus: 1.5,
+    failPenalty: 0.6,
+  },
+  ambush: {
+    icon: '👁',
+    label: 'Ambush',
+    description: 'Hidden attackers — perception wins.',
+    weaknesses: ['gear'],
+    counterCardIds: [CARD_IDS.GOGGLES, CARD_IDS.SCOUT_AHEAD],
+    counterBonus: 1.0,  // first strike bonus (handled separately)
+    failPenalty: 0.7,   // -30% DEF when surprised
+    infectOnHit: false,
+  },
+  raiders: {
+    icon: '⚔',
+    label: 'Raiders',
+    description: 'Organized humans — mixed deck needed.',
+    weaknesses: [],
+    counterCardIds: [],
+    counterBonus: 1.25,
+    failPenalty: 1.0,
+  },
+};
+
+// ── STAGE CONDITION DEFINITIONS ───────────────────────────────────────
+//
+// Conditions roll with 25% chance starting day 5.
+// Two conditions can stack after day 10.
+
+export interface StageConditionDef {
+  icon: string;
+  label: string;
+  description: string;
+  counterCardIds: string[];
+  // Effects applied during combat
+  perceptionPenalty?: number;   // reduce perception-based bonuses by %
+  weaponJamChance?: number;     // % chance each weapon use = 0 damage + uses ammo
+  infectionChanceOnHit?: number; // extra infection chance per hit
+  enemyDefenseBonus?: number;   // flat enemy DEF bonus
+  enemyHidden?: boolean;        // enemy type hidden until card selection
+  enemyMultiplyAfterTurns?: number; // enemy count doubles after N turns
+}
+
+export const STAGE_CONDITION_DEFS: Record<StageCondition, StageConditionDef> = {
+  night: {
+    icon: '🌑',
+    label: 'Night',
+    description: 'Perception -40% unless Goggles equipped.',
+    counterCardIds: [CARD_IDS.GOGGLES],
+    perceptionPenalty: 0.4,
+  },
+  rain: {
+    icon: '🌧',
+    label: 'Rain',
+    description: 'Each weapon: 30% jam chance (uses ammo, deals 0).',
+    counterCardIds: [CARD_IDS.BARRICADE_ACTION, CARD_IDS.GASOLINE],
+    weaponJamChance: 0.3,
+  },
+  infected_zone: {
+    icon: '☣',
+    label: 'Infected Zone',
+    description: 'Any hit on survivor: 25% infection chance.',
+    counterCardIds: [CARD_IDS.SARAH, CARD_IDS.MED_KIT],
+    infectionChanceOnHit: 0.25,
+  },
+  fortified: {
+    icon: '🏰',
+    label: 'Fortified',
+    description: 'Enemies +50 DEF unless Scout Ahead used.',
+    counterCardIds: [CARD_IDS.SCOUT_AHEAD],
+    enemyDefenseBonus: 50,
+  },
+  fog: {
+    icon: '🌫',
+    label: 'Fog',
+    description: "Enemy type hidden until card selection starts.",
+    counterCardIds: [],
+    enemyHidden: true,
+  },
+  timed: {
+    icon: '⏱',
+    label: 'Timed',
+    description: 'Enemies multiply if not defeated quickly.',
+    counterCardIds: [CARD_IDS.RIFLE, CARD_IDS.SHOTGUN, CARD_IDS.GASOLINE],
+    enemyMultiplyAfterTurns: 2,
+  },
+};
+
+// ── DAILY EVENT POOL ──────────────────────────────────────────────────
+//
+// One event rolls per day. Mix of threats, opportunities, moral choices.
+// Stored as homeBase.currentEvent, cleared when day advances.
+
+export const EVENT_POOL: DailyEvent[] = [
+  // ── THREATS
+  {
+    id: 'event_infected_scent',
+    type: 'threat',
+    title: 'Infected Scent',
+    description: "Something\'s drawing them in. Today\'s runs face double-size hordes.",
+    runDamageMultiplier: 1.4,
+  },
+  {
+    id: 'event_food_spoilage',
+    type: 'threat',
+    title: 'Food Spoilage',
+    description: 'The storage is compromised. 3 food lost immediately.',
+    immediateFood: -3,
+  },
+  {
+    id: 'event_survivor_fever',
+    type: 'threat',
+    title: 'Survivor Fever',
+    description: 'One of the group is burning up. Assign them to the infirmary.',
+    immediateSurvivorDamage: 20,
+  },
+  {
+    id: 'event_raid_warning',
+    type: 'threat',
+    title: 'Raid Warning',
+    description: "Tracks at the perimeter. Tonight\'s raid chance is 90%. Guard NOW.",
+    raidChanceOverride: 0.9,
+  },
+  {
+    id: 'event_supply_cache',
+    type: 'opportunity',
+    title: 'Supply Cache Found',
+    description: 'Scavenge today for +5 guaranteed materials.',
+    actionLabel: 'Send Scavenger',
+    actionResult: '+5 materials added to stores',
+  },
+  // ── OPPORTUNITIES
+  {
+    id: 'event_trade_caravan',
+    type: 'opportunity',
+    title: 'Trade Caravan',
+    description: 'A merchant passes through. Spend 5 food for any 1 item card.',
+    actionLabel: 'Trade (5 food)',
+    actionResult: 'Trade completed',
+  },
+  {
+    id: 'event_lucky_find',
+    type: 'opportunity',
+    title: 'Lucky Find',
+    description: "First scavenger out today finds a weapon. Don\'t wait.",
+    actionLabel: 'Send Scout',
+    actionResult: 'Weapon recovered',
+  },
+  {
+    id: 'event_adrenaline',
+    type: 'opportunity',
+    title: 'Adrenaline',
+    description: 'One survivor ignores exhaustion for 1 run today only.',
+    actionLabel: 'Activate',
+    actionResult: 'Exhaustion bypassed this run',
+  },
+  {
+    id: 'event_storm_coming',
+    type: 'opportunity',
+    title: 'Storm Coming',
+    description: 'Build barricade now for free. Materials still cost, but +50% DEF.',
+    actionLabel: 'Build Barricade',
+    actionResult: 'Barricade reinforced',
+  },
+  // ── MORAL EVENTS
+  {
+    id: 'event_child_found',
+    type: 'moral',
+    title: 'Child Found',
+    description: 'A child alone on the road. Take them in (+1 food/day) or turn away.',
+    actionLabel: 'Take Them In',
+    actionResult: 'A new member joins the group',
+  },
+  {
+    id: 'event_wounded_stranger',
+    type: 'moral',
+    title: 'Wounded Stranger',
+    description: 'A survivor near death at the gates. Use a Medical Kit to save them.',
+    actionLabel: 'Use Medical Kit',
+    actionResult: 'Stranger saved, joins with 40 HP',
+  },
+  {
+    id: 'event_raider_prisoner',
+    type: 'moral',
+    title: 'Raider Prisoner',
+    description: 'Caught one of them. Execute (morale -10) or release (50% attack risk).',
+    actionLabel: 'Release',
+    actionResult: 'Released into the wastes',
+  },
+];
+
+// ── MOMENTUM CARDS ────────────────────────────────────────────────────
+//
+// One momentum card generates each day. Shown on home screen.
+// Tap to activate before a run. Expires at day end.
+
+export const MOMENTUM_CARDS: MomentumCard[] = [
+  {
+    id: 'momentum_radio',
+    title: 'Overheard Radio',
+    description: 'Reveals enemy type of all 3 stages before you start.',
+    icon: '📻',
+    revealsAllEncounters: true,
+  },
+  {
+    id: 'momentum_shortcut',
+    title: 'Found Shortcut',
+    description: 'Skip stage 1, go straight to stage 2 (less loot).',
+    icon: '🏃',
+    skipStageOne: true,
+  },
+  {
+    id: 'momentum_adrenaline',
+    title: 'Adrenaline Cache',
+    description: 'One survivor starts with +30% ATK this run only.',
+    icon: '💉',
+    survivorAtkBonus: 30,
+  },
+  {
+    id: 'momentum_fog_of_war',
+    title: 'Fog of War',
+    description: 'Enemies weakened 20% today (caught off guard).',
+    icon: '🌫',
+    enemyDamageReduction: 20,
+  },
+  {
+    id: 'momentum_lucky_ammo',
+    title: 'Lucky Ammo',
+    description: 'All weapons start with +2 extra ammo this run.',
+    icon: '🔫',
+    extraWeaponAmmo: 2,
+  },
+  {
+    id: 'momentum_scavenged_parts',
+    title: 'Scavenged Parts',
+    description: 'First stage win guarantees 1 weapon card loot.',
+    icon: '⚙',
+    guaranteedWeaponLoot: true,
+  },
+  {
+    id: 'momentum_medical_stash',
+    title: 'Medical Stash',
+    description: 'First stage win guarantees 1 medical card loot.',
+    icon: '✚',
+    guaranteedMedLoot: true,
+  },
+  {
+    id: 'momentum_instinct',
+    title: 'Survivor Instinct',
+    description: 'Retreat this run — cards do not become exhausted.',
+    icon: '🧠',
+    retreatNoExhaust: true,
+  },
+];
 
 // ── STARTER DECK ──────────────────────────────────────────────────────
 //

@@ -1,12 +1,12 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { GameState, Run, CardInstance, RunPhase, StageLoot, SurvivorAssignment, ProductionChain } from '../lib/types';
+import { GameState, Run, CardInstance, RunPhase, StageLoot, SurvivorAssignment, ProductionChain, RunMode } from '../lib/types';
 import { repository } from '../lib/storage';
 import { resolveCombat, isTacticalRetreat, validateDeck } from '../lib/combat-engine';
 import { getRandomEncounter } from '../lib/encounters';
 import { rollStageLoot } from '../lib/loot';
-import { GARDEN_OUTPUTS } from '../lib/registry';
+import { GARDEN_OUTPUTS, EVENT_POOL, MOMENTUM_CARDS } from '../lib/registry';
 import { makeLootInstance } from '../lib/card-factory';
 
 const TOTAL_STAGES = 3;
@@ -56,12 +56,25 @@ export function useGame() {
         if (state.homeBase && !state.homeBase.productionChains) {
           state.homeBase.productionChains = [];
         }
-        // Migrate survivor conditions/assignments
+        // Migrate currentEvent / momentumCard
+        if (state.homeBase && state.homeBase.currentEvent === undefined) {
+          state.homeBase.currentEvent = undefined;
+        }
+        if (state.homeBase && state.homeBase.momentumCard === undefined) {
+          state.homeBase.momentumCard = undefined;
+        }
+        // Migrate existing runs missing runMode / lootMultiplier
+        if (state.currentRun && (state.currentRun as any).runMode === undefined) {
+          (state.currentRun as any).runMode = 'siege';
+          (state.currentRun as any).lootMultiplier = 1.0;
+        }
+        // Migrate survivor conditions/assignments + wear field
         state.deck = state.deck.map(c => ({
           ...c,
           condition: c.condition ?? 'healthy',
           hungerDays: c.hungerDays ?? 0,
           assignment: c.assignment ?? null,
+          wear: c.wear ?? 0,
         }));
         setGameState(state);
         setCurrentRun(state.currentRun || null);
@@ -108,11 +121,11 @@ export function useGame() {
 
   // ===== RUN MANAGEMENT =====
 
-  const startRun = useCallback(async (selectedCards: CardInstance[]) => {
+  const startRun = useCallback(async (selectedCards: CardInstance[], mode: RunMode = 'siege') => {
     try {
       if (!gameState) throw new Error('Game state not loaded');
 
-      const validation = validateDeck(selectedCards);
+      const validation = validateDeck(selectedCards, mode);
       if (!validation.valid) throw new Error(validation.error);
 
       const survivors = selectedCards.filter(c => c.type === 'survivor').map(s => ({
@@ -121,12 +134,31 @@ export function useGame() {
       }));
 
       // Initialize weapon ammo from each weapon's maxAmmo
+      // Momentum card bonus ammo
+      const momentumCard = gameState.homeBase.momentumCard;
+      const extraAmmo = (momentumCard && !momentumCard.used && momentumCard.extraWeaponAmmo) ? momentumCard.extraWeaponAmmo : 0;
+
       const weaponAmmo: Record<string, number> = {};
       selectedCards.forEach(c => {
-        if (c.maxAmmo !== undefined) weaponAmmo[c.id] = c.maxAmmo;
+        if (c.maxAmmo !== undefined) weaponAmmo[c.id] = c.maxAmmo + extraAmmo;
       });
 
+      // Sprint: max 4 cards, 2 stages, +75% loot, no exhaust on completion
+      const isSprint = mode === 'sprint';
+      const totalStages = isSprint ? 2 : TOTAL_STAGES;
+      const lootMultiplier = isSprint ? 1.75 : 1.0;
+
       const homeBarricadeLevel = gameState.homeBase.homeBarricadeLevel ?? 0;
+      const day = gameState.homeBase.day ?? 1;
+
+      // Apply momentum card ATK bonus to one survivor
+      let finalSurvivors = survivors;
+      if (momentumCard && !momentumCard.used && momentumCard.survivorAtkBonus) {
+        const bonus = momentumCard.survivorAtkBonus;
+        finalSurvivors = survivors.map((s, idx) =>
+          idx === 0 ? { ...s, attributes: { ...s.attributes!, combat: (s.attributes?.combat ?? 0) + bonus } } : s
+        );
+      }
 
       const run: Run = {
         runId: `run_${Date.now()}`,
@@ -138,21 +170,27 @@ export function useGame() {
         consumedCardIds: [],
         weaponAmmo,
         stagedLoot: {},
-        currentEncounter: getRandomEncounter(1),
+        currentEncounter: getRandomEncounter(1, day),
         currentStage: 1,
-        totalStages: TOTAL_STAGES,
+        totalStages,
         stages: [],
         itemsFound: [],
         survivorStats: {},
-        activeSurvivors: survivors,
+        activeSurvivors: finalSurvivors,
         // Apply barricade built at home (persists for this full run)
         isBarricaded: homeBarricadeLevel > 0,
+        runMode: mode,
+        lootMultiplier,
       };
 
       const state = { ...gameState };
       // Consume the home barricade — it was used for this run
       if (homeBarricadeLevel > 0) {
         state.homeBase = { ...state.homeBase, homeBarricadeLevel: 0 };
+      }
+      // Mark momentum card as used if it was applied
+      if (momentumCard && !momentumCard.used && (extraAmmo > 0 || momentumCard.survivorAtkBonus)) {
+        state.homeBase = { ...state.homeBase, momentumCard: { ...momentumCard, used: true } };
       }
       state.currentRun = run;
       state.updatedAt = new Date().toISOString();
@@ -385,7 +423,8 @@ export function useGame() {
       if (!currentRun || !gameState) throw new Error('No active run');
 
       const nextStage = (currentRun.currentStage + 1) as 1 | 2 | 3;
-      const nextEncounter = getRandomEncounter(nextStage);
+      const day = gameState.homeBase.day ?? 1;
+      const nextEncounter = getRandomEncounter(nextStage, day);
 
       const updatedRun: Run = {
         ...currentRun,
@@ -425,21 +464,39 @@ export function useGame() {
       // Apply loot to deck and raw materials
       const consumedIds = new Set(currentRun.consumedCardIds);
 
+      const isSprint = currentRun.runMode === 'sprint';
+      const retreatNoExhaust = currentRun.isRetreat && gameState.homeBase.momentumCard?.retreatNoExhaust;
+
       const updatedDeck = (gameState.deck as CardInstance[]).filter((card: CardInstance) => {
         if (consumedIds.has(card.id)) return false;
         return true;
       }).map((card: CardInstance) => {
         const wasInRun = (currentRun.deck as CardInstance[]).some((d: CardInstance) => d.id === card.id);
         if (wasInRun) {
+          // Sprint: survivors don't exhaust (sprint = quick hit, no wear)
+          const shouldExhaust = !isSprint && !retreatNoExhaust;
+          // Increment weapon wear after each run it was used in
+          const isWeapon = card.category === 'weapon';
+          const newWear = isWeapon && !isSprint ? Math.min(4, (card.wear ?? 0) + 1) : (card.wear ?? 0);
+
           return {
             ...card,
-            exhausted: true,
-            recoveryTime: 1,
+            exhausted: shouldExhaust,
+            recoveryTime: shouldExhaust ? 1 : 0,
             ammo: card.maxAmmo ?? card.ammo,
+            wear: newWear,
           };
         }
         return card;
       });
+
+      // Add scavenging survivor back to deck (they weren't in the run's deck)
+      if (currentRun.splitSurvivorId) {
+        const splitSurvivor = gameState.deck.find(c => c.id === currentRun.splitSurvivorId);
+        if (splitSurvivor && !updatedDeck.some(c => c.id === splitSurvivor.id)) {
+          updatedDeck.push({ ...splitSurvivor, exhausted: false });
+        }
+      }
 
       // Add loot cards (new additions to collection)
       const allLoot = Object.values(currentRun.stagedLoot) as StageLoot[];
@@ -757,7 +814,42 @@ export function useGame() {
         return { ...c, recoveryTime: newRecovery, exhausted: newRecovery > 0 };
       });
 
-      // 10. Add production loot to deck
+      // 10. Apply infection damage to infected survivors
+      updatedDeck = updatedDeck.map(card => {
+        if (card.type !== 'survivor' || !card.infected) return card;
+        const daysLeft = Math.max(0, (card.infectionDaysLeft ?? 3) - 1);
+        const newHP = Math.max(1, (card.currentHealth ?? 100) - 10);
+        // Cure if antibiotics card is in deck and not consumed
+        const antibioticsInDeck = updatedDeck.some(c =>
+          (c.id === 'card_antibiotics_001' || c.id.startsWith('card_antibiotics')) && !c.exhausted
+        );
+        if (antibioticsInDeck) {
+          return { ...card, infected: false, infectionDaysLeft: undefined };
+        }
+        if (daysLeft === 0) {
+          // Dies from infection — set to 0 HP and exhausted
+          return { ...card, currentHealth: 0, infected: false, exhausted: true, recoveryTime: 3 };
+        }
+        return { ...card, currentHealth: newHP, infectionDaysLeft: daysLeft };
+      });
+
+      // 11. Roll daily event and momentum card for next day
+      const nextEvent = EVENT_POOL[Math.floor(Math.random() * EVENT_POOL.length)];
+      const nextMomentum = MOMENTUM_CARDS[Math.floor(Math.random() * MOMENTUM_CARDS.length)];
+
+      // 12. Apply immediate event effects (food, survivor damage)
+      if (nextEvent.immediateFood) {
+        foodLeft = Math.max(0, foodLeft + nextEvent.immediateFood);
+      }
+      if (nextEvent.immediateSurvivorDamage) {
+        const aliveIdx = updatedDeck.findIndex(c => c.type === 'survivor' && (c.currentHealth ?? 100) > 0);
+        if (aliveIdx >= 0) {
+          const s = updatedDeck[aliveIdx];
+          updatedDeck[aliveIdx] = { ...s, currentHealth: Math.max(1, (s.currentHealth ?? 100) - nextEvent.immediateSurvivorDamage) };
+        }
+      }
+
+      // 13. Add production loot to deck
       const finalDeck = [...updatedDeck, ...lootCards];
 
       const state: GameState = {
@@ -773,6 +865,8 @@ export function useGame() {
           morale: newMorale,
           rawMaterials: newMats,
           productionChains: newProductionChains,
+          currentEvent: nextEvent,
+          momentumCard: { ...nextMomentum, used: false },
         },
         updatedAt: new Date().toISOString(),
       };
@@ -796,6 +890,54 @@ export function useGame() {
       throw e;
     }
   }, [gameState]);
+
+  /**
+   * Activate the pre-run momentum card (marks it used, effects applied in startRun).
+   */
+  const activateMomentumCard = useCallback(async () => {
+    try {
+      if (!gameState) throw new Error('Game state not loaded');
+      const mc = gameState.homeBase.momentumCard;
+      if (!mc || mc.used) return;
+      const state: GameState = {
+        ...gameState,
+        homeBase: { ...gameState.homeBase, momentumCard: { ...mc, used: true } },
+        updatedAt: new Date().toISOString(),
+      };
+      await repository.setGameState(state);
+      setGameState(state);
+    } catch (e) {
+      setError(e as Error);
+      throw e;
+    }
+  }, [gameState]);
+
+  /**
+   * Split the party at stage 2 — one survivor stays behind to scavenge.
+   * They generate 3-4 materials, don't exhaust, and are removed from active combat.
+   */
+  const splitParty = useCallback(async (survivorId: string) => {
+    try {
+      if (!currentRun || !gameState) throw new Error('No active run');
+      if (currentRun.currentStage !== 2) throw new Error('Can only split at stage 2');
+
+      const updatedRun: Run = {
+        ...currentRun,
+        splitSurvivorId: survivorId,
+        activeSurvivors: currentRun.activeSurvivors.filter(s => s.id !== survivorId),
+        deck: currentRun.deck.filter(c => c.id !== survivorId),
+      };
+
+      const state = { ...gameState, currentRun: updatedRun, updatedAt: new Date().toISOString() };
+      await repository.setGameState(state);
+      setGameState(state);
+      setCurrentRun(updatedRun);
+      return updatedRun;
+    } catch (e) {
+      setError(e as Error);
+      throw e;
+    }
+  }, [currentRun, gameState]);
 
   const advanceDay = useCallback(async () => {
     try {
@@ -857,6 +999,12 @@ export function useGame() {
 
     // Production
     startGarden,
+
+    // Daily event / momentum
+    activateMomentumCard,
+
+    // Sprint/Siege tactical
+    splitParty,
 
     // Utilities
     refreshGameState,
