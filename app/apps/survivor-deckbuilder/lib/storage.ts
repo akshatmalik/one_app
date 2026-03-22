@@ -60,6 +60,8 @@ export class LocalStorageRepository implements DeckBuilderRepository {
       itemsFound: [],
       survivorStats: {},
       activeSurvivors: deck.filter((card) => card.type === 'survivor'),
+      runMode: 'siege',
+      lootMultiplier: 1.0,
     };
 
     const state = await this.getGameState();
@@ -179,7 +181,13 @@ export class LocalStorageRepository implements DeckBuilderRepository {
         items: deck.filter((c) => c.type === 'item'),
         inventory: [],
         completedRuns: [],
-        rawMaterials: { scrapMetal: 0, wood: 0, cloth: 0, medicalSupplies: 0 },
+        rawMaterials: { scrapMetal: 0, wood: 0, cloth: 0, medicalSupplies: 0, food: 10 },
+        homeBarricadeLevel: 0,
+        day: 1,
+        food: 10,
+        baseHP: 100,
+        morale: 70,
+        productionChains: [],
       },
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),

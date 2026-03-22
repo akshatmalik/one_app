@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Encounter, CardInstance } from '../lib/types';
 import { RunStatusBar } from './RunStatusBar';
 
@@ -16,22 +16,28 @@ interface EncounterScreenProps {
   onRetreat: () => void;
 }
 
-const STAGE_LOOT: Record<number, string> = {
-  1: 'Basic supplies — food, bandages, spare ammo.',
-  2: 'Equipment cache — building materials, tactical gear.',
-  3: 'Rare find — military-grade weapons and med kits.',
-};
-
 const APPROACH_LINES: Record<string, string> = {
-  'Abandoned Pharmacy': 'The front door hangs off its hinges. Broken glass. The medicine cabinet is just past them.',
+  'Abandoned Pharmacy': 'The front door hangs off its hinges. Broken glass on the floor. The medicine cabinet is just past them.',
   'Highway Gas Station': 'Heat off the asphalt. Flies circling a window. Something moving inside.',
-  'Elementary School': 'Tiny shoes in the hallway. Crayon drawings on the walls. The cafeteria door is stuck.',
+  'Elementary School': 'Tiny shoes still in the hallway. Crayon drawings on the walls. The cafeteria door is stuck.',
   'Military Warehouse': 'Razor wire. Broken padlock. Whatever\'s inside, someone wanted it protected.',
   'City Hospital': 'Emergency lights pulse red. The quarantine tape is shredded.',
   'Police Station': 'Armory door is reinforced glass. Two dead officers still wear their kevlar.',
   'Subway Tunnel': 'Total darkness below. The sound of skittering echoes up the stairs.',
   'River Bridge': 'No other way across. The bridge groans. Something massive waits at the midspan.',
   'Research Laboratory': 'The containment seals are blown. Something got out.',
+};
+
+const LOCATION_ICON: Record<string, string> = {
+  'Abandoned Pharmacy': '💊',
+  'Highway Gas Station': '⛽',
+  'Elementary School': '🏫',
+  'Military Warehouse': '🏭',
+  'City Hospital': '🏥',
+  'Police Station': '🚔',
+  'Subway Tunnel': '🚇',
+  'River Bridge': '🌉',
+  'Research Laboratory': '🔬',
 };
 
 export function EncounterScreen({
@@ -45,15 +51,10 @@ export function EncounterScreen({
   onEnterCombat,
   onRetreat,
 }: EncounterScreenProps) {
-  const [revealed, setRevealed] = useState(false);
-
-  useEffect(() => {
-    const timer = setTimeout(() => setRevealed(true), 300);
-    return () => clearTimeout(timer);
-  }, []);
+  const [phase, setPhase] = useState<'story' | 'threat'>('story');
 
   const approachLine = APPROACH_LINES[encounter.location ?? ''] ?? 'Unknown ground. Stay sharp.';
-  const stageLoot = STAGE_LOOT[stageNumber] ?? '';
+  const locationIcon = LOCATION_ICON[encounter.location ?? ''] ?? '📍';
   const totalHP = (encounter.enemies ?? []).reduce((sum, e) => sum + e.health, 0);
 
   const diffLabel = {
@@ -67,9 +68,74 @@ export function EncounterScreen({
     easy: 'text-stone-500',
     medium: 'text-amber-700',
     hard: 'text-red-700',
-    very_hard: 'text-red-600',
+    very_hard: 'text-red-500',
   }[encounter.difficulty ?? 'easy'];
 
+  // Phase 1: Story / atmospheric reveal
+  if (phase === 'story') {
+    return (
+      <div className="min-h-screen flex flex-col bg-stone-950 text-stone-300">
+        <RunStatusBar
+          stageNumber={stageNumber}
+          totalStages={totalStages}
+          survivors={survivors}
+          cardsRemaining={cardsRemaining}
+          totalCards={totalCards}
+          location={encounter.location}
+          isBarricaded={isBarricaded}
+        />
+
+        <div className="flex-1 flex flex-col px-5 pt-8 pb-6">
+          {/* Stage label */}
+          <p className="text-[9px] text-stone-700 font-mono tracking-widest uppercase mb-6">
+            STAGE {stageNumber} OF {totalStages}
+          </p>
+
+          {/* Location icon — large, atmospheric */}
+          <div className="flex justify-center mb-5">
+            <span className="text-6xl opacity-40">{locationIcon}</span>
+          </div>
+
+          {/* Location name */}
+          <h1 className="text-2xl font-bold text-stone-200 uppercase tracking-wide text-center mb-2">
+            {encounter.name}
+          </h1>
+
+          {/* Approach line — single evocative sentence */}
+          <div className="border-l-2 border-stone-800 pl-4 mb-4">
+            <p className="text-stone-400 text-sm leading-relaxed italic">
+              {approachLine}
+            </p>
+          </div>
+
+          {/* Encounter description */}
+          <p className="text-stone-500 text-sm leading-relaxed">
+            {encounter.description}
+          </p>
+
+          <div className="flex-1" />
+        </div>
+
+        {/* Single CTA — move to threat screen */}
+        <div className="px-5 pb-8 space-y-2">
+          <button
+            onClick={() => setPhase('threat')}
+            className="w-full py-3.5 bg-stone-800 hover:bg-stone-700 text-stone-200 font-mono font-bold text-sm tracking-widest uppercase border border-stone-700 transition-colors active:scale-[0.98]"
+          >
+            APPROACH →
+          </button>
+          <button
+            onClick={onRetreat}
+            className="w-full py-2.5 text-stone-700 hover:text-stone-600 font-mono text-xs tracking-widest uppercase border border-stone-900 transition-colors"
+          >
+            FALL BACK
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Phase 2: Threats visible — decide to advance or retreat
   return (
     <div className="min-h-screen flex flex-col bg-stone-950 text-stone-300">
       <RunStatusBar
@@ -82,80 +148,79 @@ export function EncounterScreen({
         isBarricaded={isBarricaded}
       />
 
-      <div className="flex-1 px-5 py-6 flex flex-col">
-        {/* Stage context */}
-        <div className={`transition-opacity duration-500 ${revealed ? 'opacity-100' : 'opacity-0'}`}>
-          <p className="text-[9px] text-stone-700 font-mono tracking-widest uppercase mb-4">
-            ── STAGE {stageNumber} OF {totalStages} ──────────────────
-          </p>
-
-          {/* Location name */}
-          <h1 className="text-2xl font-bold text-stone-200 uppercase tracking-wide mb-1">
-            {encounter.name}
-          </h1>
-          <div className="flex items-center gap-3 mb-5">
-            <span className={`text-[10px] font-mono tracking-widest ${diffColor}`}>
+      <div className="flex-1 px-5 pt-5 pb-2 flex flex-col">
+        {/* Location + difficulty */}
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="text-lg font-bold text-stone-300 uppercase tracking-wide">
+              {encounter.name}
+            </h2>
+            <p className={`text-[10px] font-mono tracking-widest ${diffColor}`}>
               {diffLabel}
-            </span>
-            <span className="text-stone-700 text-[10px]">·</span>
-            <span className="text-[10px] text-stone-600 font-mono">
-              {(encounter.enemies ?? []).length} HOSTILES · {totalHP} HP TOTAL
-            </span>
-          </div>
-
-          {/* Approach description */}
-          <div className="border-l-2 border-stone-800 pl-4 mb-5">
-            <p className="text-stone-500 text-sm leading-relaxed italic">
-              {approachLine}
             </p>
           </div>
-
-          {/* Encounter description */}
-          <p className="text-stone-400 text-sm leading-relaxed mb-6">
-            {encounter.description}
-          </p>
+          <span className="text-3xl opacity-30">{locationIcon}</span>
         </div>
 
-        {/* Threats */}
-        <div className={`transition-opacity duration-500 delay-200 ${revealed ? 'opacity-100' : 'opacity-0'}`}>
-          <p className="text-[9px] text-stone-700 font-mono tracking-widest uppercase mb-2">
-            THREATS
-          </p>
-          <div className="space-y-1 mb-5">
-            {(encounter.enemies ?? []).map((enemy, i) => (
+        {/* Threats — visual cards */}
+        <p className="text-[9px] text-stone-700 font-mono tracking-widest uppercase mb-2">
+          THREATS · {totalHP} HP TOTAL
+        </p>
+        <div className="space-y-1.5 mb-4">
+          {(encounter.enemies ?? []).map((enemy, i) => {
+            const hpFill = (enemy.health / enemy.maxHealth) * 100;
+            return (
               <div
                 key={i}
-                className="flex items-center justify-between border border-stone-800 bg-stone-900 px-3 py-2"
+                className="border border-stone-800 bg-stone-900 px-3 py-2.5 rounded"
               >
-                <span className="text-sm text-stone-400 font-mono">{enemy.name}</span>
-                <div className="flex gap-3 text-[10px] font-mono">
-                  <span className="text-red-800">ATK {enemy.damage}</span>
-                  {enemy.defense > 0 && (
-                    <span className="text-stone-600">DEF {enemy.defense}</span>
-                  )}
-                  <span className="text-stone-500">HP {enemy.health}</span>
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-sm text-stone-300 font-mono font-bold">{enemy.name}</span>
+                  <div className="flex gap-2 text-[10px] font-mono">
+                    <span className="text-red-700">ATK {enemy.damage}</span>
+                    {enemy.defense > 0 && (
+                      <span className="text-stone-600">DEF {enemy.defense}</span>
+                    )}
+                  </div>
+                </div>
+                {/* HP as dots + bar */}
+                <div className="flex items-center gap-2">
+                  <div className="flex gap-0.5">
+                    {Array.from({ length: Math.min(enemy.health, 8) }).map((_, j) => (
+                      <span key={j} className="text-[8px] text-red-900">●</span>
+                    ))}
+                    {enemy.health > 8 && (
+                      <span className="text-[8px] text-red-900 font-mono">+{enemy.health - 8}</span>
+                    )}
+                  </div>
+                  <div className="flex-1 h-0.5 bg-stone-800 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-red-900 rounded-full"
+                      style={{ width: `${hpFill}%` }}
+                    />
+                  </div>
+                  <span className="text-[9px] text-stone-700 font-mono w-8 text-right">
+                    {enemy.health}hp
+                  </span>
                 </div>
               </div>
-            ))}
-          </div>
+            );
+          })}
         </div>
 
-        {/* Loot hint */}
-        <div className={`transition-opacity duration-500 delay-300 ${revealed ? 'opacity-100' : 'opacity-0'}`}>
-          {stageLoot && (
-            <div className="border border-stone-800 px-3 py-2 mb-6">
-              <p className="text-[10px] text-stone-600 font-mono tracking-wider uppercase mb-0.5">
-                IF SECURED
-              </p>
-              <p className="text-[11px] text-amber-800">{stageLoot}</p>
-            </div>
-          )}
+        {/* Loot hint — subtle */}
+        <div className="border border-stone-900 px-3 py-2 rounded">
+          <p className="text-[9px] text-stone-700 font-mono">
+            {stageNumber === 1 && 'Basic supplies if cleared.'}
+            {stageNumber === 2 && 'Equipment cache if cleared.'}
+            {stageNumber === 3 && 'Rare military-grade find.'}
+          </p>
         </div>
 
         <div className="flex-1" />
       </div>
 
-      {/* Action buttons */}
+      {/* Actions */}
       <div className="px-5 pb-8 pt-2 space-y-2">
         <button
           onClick={onEnterCombat}
@@ -165,9 +230,9 @@ export function EncounterScreen({
         </button>
         <button
           onClick={onRetreat}
-          className="w-full py-2.5 bg-transparent hover:bg-stone-900 text-stone-600 hover:text-stone-500 font-mono text-xs tracking-widest uppercase border border-stone-800 transition-colors"
+          className="w-full py-2.5 text-stone-700 hover:text-stone-600 font-mono text-xs tracking-widest uppercase border border-stone-900 transition-colors"
         >
-          FALL BACK (RETREAT)
+          FALL BACK
         </button>
       </div>
     </div>

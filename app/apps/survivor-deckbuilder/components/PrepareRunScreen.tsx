@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
-import { CardInstance } from '../lib/types';
+import { CardInstance, RunMode, MomentumCard } from '../lib/types';
 import { validateDeck } from '../lib/combat-engine';
 import { detectSynergies } from '../lib/synergies';
 
@@ -11,8 +11,10 @@ interface PrepareRunScreenProps {
   survivors: CardInstance[];
   items: CardInstance[];
   actions: CardInstance[];
-  onLaunch: (deck: CardInstance[]) => void;
+  onLaunch: (deck: CardInstance[], mode: RunMode) => void;
   onBack: () => void;
+  momentumCard?: MomentumCard;
+  onActivateMomentum?: () => void;
 }
 
 function getCardStatLines(card: CardInstance): string {
@@ -38,12 +40,15 @@ export function PrepareRunScreen({
   actions,
   onLaunch,
   onBack,
+  momentumCard,
+  onActivateMomentum,
 }: PrepareRunScreenProps) {
   const [phase, setPhase] = useState<Phase>('survivors');
   const [selectedSurvivorIds, setSelectedSurvivorIds] = useState<Set<string>>(new Set());
   const [selectedGearIds, setSelectedGearIds] = useState<Set<string>>(new Set());
   const [cursor, setCursor] = useState(0);
   const [launching, setLaunching] = useState(false);
+  const [runMode, setRunMode] = useState<RunMode>('siege');
 
   const allGear = useMemo(() => [...items, ...actions], [items, actions]);
   const availableSurvivors = survivors.filter(c => !c.exhausted);
@@ -56,7 +61,7 @@ export function PrepareRunScreen({
   const selectedGear = availableGear.filter(c => selectedGearIds.has(c.id));
   const allSelected = [...selectedSurvivors, ...selectedGear];
 
-  const validation = validateDeck(allSelected);
+  const validation = validateDeck(allSelected, runMode);
   const synergies = detectSynergies(allSelected);
 
   // Reset cursor when phase changes
@@ -87,7 +92,8 @@ export function PrepareRunScreen({
         if (next.has(currentCard.id)) {
           next.delete(currentCard.id);
         } else {
-          if (next.size >= 5) return prev;
+          const maxGear = runMode === 'sprint' ? 2 : 5;
+          if (next.size >= maxGear) return prev;
           next.add(currentCard.id);
         }
         return next;
@@ -124,7 +130,7 @@ export function PrepareRunScreen({
   const handleLaunch = () => {
     if (!validation.valid) return;
     setLaunching(true);
-    setTimeout(() => onLaunch(allSelected), 300);
+    setTimeout(() => onLaunch(allSelected, runMode), 300);
   };
 
   const survivorReady = selectedSurvivorIds.size === 2;
@@ -207,7 +213,9 @@ export function PrepareRunScreen({
               {cursor + 1}/{currentList.length} ·{' '}
               {phase === 'survivors'
                 ? `SELECT 2 SURVIVORS (${2 - selectedSurvivorIds.size} remaining)`
-                : `SELECT 2-5 ITEMS (${selectedGearIds.size} selected)`
+                : runMode === 'sprint'
+                    ? `SPRINT: SELECT EXACTLY 2 ITEMS (${selectedGearIds.size}/2)`
+                    : `SELECT 2-5 ITEMS (${selectedGearIds.size} selected)`
               }
             </p>
 
@@ -341,13 +349,79 @@ export function PrepareRunScreen({
             </div>
           )}
 
+          {/* Sprint / Siege toggle */}
+          <div>
+            <p className="text-[9px] text-stone-700 font-mono tracking-widest uppercase mb-2">RUN MODE</p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setRunMode('siege')}
+                className={`flex-1 py-2.5 px-3 border font-mono text-xs uppercase tracking-wider transition-colors ${
+                  runMode === 'siege'
+                    ? 'border-stone-500 text-stone-200 bg-stone-800'
+                    : 'border-stone-800 text-stone-700 bg-stone-900 hover:border-stone-700'
+                }`}
+              >
+                SIEGE
+              </button>
+              <button
+                onClick={() => {
+                  setRunMode('sprint');
+                  // Trim gear to 2 max for sprint
+                  if (selectedGearIds.size > 2) {
+                    const trimmed = Array.from(selectedGearIds).slice(0, 2);
+                    setSelectedGearIds(new Set(trimmed));
+                  }
+                }}
+                className={`flex-1 py-2.5 px-3 border font-mono text-xs uppercase tracking-wider transition-colors ${
+                  runMode === 'sprint'
+                    ? 'border-amber-700 text-amber-400 bg-stone-800'
+                    : 'border-stone-800 text-stone-700 bg-stone-900 hover:border-stone-700'
+                }`}
+              >
+                SPRINT
+              </button>
+            </div>
+            <p className="text-[9px] text-stone-700 font-mono mt-1.5">
+              {runMode === 'siege'
+                ? 'Full deck · 3 stages · Normal loot · Retreat allowed'
+                : 'Max 4 cards · 2 stages · +75% loot · No retreat · No exhaust'
+              }
+            </p>
+          </div>
+
+          {/* Momentum card if available */}
+          {momentumCard && !momentumCard.used && (
+            <div className="border border-amber-900/50 bg-stone-900 px-3 py-2">
+              <p className="text-[9px] text-stone-700 font-mono tracking-widest uppercase mb-1">TODAY'S BONUS</p>
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <p className="text-xs text-amber-400 font-mono font-bold">{momentumCard.icon} {momentumCard.title}</p>
+                  <p className="text-[9px] text-stone-600 font-mono mt-0.5">{momentumCard.description}</p>
+                </div>
+                {onActivateMomentum && (
+                  <button
+                    onClick={onActivateMomentum}
+                    className="text-[9px] font-mono text-amber-700 border border-amber-900 px-2 py-0.5 hover:text-amber-500 transition-colors whitespace-nowrap"
+                  >
+                    ACTIVATE
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
           <div className="border border-stone-800 bg-stone-900 px-3 py-2">
             <div className="flex justify-between text-[10px] font-mono text-stone-600 mb-1">
               <span>TOTAL CARDS</span><span>{allSelected.length}</span>
             </div>
             <div className="flex justify-between text-[10px] font-mono text-stone-600">
-              <span>STAGES</span><span>3</span>
+              <span>STAGES</span><span>{runMode === 'sprint' ? 2 : 3}</span>
             </div>
+            {runMode === 'sprint' && (
+              <div className="flex justify-between text-[10px] font-mono text-amber-800 mt-1">
+                <span>LOOT BONUS</span><span>+75%</span>
+              </div>
+            )}
           </div>
         </div>
       )}
