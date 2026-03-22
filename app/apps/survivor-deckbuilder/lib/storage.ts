@@ -60,6 +60,8 @@ export class LocalStorageRepository implements DeckBuilderRepository {
       itemsFound: [],
       survivorStats: {},
       activeSurvivors: deck.filter((card) => card.type === 'survivor'),
+      runMode: 'siege',
+      lootMultiplier: 1.0,
     };
 
     const state = await this.getGameState();
