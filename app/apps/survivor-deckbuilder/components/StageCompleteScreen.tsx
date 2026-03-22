@@ -18,6 +18,7 @@ interface StageCompleteScreenProps {
 }
 
 const MATERIAL_LABELS: Record<string, { icon: string; label: string }> = {
+  food:            { icon: '◆', label: 'Food' },
   scrapMetal:      { icon: '⚙', label: 'Scrap Metal' },
   wood:            { icon: '▤', label: 'Wood' },
   cloth:           { icon: '◫', label: 'Cloth' },
