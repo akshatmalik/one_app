@@ -476,19 +476,6 @@ export default function DeadWeightPrototype() {
         </span>
       </div>
 
-      {/* Phase indicator */}
-      <div style={{
-        padding: "4px 12px", textAlign: "center", fontSize: 13, flexShrink: 0,
-        background: phase === PHASE.PLAYER ? "#1a2a1a" : phase === PHASE.ZOMBIE ? "#2a1a1a" : "#1a1a2a",
-        color: phase === PHASE.PLAYER ? "#6a6" : phase === PHASE.ZOMBIE ? "#c44" : "#88f",
-        fontWeight: "bold"
-      }}>
-        {phase === PHASE.PLAYER && "YOUR TURN"}
-        {phase === PHASE.NOISE && "NOISE RESOLVING..."}
-        {phase === PHASE.ZOMBIE && "ZOMBIE PHASE..."}
-        {phase === PHASE.GAMEOVER && "GAME OVER"}
-        {phase === PHASE.WIN && "ROOM CLEARED!"}
-      </div>
 
       {/* Grid */}
       <div ref={gridRef} style={{
