@@ -22,16 +22,60 @@ const OBSTACLES = new Set([
 
 const DOOR_TILES = new Set(["3,0","10,0"]);
 
-const isObstacle = (x, y) => OBSTACLES.has(`${x},${y}`);
-const inBounds = (x, y) => x >= 0 && x < GRID_W && y >= 0 && y < GRID_H;
-const manhattan = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
+interface InventoryItem {
+  name: string;
+  type: "weapon" | "consumable";
+  damage?: number;
+  noiseRadius: number;
+  durability?: number;
+  heal?: number;
+}
 
-function bfsReachable(start, maxSteps, blockedSet) {
-  const reachable = new Map();
-  const queue = [{ ...start, steps: 0 }];
+interface Survivor {
+  id: number;
+  name: string;
+  x: number;
+  y: number;
+  hp: number;
+  maxHp: number;
+  totalSlots: number;
+  inventory: InventoryItem[];
+  actionsUsed: number;
+  state: "active" | "dead" | "grabbed";
+}
+
+interface Zombie {
+  id: number;
+  x: number;
+  y: number;
+  hp: number;
+  maxHp: number;
+  state: "dormant" | "agitated" | "grabbing" | "dead";
+  grabTarget: number | null;
+  patrolPath: { x: number; y: number }[] | null;
+  patrolIdx?: number;
+}
+
+interface NoiseEvent {
+  x: number;
+  y: number;
+  radius: number;
+}
+
+interface NoiseRipple extends NoiseEvent {
+  id: number;
+}
+
+const isObstacle = (x: number, y: number) => OBSTACLES.has(`${x},${y}`);
+const inBounds = (x: number, y: number) => x >= 0 && x < GRID_W && y >= 0 && y < GRID_H;
+const manhattan = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
+
+function bfsReachable(start: { x: number; y: number }, maxSteps: number, blockedSet: Set<string>): Map<string, number> {
+  const reachable = new Map<string, number>();
+  const queue: Array<{ x: number; y: number; steps: number }> = [{ ...start, steps: 0 }];
   const visited = new Set([`${start.x},${start.y}`]);
   while (queue.length > 0) {
-    const cur = queue.shift();
+    const cur = queue.shift()!;
     reachable.set(`${cur.x},${cur.y}`, cur.steps);
     if (cur.steps >= maxSteps) continue;
     for (const [dx, dy] of [[0,1],[0,-1],[1,0],[-1,0]]) {
@@ -46,11 +90,11 @@ function bfsReachable(start, maxSteps, blockedSet) {
   return reachable;
 }
 
-function bfsPath(start, end, blockedSet) {
-  const queue = [{ ...start, path: [start] }];
+function bfsPath(start: { x: number; y: number }, end: { x: number; y: number }, blockedSet: Set<string>): { x: number; y: number }[] | null {
+  const queue: Array<{ x: number; y: number; path: { x: number; y: number }[] }> = [{ ...start, path: [start] }];
   const visited = new Set([`${start.x},${start.y}`]);
   while (queue.length > 0) {
-    const cur = queue.shift();
+    const cur = queue.shift()!;
     if (cur.x === end.x && cur.y === end.y) return cur.path;
     for (const [dx, dy] of [[0,1],[0,-1],[1,0],[-1,0]]) {
       const nx = cur.x + dx, ny = cur.y + dy;
@@ -64,8 +108,8 @@ function bfsPath(start, end, blockedSet) {
   return null;
 }
 
-function zombieMoveToward(zombie, target, blockedSet) {
-  let best = null;
+function zombieMoveToward(zombie: { x: number; y: number }, target: { x: number; y: number }, blockedSet: Set<string>): { x: number; y: number } | null {
+  let best: { x: number; y: number } | null = null;
   let bestDist = Infinity;
   for (const [dx, dy] of [[0,1],[0,-1],[1,0],[-1,0]]) {
     const nx = zombie.x + dx, ny = zombie.y + dy;
@@ -78,7 +122,7 @@ function zombieMoveToward(zombie, target, blockedSet) {
   return best;
 }
 
-const initSurvivors = () => [
+const initSurvivors = (): Survivor[] => [
   { id: 0, name: "Scout", x: 3, y: 1, hp: 10, maxHp: 10, totalSlots: 4,
     inventory: [{ name: "Knife", damage: 1, noiseRadius: 1, durability: 99, type: "weapon" }],
     actionsUsed: 0, state: "active" },
@@ -90,7 +134,7 @@ const initSurvivors = () => [
     actionsUsed: 0, state: "active" },
 ];
 
-const initZombies = () => [
+const initZombies = (): Zombie[] => [
   { id: 0, x: 5, y: 8, hp: 3, maxHp: 3, state: "dormant", grabTarget: null, patrolPath: null },
   { id: 1, x: 8, y: 8, hp: 3, maxHp: 3, state: "dormant", grabTarget: null, patrolPath: null },
   { id: 2, x: 6, y: 5, hp: 3, maxHp: 3, state: "dormant", grabTarget: null,
@@ -102,34 +146,34 @@ const initZombies = () => [
 const PHASE = { PLAYER: "player", NOISE: "noise", ZOMBIE: "zombie", GAMEOVER: "gameover", WIN: "win" };
 
 export default function DeadWeightPrototype() {
-  const [survivors, setSurvivors] = useState(initSurvivors);
-  const [zombies, setZombies] = useState(initZombies);
-  const [phase, setPhase] = useState(PHASE.PLAYER);
-  const [selectedSurvivor, setSelectedSurvivor] = useState(null);
-  const [reachableTiles, setReachableTiles] = useState(new Map());
-  const [attackTargets, setAttackTargets] = useState([]);
-  const [noiseEvents, setNoiseEvents] = useState([]);
-  const [noiseRipples, setNoiseRipples] = useState([]);
-  const [messages, setMessages] = useState(["Your turn. Tap a survivor to select."]);
-  const [turn, setTurn] = useState(1);
-  const [compoundIntegrity, setCompoundIntegrity] = useState(10);
-  const gridRef = useRef(null);
+  const [survivors, setSurvivors] = useState<Survivor[]>(initSurvivors);
+  const [zombies, setZombies] = useState<Zombie[]>(initZombies);
+  const [phase, setPhase] = useState<string>(PHASE.PLAYER);
+  const [selectedSurvivor, setSelectedSurvivor] = useState<number | null>(null);
+  const [reachableTiles, setReachableTiles] = useState<Map<string, number>>(new Map());
+  const [attackTargets, setAttackTargets] = useState<number[]>([]);
+  const [noiseEvents, setNoiseEvents] = useState<NoiseEvent[]>([]);
+  const [noiseRipples, setNoiseRipples] = useState<NoiseRipple[]>([]);
+  const [messages, setMessages] = useState<string[]>(["Your turn. Tap a survivor to select."]);
+  const [turn, setTurn] = useState<number>(1);
+  const [compoundIntegrity, setCompoundIntegrity] = useState<number>(10);
+  const gridRef = useRef<HTMLDivElement>(null);
 
-  const addMsg = useCallback((msg) => {
+  const addMsg = useCallback((msg: string) => {
     setMessages(prev => [msg, ...prev].slice(0, 6));
   }, []);
 
-  const getBlockedSet = useCallback((excludeSurvivorId = -1) => {
-    const blocked = new Set();
+  const getBlockedSet = useCallback((excludeSurvivorId: number = -1): Set<string> => {
+    const blocked = new Set<string>();
     survivors.forEach(s => { if (s.id !== excludeSurvivorId && s.state !== "dead") blocked.add(`${s.x},${s.y}`); });
     zombies.forEach(z => { if (z.hp > 0) blocked.add(`${z.x},${z.y}`); });
     return blocked;
   }, [survivors, zombies]);
 
-  const freeSlots = (s) => s.totalSlots - s.inventory.length;
-  const actionsLeft = (s) => freeSlots(s) - s.actionsUsed;
+  const freeSlots = (s: Survivor) => s.totalSlots - s.inventory.length;
+  const actionsLeft = (s: Survivor) => freeSlots(s) - s.actionsUsed;
 
-  const selectSurvivor = useCallback((sid) => {
+  const selectSurvivor = useCallback((sid: number) => {
     if (phase !== PHASE.PLAYER) return;
     const s = survivors.find(sv => sv.id === sid);
     if (!s || s.state === "dead") return;
@@ -142,7 +186,7 @@ export default function DeadWeightPrototype() {
     setAttackTargets(targets.map(z => z.id));
   }, [phase, survivors, zombies, getBlockedSet]);
 
-  const moveSurvivor = useCallback((tx, ty) => {
+  const moveSurvivor = useCallback((tx: number, ty: number) => {
     if (selectedSurvivor === null || phase !== PHASE.PLAYER) return;
     const key = `${tx},${ty}`;
     if (!reachableTiles.has(key)) return;
@@ -158,7 +202,7 @@ export default function DeadWeightPrototype() {
     setTimeout(() => selectSurvivor(selectedSurvivor), 50);
   }, [selectedSurvivor, phase, reachableTiles, selectSurvivor]);
 
-  const attackZombie = useCallback((zid) => {
+  const attackZombie = useCallback((zid: number) => {
     if (selectedSurvivor === null || phase !== PHASE.PLAYER) return;
     const s = survivors.find(sv => sv.id === selectedSurvivor);
     if (!s || actionsLeft(s) <= 0) return;
@@ -374,7 +418,7 @@ export default function DeadWeightPrototype() {
     return () => clearTimeout(timer);
   }, [noiseRipples]);
 
-  const handleTileClick = useCallback((tx, ty) => {
+  const handleTileClick = useCallback((tx: number, ty: number) => {
     if (phase !== PHASE.PLAYER) return;
 
     // Check if clicking a survivor
