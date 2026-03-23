@@ -190,7 +190,7 @@ export default function DeadWeightPrototype() {
     if (selectedSurvivor === null || phase !== PHASE.PLAYER) return;
     const key = `${tx},${ty}`;
     if (!reachableTiles.has(key)) return;
-    const cost = reachableTiles.get(key);
+    const cost = reachableTiles.get(key)!;
     if (cost === 0) return;
 
     setSurvivors(prev => prev.map(s => {
@@ -211,7 +211,7 @@ export default function DeadWeightPrototype() {
     const z = zombies.find(zz => zz.id === zid);
     if (!z || z.hp <= 0 || manhattan(s, z) !== 1) return;
 
-    const damage = weapon.damage;
+    const damage = weapon.damage!;
     const noiseR = weapon.noiseRadius;
     const newHp = z.hp - damage;
     const killed = newHp <= 0;
@@ -227,7 +227,7 @@ export default function DeadWeightPrototype() {
       return { ...zz, hp: newHp };
     }));
 
-    const newDur = weapon.durability - 1;
+    const newDur = (weapon.durability ?? 0) - 1;
     const weaponBroke = newDur <= 0;
 
     setSurvivors(prev => prev.map(ss => {
@@ -259,7 +259,7 @@ export default function DeadWeightPrototype() {
     if (!s || actionsLeft(s) <= 0) return;
     const bandage = s.inventory.find(i => i.type === "consumable" && i.name === "Bandage");
     if (!bandage) return;
-    const healed = Math.min(s.maxHp, s.hp + bandage.heal);
+    const healed = Math.min(s.maxHp, s.hp + (bandage.heal ?? 0));
     setSurvivors(prev => prev.map(ss => {
       if (ss.id !== selectedSurvivor) return ss;
       return { ...ss, hp: healed, actionsUsed: ss.actionsUsed + 1, inventory: ss.inventory.filter(i => i !== bandage) };
