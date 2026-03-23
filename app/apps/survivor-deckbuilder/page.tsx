@@ -353,7 +353,7 @@ export default function DeadWeightPrototype() {
         if (z.state === "dormant" && z.patrolPath) {
           const nextIdx = ((z.patrolIdx || 0) + 1) % z.patrolPath.length;
           const next = z.patrolPath[nextIdx];
-          const blocked = new Set();
+          const blocked = new Set<string>();
           newSurvivors.forEach(s => { if (s.state !== "dead") blocked.add(`${s.x},${s.y}`); });
           newZombies.forEach((zz, j) => { if (j !== i && zz.hp > 0) blocked.add(`${zz.x},${zz.y}`); });
           if (!blocked.has(`${next.x},${next.y}`)) {
@@ -378,7 +378,7 @@ export default function DeadWeightPrototype() {
             if (t) t.state = "grabbed";
             addMsg(`Zombie grabs ${closest.name}!`);
           } else {
-            const blocked = new Set();
+            const blocked = new Set<string>();
             newSurvivors.forEach(s => { if (s.state !== "dead") blocked.add(`${s.x},${s.y}`); });
             newZombies.forEach((zz, j) => { if (j !== i && zz.hp > 0) blocked.add(`${zz.x},${zz.y}`); });
             const next = zombieMoveToward(z, closest, blocked);
@@ -505,7 +505,7 @@ export default function DeadWeightPrototype() {
               const isObs = isObstacle(x, y);
               const isDoor = DOOR_TILES.has(`${x},${y}`);
               const key = `${x},${y}`;
-              const isReachable = reachableTiles.has(key) && reachableTiles.get(key) > 0;
+              const isReachable = reachableTiles.has(key) && (reachableTiles.get(key) ?? 0) > 0;
               const isSelected = selS && selS.x === x && selS.y === y;
 
               let bg = "#3a3a3a";
@@ -551,8 +551,8 @@ export default function DeadWeightPrototype() {
           {/* Zombies */}
           {zombies.filter(z => z.hp > 0).map(z => {
             const isTarget = attackTargets.includes(z.id);
-            const colors = {
-              dormant: "#666", agitated: "#c44", grabbing: "#f66"
+            const colors: Record<string, string> = {
+              dormant: "#666", agitated: "#c44", grabbing: "#f66", dead: "#333"
             };
             return (
               <div
