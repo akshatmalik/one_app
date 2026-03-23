@@ -1,6 +1,6 @@
 export const metadata = {
-  title: 'Survivor Deck-Builder',
-  description: 'A tactical zombie survival game with card-based expeditions',
+  title: 'Dead Weight',
+  description: 'A tactical turn-based tactical game with survivors and zombies',
 };
 
 export default function SurvivorLayout({

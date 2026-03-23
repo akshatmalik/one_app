@@ -1,672 +1,665 @@
 'use client';
 
-import { useState, useCallback } from 'react';
-import { useGame } from './hooks/useGame';
-import { CardInstance, SurvivorAssignment, RunMode } from './lib/types';
-import { RunScreen } from './components/RunScreen';
-import { PrepareRunScreen } from './components/PrepareRunScreen';
-import { CompoundView } from './components/CompoundView';
+import { useState, useCallback, useEffect, useRef } from "react";
 
-type View = 'home' | 'prepare' | 'run' | 'compound';
+const GRID_W = 14;
+const GRID_H = 10;
+const TILE = 52;
 
-const MAT_ICONS: Record<string, string> = {
-  scrapMetal: '⚙',
-  wood: '▤',
-  cloth: '◫',
-  medicalSupplies: '✚',
-  food: '◆',
-};
+// Obstacle map: 1 = obstacle
+const OBSTACLES = new Set([
+  // Serving counter (row 9)
+  "3,9","4,9","5,9","6,9","7,9","8,9",
+  // Shelf (row 8)
+  "11,8","12,8",
+  // Table row upper (rows 6-7)
+  "1,7","1,6","4,7","4,6","7,7","7,6","10,7","10,6",
+  // Table row lower (rows 3-4)
+  "1,4","1,3","4,4","4,3","7,4","7,3",
+  // Food cart
+  "12,4",
+]);
 
-const ASSIGNMENT_CONFIG: Record<NonNullable<SurvivorAssignment>, { label: string; icon: string; color: string }> = {
-  guard:     { label: 'Guard',     icon: '🛡', color: 'text-red-600 border-red-900/60' },
-  garden:    { label: 'Garden',    icon: '🌱', color: 'text-green-600 border-green-900/60' },
-  workshop:  { label: 'Workshop',  icon: '⚙', color: 'text-amber-600 border-amber-900/60' },
-  infirmary: { label: 'Infirmary', icon: '✚', color: 'text-emerald-600 border-emerald-900/60' },
-  scavenge:  { label: 'Scavenge',  icon: '◎', color: 'text-sky-600 border-sky-900/60' },
-  rest:      { label: 'Rest',      icon: '◒', color: 'text-stone-500 border-stone-700' },
-};
+const DOOR_TILES = new Set(["3,0","10,0"]);
 
-const CONDITION_CONFIG = {
-  healthy:  { icon: '', color: '' },
-  hungry:   { icon: '⚠', color: 'text-amber-600' },
-  starving: { icon: '☠', color: 'text-red-600' },
-};
+const isObstacle = (x, y) => OBSTACLES.has(`${x},${y}`);
+const inBounds = (x, y) => x >= 0 && x < GRID_W && y >= 0 && y < GRID_H;
+const manhattan = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
 
-interface NightReport {
-  day: number;
-  foodConsumed: number;
-  shortfall: number;
-  raidHappened: boolean;
-  raidResult: 'none' | 'defended' | 'damaged';
-  productionsCompleted: number;
-  scavengeGain: number;
+function bfsReachable(start, maxSteps, blockedSet) {
+  const reachable = new Map();
+  const queue = [{ ...start, steps: 0 }];
+  const visited = new Set([`${start.x},${start.y}`]);
+  while (queue.length > 0) {
+    const cur = queue.shift();
+    reachable.set(`${cur.x},${cur.y}`, cur.steps);
+    if (cur.steps >= maxSteps) continue;
+    for (const [dx, dy] of [[0,1],[0,-1],[1,0],[-1,0]]) {
+      const nx = cur.x + dx, ny = cur.y + dy;
+      const key = `${nx},${ny}`;
+      if (!visited.has(key) && inBounds(nx, ny) && !isObstacle(nx, ny) && !blockedSet.has(key)) {
+        visited.add(key);
+        queue.push({ x: nx, y: ny, steps: cur.steps + 1 });
+      }
+    }
+  }
+  return reachable;
 }
 
-export default function SurvivorDeckBuilder() {
-  const {
-    gameState,
-    currentRun,
-    loading,
-    getSurvivors,
-    getItems,
-    getActions,
-    getAvailableCards,
-    startRun,
-    enterCombat,
-    playCards,
-    continueAfterCombat,
-    advanceToNextStage,
-    completeRun,
-    retreatFromExpedition,
-    buildHomeBarricade,
-    canBuildHomeBarricade,
-    endDay,
-    assignSurvivor,
-    startGarden,
-    activateMomentumCard,
-    splitParty,
-    resetGame,
-  } = useGame();
-
-  const [view, setView] = useState<View>('home');
-  const [nightReport, setNightReport] = useState<NightReport | null>(null);
-  const [assigningId, setAssigningId] = useState<string | null>(null);
-  const [gardenSurvivorId, setGardenSurvivorId] = useState<string | null>(null);
-
-  const activeView = currentRun ? 'run' : view;
-
-  const handleEndDay = useCallback(async () => {
-    const report = await endDay();
-    setNightReport(report);
-    setAssigningId(null);
-  }, [endDay]);
-
-  const handleAssign = useCallback(async (survivorId: string, assignment: SurvivorAssignment) => {
-    await assignSurvivor(survivorId, assignment);
-    setAssigningId(null);
-  }, [assignSurvivor]);
-
-  const handleStartGarden = useCallback(async (survivorId: string, seedId: string) => {
-    await startGarden(survivorId, seedId);
-    setGardenSurvivorId(null);
-  }, [startGarden]);
-
-  if (loading) {
-    return (
-      <div className="fixed inset-0 z-[9999] bg-stone-950 flex items-center justify-center">
-        <p className="text-stone-700 font-mono text-xs tracking-widest uppercase animate-pulse">
-          LOADING...
-        </p>
-      </div>
-    );
+function bfsPath(start, end, blockedSet) {
+  const queue = [{ ...start, path: [start] }];
+  const visited = new Set([`${start.x},${start.y}`]);
+  while (queue.length > 0) {
+    const cur = queue.shift();
+    if (cur.x === end.x && cur.y === end.y) return cur.path;
+    for (const [dx, dy] of [[0,1],[0,-1],[1,0],[-1,0]]) {
+      const nx = cur.x + dx, ny = cur.y + dy;
+      const key = `${nx},${ny}`;
+      if (!visited.has(key) && inBounds(nx, ny) && !isObstacle(nx, ny) && !blockedSet.has(key)) {
+        visited.add(key);
+        queue.push({ x: nx, y: ny, path: [...cur.path, { x: nx, y: ny }] });
+      }
+    }
   }
+  return null;
+}
 
-  if (!gameState) {
-    return (
-      <div className="fixed inset-0 z-[9999] bg-stone-950 flex flex-col items-center justify-center px-8">
-        <p className="text-red-900 font-mono text-sm mb-4">SYSTEM FAILURE</p>
-        <button
-          onClick={resetGame}
-          className="px-6 py-2 border border-stone-700 text-stone-400 font-mono text-xs tracking-widest uppercase hover:bg-stone-900 transition-colors"
-        >
-          RESET
-        </button>
-      </div>
-    );
+function zombieMoveToward(zombie, target, blockedSet) {
+  let best = null;
+  let bestDist = Infinity;
+  for (const [dx, dy] of [[0,1],[0,-1],[1,0],[-1,0]]) {
+    const nx = zombie.x + dx, ny = zombie.y + dy;
+    const key = `${nx},${ny}`;
+    if (inBounds(nx, ny) && !isObstacle(nx, ny) && !blockedSet.has(key)) {
+      const d = manhattan({ x: nx, y: ny }, target);
+      if (d < bestDist) { bestDist = d; best = { x: nx, y: ny }; }
+    }
   }
+  return best;
+}
 
-  // === RUN VIEW ===
-  if (activeView === 'run' && currentRun) {
-    return (
-      <div className="fixed inset-0 z-[9999] bg-stone-950 overflow-y-auto">
-        <RunScreen
-          run={currentRun}
-          onEnterCombat={enterCombat}
-          onPlayCards={async (cards: CardInstance[]) => {
-            await playCards(cards);
-          }}
-          onContinueAfterCombat={continueAfterCombat}
-          onAdvanceStage={async () => {
-            await advanceToNextStage();
-          }}
-          onCompleteRun={async () => {
-            await completeRun();
-            setView('home');
-          }}
-          onRetreat={async () => {
-            await retreatFromExpedition();
-          }}
-        />
-      </div>
-    );
-  }
+const initSurvivors = () => [
+  { id: 0, name: "Scout", x: 3, y: 1, hp: 10, maxHp: 10, totalSlots: 4,
+    inventory: [{ name: "Knife", damage: 1, noiseRadius: 1, durability: 99, type: "weapon" }],
+    actionsUsed: 0, state: "active" },
+  { id: 1, name: "Fighter", x: 10, y: 1, hp: 10, maxHp: 10, totalSlots: 4,
+    inventory: [
+      { name: "Bat", damage: 2, noiseRadius: 2, durability: 6, type: "weapon" },
+      { name: "Bandage", heal: 3, noiseRadius: 1, type: "consumable" }
+    ],
+    actionsUsed: 0, state: "active" },
+];
 
-  // === PREPARE VIEW ===
-  if (activeView === 'prepare') {
-    const unassignedSurvivors = getSurvivors().filter(s => !s.assignment || s.assignment === null);
-    const unassignedItems = getItems().filter(c => !c.exhausted);
-    const unassignedActions = getActions().filter(c => !c.exhausted);
-    return (
-      <div className="fixed inset-0 z-[9999] bg-stone-950 overflow-y-auto">
-        <PrepareRunScreen
-          survivors={unassignedSurvivors}
-          items={unassignedItems}
-          actions={unassignedActions}
-          onLaunch={async (deck: CardInstance[], mode: RunMode) => {
-            await startRun(deck, mode);
-          }}
-          onBack={() => setView('home')}
-          momentumCard={gameState.homeBase.momentumCard}
-          onActivateMomentum={activateMomentumCard}
-        />
-      </div>
-    );
-  }
+const initZombies = () => [
+  { id: 0, x: 5, y: 8, hp: 3, maxHp: 3, state: "dormant", grabTarget: null, patrolPath: null },
+  { id: 1, x: 8, y: 8, hp: 3, maxHp: 3, state: "dormant", grabTarget: null, patrolPath: null },
+  { id: 2, x: 6, y: 5, hp: 3, maxHp: 3, state: "dormant", grabTarget: null,
+    patrolPath: [{x:6,y:5},{x:7,y:5},{x:8,y:5},{x:9,y:5},{x:8,y:5},{x:7,y:5}], patrolIdx: 0 },
+  { id: 3, x: 2, y: 6, hp: 3, maxHp: 3, state: "dormant", grabTarget: null, patrolPath: null },
+  { id: 4, x: 11, y: 7, hp: 3, maxHp: 3, state: "dormant", grabTarget: null, patrolPath: null },
+];
 
-  // === COMPOUND VIEW ===
-  if (activeView === 'compound') {
-    return (
-      <div className="fixed inset-0 z-[9999] bg-stone-950 overflow-y-auto">
-        <CompoundView
-          deck={gameState.deck}
-          rawMaterials={gameState.homeBase.rawMaterials}
-          onBack={() => setView('home')}
-        />
-      </div>
-    );
-  }
+const PHASE = { PLAYER: "player", NOISE: "noise", ZOMBIE: "zombie", GAMEOVER: "gameover", WIN: "win" };
 
-  // === HOME BASE ===
-  const hb = gameState.homeBase;
-  const survivors = getSurvivors();
-  const items = getItems();
-  const actions = getActions();
-  const availableCards = getAvailableCards();
-  const exhaustedCards = gameState.deck.filter(c => c.exhausted);
-  const completedRuns = hb.completedRuns;
-  const rawMats = hb.rawMaterials;
-  const barricadeBuilt = (hb.homeBarricadeLevel ?? 0) > 0;
-  const canBarricade = canBuildHomeBarricade();
+export default function DeadWeightPrototype() {
+  const [survivors, setSurvivors] = useState(initSurvivors);
+  const [zombies, setZombies] = useState(initZombies);
+  const [phase, setPhase] = useState(PHASE.PLAYER);
+  const [selectedSurvivor, setSelectedSurvivor] = useState(null);
+  const [reachableTiles, setReachableTiles] = useState(new Map());
+  const [attackTargets, setAttackTargets] = useState([]);
+  const [noiseEvents, setNoiseEvents] = useState([]);
+  const [noiseRipples, setNoiseRipples] = useState([]);
+  const [messages, setMessages] = useState(["Your turn. Tap a survivor to select."]);
+  const [turn, setTurn] = useState(1);
+  const [compoundIntegrity, setCompoundIntegrity] = useState(10);
+  const gridRef = useRef(null);
 
-  // Seeds in inventory
-  const seedCards = gameState.deck.filter(c => c.category === 'seed' && !c.exhausted);
+  const addMsg = useCallback((msg) => {
+    setMessages(prev => [msg, ...prev].slice(0, 6));
+  }, []);
 
-  // Survivors available for expedition (not assigned)
-  const freeSurvivors = survivors.filter(s => !s.assignment && !s.exhausted);
-  const freeItems = availableCards.filter(c => c.type !== 'survivor');
-  const canLaunch = freeSurvivors.length >= 2 && freeItems.length >= 2;
+  const getBlockedSet = useCallback((excludeSurvivorId = -1) => {
+    const blocked = new Set();
+    survivors.forEach(s => { if (s.id !== excludeSurvivorId && s.state !== "dead") blocked.add(`${s.x},${s.y}`); });
+    zombies.forEach(z => { if (z.hp > 0) blocked.add(`${z.x},${z.y}`); });
+    return blocked;
+  }, [survivors, zombies]);
 
-  // Active production
-  const activeProductions = hb.productionChains.filter(p => !p.completed);
-  const totalRuns = completedRuns.length;
-  const successfulRuns = completedRuns.filter(r => r.status === 'completed').length;
+  const freeSlots = (s) => s.totalSlots - s.inventory.length;
+  const actionsLeft = (s) => freeSlots(s) - s.actionsUsed;
 
-  const moralePct = hb.morale ?? 70;
-  const basePct = hb.baseHP ?? 100;
-  const foodCount = hb.food ?? 0;
-  const currentDay = hb.day ?? 1;
-  const foodNeeded = survivors.length;
-  const foodColor = foodCount >= foodNeeded * 2 ? 'text-green-500' : foodCount >= foodNeeded ? 'text-amber-500' : 'text-red-500';
+  const selectSurvivor = useCallback((sid) => {
+    if (phase !== PHASE.PLAYER) return;
+    const s = survivors.find(sv => sv.id === sid);
+    if (!s || s.state === "dead") return;
+    setSelectedSurvivor(sid);
+    const remaining = actionsLeft(s);
+    const blocked = getBlockedSet(sid);
+    const reach = bfsReachable({ x: s.x, y: s.y }, remaining, blocked);
+    setReachableTiles(reach);
+    const targets = zombies.filter(z => z.hp > 0 && manhattan(s, z) === 1);
+    setAttackTargets(targets.map(z => z.id));
+  }, [phase, survivors, zombies, getBlockedSet]);
+
+  const moveSurvivor = useCallback((tx, ty) => {
+    if (selectedSurvivor === null || phase !== PHASE.PLAYER) return;
+    const key = `${tx},${ty}`;
+    if (!reachableTiles.has(key)) return;
+    const cost = reachableTiles.get(key);
+    if (cost === 0) return;
+
+    setSurvivors(prev => prev.map(s => {
+      if (s.id !== selectedSurvivor) return s;
+      const newS = { ...s, x: tx, y: ty, actionsUsed: s.actionsUsed + cost };
+      return newS;
+    }));
+
+    setTimeout(() => selectSurvivor(selectedSurvivor), 50);
+  }, [selectedSurvivor, phase, reachableTiles, selectSurvivor]);
+
+  const attackZombie = useCallback((zid) => {
+    if (selectedSurvivor === null || phase !== PHASE.PLAYER) return;
+    const s = survivors.find(sv => sv.id === selectedSurvivor);
+    if (!s || actionsLeft(s) <= 0) return;
+    const weapon = s.inventory.find(i => i.type === "weapon");
+    if (!weapon) { addMsg("No weapon!"); return; }
+    const z = zombies.find(zz => zz.id === zid);
+    if (!z || z.hp <= 0 || manhattan(s, z) !== 1) return;
+
+    const damage = weapon.damage;
+    const noiseR = weapon.noiseRadius;
+    const newHp = z.hp - damage;
+    const killed = newHp <= 0;
+
+    setZombies(prev => prev.map(zz => {
+      if (zz.id !== zid) return zz;
+      if (killed) {
+        if (zz.grabTarget !== null) {
+          setSurvivors(sp => sp.map(ss => ss.id === zz.grabTarget ? { ...ss, state: "active" } : ss));
+        }
+        return { ...zz, hp: 0, state: "dead", grabTarget: null };
+      }
+      return { ...zz, hp: newHp };
+    }));
+
+    const newDur = weapon.durability - 1;
+    const weaponBroke = newDur <= 0;
+
+    setSurvivors(prev => prev.map(ss => {
+      if (ss.id !== selectedSurvivor) return ss;
+      let newInv = ss.inventory.map(i => {
+        if (i === weapon) return { ...i, durability: newDur };
+        return i;
+      });
+      if (weaponBroke) {
+        newInv = ss.inventory.filter(i => i !== weapon);
+      }
+      return { ...ss, actionsUsed: ss.actionsUsed + 1, inventory: newInv };
+    }));
+
+    setNoiseEvents(prev => [...prev, { x: s.x, y: s.y, radius: noiseR }]);
+    setNoiseRipples(prev => [...prev, { x: s.x, y: s.y, radius: noiseR, id: Date.now() }]);
+
+    let msg = `${s.name} hits zombie for ${damage}!`;
+    if (killed) msg += " Zombie killed!";
+    if (weaponBroke) msg += ` ${weapon.name} broke!`;
+    addMsg(msg);
+
+    setTimeout(() => selectSurvivor(selectedSurvivor), 50);
+  }, [selectedSurvivor, phase, survivors, zombies, addMsg, selectSurvivor]);
+
+  const useBandage = useCallback(() => {
+    if (selectedSurvivor === null || phase !== PHASE.PLAYER) return;
+    const s = survivors.find(sv => sv.id === selectedSurvivor);
+    if (!s || actionsLeft(s) <= 0) return;
+    const bandage = s.inventory.find(i => i.type === "consumable" && i.name === "Bandage");
+    if (!bandage) return;
+    const healed = Math.min(s.maxHp, s.hp + bandage.heal);
+    setSurvivors(prev => prev.map(ss => {
+      if (ss.id !== selectedSurvivor) return ss;
+      return { ...ss, hp: healed, actionsUsed: ss.actionsUsed + 1, inventory: ss.inventory.filter(i => i !== bandage) };
+    }));
+    setNoiseEvents(prev => [...prev, { x: s.x, y: s.y, radius: bandage.noiseRadius }]);
+    addMsg(`${s.name} used bandage. Healed to ${healed} HP.`);
+    setTimeout(() => selectSurvivor(selectedSurvivor), 50);
+  }, [selectedSurvivor, phase, survivors, addMsg, selectSurvivor]);
+
+  const breakFree = useCallback(() => {
+    if (selectedSurvivor === null || phase !== PHASE.PLAYER) return;
+    const s = survivors.find(sv => sv.id === selectedSurvivor);
+    if (!s || s.state !== "grabbed" || actionsLeft(s) <= 0) return;
+    setSurvivors(prev => prev.map(ss => {
+      if (ss.id !== selectedSurvivor) return ss;
+      return { ...ss, state: "active", actionsUsed: ss.actionsUsed + 1 };
+    }));
+    setZombies(prev => prev.map(z => z.grabTarget === selectedSurvivor ? { ...z, state: "agitated", grabTarget: null } : z));
+    setNoiseEvents(prev => [...prev, { x: s.x, y: s.y, radius: 1 }]);
+    addMsg(`${s.name} broke free!`);
+    setTimeout(() => selectSurvivor(selectedSurvivor), 50);
+  }, [selectedSurvivor, phase, survivors, addMsg, selectSurvivor]);
+
+  const endPlayerPhase = useCallback(() => {
+    if (phase !== PHASE.PLAYER) return;
+    setSelectedSurvivor(null);
+    setReachableTiles(new Map());
+    setAttackTargets([]);
+    setPhase(PHASE.NOISE);
+  }, [phase]);
+
+  // Noise resolution
+  useEffect(() => {
+    if (phase !== PHASE.NOISE) return;
+    const timer = setTimeout(() => {
+      let events = [...noiseEvents];
+      let newZombies = zombies.map(z => ({ ...z }));
+      let changed = true;
+      let iterations = 0;
+      while (changed && iterations < 20) {
+        changed = false;
+        iterations++;
+        for (const evt of events) {
+          for (let i = 0; i < newZombies.length; i++) {
+            const z = newZombies[i];
+            if (z.state === "dormant" && z.hp > 0) {
+              const dist = manhattan(evt, z);
+              if (dist <= evt.radius) {
+                newZombies[i] = { ...z, state: "agitated" };
+                events.push({ x: z.x, y: z.y, radius: 2 });
+                setNoiseRipples(prev => [...prev, { x: z.x, y: z.y, radius: 2, id: Date.now() + i }]);
+                changed = true;
+                addMsg(`Zombie at (${z.x},${z.y}) wakes up!`);
+              }
+            }
+          }
+        }
+      }
+      setZombies(newZombies);
+      setNoiseEvents([]);
+      setPhase(PHASE.ZOMBIE);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [phase, noiseEvents, zombies, addMsg]);
+
+  // Zombie phase
+  useEffect(() => {
+    if (phase !== PHASE.ZOMBIE) return;
+    const timer = setTimeout(() => {
+      let newZombies = zombies.map(z => ({ ...z }));
+      let newSurvivors = survivors.map(s => ({ ...s }));
+
+      for (let i = 0; i < newZombies.length; i++) {
+        const z = newZombies[i];
+        if (z.hp <= 0) continue;
+
+        if (z.state === "grabbing") {
+          const target = newSurvivors.find(s => s.id === z.grabTarget);
+          if (target && target.state !== "dead") {
+            target.hp -= 2;
+            addMsg(`Zombie deals 2 damage to ${target.name}! (${target.hp} HP)`);
+            if (target.hp <= 0) {
+              target.state = "dead";
+              addMsg(`${target.name} is down!`);
+              newZombies[i] = { ...z, state: "agitated", grabTarget: null };
+            }
+          }
+          continue;
+        }
+
+        if (z.state === "dormant" && z.patrolPath) {
+          const nextIdx = ((z.patrolIdx || 0) + 1) % z.patrolPath.length;
+          const next = z.patrolPath[nextIdx];
+          const blocked = new Set();
+          newSurvivors.forEach(s => { if (s.state !== "dead") blocked.add(`${s.x},${s.y}`); });
+          newZombies.forEach((zz, j) => { if (j !== i && zz.hp > 0) blocked.add(`${zz.x},${zz.y}`); });
+          if (!blocked.has(`${next.x},${next.y}`)) {
+            newZombies[i] = { ...z, x: next.x, y: next.y, patrolIdx: nextIdx };
+          }
+          continue;
+        }
+
+        if (z.state === "agitated") {
+          const aliveSurvivors = newSurvivors.filter(s => s.state !== "dead");
+          if (aliveSurvivors.length === 0) continue;
+          let closest = aliveSurvivors[0];
+          let closestDist = manhattan(z, closest);
+          for (const s of aliveSurvivors) {
+            const d = manhattan(z, s);
+            if (d < closestDist) { closest = s; closestDist = d; }
+          }
+
+          if (closestDist === 1) {
+            newZombies[i] = { ...z, state: "grabbing", grabTarget: closest.id };
+            const t = newSurvivors.find(s => s.id === closest.id);
+            if (t) t.state = "grabbed";
+            addMsg(`Zombie grabs ${closest.name}!`);
+          } else {
+            const blocked = new Set();
+            newSurvivors.forEach(s => { if (s.state !== "dead") blocked.add(`${s.x},${s.y}`); });
+            newZombies.forEach((zz, j) => { if (j !== i && zz.hp > 0) blocked.add(`${zz.x},${zz.y}`); });
+            const next = zombieMoveToward(z, closest, blocked);
+            if (next) newZombies[i] = { ...z, x: next.x, y: next.y };
+          }
+        }
+      }
+
+      setZombies(newZombies);
+      setSurvivors(newSurvivors);
+
+      const aliveS = newSurvivors.filter(s => s.state !== "dead");
+      const aliveZ = newZombies.filter(z => z.hp > 0);
+      if (aliveS.length === 0) {
+        setPhase(PHASE.GAMEOVER);
+        addMsg("All survivors down. Game over.");
+        return;
+      }
+      if (aliveZ.length === 0) {
+        setPhase(PHASE.WIN);
+        addMsg("All zombies cleared! Room secure.");
+        return;
+      }
+
+      setSurvivors(prev => prev.map(s => s.state !== "dead" ? { ...s, actionsUsed: 0 } : s));
+      setTurn(t => t + 1);
+      setPhase(PHASE.PLAYER);
+      addMsg("Your turn.");
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [phase, zombies, survivors, addMsg]);
+
+  // Clear ripples after animation
+  useEffect(() => {
+    if (noiseRipples.length === 0) return;
+    const timer = setTimeout(() => setNoiseRipples([]), 1500);
+    return () => clearTimeout(timer);
+  }, [noiseRipples]);
+
+  const handleTileClick = useCallback((tx, ty) => {
+    if (phase !== PHASE.PLAYER) return;
+
+    // Check if clicking a survivor
+    const clickedSurvivor = survivors.find(s => s.x === tx && s.y === ty && s.state !== "dead");
+    if (clickedSurvivor) {
+      selectSurvivor(clickedSurvivor.id);
+      return;
+    }
+
+    // Check if clicking a zombie to attack
+    const clickedZombie = zombies.find(z => z.x === tx && z.y === ty && z.hp > 0);
+    if (clickedZombie && attackTargets.includes(clickedZombie.id)) {
+      attackZombie(clickedZombie.id);
+      return;
+    }
+
+    // Otherwise try to move
+    if (selectedSurvivor !== null) {
+      moveSurvivor(tx, ty);
+    }
+  }, [phase, survivors, zombies, selectedSurvivor, attackTargets, selectSurvivor, attackZombie, moveSurvivor]);
+
+  const restart = () => {
+    setSurvivors(initSurvivors());
+    setZombies(initZombies());
+    setPhase(PHASE.PLAYER);
+    setSelectedSurvivor(null);
+    setReachableTiles(new Map());
+    setAttackTargets([]);
+    setNoiseEvents([]);
+    setNoiseRipples([]);
+    setMessages(["Your turn. Tap a survivor to select."]);
+    setTurn(1);
+    setCompoundIntegrity(10);
+  };
+
+  const selS = survivors.find(s => s.id === selectedSurvivor);
 
   return (
-    <div className="fixed inset-0 z-[9999] bg-stone-950 text-stone-300 overflow-y-auto">
-      <div className="min-h-full flex flex-col pb-6">
+    <div style={{
+      width: "100%", maxWidth: 540, margin: "0 auto", height: "100vh",
+      display: "flex", flexDirection: "column",
+      background: "#1a1a1a", color: "#e0e0e0", fontFamily: "'Courier New', monospace",
+      overflow: "hidden", userSelect: "none"
+    }}>
+      {/* Header */}
+      <div style={{
+        padding: "8px 12px", display: "flex", justifyContent: "space-between", alignItems: "center",
+        borderBottom: "1px solid #333", background: "#111", flexShrink: 0
+      }}>
+        <span style={{ fontSize: 14, fontWeight: "bold", color: "#c44" }}>DEAD WEIGHT</span>
+        <span style={{ fontSize: 12, color: "#888" }}>Turn {turn}</span>
+        <span style={{ fontSize: 12, color: compoundIntegrity > 5 ? "#6a6" : "#c44" }}>
+          Integrity: {compoundIntegrity}
+        </span>
+      </div>
 
-        {/* ── HEADER ── */}
-        <div className="px-5 pt-6 pb-3 border-b border-stone-900">
-          <div className="flex items-start justify-between">
-            <div>
-              <p className="text-[8px] text-stone-700 font-mono tracking-widest uppercase">SAFE HOUSE</p>
-              <h1 className="text-xl font-bold text-stone-200 uppercase tracking-wider font-mono leading-none mt-0.5">
-                DAY {currentDay}
-              </h1>
-              <p className="text-[9px] text-stone-600 font-mono mt-0.5">
-                {successfulRuns}/{totalRuns} expeditions
-              </p>
-            </div>
-            {/* Food — prominent */}
-            <div className="text-right">
-              <p className={`text-3xl font-bold font-mono leading-none ${foodColor}`}>{foodCount}</p>
-              <p className="text-[9px] text-stone-600 font-mono">FOOD</p>
-              <p className="text-[8px] text-stone-700 font-mono">needs {foodNeeded}/day</p>
-            </div>
-          </div>
+      {/* Phase indicator */}
+      <div style={{
+        padding: "4px 12px", textAlign: "center", fontSize: 13, flexShrink: 0,
+        background: phase === PHASE.PLAYER ? "#1a2a1a" : phase === PHASE.ZOMBIE ? "#2a1a1a" : "#1a1a2a",
+        color: phase === PHASE.PLAYER ? "#6a6" : phase === PHASE.ZOMBIE ? "#c44" : "#88f",
+        fontWeight: "bold"
+      }}>
+        {phase === PHASE.PLAYER && "YOUR TURN"}
+        {phase === PHASE.NOISE && "NOISE RESOLVING..."}
+        {phase === PHASE.ZOMBIE && "ZOMBIE PHASE..."}
+        {phase === PHASE.GAMEOVER && "GAME OVER"}
+        {phase === PHASE.WIN && "ROOM CLEARED!"}
+      </div>
 
-          {/* Vital bars */}
-          <div className="mt-3 grid grid-cols-2 gap-2">
-            <div>
-              <div className="flex items-center justify-between mb-0.5">
-                <span className="text-[8px] text-stone-700 font-mono uppercase">BASE</span>
-                <span className="text-[8px] text-stone-600 font-mono">{basePct}</span>
-              </div>
-              <div className="h-0.5 bg-stone-800 rounded-full overflow-hidden">
+      {/* Grid */}
+      <div ref={gridRef} style={{
+        flex: "1 1 auto", overflowX: "auto", overflowY: "hidden",
+        WebkitOverflowScrolling: "touch", minHeight: 0
+      }}>
+        <div style={{
+          width: GRID_W * TILE, height: GRID_H * TILE, position: "relative",
+          background: "#2a2a2a", margin: "4px 0"
+        }}>
+          {/* Floor tiles */}
+          {Array.from({ length: GRID_H }, (_, y) =>
+            Array.from({ length: GRID_W }, (_, x) => {
+              const isObs = isObstacle(x, y);
+              const isDoor = DOOR_TILES.has(`${x},${y}`);
+              const key = `${x},${y}`;
+              const isReachable = reachableTiles.has(key) && reachableTiles.get(key) > 0;
+              const isSelected = selS && selS.x === x && selS.y === y;
+
+              let bg = "#3a3a3a";
+              let border = "1px solid #2a2a2a";
+              if (isObs) { bg = "#5a4a2a"; border = "1px solid #6a5a3a"; }
+              if (isDoor) { bg = "#2a4a2a"; border = "1px solid #3a6a3a"; }
+              if (isReachable && !isObs) { bg = "#2a3a2a"; border = "1px solid #4a7a4a"; }
+
+              return (
                 <div
-                  className={`h-full rounded-full ${basePct > 60 ? 'bg-stone-500' : basePct > 30 ? 'bg-amber-700' : 'bg-red-700'}`}
-                  style={{ width: `${basePct}%` }}
-                />
-              </div>
-            </div>
-            <div>
-              <div className="flex items-center justify-between mb-0.5">
-                <span className="text-[8px] text-stone-700 font-mono uppercase">MORALE</span>
-                <span className="text-[8px] text-stone-600 font-mono">{moralePct}</span>
-              </div>
-              <div className="h-0.5 bg-stone-800 rounded-full overflow-hidden">
-                <div
-                  className={`h-full rounded-full ${moralePct > 60 ? 'bg-emerald-700' : moralePct > 30 ? 'bg-amber-700' : 'bg-red-700'}`}
-                  style={{ width: `${moralePct}%` }}
-                />
-              </div>
-            </div>
-          </div>
-        </div>
+                  key={key}
+                  onClick={() => !isObs && handleTileClick(x, y)}
+                  style={{
+                    position: "absolute",
+                    left: x * TILE, top: (GRID_H - 1 - y) * TILE,
+                    width: TILE - 2, height: TILE - 2,
+                    background: bg, border,
+                    cursor: isObs ? "default" : "pointer",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: 9, color: "#555", boxSizing: "content-box"
+                  }}
+                >
+                  {isObs && <span style={{ fontSize: 16 }}>▪</span>}
+                  {isDoor && <span style={{ fontSize: 10, color: "#6a6" }}>DOOR</span>}
+                </div>
+              );
+            })
+          )}
 
-        {/* ── NIGHT REPORT ── */}
-        {nightReport && (
-          <div className="mx-5 mt-3 border border-stone-700 bg-stone-900/60 rounded p-3">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-[9px] text-stone-500 font-mono uppercase tracking-widest">
-                NIGHT REPORT — Day {nightReport.day}
-              </p>
-              <button
-                onClick={() => setNightReport(null)}
-                className="text-[9px] text-stone-700 font-mono hover:text-stone-500"
+          {/* Noise ripples */}
+          {noiseRipples.map(r => (
+            <div key={r.id} style={{
+              position: "absolute",
+              left: r.x * TILE + TILE / 2 - r.radius * TILE,
+              top: (GRID_H - 1 - r.y) * TILE + TILE / 2 - r.radius * TILE,
+              width: r.radius * 2 * TILE, height: r.radius * 2 * TILE,
+              border: `2px solid ${r.radius <= 1 ? "rgba(100,180,255,0.5)" : "rgba(255,200,50,0.5)"}`,
+              borderRadius: "50%", pointerEvents: "none",
+              animation: "ripple 1s ease-out forwards"
+            }} />
+          ))}
+
+          {/* Zombies */}
+          {zombies.filter(z => z.hp > 0).map(z => {
+            const isTarget = attackTargets.includes(z.id);
+            const colors = {
+              dormant: "#666", agitated: "#c44", grabbing: "#f66"
+            };
+            return (
+              <div
+                key={`z${z.id}`}
+                onClick={() => isTarget && attackZombie(z.id)}
+                style={{
+                  position: "absolute",
+                  left: z.x * TILE + 4, top: (GRID_H - 1 - z.y) * TILE + 4,
+                  width: TILE - 10, height: TILE - 10,
+                  background: colors[z.state] || "#666",
+                  border: isTarget ? "2px solid #ff0" : "2px solid #400",
+                  borderRadius: 4, cursor: isTarget ? "pointer" : "default",
+                  display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                  fontSize: 10, color: "#fff", fontWeight: "bold",
+                  transition: "left 0.3s, top 0.3s",
+                  boxShadow: z.state === "agitated" ? "0 0 8px #c44" : "none"
+                }}
               >
-                ✕
-              </button>
-            </div>
-            <div className="space-y-1 text-[10px] font-mono">
-              <p className={nightReport.shortfall > 0 ? 'text-amber-600' : 'text-stone-500'}>
-                ◆ Food: {nightReport.shortfall > 0 ? `−${nightReport.shortfall} short` : `−${nightReport.foodConsumed} consumed`}
-              </p>
-              {nightReport.raidHappened && (
-                <p className={nightReport.raidResult === 'defended' ? 'text-green-600' : 'text-red-600'}>
-                  {nightReport.raidResult === 'defended' ? '🛡 Raid repelled' : '💥 Raid hit base −15 HP'}
-                </p>
-              )}
-              {nightReport.productionsCompleted > 0 && (
-                <p className="text-green-600">🌱 {nightReport.productionsCompleted} item(s) harvested</p>
-              )}
-              {nightReport.scavengeGain > 0 && (
-                <p className="text-sky-600">◎ Scavenged +{nightReport.scavengeGain} food</p>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* ── DAILY EVENT CARD ── */}
-        {hb.currentEvent && (
-          <div className={`mx-5 mt-3 border rounded p-3 ${
-            hb.currentEvent.type === 'threat' ? 'border-red-900/60 bg-red-950/20' :
-            hb.currentEvent.type === 'opportunity' ? 'border-amber-900/60 bg-amber-950/20' :
-            'border-violet-900/60 bg-violet-950/20'
-          }`}>
-            <div className="flex items-start justify-between gap-2">
-              <div className="flex-1">
-                <p className={`text-[8px] font-mono tracking-widest uppercase mb-1 ${
-                  hb.currentEvent.type === 'threat' ? 'text-red-800' :
-                  hb.currentEvent.type === 'opportunity' ? 'text-amber-800' :
-                  'text-violet-800'
-                }`}>
-                  {hb.currentEvent.type === 'threat' ? '⚠ THREAT' :
-                   hb.currentEvent.type === 'opportunity' ? '◆ OPPORTUNITY' :
-                   '? CHOICE'} · TODAY ONLY
-                </p>
-                <p className="text-xs font-mono font-bold text-stone-300 uppercase">{hb.currentEvent.title}</p>
-                <p className="text-[9px] text-stone-600 font-mono mt-0.5">{hb.currentEvent.description}</p>
+                <span style={{ fontSize: 16 }}>Z</span>
+                <span style={{ fontSize: 8 }}>{z.hp}/{z.maxHp}</span>
+                {z.state === "agitated" && <span style={{ position: "absolute", top: -14, fontSize: 14, color: "#ff0" }}>!</span>}
+                {z.state === "grabbing" && <span style={{ position: "absolute", top: -14, fontSize: 10, color: "#f66" }}>GRAB</span>}
               </div>
-              {hb.currentEvent.actionLabel && (
-                <button className={`text-[9px] font-mono border px-2 py-1 transition-colors whitespace-nowrap ${
-                  hb.currentEvent.type === 'threat' ? 'border-red-900 text-red-600 hover:text-red-400' :
-                  hb.currentEvent.type === 'opportunity' ? 'border-amber-900 text-amber-600 hover:text-amber-400' :
-                  'border-violet-900 text-violet-600 hover:text-violet-400'
-                }`}>
-                  {hb.currentEvent.actionLabel}
-                </button>
-              )}
-            </div>
-          </div>
-        )}
+            );
+          })}
 
-        {/* ── MOMENTUM CARD ── */}
-        {hb.momentumCard && !hb.momentumCard.used && (
-          <div className="mx-5 mt-2 border border-stone-700/60 bg-stone-900/40 rounded px-3 py-2 flex items-center gap-3">
-            <span className="text-base opacity-70">{hb.momentumCard.icon}</span>
-            <div className="flex-1 min-w-0">
-              <p className="text-[8px] font-mono tracking-widest uppercase text-stone-700 mb-0.5">TODAY'S BONUS</p>
-              <p className="text-xs font-mono font-bold text-stone-300 uppercase">{hb.momentumCard.title}</p>
-              <p className="text-[9px] text-stone-600 font-mono">{hb.momentumCard.description}</p>
-            </div>
-            <span className="text-[8px] font-mono text-stone-700 uppercase">ACTIVATE IN PREP</span>
-          </div>
-        )}
-
-        {/* ── SURVIVORS + ASSIGNMENTS ── */}
-        <div className="px-5 pt-4">
-          <p className="text-[8px] text-stone-700 font-mono tracking-widest uppercase mb-2">SURVIVORS</p>
-          <div className="space-y-1.5">
-            {survivors.map(s => {
-              const hp = s.currentHealth ?? s.maxHealth ?? 100;
-              const maxHp = s.maxHealth ?? 100;
-              const pct = (hp / maxHp) * 100;
-              const assignment = s.assignment as NonNullable<SurvivorAssignment> | null;
-              const assConf = assignment ? ASSIGNMENT_CONFIG[assignment] : null;
-              const condConf = CONDITION_CONFIG[(s.condition ?? 'healthy') as keyof typeof CONDITION_CONFIG];
-              const isExpanded = assigningId === s.id;
-              const isGardenSetup = gardenSurvivorId === s.id;
-              const inProduction = !!s.assignedToProduction;
-
-              return (
-                <div key={s.id}>
-                  <div
-                    className={`border rounded overflow-hidden ${
-                      s.exhausted ? 'border-stone-800 bg-stone-900/30 opacity-60' : 'border-stone-800 bg-stone-900'
-                    }`}
-                  >
-                    <div className="px-3 py-2 flex items-center gap-3">
-                      {/* Name + role */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <p className="text-xs font-mono font-bold text-stone-300 uppercase truncate">
-                            {s.name?.split(' ')[0]}
-                          </p>
-                          {condConf.icon && (
-                            <span className={`text-[10px] ${condConf.color}`}>{condConf.icon}</span>
-                          )}
-                        </div>
-                        <p className="text-[8px] text-stone-600 font-mono uppercase">
-                          {s.role} {s.exhausted ? `· ${s.recoveryTime}d` : ''}
-                        </p>
-                      </div>
-
-                      {/* HP bar */}
-                      <div className="w-12 h-0.5 bg-stone-800 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full ${pct > 60 ? 'bg-stone-500' : pct > 30 ? 'bg-amber-700' : 'bg-red-800'}`}
-                          style={{ width: `${pct}%` }}
-                        />
-                      </div>
-                      <span className="text-[9px] text-stone-600 font-mono tabular-nums w-8 text-right">{hp}</span>
-
-                      {/* Assignment badge / button */}
-                      {!s.exhausted && !inProduction && (
-                        <button
-                          onClick={() => setAssigningId(isExpanded ? null : s.id)}
-                          className={`text-[9px] font-mono border px-2 py-0.5 rounded transition-colors ${
-                            assConf
-                              ? assConf.color
-                              : 'border-stone-800 text-stone-600 hover:border-stone-700'
-                          }`}
-                        >
-                          {assConf ? `${assConf.icon} ${assConf.label}` : '+ ASSIGN'}
-                        </button>
-                      )}
-                      {inProduction && (
-                        <span className="text-[9px] font-mono text-green-700 border border-green-900/40 px-2 py-0.5 rounded">
-                          🌱 WORKING
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Assignment panel */}
-                    {isExpanded && !s.exhausted && !inProduction && (
-                      <div className="border-t border-stone-800 bg-stone-950/40 px-3 py-2">
-                        <div className="flex flex-wrap gap-1.5">
-                          {(Object.keys(ASSIGNMENT_CONFIG) as NonNullable<SurvivorAssignment>[]).map(asgn => {
-                            const conf = ASSIGNMENT_CONFIG[asgn];
-                            const isGarden = asgn === 'garden';
-                            const hasSeed = seedCards.length > 0;
-                            const isActive = s.assignment === asgn;
-                            return (
-                              <button
-                                key={asgn}
-                                disabled={isGarden && !hasSeed}
-                                onClick={() => {
-                                  if (isActive) {
-                                    handleAssign(s.id, null);
-                                  } else if (isGarden && hasSeed) {
-                                    setGardenSurvivorId(s.id);
-                                    setAssigningId(null);
-                                  } else {
-                                    handleAssign(s.id, asgn);
-                                  }
-                                }}
-                                className={`text-[9px] font-mono border px-2 py-1 rounded transition-colors ${
-                                  isActive
-                                    ? conf.color + ' bg-stone-800'
-                                    : isGarden && !hasSeed
-                                      ? 'border-stone-900 text-stone-700 cursor-not-allowed'
-                                      : 'border-stone-800 text-stone-500 hover:text-stone-300 hover:border-stone-600'
-                                }`}
-                              >
-                                {conf.icon} {conf.label}
-                                {isGarden && !hasSeed && ' (no seeds)'}
-                              </button>
-                            );
-                          })}
-                          {s.assignment && (
-                            <button
-                              onClick={() => handleAssign(s.id, null)}
-                              className="text-[9px] font-mono border border-stone-800 text-stone-600 px-2 py-1 rounded hover:text-stone-400"
-                            >
-                              ✕ CLEAR
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Garden seed selection */}
-                    {isGardenSetup && (
-                      <div className="border-t border-stone-800 bg-stone-950/40 px-3 py-2">
-                        <p className="text-[8px] text-stone-600 font-mono uppercase mb-1.5">CHOOSE SEED</p>
-                        <div className="flex flex-wrap gap-1.5">
-                          {seedCards.map(seed => (
-                            <button
-                              key={seed.id}
-                              onClick={() => handleStartGarden(s.id, seed.id)}
-                              className="text-[9px] font-mono border border-green-900/50 text-green-700 px-2 py-1 rounded hover:bg-green-950/20"
-                            >
-                              🌱 {seed.name}
-                            </button>
-                          ))}
-                          <button
-                            onClick={() => setGardenSurvivorId(null)}
-                            className="text-[9px] font-mono border border-stone-800 text-stone-600 px-2 py-1 rounded"
-                          >
-                            CANCEL
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          {/* Survivors */}
+          {survivors.filter(s => s.state !== "dead").map(s => {
+            const isSelected = selectedSurvivor === s.id;
+            const isGrabbed = s.state === "grabbed";
+            return (
+              <div
+                key={`s${s.id}`}
+                onClick={() => handleTileClick(s.x, s.y)}
+                style={{
+                  position: "absolute",
+                  left: s.x * TILE + 4, top: (GRID_H - 1 - s.y) * TILE + 4,
+                  width: TILE - 10, height: TILE - 10,
+                  background: isGrabbed ? "#a86a20" : (s.id === 0 ? "#2a6a2a" : "#2a4a8a"),
+                  border: isSelected ? "2px solid #fff" : "2px solid #040",
+                  borderRadius: "50%", cursor: "pointer",
+                  display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                  fontSize: 10, color: "#fff", fontWeight: "bold",
+                  transition: "left 0.3s, top 0.3s",
+                  boxShadow: isSelected ? "0 0 12px rgba(255,255,255,0.4)" : "none",
+                  zIndex: 10
+                }}
+              >
+                <span style={{ fontSize: 9 }}>{s.name[0]}</span>
+                <span style={{ fontSize: 8 }}>{s.hp}/{s.maxHp}</span>
+              </div>
+            );
+          })}
         </div>
+      </div>
 
-        {/* ── ACTIVE PRODUCTION ── */}
-        {activeProductions.length > 0 && (
-          <div className="px-5 pt-4">
-            <p className="text-[8px] text-stone-700 font-mono tracking-widest uppercase mb-2">PRODUCTION</p>
-            <div className="space-y-1.5">
-              {activeProductions.map(chain => {
-                const elapsed = currentDay - chain.startDay;
-                const pct = Math.min(100, (elapsed / chain.daysRequired) * 100);
-                const remaining = Math.max(0, chain.daysRequired - elapsed);
-                const producer = survivors.find(s => s.id === chain.survivorId);
-                return (
-                  <div key={chain.id} className="border border-green-900/40 bg-green-950/10 px-3 py-2 rounded">
-                    <div className="flex items-center justify-between mb-1">
-                      <p className="text-[10px] text-green-700 font-mono font-bold uppercase">
-                        🌱 {chain.type} · {producer?.name?.split(' ')[0] ?? '?'}
-                      </p>
-                      <p className="text-[9px] text-stone-600 font-mono">{remaining}d left</p>
-                    </div>
-                    <div className="h-0.5 bg-stone-800 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-green-800 rounded-full transition-all"
-                        style={{ width: `${pct}%` }}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
+      {/* UI Panel */}
+      <div style={{
+        flexShrink: 0, borderTop: "1px solid #333", background: "#111",
+        padding: "8px 12px", minHeight: 180
+      }}>
+        {/* Selected survivor info */}
+        {selS ? (
+          <div style={{ marginBottom: 8 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+              <span style={{ fontWeight: "bold", fontSize: 14, color: "#fff" }}>{selS.name}</span>
+              <span style={{ fontSize: 12, color: "#aaa" }}>
+                Actions: {actionsLeft(selS)}/{freeSlots(selS)} | Free slots: {freeSlots(selS)}
+              </span>
             </div>
-          </div>
-        )}
-
-        {/* ── BARRICADE STATUS ── */}
-        {barricadeBuilt && (
-          <div className="px-5 pt-3">
-            <div className="border border-amber-900/40 bg-amber-950/10 px-3 py-2 rounded flex items-center gap-2">
-              <span className="text-amber-700 text-sm">▦</span>
-              <p className="text-[10px] text-amber-700 font-mono">FORTIFIED · next run +30 DEF</p>
+            <div style={{ display: "flex", gap: 4, marginBottom: 4 }}>
+              <div style={{
+                flex: 1, height: 8, background: "#333", borderRadius: 4, overflow: "hidden"
+              }}>
+                <div style={{
+                  width: `${(selS.hp / selS.maxHp) * 100}%`, height: "100%",
+                  background: selS.hp > 5 ? "#4a4" : "#c44", borderRadius: 4
+                }} />
+              </div>
+              <span style={{ fontSize: 10, color: "#aaa" }}>{selS.hp}HP</span>
             </div>
-          </div>
-        )}
-
-        {/* ── MATERIALS ── */}
-        <div className="px-5 pt-4">
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-[8px] text-stone-700 font-mono tracking-widest uppercase">STORES</p>
-            <button
-              onClick={() => setView('compound')}
-              className="text-[8px] text-stone-600 font-mono uppercase hover:text-stone-400 transition-colors"
-            >
-              COMPOUND →
-            </button>
-          </div>
-          <div className="flex gap-2 flex-wrap">
-            {Object.entries(rawMats).map(([key, val]) => {
-              if ((val ?? 0) === 0) return null;
-              return (
-                <div key={key} className="flex items-center gap-1 border border-stone-800 bg-stone-900 px-2 py-1.5 rounded">
-                  <span className="text-stone-600 text-xs">{MAT_ICONS[key] ?? '?'}</span>
-                  <span className="text-xs font-mono font-bold text-stone-300">{val}</span>
-                </div>
-              );
-            })}
-            {Object.values(rawMats).every(v => (v ?? 0) === 0) && (
-              <p className="text-[9px] text-stone-700 font-mono">No materials</p>
+            <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 4 }}>
+              {selS.inventory.map((item, idx) => (
+                <span key={idx} style={{
+                  padding: "2px 6px", background: "#2a2a2a", border: "1px solid #444",
+                  borderRadius: 3, fontSize: 10, color: "#ccc"
+                }}>
+                  {item.name}{item.durability && item.durability < 99 ? ` (${item.durability})` : ""}
+                </span>
+              ))}
+              {Array.from({ length: freeSlots(selS) }, (_, i) => (
+                <span key={`empty${i}`} style={{
+                  padding: "2px 6px", background: "#1a1a1a", border: "1px dashed #333",
+                  borderRadius: 3, fontSize: 10, color: "#555"
+                }}>empty</span>
+              ))}
+            </div>
+            {selS.state === "grabbed" && actionsLeft(selS) > 0 && (
+              <button onClick={breakFree} style={{
+                padding: "4px 12px", background: "#a86a20", border: "1px solid #c88a30",
+                color: "#fff", borderRadius: 4, fontSize: 11, cursor: "pointer", marginRight: 4
+              }}>Break Free (1 action)</button>
+            )}
+            {selS.inventory.find(i => i.type === "consumable" && i.name === "Bandage") && actionsLeft(selS) > 0 && selS.hp < selS.maxHp && (
+              <button onClick={useBandage} style={{
+                padding: "4px 12px", background: "#2a5a2a", border: "1px solid #4a8a4a",
+                color: "#fff", borderRadius: 4, fontSize: 11, cursor: "pointer"
+              }}>Use Bandage (1 action)</button>
             )}
           </div>
-
-          {/* Barricade build option */}
-          {!barricadeBuilt && canBarricade && (
-            <button
-              onClick={buildHomeBarricade}
-              className="mt-2 w-full py-2 font-mono text-xs tracking-widest uppercase border border-amber-900/60 text-amber-800 hover:bg-amber-950/20 transition-colors rounded"
-            >
-              ▦ BUILD BARRICADE (▤2 ⚙1)
-            </button>
-          )}
-        </div>
-
-        {/* ── GEAR OVERVIEW ── */}
-        {(items.length > 0 || actions.length > 0) && (
-          <div className="px-5 pt-4">
-            <p className="text-[8px] text-stone-700 font-mono tracking-widest uppercase mb-2">
-              GEAR ({freeItems.length} ready)
-            </p>
-            <div className="flex flex-wrap gap-1">
-              {[...items, ...actions].slice(0, 8).map(card => (
-                <div
-                  key={card.id}
-                  className={`text-[9px] font-mono border px-1.5 py-0.5 rounded ${
-                    card.exhausted
-                      ? 'border-stone-900 text-stone-700'
-                      : 'border-stone-800 text-stone-500'
-                  }`}
-                >
-                  {card.name?.split(' ')[0]}
-                  {card.exhausted && <span className="text-stone-700 ml-0.5">({card.recoveryTime}d)</span>}
-                  {card.maxAmmo !== undefined && !card.exhausted && (
-                    <span className="ml-0.5 text-red-900">
-                      {Array.from({ length: Math.min(card.ammo ?? card.maxAmmo, 6) }).map((_, i) => (
-                        <span key={i} className="text-[7px]">●</span>
-                      ))}
-                    </span>
-                  )}
-                </div>
-              ))}
-              {[...items, ...actions].length > 8 && (
-                <span className="text-[9px] text-stone-700 font-mono px-1.5 py-0.5">
-                  +{[...items, ...actions].length - 8} more
-                </span>
-              )}
-            </div>
+        ) : (
+          <div style={{ fontSize: 12, color: "#666", marginBottom: 8 }}>
+            Tap a survivor to select and see their actions.
           </div>
         )}
 
-        {/* ── ACTIONS ── */}
-        <div className="px-5 pt-5 space-y-2">
-          {/* End Day — primary CTA */}
-          <button
-            onClick={handleEndDay}
-            className="w-full py-3.5 bg-stone-800 hover:bg-stone-700 border border-stone-700 text-stone-200 font-mono font-bold text-sm tracking-widest uppercase transition-colors active:scale-[0.98]"
-          >
-            END DAY →
-          </button>
-
-          {/* Launch expedition */}
-          <button
-            onClick={() => setView('prepare')}
-            disabled={!canLaunch}
-            className={`w-full py-3 font-mono font-bold text-sm tracking-widest uppercase border transition-colors ${
-              canLaunch
-                ? 'border-stone-600 text-stone-400 hover:bg-stone-900 active:scale-[0.98]'
-                : 'border-stone-900 text-stone-700 cursor-not-allowed'
-            }`}
-          >
-            {canLaunch ? 'LAUNCH EXPEDITION' : 'EXPEDITION UNAVAILABLE'}
-          </button>
-
-          {!canLaunch && (
-            <p className="text-[8px] text-stone-700 font-mono text-center">
-              {freeSurvivors.length < 2
-                ? `${freeSurvivors.length}/2 survivors free (${survivors.filter(s => s.assignment).length} assigned)`
-                : 'Need 2 gear cards ready'}
-            </p>
+        {/* Action buttons */}
+        <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+          {phase === PHASE.PLAYER && (
+            <button onClick={endPlayerPhase} style={{
+              flex: 1, padding: "10px", background: "#333", border: "1px solid #555",
+              color: "#fff", borderRadius: 6, fontSize: 14, fontWeight: "bold",
+              cursor: "pointer", fontFamily: "'Courier New', monospace"
+            }}>END TURN</button>
+          )}
+          {(phase === PHASE.GAMEOVER || phase === PHASE.WIN) && (
+            <button onClick={restart} style={{
+              flex: 1, padding: "10px", background: phase === PHASE.WIN ? "#2a5a2a" : "#5a2a2a",
+              border: "1px solid #555", color: "#fff", borderRadius: 6, fontSize: 14,
+              fontWeight: "bold", cursor: "pointer", fontFamily: "'Courier New', monospace"
+            }}>RESTART</button>
           )}
         </div>
 
-        {/* ── RUN LOG ── */}
-        {completedRuns.length > 0 && (
-          <div className="px-5 pt-5 border-t border-stone-900 mt-5">
-            <p className="text-[8px] text-stone-700 font-mono tracking-widest uppercase mb-2">LOG</p>
-            <div className="border border-stone-800">
-              {completedRuns.slice(-4).reverse().map((run, i) => {
-                const stages = run.stages.filter(s => s.result === 'completed').length;
-                return (
-                  <div
-                    key={run.runId}
-                    className={`flex items-center gap-3 px-3 py-2 bg-stone-900 ${i > 0 ? 'border-t border-stone-800' : ''}`}
-                  >
-                    <span className={`text-[10px] font-mono ${run.status === 'completed' ? 'text-stone-400' : 'text-stone-700'}`}>
-                      {run.status === 'completed' ? '✓' : run.isRetreat ? '→' : '✕'}
-                    </span>
-                    <span className="text-[10px] text-stone-500 font-mono">Run #{completedRuns.length - i}</span>
-                    <span className="text-[9px] text-stone-700 font-mono ml-auto">{stages}/{run.totalStages}</span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* Reset */}
-        <div className="px-5 pt-4 mt-auto">
-          <button
-            onClick={resetGame}
-            className="w-full py-2 text-[9px] text-stone-800 hover:text-stone-700 font-mono tracking-widest uppercase transition-colors"
-          >
-            RESET GAME
-          </button>
+        {/* Messages */}
+        <div style={{ maxHeight: 60, overflowY: "auto" }}>
+          {messages.map((m, i) => (
+            <div key={i} style={{
+              fontSize: 10, color: i === 0 ? "#ccc" : "#555",
+              padding: "1px 0"
+            }}>{m}</div>
+          ))}
         </div>
-
       </div>
+
+      <style>{`
+        @keyframes ripple {
+          0% { opacity: 0.8; transform: scale(0.3); }
+          100% { opacity: 0; transform: scale(1); }
+        }
+      `}</style>
     </div>
   );
 }
