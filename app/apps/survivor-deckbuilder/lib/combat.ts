@@ -1,7 +1,7 @@
 import { Survivor, Zombie, NoiseEvent, NoiseRipple, LootItem, TerrainTile, Coord } from './types';
 import { manhattan, isFlanking, directionDelta, oppositeDir, inBounds, isObstacle, hasLineOfSight, getAdjacentCoords, coordToDir } from './grid';
 import { getNoiseIntensity } from './noise';
-import { ALERT_INVESTIGATE_TURNS, BRICK_ALERT_TURNS } from './constants';
+import { ALERT_INVESTIGATE_TURNS, BRICK_ALERT_TURNS, FLARE_ALERT_TURNS } from './constants';
 
 export interface AttackResult {
   survivors: Survivor[];
@@ -43,10 +43,19 @@ export function processAttack(
   let damage = weapon.damage ?? 1;
   const noiseR = weapon.noiseRadius;
 
-  // Flanking bonus: +1 damage from behind
+  // Flanking bonus: +1 damage — requires an ally on the OPPOSITE (front) side of the zombie simultaneously
   if (!isRanged && isFlanking(s, z)) {
-    damage += 1;
-    messages.push("Flanking bonus! +1 damage from behind.");
+    const frontDelta = directionDelta(z.facing);
+    const allyInFront = survivors.some(sv =>
+      sv.id !== survivorId &&
+      sv.state === "active" &&
+      sv.x === z.x + frontDelta.x &&
+      sv.y === z.y + frontDelta.y
+    );
+    if (allyInFront) {
+      damage += 1;
+      messages.push("Flanking! +1 damage — caught between two survivors.");
+    }
   }
 
   // Focus fire stagger: second different survivor attacking same zombie
@@ -253,7 +262,9 @@ export function throwDistraction(
   // Brick and Glass Bottle → alert only (intensity 1), brick stays alert much longer
   const agitates = throwNoise >= 4;
   const intensity = agitates ? 2 : 1;
-  const alertDuration = distraction.name === "Brick" ? BRICK_ALERT_TURNS : ALERT_INVESTIGATE_TURNS;
+  const alertDuration = distraction.name === "Brick" ? BRICK_ALERT_TURNS
+    : distraction.name === "Flare" ? FLARE_ALERT_TURNS
+    : ALERT_INVESTIGATE_TURNS;
 
   noiseEvents.push({ x: targetX, y: targetY, radius: throwNoise, intensity, alertDuration });
   noiseRipples.push({ x: targetX, y: targetY, radius: throwNoise, intensity, id: Date.now() + 777 });

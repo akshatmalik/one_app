@@ -40,11 +40,9 @@ export function resolveNoise(
 
         if (z.state === "dormant") {
           if (evt.intensity >= 2) {
-            // Loud+ noise: dormant -> agitated, face the source
             newZombies[i] = { ...z, state: "agitated", facing: newFacing };
             messages.push(`${z.type[0].toUpperCase() + z.type.slice(1)} at (${z.x},${z.y}) wakes up agitated!`);
           } else {
-            // Whisper noise: dormant -> alert, face the source, use custom alertDuration if provided
             const alertTurns = evt.alertDuration ?? ALERT_INVESTIGATE_TURNS;
             newZombies[i] = {
               ...z, state: "alert", facing: newFacing,
@@ -54,13 +52,19 @@ export function resolveNoise(
             };
             messages.push(`${z.type[0].toUpperCase() + z.type.slice(1)} at (${z.x},${z.y}) heard something...`);
           }
-          // Chain groan
+          newEvents.push({ x: z.x, y: z.y, radius: z.groanRadius, intensity: 1 });
+          ripples.push({ x: z.x, y: z.y, radius: z.groanRadius, intensity: 1, id: Date.now() + i + iterations * 100 });
+          zombiesWoke++;
+          changed = true;
+        } else if (z.state === "wary") {
+          // Wary zombies snap to agitated on ANY noise — no investigation phase
+          newZombies[i] = { ...z, state: "agitated", facing: newFacing };
+          messages.push(`${z.type[0].toUpperCase() + z.type.slice(1)} at (${z.x},${z.y}) was on edge — snaps to agitated!`);
           newEvents.push({ x: z.x, y: z.y, radius: z.groanRadius, intensity: 1 });
           ripples.push({ x: z.x, y: z.y, radius: z.groanRadius, intensity: 1, id: Date.now() + i + iterations * 100 });
           zombiesWoke++;
           changed = true;
         } else if (z.state === "alert" && evt.intensity >= 2) {
-          // Alert zombie hears loud noise -> agitated, face the new source
           newZombies[i] = { ...z, state: "agitated", facing: newFacing, alertTurnsLeft: 0, alertSource: null, alertOrigin: null };
           messages.push(`${z.type[0].toUpperCase() + z.type.slice(1)} at (${z.x},${z.y}) becomes agitated!`);
           changed = true;
