@@ -20,7 +20,8 @@ export function processAttack(
   zombiesIn: Zombie[],
   lootIn: LootItem[],
   terrainIn: TerrainTile[],
-  nextLootId: number
+  nextLootId: number,
+  weaponIdx?: number
 ): AttackResult {
   const survivors = survivorsIn.map(s => ({ ...s, inventory: [...s.inventory], statusEffects: [...s.statusEffects] }));
   const zombies = zombiesIn.map(z => ({ ...z }));
@@ -33,7 +34,9 @@ export function processAttack(
 
   const s = survivors.find(sv => sv.id === survivorId)!;
   const z = zombies.find(zz => zz.id === zombieId)!;
-  const weapon = s.inventory.find(i => i.type === "weapon")!;
+  const weapon = (weaponIdx !== undefined && s.inventory[weaponIdx]?.type === "weapon")
+    ? s.inventory[weaponIdx]
+    : s.inventory.find(i => i.type === "weapon")!;
 
   const isRanged = (weapon.rangedRange ?? 0) > 0;
   let damage = weapon.damage ?? 1;
@@ -130,8 +133,14 @@ export function processAttack(
     s.adrenalineNextTurn = true; // adrenaline status
   } else if (!knockedBack) {
     z.hp = newHp;
+    z.state = "agitated";
+    z.facing = coordToDir(z, { x: s.x, y: s.y });
+    messages.push(`${z.type[0].toUpperCase() + z.type.slice(1)} is enraged — turns to fight back!`);
   } else {
     z.hp = newHp;
+    z.state = "agitated";
+    z.facing = coordToDir(z, { x: s.x, y: s.y });
+    messages.push(`${z.type[0].toUpperCase() + z.type.slice(1)} is enraged — turns to fight back!`);
   }
 
   // Weapon durability
@@ -152,10 +161,10 @@ export function processAttack(
     }
   }
 
-  s.actionsUsed += 1;
+  if (!isRanged) s.actionsUsed += 1;
   s.nerve = Math.min(s.maxNerve, s.nerve + nerveChange);
 
-  // Noise
+  // Noise — ranged (pistol) fires noise from shooter position, very loud
   noiseEvents.push({ x: s.x, y: s.y, radius: noiseR, intensity: getNoiseIntensity(noiseR) });
   noiseRipples.push({ x: s.x, y: s.y, radius: noiseR, intensity: getNoiseIntensity(noiseR), id: Date.now() });
 
@@ -214,7 +223,7 @@ export function throwDistraction(
   noiseEvents.push({ x: targetX, y: targetY, radius: throwNoise, intensity: getNoiseIntensity(throwNoise) });
   noiseRipples.push({ x: targetX, y: targetY, radius: throwNoise, intensity: getNoiseIntensity(throwNoise), id: Date.now() + 777 });
 
-  messages.push(`${s.name} throws ${distraction.name} to (${targetX},${targetY})! Noise ${throwNoise}!`);
+  messages.push(`${s.name} throws ${distraction.name}! Zombies will investigate the landing spot.`);
 
   // Glass bottle creates glass terrain
   if (distraction.name === "Glass Bottle") {

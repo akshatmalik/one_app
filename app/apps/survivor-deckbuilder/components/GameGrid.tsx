@@ -17,13 +17,14 @@ interface GameGridProps {
   throwTargets: Set<string>;
   noiseRipples: NoiseRipple[];
   showVisionCones: boolean;
+  focusMode: boolean;
   onTileClick: (x: number, y: number) => void;
 }
 
 export default function GameGrid({
   survivors, zombies, loot, terrain, containers,
   selectedSurvivor, reachableTiles, attackTargets, rangedTargets, throwTargets,
-  noiseRipples, showVisionCones, onTileClick,
+  noiseRipples, showVisionCones, focusMode, onTileClick,
 }: GameGridProps) {
   const selS = survivors.find(s => s.id === selectedSurvivor);
 
@@ -115,6 +116,15 @@ export default function GameGrid({
                   pointerEvents: "none",
                 }} />
               )}
+              {/* Focus mode dim — darken tiles outside reach (not the selected survivor's current tile) */}
+              {focusMode && !isReachable && !isObs && !(selS && selS.x === x && selS.y === y) && (
+                <div style={{
+                  position: "absolute", inset: 0,
+                  background: "rgba(0,0,0,0.45)",
+                  pointerEvents: "none",
+                  zIndex: 1,
+                }} />
+              )}
               {isObs && !cont && <span style={{ fontSize: 16 }}>&#9642;</span>}
               {isDoor && <span style={{ fontSize: 10, color: "#6a6" }}>DOOR</span>}
               {isExit && <span style={{ fontSize: 8, color: "#88f" }}>EXIT</span>}
@@ -131,15 +141,21 @@ export default function GameGrid({
               )}
               {/* Loot on ground */}
               {lootHere && (
-                <span style={{
-                  position: "absolute", bottom: 2, left: 2, fontSize: 8,
-                  color: lootHere.item.type === "weapon" ? "#f88" :
-                         lootHere.item.type === "distraction" ? "#ff8" : "#8f8",
-                  fontWeight: "bold", pointerEvents: "none",
-                  textShadow: "0 0 4px rgba(0,0,0,0.8)",
+                <div style={{
+                  position: "absolute", bottom: 1, left: "50%",
+                  transform: "translateX(-50%)",
+                  background: lootHere.item.type === "weapon" ? "rgba(180,60,60,0.92)" :
+                               lootHere.item.type === "distraction" ? "rgba(170,150,30,0.92)" : "rgba(50,150,60,0.92)",
+                  border: `1px solid ${lootHere.item.type === "weapon" ? "#f88" : lootHere.item.type === "distraction" ? "#ee8" : "#8f8"}`,
+                  borderRadius: 2, padding: "0px 3px",
+                  fontSize: 7, color: "#fff", fontWeight: "bold",
+                  pointerEvents: "none", whiteSpace: "nowrap",
+                  maxWidth: TILE - 6, overflow: "hidden", textOverflow: "ellipsis",
+                  animation: "loot-pulse 2s ease-in-out infinite",
+                  zIndex: 2,
                 }}>
-                  {lootHere.item.name[0]}
-                </span>
+                  {lootHere.item.name}
+                </div>
               )}
             </div>
           );
@@ -184,7 +200,7 @@ export default function GameGrid({
               cursor: isTarget ? "pointer" : "default",
               display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
               fontSize: 10, color: "#fff", fontWeight: "bold",
-              transition: "left 0.3s, top 0.3s",
+              transition: "left 0.15s, top 0.15s",
               boxShadow: z.state === "agitated" ? "0 0 8px #c44" :
                          z.state === "alert" ? "0 0 6px #aa8822" : "none",
               opacity: z.type === "crawler" ? 0.85 : 1,
@@ -245,8 +261,9 @@ export default function GameGrid({
               borderRadius: "50%", cursor: "pointer",
               display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
               fontSize: 10, color: "#fff", fontWeight: "bold",
-              transition: "left 0.3s, top 0.3s",
-              boxShadow: isSelected ? "0 0 12px rgba(255,255,255,0.4)" : "none",
+              transition: "left 0.15s, top 0.15s",
+              opacity: !isSelected && focusMode ? 0.55 : 1,
+              boxShadow: isSelected ? "0 0 14px rgba(255,255,255,0.6)" : "none",
               zIndex: 10,
               animation: panicked ? "panic-pulse 0.5s infinite" : undefined,
             }}

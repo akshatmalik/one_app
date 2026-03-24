@@ -10,6 +10,8 @@ interface SurvivorPanelProps {
   canRangedAttack: boolean;
   canThrow: boolean;
   canMolotov: boolean;
+  selectedWeaponIdx: number | null;
+  onSelectWeapon: (idx: number) => void;
   onBreakFree: () => void;
   onUseBandage: () => void;
   onUseMedkit: () => void;
@@ -29,6 +31,7 @@ interface SurvivorPanelProps {
 export default function SurvivorPanel({
   survivor: s, lootOnTile, containerOnTile,
   canAttack, canRangedAttack, canThrow, canMolotov,
+  selectedWeaponIdx, onSelectWeapon,
   onBreakFree, onUseBandage, onUseMedkit, onOverwatch, onDisengage,
   onDropItem, onPickupLoot, onSearchContainer,
   onToggleThrowMode, onToggleMolotovMode, onToggleRangedMode,
@@ -108,28 +111,38 @@ export default function SurvivorPanel({
 
       {/* Inventory */}
       <div style={{ display: "flex", gap: 3, flexWrap: "wrap", marginBottom: 4 }}>
-        {s.inventory.map((item, idx) => (
-          <div key={idx} style={{
-            padding: "2px 5px", background: "#2a2a2a", border: "1px solid #444",
-            borderRadius: 3, fontSize: 9, color: "#ccc", display: "flex", gap: 4, alignItems: "center",
-          }}>
-            <span>
-              {item.name}
-              {item.durability && item.durability < 99 ? ` (${item.durability})` : ""}
-              {item.ammo !== undefined ? ` [${item.ammo}]` : ""}
-            </span>
-            {actionsLeft >= 0 && (
+        {s.inventory.map((item, idx) => {
+          const isWeapon = item.type === "weapon";
+          const isSelected = isWeapon && selectedWeaponIdx === idx;
+          return (
+            <div key={idx} style={{
+              padding: "2px 5px",
+              background: isSelected ? "#3a2a1a" : "#2a2a2a",
+              border: `1px solid ${isSelected ? "#c84" : "#444"}`,
+              borderRadius: 3, fontSize: 9, color: isSelected ? "#fc8" : "#ccc",
+              display: "flex", gap: 4, alignItems: "center",
+              cursor: isWeapon ? "pointer" : "default",
+            }}
+              onClick={() => isWeapon && onSelectWeapon(idx)}
+              title={isWeapon ? "Tap to equip" : undefined}
+            >
+              <span>
+                {isWeapon && <span style={{ fontSize: 7, color: "#888" }}>⚔ </span>}
+                {item.name}
+                {item.durability && item.durability < 99 ? ` (${item.durability})` : ""}
+                {item.ammo !== undefined ? ` [${item.ammo}🔫]` : ""}
+              </span>
               <button
-                onClick={() => onDropItem(idx)}
+                onClick={e => { e.stopPropagation(); onDropItem(idx); }}
                 style={{
                   background: "none", border: "none", color: "#866", cursor: "pointer",
                   fontSize: 9, padding: 0, lineHeight: 1,
                 }}
                 title="Drop (free)"
-              >x</button>
-            )}
-          </div>
-        ))}
+              >×</button>
+            </div>
+          );
+        })}
         {Array.from({ length: freeSlots }, (_, i) => (
           <span key={`e${i}`} style={{
             padding: "2px 5px", background: "#1a1a1a", border: "1px dashed #333",
@@ -204,12 +217,13 @@ export default function SurvivorPanel({
           </button>
         )}
 
-        {hasRanged && actionsLeft > 0 && s.state === "active" && (
+        {hasRanged && s.state === "active" && (
           <button
             onClick={onToggleRangedMode}
             style={btnStyle(rangedMode ? "#5a1a1a" : "#3a1a2a", "#6a2a3a")}
+            title="Pistol: free action but VERY loud"
           >
-            {rangedMode ? "Cancel Aim" : "Shoot"}
+            {rangedMode ? "Cancel Aim" : "🔫 Shoot (free)"}
           </button>
         )}
 

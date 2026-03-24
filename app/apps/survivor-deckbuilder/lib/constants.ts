@@ -21,7 +21,7 @@ export const ITEMS: Record<string, InventoryItem> = {
   knife:         { name: "Knife",         type: "weapon",     damage: 1, noiseRadius: 1, durability: 99 },
   bat:           { name: "Bat",           type: "weapon",     damage: 2, noiseRadius: 2, durability: 6, knockback: true },
   pipe:          { name: "Pipe",          type: "weapon",     damage: 2, noiseRadius: 2, durability: 4 },
-  pistol:        { name: "Pistol",        type: "weapon",     damage: 3, noiseRadius: 4, durability: 99, rangedRange: 3, ammo: 2 },
+  pistol:        { name: "Pistol",        type: "weapon",     damage: 3, noiseRadius: 8, durability: 99, rangedRange: 3, ammo: 2 },
   bandage:       { name: "Bandage",       type: "consumable", heal: 3,   noiseRadius: 1 },
   medkit:        { name: "Medkit",        type: "consumable", heal: 5,   noiseRadius: 1 },
   molotov:       { name: "Molotov",       type: "consumable", damage: 2, noiseRadius: 3, areaEffect: true, throwRange: 4 },
