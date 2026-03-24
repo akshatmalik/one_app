@@ -1,6 +1,7 @@
 import { Survivor, Zombie, NoiseEvent, NoiseRipple, LootItem, TerrainTile, Coord } from './types';
 import { manhattan, isFlanking, directionDelta, oppositeDir, inBounds, isObstacle, hasLineOfSight, getAdjacentCoords, coordToDir } from './grid';
 import { getNoiseIntensity } from './noise';
+import { ALERT_INVESTIGATE_TURNS, BRICK_ALERT_TURNS } from './constants';
 
 export interface AttackResult {
   survivors: Survivor[];
@@ -20,7 +21,8 @@ export function processAttack(
   zombiesIn: Zombie[],
   lootIn: LootItem[],
   terrainIn: TerrainTile[],
-  nextLootId: number
+  nextLootId: number,
+  weaponIdx?: number
 ): AttackResult {
   const survivors = survivorsIn.map(s => ({ ...s, inventory: [...s.inventory], statusEffects: [...s.statusEffects] }));
   const zombies = zombiesIn.map(z => ({ ...z }));
@@ -33,7 +35,9 @@ export function processAttack(
 
   const s = survivors.find(sv => sv.id === survivorId)!;
   const z = zombies.find(zz => zz.id === zombieId)!;
-  const weapon = s.inventory.find(i => i.type === "weapon")!;
+  const weapon = (weaponIdx !== undefined && s.inventory[weaponIdx]?.type === "weapon")
+    ? s.inventory[weaponIdx]
+    : s.inventory.find(i => i.type === "weapon")!;
 
   const isRanged = (weapon.rangedRange ?? 0) > 0;
   let damage = weapon.damage ?? 1;
@@ -44,6 +48,14 @@ export function processAttack(
     damage += 1;
     messages.push("Flanking bonus! +1 damage from behind.");
   }
+
+  // Focus fire stagger: second different survivor attacking same zombie
+  if (!isRanged && z.lastAttackedBySurvivor !== undefined && z.lastAttackedBySurvivor !== survivorId) {
+    z.staggered = true;
+    messages.push(`Coordinated attack! ${z.type[0].toUpperCase() + z.type.slice(1)} is staggered — loses next action!`);
+    nerveChange += 1;
+  }
+  z.lastAttackedBySurvivor = survivorId;
 
   // Apply damage
   const newHp = z.hp - damage;
@@ -56,13 +68,10 @@ export function processAttack(
     const delta = directionDelta(pushDir);
     const pushX = z.x + delta.x;
     const pushY = z.y + delta.y;
-    const pushKey = `${pushX},${pushY}`;
 
     if (inBounds(pushX, pushY) && !isObstacle(pushX, pushY)) {
-      // Check if another zombie is there
       const otherZ = zombies.find(zz => zz.id !== z.id && zz.hp > 0 && zz.x === pushX && zz.y === pushY);
       if (otherZ) {
-        // Collision: both take 1 damage
         otherZ.hp -= 1;
         z.hp = newHp - 1;
         messages.push(`Knocked into another zombie! Both take collision damage.`);
@@ -70,7 +79,7 @@ export function processAttack(
           otherZ.state = "dead";
           messages.push(`Collision kills the ${otherZ.type}!`);
         }
-        knockedBack = false; // stays in place
+        knockedBack = false;
       } else {
         const survivorThere = survivors.find(ss => ss.state !== "dead" && ss.x === pushX && ss.y === pushY);
         if (!survivorThere) {
@@ -81,7 +90,6 @@ export function processAttack(
         }
       }
     } else if (inBounds(pushX, pushY) && isObstacle(pushX, pushY)) {
-      // Wall collision: +1 bonus damage
       z.hp = newHp - 1;
       messages.push("Smashed into wall! +1 collision damage.");
       if (z.hp <= 0) {
@@ -92,7 +100,6 @@ export function processAttack(
   }
 
   if (killed || z.hp <= 0) {
-    // Handle bloater explosion
     if (z.explodesOnDeath && z.hp <= 0) {
       z.state = "dead";
       z.hp = 0;
@@ -100,7 +107,6 @@ export function processAttack(
       noiseRipples.push({ x: z.x, y: z.y, radius: z.explosionRadius + 3, intensity: 3, id: Date.now() + 999 });
       messages.push(`BLOATER EXPLODES! Noise everywhere!`);
 
-      // Damage everything adjacent
       const adjacent = getAdjacentCoords(z);
       for (const pos of adjacent) {
         const adjZ = zombies.find(zz => zz.id !== z.id && zz.hp > 0 && zz.x === pos.x && zz.y === pos.y);
@@ -126,12 +132,44 @@ export function processAttack(
       if (grabbed) grabbed.state = "active";
     }
     z.grabTarget = null;
-    nerveChange += 1; // killing = nerve boost
-    s.adrenalineNextTurn = true; // adrenaline status
+    nerveChange += 1;
+    s.adrenalineNextTurn = true;
   } else if (!knockedBack) {
     z.hp = newHp;
+    z.state = "agitated";
+    z.facing = coordToDir(z, { x: s.x, y: s.y });
+    messages.push(`${z.type[0].toUpperCase() + z.type.slice(1)} is enraged — turns to fight back!`);
   } else {
     z.hp = newHp;
+    z.state = "agitated";
+    z.facing = coordToDir(z, { x: s.x, y: s.y });
+    messages.push(`${z.type[0].toUpperCase() + z.type.slice(1)} is enraged — turns to fight back!`);
+  }
+
+  // Coordination jab: adjacent ally with weapon gets a free +1 hit (melee only, zombie not yet dead)
+  if (!isRanged && z.hp > 0 && z.state !== "dead") {
+    const ally = survivors.find(sv =>
+      sv.id !== survivorId &&
+      sv.state === "active" &&
+      manhattan(sv, z) === 1 &&
+      sv.inventory.some(i => i.type === "weapon")
+    );
+    if (ally) {
+      z.hp -= 1;
+      messages.push(`${ally.name} coordinates — free jab on ${z.type}! (${Math.max(0, z.hp)} HP)`);
+      if (z.hp <= 0) {
+        z.state = "dead";
+        z.hp = 0;
+        messages.push(`Coordination finishes the ${z.type}!`);
+        nerveChange += 1;
+        s.adrenalineNextTurn = true;
+        if (z.grabTarget !== null) {
+          const grabbed = survivors.find(ss => ss.id === z.grabTarget);
+          if (grabbed) grabbed.state = "active";
+          z.grabTarget = null;
+        }
+      }
+    }
   }
 
   // Weapon durability
@@ -152,10 +190,9 @@ export function processAttack(
     }
   }
 
-  s.actionsUsed += 1;
+  if (!isRanged) s.actionsUsed += 1;
   s.nerve = Math.min(s.maxNerve, s.nerve + nerveChange);
 
-  // Noise
   noiseEvents.push({ x: s.x, y: s.y, radius: noiseR, intensity: getNoiseIntensity(noiseR) });
   noiseRipples.push({ x: s.x, y: s.y, radius: noiseR, intensity: getNoiseIntensity(noiseR), id: Date.now() });
 
@@ -200,7 +237,7 @@ export function throwDistraction(
   const survivors = survivorsIn.map(s => ({ ...s, inventory: [...s.inventory] }));
   const s = survivors.find(sv => sv.id === survivorId);
   if (!s) return null;
-  const distraction = s.inventory.find(i => i.type === "distraction");
+  const distraction = s.inventory.find(i => i.type === "distraction" && !i.isTrap);
   if (!distraction) return null;
   const dist = manhattan(s, { x: targetX, y: targetY });
   if (dist > (distraction.throwRange ?? 3)) return null;
@@ -211,10 +248,21 @@ export function throwDistraction(
   let terrain = terrainIn.map(t => ({ ...t }));
 
   const throwNoise = distraction.throwNoise ?? 2;
-  noiseEvents.push({ x: targetX, y: targetY, radius: throwNoise, intensity: getNoiseIntensity(throwNoise) });
-  noiseRipples.push({ x: targetX, y: targetY, radius: throwNoise, intensity: getNoiseIntensity(throwNoise), id: Date.now() + 777 });
 
-  messages.push(`${s.name} throws ${distraction.name} to (${targetX},${targetY})! Noise ${throwNoise}!`);
+  // Alarm Clock and Firecracker (throwNoise >= 4) → agitate nearby zombies (intensity 2)
+  // Brick and Glass Bottle → alert only (intensity 1), brick stays alert much longer
+  const agitates = throwNoise >= 4;
+  const intensity = agitates ? 2 : 1;
+  const alertDuration = distraction.name === "Brick" ? BRICK_ALERT_TURNS : ALERT_INVESTIGATE_TURNS;
+
+  noiseEvents.push({ x: targetX, y: targetY, radius: throwNoise, intensity, alertDuration });
+  noiseRipples.push({ x: targetX, y: targetY, radius: throwNoise, intensity, id: Date.now() + 777 });
+
+  if (agitates) {
+    messages.push(`${s.name} throws ${distraction.name}! LOUD — zombies agitated!`);
+  } else {
+    messages.push(`${s.name} throws ${distraction.name}! Zombies will investigate the landing spot.`);
+  }
 
   // Glass bottle creates glass terrain
   if (distraction.name === "Glass Bottle") {
@@ -253,16 +301,13 @@ export function throwMolotov(
   const messages: string[] = [];
   const dmg = molotov.damage ?? 2;
 
-  // Damage target tile + adjacent
   const hitTiles: Coord[] = [{ x: targetX, y: targetY }];
   for (const [dx, dy] of [[0,1],[0,-1],[1,0],[-1,0]] as [number, number][]) {
     hitTiles.push({ x: targetX + dx, y: targetY + dy });
   }
 
-  // Check if hitting puddle - fire spreads across puddle tiles
   const hitPuddles = terrain.filter(t => t.type === "puddle" && hitTiles.some(h => h.x === t.x && h.y === t.y));
   for (const puddle of hitPuddles) {
-    // Add puddle tile to hit area
     if (!hitTiles.some(h => h.x === puddle.x && h.y === puddle.y)) {
       hitTiles.push({ x: puddle.x, y: puddle.y });
     }
@@ -290,9 +335,10 @@ export function throwMolotov(
     }
   }
 
+  // Molotov noise: radius 8 — wakes the whole room (noiseRadius updated in ITEMS)
   noiseEvents.push({ x: targetX, y: targetY, radius: molotov.noiseRadius, intensity: 3 });
   noiseRipples.push({ x: targetX, y: targetY, radius: molotov.noiseRadius, intensity: 3, id: Date.now() + 888 });
-  messages.unshift(`${s.name} throws Molotov!`);
+  messages.unshift(`${s.name} throws Molotov! BOOM — whole room alerts!`);
 
   s.inventory = s.inventory.filter(i => i !== molotov);
   s.actionsUsed += 1;

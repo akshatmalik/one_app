@@ -1,5 +1,6 @@
 import { NoiseEvent, Zombie, Survivor, NoiseRipple } from './types';
-import { manhattan } from './grid';
+import { manhattan, coordToDir } from './grid';
+import { ALERT_INVESTIGATE_TURNS } from './constants';
 
 export interface NoiseResult {
   zombies: Zombie[];
@@ -34,15 +35,20 @@ export function resolveNoise(
         const dist = manhattan(evt, z);
         if (dist > evt.radius) continue;
 
+        // Face the noise source when waking up
+        const newFacing = coordToDir(z, { x: evt.x, y: evt.y });
+
         if (z.state === "dormant") {
           if (evt.intensity >= 2) {
-            // Loud+ noise: dormant -> agitated
-            newZombies[i] = { ...z, state: "agitated" };
+            // Loud+ noise: dormant -> agitated, face the source
+            newZombies[i] = { ...z, state: "agitated", facing: newFacing };
             messages.push(`${z.type[0].toUpperCase() + z.type.slice(1)} at (${z.x},${z.y}) wakes up agitated!`);
           } else {
-            // Whisper noise: dormant -> alert
+            // Whisper noise: dormant -> alert, face the source, use custom alertDuration if provided
+            const alertTurns = evt.alertDuration ?? ALERT_INVESTIGATE_TURNS;
             newZombies[i] = {
-              ...z, state: "alert", alertTurnsLeft: 3,
+              ...z, state: "alert", facing: newFacing,
+              alertTurnsLeft: alertTurns,
               alertSource: { x: evt.x, y: evt.y },
               alertOrigin: { x: z.x, y: z.y },
             };
@@ -54,8 +60,8 @@ export function resolveNoise(
           zombiesWoke++;
           changed = true;
         } else if (z.state === "alert" && evt.intensity >= 2) {
-          // Alert zombie hears loud noise -> agitated
-          newZombies[i] = { ...z, state: "agitated", alertTurnsLeft: 0, alertSource: null, alertOrigin: null };
+          // Alert zombie hears loud noise -> agitated, face the new source
+          newZombies[i] = { ...z, state: "agitated", facing: newFacing, alertTurnsLeft: 0, alertSource: null, alertOrigin: null };
           messages.push(`${z.type[0].toUpperCase() + z.type.slice(1)} at (${z.x},${z.y}) becomes agitated!`);
           changed = true;
         }

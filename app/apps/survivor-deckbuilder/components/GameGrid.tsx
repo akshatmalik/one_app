@@ -15,15 +15,17 @@ interface GameGridProps {
   attackTargets: number[];
   rangedTargets: number[];
   throwTargets: Set<string>;
+  knockbackPreview: Map<string, "clear" | "blocked" | "collision">;
   noiseRipples: NoiseRipple[];
   showVisionCones: boolean;
+  focusMode: boolean;
   onTileClick: (x: number, y: number) => void;
 }
 
 export default function GameGrid({
   survivors, zombies, loot, terrain, containers,
   selectedSurvivor, reachableTiles, attackTargets, rangedTargets, throwTargets,
-  noiseRipples, showVisionCones, onTileClick,
+  knockbackPreview, noiseRipples, showVisionCones, focusMode, onTileClick,
 }: GameGridProps) {
   const selS = survivors.find(s => s.id === selectedSurvivor);
 
@@ -72,6 +74,7 @@ export default function GameGrid({
           const isReachable = reachableTiles.has(key) && (reachableTiles.get(key) ?? 0) > 0;
           const isThrowable = throwTargets.has(key);
           const isVision = visionTiles.has(key);
+          const kbStatus = knockbackPreview.get(key);
           const ter = terrainMap.get(key);
           const cont = containerMap.get(key);
           const lootHere = lootMap.get(key);
@@ -84,6 +87,15 @@ export default function GameGrid({
               case "glass": bg = "#3a4a5a"; border = "1px solid #4a6a8a"; break;
               case "metal": bg = "#4a4a4a"; border = "1px solid #6a6a6a"; break;
               case "puddle": bg = "#2a3a4a"; border = "1px solid #3a5a7a"; break;
+              case "trap":
+                if (ter.triggered) {
+                  bg = "#2a2a2a"; border = "1px dashed #444";
+                } else if (ter.trapType === "nail") {
+                  bg = "#3a2a1a"; border = "1px solid #8a5a2a";
+                } else {
+                  bg = "#1a2a1a"; border = "1px solid #3a6a3a";
+                }
+                break;
             }
           }
           if (isObs) { bg = "#5a4a2a"; border = "1px solid #6a5a3a"; }
@@ -115,12 +127,32 @@ export default function GameGrid({
                   pointerEvents: "none",
                 }} />
               )}
+              {/* Knockback landing preview */}
+              {kbStatus && (
+                <div style={{
+                  position: "absolute", inset: 0,
+                  background: kbStatus === "clear" ? "rgba(80,220,80,0.25)" :
+                              kbStatus === "collision" ? "rgba(255,200,50,0.3)" :
+                              "rgba(220,60,60,0.25)",
+                  border: `1px solid ${kbStatus === "clear" ? "#4e4" : kbStatus === "collision" ? "#fc0" : "#c44"}`,
+                  pointerEvents: "none", zIndex: 2,
+                }} />
+              )}
+              {/* Focus mode dim — darken tiles outside reach (not the selected survivor's current tile) */}
+              {focusMode && !isReachable && !isObs && !(selS && selS.x === x && selS.y === y) && (
+                <div style={{
+                  position: "absolute", inset: 0,
+                  background: "rgba(0,0,0,0.45)",
+                  pointerEvents: "none",
+                  zIndex: 1,
+                }} />
+              )}
               {isObs && !cont && <span style={{ fontSize: 16 }}>&#9642;</span>}
               {isDoor && <span style={{ fontSize: 10, color: "#6a6" }}>DOOR</span>}
               {isExit && <span style={{ fontSize: 8, color: "#88f" }}>EXIT</span>}
               {cont && !cont.searched && <span style={{ fontSize: 10, color: "#c96" }}>?</span>}
               {cont && cont.searched && <span style={{ fontSize: 10, color: "#555" }}>-</span>}
-              {ter && !isObs && (
+              {ter && !isObs && ter.type !== "trap" && (
                 <span style={{
                   position: "absolute", bottom: 1, right: 2, fontSize: 7,
                   color: ter.type === "glass" ? "#6af" : ter.type === "metal" ? "#999" : "#48a",
@@ -129,17 +161,39 @@ export default function GameGrid({
                   {ter.type === "glass" ? "***" : ter.type === "metal" ? "===" : "~~~"}
                 </span>
               )}
+              {ter && ter.type === "trap" && !ter.triggered && (
+                <span style={{
+                  position: "absolute", fontSize: 13,
+                  color: ter.trapType === "nail" ? "#c84" : "#6c6",
+                  pointerEvents: "none",
+                  filter: "drop-shadow(0 0 3px currentColor)",
+                }}>
+                  {ter.trapType === "nail" ? "⊞" : "⌇"}
+                </span>
+              )}
+              {ter && ter.type === "trap" && ter.triggered && (
+                <span style={{
+                  position: "absolute", fontSize: 8, color: "#555",
+                  pointerEvents: "none",
+                }}>✓</span>
+              )}
               {/* Loot on ground */}
               {lootHere && (
-                <span style={{
-                  position: "absolute", bottom: 2, left: 2, fontSize: 8,
-                  color: lootHere.item.type === "weapon" ? "#f88" :
-                         lootHere.item.type === "distraction" ? "#ff8" : "#8f8",
-                  fontWeight: "bold", pointerEvents: "none",
-                  textShadow: "0 0 4px rgba(0,0,0,0.8)",
+                <div style={{
+                  position: "absolute", bottom: 1, left: "50%",
+                  transform: "translateX(-50%)",
+                  background: lootHere.item.type === "weapon" ? "rgba(180,60,60,0.92)" :
+                               lootHere.item.type === "distraction" ? "rgba(170,150,30,0.92)" : "rgba(50,150,60,0.92)",
+                  border: `1px solid ${lootHere.item.type === "weapon" ? "#f88" : lootHere.item.type === "distraction" ? "#ee8" : "#8f8"}`,
+                  borderRadius: 2, padding: "0px 3px",
+                  fontSize: 7, color: "#fff", fontWeight: "bold",
+                  pointerEvents: "none", whiteSpace: "nowrap",
+                  maxWidth: TILE - 6, overflow: "hidden", textOverflow: "ellipsis",
+                  animation: "loot-pulse 2s ease-in-out infinite",
+                  zIndex: 2,
                 }}>
-                  {lootHere.item.name[0]}
-                </span>
+                  {lootHere.item.name}
+                </div>
               )}
             </div>
           );
@@ -184,7 +238,7 @@ export default function GameGrid({
               cursor: isTarget ? "pointer" : "default",
               display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
               fontSize: 10, color: "#fff", fontWeight: "bold",
-              transition: "left 0.3s, top 0.3s",
+              transition: "left 0.15s, top 0.15s",
               boxShadow: z.state === "agitated" ? "0 0 8px #c44" :
                          z.state === "alert" ? "0 0 6px #aa8822" : "none",
               opacity: z.type === "crawler" ? 0.85 : 1,
@@ -218,6 +272,9 @@ export default function GameGrid({
             {z.state === "grabbing" && (
               <span style={{ position: "absolute", top: -14, fontSize: 9, color: "#f66" }}>GRAB</span>
             )}
+            {z.staggered && (
+              <span style={{ position: "absolute", bottom: -14, fontSize: 9, color: "#fc0" }}>STGR</span>
+            )}
           </div>
         );
       })}
@@ -245,8 +302,9 @@ export default function GameGrid({
               borderRadius: "50%", cursor: "pointer",
               display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
               fontSize: 10, color: "#fff", fontWeight: "bold",
-              transition: "left 0.3s, top 0.3s",
-              boxShadow: isSelected ? "0 0 12px rgba(255,255,255,0.4)" : "none",
+              transition: "left 0.15s, top 0.15s",
+              opacity: !isSelected && focusMode ? 0.55 : 1,
+              boxShadow: isSelected ? "0 0 14px rgba(255,255,255,0.6)" : "none",
               zIndex: 10,
               animation: panicked ? "panic-pulse 0.5s infinite" : undefined,
             }}

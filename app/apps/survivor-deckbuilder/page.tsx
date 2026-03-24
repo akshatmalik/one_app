@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { Survivor, Zombie, LootItem, TerrainTile, ContainerTile, NoiseEvent, NoiseRipple, Phase, TurnSummary } from "./lib/types";
 import { GRID_W, GRID_H, TILE, initSurvivors, initZombies, initLoot, initTerrain, initContainers, ITEMS, NERVE_SHAKY } from "./lib/constants";
-import { bfsReachable, manhattan, isObstacle, hasLineOfSight, getVisionCone } from "./lib/grid";
+import { bfsReachable, manhattan, isObstacle, inBounds, coordToDir, directionDelta, hasLineOfSight, getVisionCone, zombieCanSee } from "./lib/grid";
 import { resolveNoise, getNoiseIntensity } from "./lib/noise";
 import { processZombiePhase } from "./lib/zombie-ai";
 import { processAttack, processRangedAttack, throwDistraction, throwMolotov, getZocDamage } from "./lib/combat";
@@ -32,6 +32,8 @@ export default function DeadWeightPrototype() {
   const [showEndTurnConfirm, setShowEndTurnConfirm] = useState(false);
   const [turnSummary, setTurnSummary] = useState<TurnSummary | null>(null);
   const [nextLootId, setNextLootId] = useState(100);
+  const [selectedWeaponIdx, setSelectedWeaponIdx] = useState<number | null>(null);
+  const [showInfo, setShowInfo] = useState(false);
   const gridRef = useRef<HTMLDivElement>(null);
 
   const addMsg = useCallback((msg: string) => {
@@ -42,12 +44,57 @@ export default function DeadWeightPrototype() {
     setMessages(prev => [...msgs, ...prev].slice(0, 8));
   }, []);
 
+  // Undo system — snapshot before each player action
+  const undoSnapshotRef = useRef<{
+    survivors: Survivor[]; zombies: Zombie[]; loot: LootItem[]; terrain: TerrainTile[];
+  } | null>(null);
+  const [hasUndo, setHasUndo] = useState(false);
+  const survivorsRef = useRef(survivors);
+  const zombiesRef = useRef(zombies);
+  const lootRef = useRef(loot);
+  const terrainRef = useRef(terrain);
+  useEffect(() => { survivorsRef.current = survivors; }, [survivors]);
+  useEffect(() => { zombiesRef.current = zombies; }, [zombies]);
+  useEffect(() => { lootRef.current = loot; }, [loot]);
+  useEffect(() => { terrainRef.current = terrain; }, [terrain]);
+
+  const saveUndoState = useCallback(() => {
+    undoSnapshotRef.current = {
+      survivors: survivorsRef.current.map(s => ({ ...s, inventory: [...s.inventory], statusEffects: [...s.statusEffects] })),
+      zombies: zombiesRef.current.map(z => ({ ...z })),
+      loot: lootRef.current.map(l => ({ ...l, item: { ...l.item } })),
+      terrain: terrainRef.current.map(t => ({ ...t })),
+    };
+    setHasUndo(true);
+  }, []);
+
+  const undo = useCallback(() => {
+    if (!undoSnapshotRef.current || phase !== "player") return;
+    const snap = undoSnapshotRef.current;
+    setSurvivors(snap.survivors);
+    setZombies(snap.zombies);
+    setLoot(snap.loot);
+    setTerrain(snap.terrain);
+    undoSnapshotRef.current = null;
+    setHasUndo(false);
+    setSelectedSurvivor(null);
+    setReachableTiles(new Map());
+    setAttackTargets([]);
+    setRangedTargets([]);
+    setThrowTargets(new Set());
+    setThrowMode(false);
+    setMolotovMode(false);
+    setRangedMode(false);
+    addMsg("↩ Action undone.");
+  }, [phase, addMsg]);
+
   const freeSlots = (s: Survivor) => s.totalSlots - s.inventory.length;
   const actionsLeft = (s: Survivor) => {
     const base = freeSlots(s) - s.actionsUsed;
-    // Adrenaline bonus
     const bonus = s.statusEffects.includes("adrenaline") ? 1 : 0;
-    return base + bonus;
+    // Critical state: hp ≤ 2 costs 1 action (survivor is struggling)
+    const critPenalty = s.hp <= 2 ? 1 : 0;
+    return Math.max(0, base + bonus - critPenalty);
   };
 
   const getBlockedSet = useCallback((excludeSurvivorId: number = -1): Set<string> => {
@@ -102,6 +149,7 @@ export default function DeadWeightPrototype() {
     setThrowMode(false);
     setMolotovMode(false);
     setRangedMode(false);
+    setSelectedWeaponIdx(null);
 
     if (s.overwatching || s.nerve <= 0) {
       setReachableTiles(new Map());
@@ -112,8 +160,10 @@ export default function DeadWeightPrototype() {
     }
 
     const remaining = actionsLeft(s);
+    // Emergency move: full inventory survivors can always take 1 step per turn
+    const movementRange = remaining > 0 ? remaining : (!s.emergencyMoveUsed ? 1 : 0);
     const blocked = getBlockedSet(sid);
-    setReachableTiles(bfsReachable({ x: s.x, y: s.y }, remaining, blocked));
+    setReachableTiles(bfsReachable({ x: s.x, y: s.y }, movementRange, blocked));
     computeTargets(s);
     setThrowTargets(new Set());
   }, [phase, survivors, getBlockedSet, computeTargets]);
@@ -126,6 +176,24 @@ export default function DeadWeightPrototype() {
     if (!reachableTiles.has(key)) return;
     const cost = reachableTiles.get(key)!;
     if (cost === 0) return;
+
+    saveUndoState();
+
+    const movingSurv = survivors.find(s => s.id === selectedSurvivor);
+    // Emergency move: used when inventory is full and no actions remain
+    const isEmergencyMove = movingSurv ? (actionsLeft(movingSurv) <= 0 && !movingSurv.emergencyMoveUsed) : false;
+
+    // Check if survivor walks into a zombie's line of sight during player turn
+    if (movingSurv) {
+      const newPos = { x: tx, y: ty };
+      const spotted = zombies.filter(z => z.hp > 0 && z.state !== "agitated" && z.state !== "dead" && zombieCanSee(z, newPos));
+      if (spotted.length > 0) {
+        setZombies(prev => prev.map(z =>
+          spotted.some(sp => sp.id === z.id) ? { ...z, state: "agitated" as const } : z
+        ));
+        spotted.forEach(z => addMsg(`⚠ ${z.type[0].toUpperCase() + z.type.slice(1)} spots ${movingSurv.name}!`));
+      }
+    }
 
     setSurvivors(prev => {
       const newSurvivors = prev.map(s => {
@@ -148,22 +216,23 @@ export default function DeadWeightPrototype() {
         }
 
         if (newHp <= 0) {
-          return { ...s, x: tx, y: ty, hp: 0, state: "dead" as const, actionsUsed: s.actionsUsed + cost };
+          return { ...s, x: tx, y: ty, hp: 0, state: "dead" as const, actionsUsed: s.actionsUsed + (isEmergencyMove ? 0 : cost), emergencyMoveUsed: isEmergencyMove ? true : s.emergencyMoveUsed };
         }
-        return { ...s, x: tx, y: ty, hp: newHp, actionsUsed: s.actionsUsed + cost };
+        return { ...s, x: tx, y: ty, hp: newHp, actionsUsed: s.actionsUsed + (isEmergencyMove ? 0 : cost), emergencyMoveUsed: isEmergencyMove ? true : s.emergencyMoveUsed };
       });
       return newSurvivors;
     });
 
     setTimeout(() => selectSurvivor(selectedSurvivor), 50);
-  }, [selectedSurvivor, phase, reachableTiles, zombies, terrain, addMsg, selectSurvivor]);
+  }, [selectedSurvivor, phase, reachableTiles, survivors, zombies, terrain, addMsg, selectSurvivor, saveUndoState]);
 
   const handleAttack = useCallback((zid: number) => {
     if (selectedSurvivor === null || phase !== "player") return;
     const s = survivors.find(sv => sv.id === selectedSurvivor);
     if (!s || actionsLeft(s) <= 0 || s.overwatching || s.nerve <= 0) return;
 
-    const result = processAttack(selectedSurvivor, zid, survivors, zombies, loot, terrain, nextLootId);
+    saveUndoState();
+    const result = processAttack(selectedSurvivor, zid, survivors, zombies, loot, terrain, nextLootId, selectedWeaponIdx ?? undefined);
     setSurvivors(result.survivors);
     setZombies(result.zombies);
     setLoot(result.loot);
@@ -173,13 +242,14 @@ export default function DeadWeightPrototype() {
     result.messages.forEach(m => addMsg(m));
 
     setTimeout(() => selectSurvivor(selectedSurvivor), 50);
-  }, [selectedSurvivor, phase, survivors, zombies, loot, terrain, nextLootId, addMsg, selectSurvivor]);
+  }, [selectedSurvivor, phase, survivors, zombies, loot, terrain, nextLootId, addMsg, selectSurvivor, saveUndoState, selectedWeaponIdx]);
 
   const handleThrowTile = useCallback((tx: number, ty: number) => {
     if (selectedSurvivor === null || phase !== "player") return;
     const s = survivors.find(sv => sv.id === selectedSurvivor);
     if (!s || actionsLeft(s) <= 0) return;
 
+    saveUndoState();
     if (molotovMode) {
       const result = throwMolotov(selectedSurvivor, tx, ty, survivors, zombies, terrain);
       if (!result) return;
@@ -202,10 +272,11 @@ export default function DeadWeightPrototype() {
     }
 
     setTimeout(() => selectSurvivor(selectedSurvivor), 50);
-  }, [selectedSurvivor, phase, survivors, zombies, terrain, nextLootId, molotovMode, addMsg, selectSurvivor]);
+  }, [selectedSurvivor, phase, survivors, zombies, terrain, nextLootId, molotovMode, addMsg, selectSurvivor, saveUndoState]);
 
   const handleRangedAttack = useCallback((tx: number, ty: number) => {
     if (selectedSurvivor === null || phase !== "player") return;
+    saveUndoState();
     const result = processRangedAttack(selectedSurvivor, tx, ty, survivors, zombies, loot, terrain, nextLootId);
     if (!result) return;
     setSurvivors(result.survivors);
@@ -215,12 +286,13 @@ export default function DeadWeightPrototype() {
     result.messages.forEach(m => addMsg(m));
     setRangedMode(false);
     setTimeout(() => selectSurvivor(selectedSurvivor), 50);
-  }, [selectedSurvivor, phase, survivors, zombies, loot, terrain, nextLootId, addMsg, selectSurvivor]);
+  }, [selectedSurvivor, phase, survivors, zombies, loot, terrain, nextLootId, addMsg, selectSurvivor, saveUndoState]);
 
   const useBandageOrMedkit = useCallback((itemName: string) => {
     if (selectedSurvivor === null || phase !== "player") return;
     const s = survivors.find(sv => sv.id === selectedSurvivor);
     if (!s || actionsLeft(s) <= 0) return;
+    saveUndoState();
     const item = s.inventory.find(i => i.name === itemName);
     if (!item) return;
 
@@ -241,7 +313,7 @@ export default function DeadWeightPrototype() {
     setNoiseEvents(prev => [...prev, { x: s.x, y: s.y, radius: item.noiseRadius, intensity: 1 }]);
     addMsg(`${s.name} used ${itemName}. Healed to ${healed} HP.`);
     setTimeout(() => selectSurvivor(selectedSurvivor), 50);
-  }, [selectedSurvivor, phase, survivors, addMsg, selectSurvivor]);
+  }, [selectedSurvivor, phase, survivors, addMsg, selectSurvivor, saveUndoState]);
 
   const breakFree = useCallback(() => {
     if (selectedSurvivor === null || phase !== "player") return;
@@ -302,7 +374,10 @@ export default function DeadWeightPrototype() {
       newInv.splice(idx, 1);
       return { ...ss, inventory: newInv };
     }));
-    addMsg(`${s.name} drops ${item.name}. +1 action slot!`);
+    // Dropping creates a small noise — emergency drops have a cost
+    setNoiseEvents(prev => [...prev, { x: s.x, y: s.y, radius: 1, intensity: 1 }]);
+    setNoiseRipples(prev => [...prev, { x: s.x, y: s.y, radius: 1, intensity: 1, id: Date.now() + 200 }]);
+    addMsg(`${s.name} drops ${item.name}. Noise! +1 action slot.`);
     setTimeout(() => selectSurvivor(selectedSurvivor), 50);
   }, [selectedSurvivor, phase, survivors, nextLootId, addMsg, selectSurvivor]);
 
@@ -310,6 +385,7 @@ export default function DeadWeightPrototype() {
     if (selectedSurvivor === null || phase !== "player") return;
     const s = survivors.find(sv => sv.id === selectedSurvivor);
     if (!s || actionsLeft(s) <= 0 || freeSlots(s) <= 0) return;
+    saveUndoState();
     const lootItem = loot.find(l => l.x === s.x && l.y === s.y);
     if (!lootItem) return;
 
@@ -319,13 +395,24 @@ export default function DeadWeightPrototype() {
       return { ...ss, inventory: [...ss.inventory, { ...lootItem.item }], actionsUsed: ss.actionsUsed + 1 };
     }));
     addMsg(`${s.name} picks up ${lootItem.item.name}. Weight +1.`);
+    // Auto-enter throw mode if picked up a throwable distraction (not a trap)
+    if (lootItem.item.type === "distraction" && lootItem.item.throwRange && !lootItem.item.isTrap) {
+      setThrowMode(true);
+      setMolotovMode(false);
+      setRangedMode(false);
+    } else if (lootItem.item.name === "Molotov") {
+      setMolotovMode(true);
+      setThrowMode(false);
+      setRangedMode(false);
+    }
     setTimeout(() => selectSurvivor(selectedSurvivor), 50);
-  }, [selectedSurvivor, phase, survivors, loot, addMsg, selectSurvivor]);
+  }, [selectedSurvivor, phase, survivors, loot, addMsg, selectSurvivor, saveUndoState]);
 
   const searchContainer = useCallback(() => {
     if (selectedSurvivor === null || phase !== "player") return;
     const s = survivors.find(sv => sv.id === selectedSurvivor);
     if (!s || actionsLeft(s) <= 0) return;
+    saveUndoState();
 
     // Must be adjacent to container
     const cont = containers.find(c => {
@@ -347,7 +434,26 @@ export default function DeadWeightPrototype() {
     setNoiseRipples(prev => [...prev, { x: cont.x, y: cont.y, radius: 1, intensity: 1, id: Date.now() + 444 }]);
     addMsg(`${s.name} searches and finds ${found.name}!`);
     setTimeout(() => selectSurvivor(selectedSurvivor), 50);
-  }, [selectedSurvivor, phase, survivors, containers, nextLootId, addMsg, selectSurvivor]);
+  }, [selectedSurvivor, phase, survivors, containers, nextLootId, addMsg, selectSurvivor, saveUndoState]);
+
+  const setTrap = useCallback(() => {
+    if (selectedSurvivor === null || phase !== "player") return;
+    const s = survivors.find(sv => sv.id === selectedSurvivor);
+    if (!s || actionsLeft(s) <= 0) return;
+    const trapItem = s.inventory.find(i => i.isTrap);
+    if (!trapItem) return;
+    // Can't place trap on top of existing terrain
+    const existingTerrain = terrain.find(t => t.x === s.x && t.y === s.y);
+    if (existingTerrain) { addMsg("Can't place trap here — terrain in the way!"); return; }
+    saveUndoState();
+    setTerrain(prev => [...prev, { x: s.x, y: s.y, type: "trap", noiseOnStep: 0, trapType: trapItem.trapType, triggered: false }]);
+    setSurvivors(prev => prev.map(ss => {
+      if (ss.id !== selectedSurvivor) return ss;
+      return { ...ss, inventory: ss.inventory.filter(i => i !== trapItem), actionsUsed: ss.actionsUsed + 1 };
+    }));
+    addMsg(`${s.name} sets ${trapItem.name}! Ready to trigger.`);
+    setTimeout(() => selectSurvivor(selectedSurvivor), 50);
+  }, [selectedSurvivor, phase, survivors, terrain, addMsg, selectSurvivor, saveUndoState]);
 
   // --- End Turn ---
 
@@ -371,6 +477,8 @@ export default function DeadWeightPrototype() {
     setMolotovMode(false);
     setRangedMode(false);
     setShowEndTurnConfirm(false);
+    undoSnapshotRef.current = null;
+    setHasUndo(false);
     setPhase("noise");
   }, []);
 
@@ -379,6 +487,7 @@ export default function DeadWeightPrototype() {
     if (phase !== "noise") return;
     const timer = setTimeout(() => {
       const result = resolveNoise(noiseEvents, zombies, survivors);
+
       setZombies(result.zombies);
       setNoiseRipples(prev => [...prev, ...result.newRipples]);
       result.messages.forEach(m => addMsg(m));
@@ -393,7 +502,7 @@ export default function DeadWeightPrototype() {
       }));
 
       setPhase("zombie");
-    }, 400);
+    }, 150);
     return () => clearTimeout(timer);
   }, [phase, noiseEvents, zombies, survivors, addMsg]);
 
@@ -401,9 +510,10 @@ export default function DeadWeightPrototype() {
   useEffect(() => {
     if (phase !== "zombie") return;
     const timer = setTimeout(() => {
-      const result = processZombiePhase(zombies, survivors);
+      const result = processZombiePhase(zombies, survivors, terrain);
       setZombies(result.zombies);
       setSurvivors(result.survivors);
+      setTerrain(result.terrain);
       result.messages.forEach(m => addMsg(m));
 
       // Process any noise events from zombie phase (screamer groans)
@@ -435,49 +545,91 @@ export default function DeadWeightPrototype() {
         return;
       }
 
+      // Reset zombie turn-tracking fields for new turn
+      setZombies(prev => prev.map(z => ({ ...z, staggered: false, lastAttackedBySurvivor: undefined })));
+
       // Start new turn - apply status effects, reset actions
-      setSurvivors(prev => prev.map(s => {
-        if (s.state === "dead") return s;
-        let newHp = s.hp;
-        let newNerve = s.nerve;
-        const newEffects = [...s.statusEffects];
+      setSurvivors(prev => {
+        const alivePrev = prev.filter(s => s.state !== "dead");
 
-        // Bleeding
-        if (newEffects.includes("bleeding")) {
-          newHp -= 1;
-          if (newHp <= 0) {
-            addMsg(`${s.name} bleeds out!`);
-            return { ...s, hp: 0, state: "dead" as const, actionsUsed: 0, overwatching: false, overwatchAttacks: 0 };
+        // Nerve contagion: check survivor states before applying individual effects
+        const nerveContagion = new Map<number, number>(); // survivorId -> nerve delta
+
+        if (alivePrev.length >= 2) {
+          const s0 = alivePrev[0];
+          const s1 = alivePrev[1];
+
+          // Adjacency regen: standing together steadies both
+          const adjacent = Math.abs(s0.x - s1.x) + Math.abs(s0.y - s1.y) === 1;
+          if (adjacent) {
+            nerveContagion.set(s0.id, (nerveContagion.get(s0.id) ?? 0) + 1);
+            nerveContagion.set(s1.id, (nerveContagion.get(s1.id) ?? 0) + 1);
+            addMsg("Staying together — +1 nerve each.");
           }
-          addMsg(`${s.name} is bleeding! -1 HP (${newHp})`);
+
+          // Both high nerve: extra steady
+          if (s0.nerve >= 8 && s1.nerve >= 8) {
+            nerveContagion.set(s0.id, (nerveContagion.get(s0.id) ?? 0) + 1);
+            nerveContagion.set(s1.id, (nerveContagion.get(s1.id) ?? 0) + 1);
+            addMsg("Both steady — nerves holding strong.");
+          }
+
+          // Nerve contagion: one critically low + low HP → partner suffers
+          if (s0.hp <= 3 && s0.nerve <= 2) {
+            nerveContagion.set(s1.id, (nerveContagion.get(s1.id) ?? 0) - 1);
+            addMsg(`${s0.name} is breaking — ${s1.name} feels it! -1 nerve.`);
+          }
+          if (s1.hp <= 3 && s1.nerve <= 2) {
+            nerveContagion.set(s0.id, (nerveContagion.get(s0.id) ?? 0) - 1);
+            addMsg(`${s1.name} is breaking — ${s0.name} feels it! -1 nerve.`);
+          }
         }
 
-        // Adrenaline: apply from last turn's kills, add as status effect for this turn
-        const hasAdrenaline = s.adrenalineNextTurn;
-        const effects = hasAdrenaline
-          ? (newEffects.includes("adrenaline") ? newEffects : [...newEffects, "adrenaline" as const])
-          : newEffects.filter(e => e !== "adrenaline");
+        return prev.map(s => {
+          if (s.state === "dead") return s;
+          let newHp = s.hp;
+          let newNerve = s.nerve + (nerveContagion.get(s.id) ?? 0);
+          const newEffects = [...s.statusEffects];
 
-        // Panicked check
-        if (newNerve <= 0) {
-          addMsg(`${s.name} is panicking! Can't act this turn.`);
-          newNerve = 1; // recover 1 nerve per turn
-        }
+          // Bleeding
+          if (newEffects.includes("bleeding")) {
+            newHp -= 1;
+            if (newHp <= 0) {
+              addMsg(`${s.name} bleeds out!`);
+              return { ...s, hp: 0, state: "dead" as const, actionsUsed: 0, overwatching: false, overwatchAttacks: 0, emergencyMoveUsed: false };
+            }
+            addMsg(`${s.name} is bleeding! -1 HP (${newHp})`);
+          }
 
-        return {
-          ...s,
-          hp: newHp, nerve: newNerve,
-          actionsUsed: 0, overwatching: false, overwatchAttacks: 0,
-          disengaging: false, adrenalineNextTurn: false,
-          statusEffects: effects,
-        };
-      }));
+          // Adrenaline: apply from last turn's kills
+          const hasAdrenaline = s.adrenalineNextTurn;
+          const effects = hasAdrenaline
+            ? (newEffects.includes("adrenaline") ? newEffects : [...newEffects, "adrenaline" as const])
+            : newEffects.filter(e => e !== "adrenaline");
+
+          // Panicked check
+          if (newNerve <= 0) {
+            addMsg(`${s.name} is panicking! Can't act this turn.`);
+            newNerve = 1;
+          }
+
+          newNerve = Math.max(0, Math.min(s.maxNerve, newNerve));
+
+          return {
+            ...s,
+            hp: newHp, nerve: newNerve,
+            actionsUsed: 0, overwatching: false, overwatchAttacks: 0,
+            disengaging: false, adrenalineNextTurn: false, emergencyMoveUsed: false,
+            statusEffects: effects,
+          };
+        });
+      });
 
       setTurn(t => t + 1);
       setTurnSummary(null);
       setPhase("player");
       addMsg("Your turn.");
-    }, 600);
+    }, 280);
     return () => clearTimeout(timer);
   }, [phase, zombies, survivors, addMsg, turnSummary]);
 
@@ -527,13 +679,26 @@ export default function DeadWeightPrototype() {
       }
     }
 
-    // Move
+    // Move — with auto-pickup if loot is at destination and survivor has enough actions
     if (selectedSurvivor !== null) {
-      moveSurvivor(tx, ty);
+      const s = survivors.find(sv => sv.id === selectedSurvivor);
+      const moveCost = reachableTiles.get(`${tx},${ty}`) ?? 0;
+      const lootAtTarget = loot.find(l => l.x === tx && l.y === ty);
+      if (s && lootAtTarget && moveCost > 0 && freeSlots(s) > 0 && actionsLeft(s) >= moveCost + 1) {
+        // Combined move + pickup in one click
+        moveSurvivor(tx, ty);
+        // Auto-pickup executes after move state settles
+        setTimeout(() => {
+          const updatedS = survivors.find(sv => sv.id === selectedSurvivor);
+          if (updatedS && freeSlots(updatedS) > 0) pickupLoot();
+        }, 80);
+      } else {
+        moveSurvivor(tx, ty);
+      }
     }
-  }, [phase, throwMode, molotovMode, rangedMode, throwTargets, survivors, zombies,
-      selectedSurvivor, attackTargets, rangedTargets,
-      selectSurvivor, handleAttack, moveSurvivor, handleThrowTile, handleRangedAttack]);
+  }, [phase, throwMode, molotovMode, rangedMode, throwTargets, survivors, zombies, loot,
+      selectedSurvivor, attackTargets, rangedTargets, reachableTiles,
+      selectSurvivor, handleAttack, moveSurvivor, handleThrowTile, handleRangedAttack, pickupLoot]);
 
   const restart = () => {
     setSurvivors(initSurvivors());
@@ -557,6 +722,9 @@ export default function DeadWeightPrototype() {
     setShowEndTurnConfirm(false);
     setTurnSummary(null);
     setNextLootId(100);
+    setSelectedWeaponIdx(null);
+    undoSnapshotRef.current = null;
+    setHasUndo(false);
   };
 
   const selS = survivors.find(s => s.id === selectedSurvivor) || null;
@@ -571,6 +739,29 @@ export default function DeadWeightPrototype() {
       setThrowTargets(new Set());
     }
   }, [throwMode, molotovMode, selS, computeThrowTargets]);
+
+  // Knockback landing preview — show where zombie will land when hit with knockback weapon
+  const knockbackPreview = useMemo<Map<string, "clear" | "blocked" | "collision">>(() => {
+    const result = new Map<string, "clear" | "blocked" | "collision">();
+    if (!selS || selectedWeaponIdx === null) return result;
+    const weapon = selS.inventory[selectedWeaponIdx];
+    if (!weapon?.knockback) return result;
+    for (const zid of attackTargets) {
+      const z = zombies.find(zz => zz.id === zid);
+      if (!z || z.knockbackResistant) continue;
+      const pushDir = coordToDir(selS, z);
+      const delta = directionDelta(pushDir);
+      const px = z.x + delta.x;
+      const py = z.y + delta.y;
+      if (!inBounds(px, py) || isObstacle(px, py)) {
+        result.set(`${px},${py}`, "blocked");
+      } else {
+        const collidesZ = zombies.some(zz => zz.id !== z.id && zz.hp > 0 && zz.x === px && zz.y === py);
+        result.set(`${px},${py}`, collidesZ ? "collision" : "clear");
+      }
+    }
+    return result;
+  }, [selS, selectedWeaponIdx, attackTargets, zombies]);
 
   return (
     <div style={{
@@ -587,8 +778,19 @@ export default function DeadWeightPrototype() {
         <span style={{ fontSize: 13, fontWeight: "bold", color: "#c44" }}>DEAD WEIGHT</span>
         <span style={{ fontSize: 11, color: "#888" }}>Turn {turn}</span>
         <span style={{ fontSize: 10, color: "#888" }}>
-          {zombies.filter(z => z.hp > 0).length} zombies left
+          {zombies.filter(z => z.hp > 0).length}🧟
         </span>
+        <button
+          onClick={() => setShowInfo(true)}
+          style={{
+            background: "none", border: "1px solid #555", color: "#aaa",
+            borderRadius: "50%", width: 20, height: 20, fontSize: 11,
+            cursor: "pointer", fontFamily: "'Courier New', monospace",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            padding: 0, flexShrink: 0,
+          }}
+          title="How to play"
+        >i</button>
       </div>
 
       {/* Grid */}
@@ -607,8 +809,10 @@ export default function DeadWeightPrototype() {
           attackTargets={attackTargets}
           rangedTargets={rangedTargets}
           throwTargets={throwTargets}
+          knockbackPreview={knockbackPreview}
           noiseRipples={noiseRipples}
           showVisionCones={selectedSurvivor !== null}
+          focusMode={selectedSurvivor !== null}
           onTileClick={handleTileClick}
         />
       </div>
@@ -624,8 +828,10 @@ export default function DeadWeightPrototype() {
           containerOnTile={containerOnTile || null}
           canAttack={attackTargets.length > 0}
           canRangedAttack={rangedTargets.length > 0}
-          canThrow={selS?.inventory.some(i => i.type === "distraction") || false}
+          canThrow={selS?.inventory.some(i => i.type === "distraction" && !i.isTrap) || false}
           canMolotov={selS?.inventory.some(i => i.name === "Molotov") || false}
+          selectedWeaponIdx={selectedWeaponIdx}
+          onSelectWeapon={setSelectedWeaponIdx}
           onBreakFree={breakFree}
           onUseBandage={() => useBandageOrMedkit("Bandage")}
           onUseMedkit={() => useBandageOrMedkit("Medkit")}
@@ -637,6 +843,7 @@ export default function DeadWeightPrototype() {
           onToggleThrowMode={() => { setThrowMode(!throwMode); setMolotovMode(false); setRangedMode(false); }}
           onToggleMolotovMode={() => { setMolotovMode(!molotovMode); setThrowMode(false); setRangedMode(false); }}
           onToggleRangedMode={() => { setRangedMode(!rangedMode); setThrowMode(false); setMolotovMode(false); }}
+          onSetTrap={setTrap}
           throwMode={throwMode}
           molotovMode={molotovMode}
           rangedMode={rangedMode}
@@ -644,6 +851,13 @@ export default function DeadWeightPrototype() {
 
         {/* Action buttons */}
         <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
+          {phase === "player" && hasUndo && (
+            <button onClick={undo} style={{
+              padding: "8px 12px", background: "#2a2a3a", border: "1px solid #4a4a6a",
+              color: "#aaa", borderRadius: 4, fontSize: 12, fontWeight: "bold",
+              cursor: "pointer", fontFamily: "'Courier New', monospace", flexShrink: 0,
+            }} title="Undo last action">↩ UNDO</button>
+          )}
           {phase === "player" && (
             <button onClick={tryEndTurn} style={{
               flex: 1, padding: "8px", background: "#333", border: "1px solid #555",
@@ -698,6 +912,108 @@ export default function DeadWeightPrototype() {
         </div>
       )}
 
+      {/* Info / Legend Modal */}
+      {showInfo && (
+        <div style={{
+          position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)",
+          display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200,
+          overflow: "auto",
+        }}
+          onClick={() => setShowInfo(false)}
+        >
+          <div style={{
+            background: "#1c1c1c", border: "1px solid #555", borderRadius: 8,
+            padding: "14px 18px", maxWidth: 320, width: "90%", maxHeight: "85vh",
+            overflowY: "auto", fontFamily: "'Courier New', monospace", fontSize: 10,
+          }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ fontSize: 13, fontWeight: "bold", color: "#c44", marginBottom: 10 }}>
+              HOW TO PLAY
+            </div>
+            {[
+              { title: "MOVEMENT", items: [
+                "Tap a survivor (circle) to select them",
+                "Green-tinted tiles = where you can move",
+                "Each step costs 1 action (backtracking counts too)",
+                "Actions = free inventory slots (empty = more actions)",
+              ]},
+              { title: "TILES", items: [
+                "🔵 Blue tile = EXIT — reach it to win",
+                "🟫 Green tile with DOOR = locked door (use Lockpick)",
+                "~~~ Puddle / === Metal / *** Glass = noisy terrain",
+                "? Container = search (1 action) for loot",
+                "Yellow border = throwable zone",
+              ]},
+              { title: "LOOT", items: [
+                "Red badge = weapon (tap to equip)",
+                "Yellow badge = distraction (throw it)",
+                "Green badge = consumable (bandage/medkit)",
+                "Walk on same tile + tap Pick Up (1 action)",
+              ]},
+              { title: "ZOMBIES", items: [
+                "Gray = dormant (sleeping/patrolling)",
+                "? above = alert (heard noise, investigating)",
+                "! above = agitated (chasing you!)",
+                "Arrow shows facing direction — sneak from behind",
+                "Z=Shambler, C=Crawler, B=Bloater, !=Screamer, X=Brute",
+              ]},
+              { title: "RED OVERLAY", items: [
+                "Zombie vision cone — stepping into it wakes them MID-TURN",
+                "Stay out or approach from the sides/back",
+              ]},
+              { title: "COMBAT", items: [
+                "Tap adjacent zombie to melee attack",
+                "Tap ⚔ item in inventory to switch weapon",
+                "🔫 Shoot = FREE action but VERY loud (wakes whole room)",
+                "Flank from behind for +1 damage bonus",
+                "Both survivors attack same zombie = STAGGER (it loses next action)",
+                "Adjacent ally auto-jabs for +1 free damage when you attack",
+                "Partner adjacent to grabbed survivor = grab is PREVENTED",
+              ]},
+              { title: "NOISE & STEALTH", items: [
+                "Every action may create noise (radius shown in ripple)",
+                "Brick/Bottle = quiet alert (investigate), Alarm/Firecracker = agitate",
+                "Molotov = HUGE noise — wakes entire room",
+                "Dropping items creates noise — emergency drops cost you",
+                "Zombie facing arrow = their vision cone direction (now 5 tiles)",
+              ]},
+              { title: "TACTICS", items: [
+                "3+ agitated zombies form a HERD — they converge on one target",
+                "Set Wire Trip or Nail Board traps to control zombie movement",
+                "Full inventory? You can still move 1 tile (emergency move)",
+                "Click loot tile with enough actions = move + pick up in one go",
+                "Staying together regens nerve. Both high nerve = extra regen.",
+              ]},
+              { title: "SURVIVAL", items: [
+                "Nerve = sanity bar — hitting zero = can't act that turn",
+                "HP ≤ 2 = Critical state — lose 1 effective action per turn",
+                "Healing is scarce — search containers and protect your partner",
+                "Partner breaking down (low HP + nerve) = you lose nerve too",
+                "Overwatch = spend remaining actions to react to zombie moves",
+                "↩ UNDO button = reverse your last action",
+              ]},
+            ].map(section => (
+              <div key={section.title} style={{ marginBottom: 10 }}>
+                <div style={{ color: "#8af", fontWeight: "bold", marginBottom: 3 }}>{section.title}</div>
+                {section.items.map((item, i) => (
+                  <div key={i} style={{ color: "#aaa", paddingLeft: 6, marginBottom: 2 }}>• {item}</div>
+                ))}
+              </div>
+            ))}
+            <button
+              onClick={() => setShowInfo(false)}
+              style={{
+                width: "100%", padding: "8px", marginTop: 6,
+                background: "#333", border: "1px solid #555", color: "#fff",
+                borderRadius: 4, cursor: "pointer", fontFamily: "'Courier New', monospace",
+                fontSize: 11,
+              }}
+            >Close</button>
+          </div>
+        </div>
+      )}
+
       <style>{`
         @keyframes ripple {
           0% { opacity: 0.8; transform: scale(0.3); }
@@ -706,6 +1022,10 @@ export default function DeadWeightPrototype() {
         @keyframes panic-pulse {
           0%, 100% { opacity: 1; }
           50% { opacity: 0.5; }
+        }
+        @keyframes loot-pulse {
+          0%, 100% { opacity: 0.85; }
+          50% { opacity: 1; box-shadow: 0 0 5px rgba(255,255,255,0.3); }
         }
       `}</style>
     </div>
