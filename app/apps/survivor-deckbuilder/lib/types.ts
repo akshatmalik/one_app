@@ -6,7 +6,7 @@ export type ZombieType = "shambler" | "crawler" | "bloater" | "screamer" | "brut
 
 export type StatusEffect = "bleeding" | "adrenaline";
 
-export type TerrainType = "glass" | "metal" | "puddle";
+export type TerrainType = "glass" | "metal" | "puddle" | "trap";
 
 export type Phase = "player" | "noise" | "zombie" | "gameover" | "win";
 
@@ -23,6 +23,8 @@ export interface InventoryItem {
   rangedRange?: number;
   ammo?: number;
   knockback?: boolean;
+  isTrap?: boolean;
+  trapType?: "wire" | "nail";
 }
 
 export interface Survivor {
@@ -43,6 +45,7 @@ export interface Survivor {
   overwatchAttacks: number;
   adrenalineNextTurn: boolean;
   disengaging: boolean;
+  emergencyMoveUsed: boolean;
 }
 
 export interface Zombie {
@@ -69,6 +72,8 @@ export interface Zombie {
   explodesOnDeath: boolean;
   explosionRadius: number;
   explosionDamage: number;
+  staggered: boolean;
+  lastAttackedBySurvivor?: number;
 }
 
 export interface LootItem {
@@ -83,6 +88,8 @@ export interface TerrainTile {
   y: number;
   type: TerrainType;
   noiseOnStep: number;
+  trapType?: "wire" | "nail";
+  triggered?: boolean;
 }
 
 export interface ContainerTile {
@@ -97,6 +104,7 @@ export interface NoiseEvent {
   y: number;
   radius: number;
   intensity: number;
+  alertDuration?: number;
 }
 
 export interface NoiseRipple {

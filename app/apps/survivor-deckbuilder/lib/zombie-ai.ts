@@ -1,9 +1,10 @@
-import { Zombie, Survivor, NoiseEvent, NoiseRipple, Coord } from './types';
+import { Zombie, Survivor, NoiseEvent, NoiseRipple, Coord, TerrainTile } from './types';
 import { manhattan, zombieMoveToward, zombieCanSee, coordToDir, getAdjacentCoords, DIRS, inBounds, isObstacle } from './grid';
 
 export interface ZombiePhaseResult {
   zombies: Zombie[];
   survivors: Survivor[];
+  terrain: TerrainTile[];
   messages: string[];
   noiseEvents: NoiseEvent[];
   noiseRipples: NoiseRipple[];
@@ -37,17 +38,78 @@ function processOverwatch(
   return { survivors: newSurvivors, damage: totalDamage, hits };
 }
 
+// Trigger a trap tile — returns updated terrain + effects
+function triggerTrap(
+  tile: TerrainTile,
+  zombie: Zombie,
+  messages: string[]
+): { noiseEvent?: NoiseEvent; noiseRipple?: NoiseRipple; damage: number; stagger: boolean } {
+  if (tile.triggered) return { damage: 0, stagger: false };
+
+  if (tile.trapType === "wire") {
+    messages.push(`${zombie.type[0].toUpperCase() + zombie.type.slice(1)} trips the wire! CRASH — noise + stagger!`);
+    return {
+      noiseEvent: { x: tile.x, y: tile.y, radius: 3, intensity: 2 },
+      noiseRipple: { x: tile.x, y: tile.y, radius: 3, intensity: 2, id: Date.now() + 5500 },
+      damage: 0,
+      stagger: true,
+    };
+  } else if (tile.trapType === "nail") {
+    const dmg = 3;
+    messages.push(`${zombie.type[0].toUpperCase() + zombie.type.slice(1)} hits the nail board! -${dmg} HP!`);
+    return { damage: dmg, stagger: false };
+  }
+  return { damage: 0, stagger: false };
+}
+
 export function processZombiePhase(
   zombiesIn: Zombie[],
-  survivorsIn: Survivor[]
+  survivorsIn: Survivor[],
+  terrainIn: TerrainTile[]
 ): ZombiePhaseResult {
   const zombies = zombiesIn.map(z => ({ ...z }));
   let survivors = survivorsIn.map(s => ({ ...s }));
+  let terrain = terrainIn.map(t => ({ ...t }));
   const messages: string[] = [];
   const noiseEvents: NoiseEvent[] = [];
   const noiseRipples: NoiseRipple[] = [];
   let overwatchHits = 0;
   const zocDamage: { survivorId: number; amount: number }[] = [];
+
+  // --- HERD BEHAVIOR ---
+  // 3+ agitated zombies within 3 tiles of each other all target the same survivor
+  const agitatedZombies = zombies.filter(z => z.state === "agitated" && z.hp > 0);
+  const herdTargetOverride = new Map<number, number>(); // zombieId -> survivorId
+
+  for (const z of agitatedZombies) {
+    const nearby = agitatedZombies.filter(other => other.id !== z.id && manhattan(z, other) <= 3);
+    if (nearby.length >= 2) {
+      // This zombie + 2 others = herd of 3+
+      const herdMembers = [z, ...nearby];
+      // Find centroid
+      const cx = herdMembers.reduce((sum, m) => sum + m.x, 0) / herdMembers.length;
+      const cy = herdMembers.reduce((sum, m) => sum + m.y, 0) / herdMembers.length;
+      // Find closest survivor to centroid
+      const alive = survivors.filter(s => s.state !== "dead");
+      if (alive.length > 0) {
+        let target = alive[0];
+        let minDist = Math.abs(alive[0].x - cx) + Math.abs(alive[0].y - cy);
+        for (const sv of alive) {
+          const d = Math.abs(sv.x - cx) + Math.abs(sv.y - cy);
+          if (d < minDist) { minDist = d; target = sv; }
+        }
+        herdMembers.forEach(m => {
+          if (!herdTargetOverride.has(m.id)) {
+            herdTargetOverride.set(m.id, target.id);
+          }
+        });
+      }
+    }
+  }
+
+  if (herdTargetOverride.size > 0) {
+    messages.push(`Herd forming — ${herdTargetOverride.size} zombies converging on one target!`);
+  }
 
   for (let i = 0; i < zombies.length; i++) {
     const z = zombies[i];
@@ -58,6 +120,13 @@ export function processZombiePhase(
       noiseEvents.push({ x: z.x, y: z.y, radius: z.groanRadius, intensity: 2 });
       noiseRipples.push({ x: z.x, y: z.y, radius: z.groanRadius, intensity: 2, id: Date.now() + i + 5000 });
       messages.push(`Screamer shrieks! Noise radius ${z.groanRadius}!`);
+    }
+
+    // --- STAGGERED: skip action ---
+    if (z.staggered) {
+      zombies[i] = { ...z, staggered: false };
+      messages.push(`${z.type[0].toUpperCase() + z.type.slice(1)} is staggered — can't act!`);
+      continue;
     }
 
     // --- GRABBING ---
@@ -71,7 +140,6 @@ export function processZombiePhase(
           target.state = "dead";
           messages.push(`${target.name} is down!`);
           zombies[i] = { ...z, state: "agitated", grabTarget: null };
-          // Other survivors lose nerve
           survivors.forEach(s => {
             if (s.id !== target.id && s.state !== "dead") {
               s.nerve = Math.max(0, s.nerve - 4);
@@ -93,7 +161,6 @@ export function processZombiePhase(
         const newFacing = coordToDir(z, next);
         zombies[i] = { ...z, x: next.x, y: next.y, patrolIdx: nextIdx, facing: newFacing };
       }
-      // Check vision for survivors
       const aliveSurvivors = survivors.filter(s => s.state !== "dead");
       for (const s of aliveSurvivors) {
         if (zombieCanSee(zombies[i], s)) {
@@ -126,7 +193,6 @@ export function processZombiePhase(
 
     // --- ALERT: investigating ---
     if (z.state === "alert") {
-      // Check vision first
       const aliveSurvivors = survivors.filter(s => s.state !== "dead");
       let spotted = false;
       for (const s of aliveSurvivors) {
@@ -139,13 +205,10 @@ export function processZombiePhase(
       }
       if (spotted) continue;
 
-      // Move toward alert source
       if (z.alertSource) {
         if (z.x === z.alertSource.x && z.y === z.alertSource.y) {
-          // Reached source, nothing here
           zombies[i] = { ...z, alertTurnsLeft: z.alertTurnsLeft - 1 };
           if (z.alertTurnsLeft <= 1) {
-            // Return to dormant, walk back to origin
             if (z.alertOrigin && (z.x !== z.alertOrigin.x || z.y !== z.alertOrigin.y)) {
               const blocked = getBlockedSet(zombies, survivors, i);
               const next = zombieMoveToward(z, z.alertOrigin, blocked);
@@ -165,7 +228,6 @@ export function processZombiePhase(
           const next = zombieMoveToward(z, z.alertSource, blocked);
           if (next) {
             const newFacing = coordToDir(z, next);
-            // Check overwatch
             const ow = processOverwatch(z, next, survivors, messages);
             survivors = ow.survivors;
             overwatchHits += ow.hits;
@@ -175,6 +237,19 @@ export function processZombiePhase(
               messages.push(`${z.type[0].toUpperCase() + z.type.slice(1)} killed by overwatch!`);
               continue;
             }
+
+            // Check trap on destination
+            const trapTile = terrain.find(t => t.x === next.x && t.y === next.y && t.type === "trap" && !t.triggered);
+            if (trapTile) {
+              const trapResult = triggerTrap(trapTile, z, messages);
+              terrain = terrain.map(t => t === trapTile ? { ...t, triggered: true } : t);
+              newHp -= trapResult.damage;
+              if (trapResult.stagger) zombies[i] = { ...z, staggered: true };
+              if (trapResult.noiseEvent) noiseEvents.push(trapResult.noiseEvent);
+              if (trapResult.noiseRipple) noiseRipples.push(trapResult.noiseRipple);
+              if (newHp <= 0) { zombies[i] = { ...z, hp: 0, state: "dead" }; messages.push(`Trap kills the ${z.type}!`); continue; }
+            }
+
             zombies[i] = { ...z, x: next.x, y: next.y, facing: newFacing, hp: newHp, alertTurnsLeft: z.alertTurnsLeft - 1 };
           }
         }
@@ -187,53 +262,69 @@ export function processZombiePhase(
       const aliveSurvivors = survivors.filter(s => s.state !== "dead");
       if (aliveSurvivors.length === 0) continue;
 
-      // Find closest survivor
-      let closest = aliveSurvivors[0];
-      let closestDist = manhattan(z, closest);
-      for (const s of aliveSurvivors) {
-        const d = manhattan(z, s);
-        if (d < closestDist) { closest = s; closestDist = d; }
+      // Herd override: if in a herd, target designated survivor
+      let target: Survivor;
+      const herdTargetId = herdTargetOverride.get(z.id);
+      if (herdTargetId !== undefined) {
+        target = aliveSurvivors.find(s => s.id === herdTargetId) ?? aliveSurvivors[0];
+      } else {
+        target = aliveSurvivors[0];
+        let closestDist = manhattan(z, target);
+        for (const s of aliveSurvivors) {
+          const d = manhattan(z, s);
+          if (d < closestDist) { target = s; closestDist = d; }
+        }
       }
 
-      // Update facing toward target
-      const newFacing = coordToDir(z, closest);
+      const newFacing = coordToDir(z, target);
       zombies[i] = { ...z, facing: newFacing };
 
-      // Move (up to speed tiles)
       for (let step = 0; step < z.speed; step++) {
         const cz = zombies[i];
-        const dist = manhattan(cz, closest);
+        const dist = manhattan(cz, target);
 
         if (dist === 1 && cz.canGrab) {
-          // Grab
-          zombies[i] = { ...cz, state: "grabbing", grabTarget: closest.id };
-          const t = survivors.find(s => s.id === closest.id);
+          // GRAB PREVENTION: check if another survivor is adjacent to target
+          const rescuer = aliveSurvivors.find(s =>
+            s.id !== target.id &&
+            s.state === "active" &&
+            manhattan(s, target) === 1
+          );
+          if (rescuer) {
+            // Grab prevented — shove damage only
+            const t = survivors.find(s => s.id === target.id)!;
+            t.hp -= 1;
+            t.nerve = Math.max(0, t.nerve - 1);
+            messages.push(`${rescuer.name} pulls ${target.name} free! Grab prevented. ${target.name} takes 1 shove damage.`);
+            break;
+          }
+          // Normal grab
+          zombies[i] = { ...cz, state: "grabbing", grabTarget: target.id };
+          const t = survivors.find(s => s.id === target.id);
           if (t) {
             t.state = "grabbed";
             t.nerve = Math.max(0, t.nerve - 3);
           }
-          messages.push(`${cz.type[0].toUpperCase() + cz.type.slice(1)} grabs ${closest.name}!`);
+          messages.push(`${cz.type[0].toUpperCase() + cz.type.slice(1)} grabs ${target.name}!`);
           break;
         } else if (dist === 1 && !cz.canGrab) {
-          // Direct attack (brute, crawler)
-          const target = survivors.find(s => s.id === closest.id)!;
-          target.hp -= cz.damage;
-          target.nerve = Math.max(0, target.nerve - 1);
-          messages.push(`${cz.type[0].toUpperCase() + cz.type.slice(1)} hits ${target.name} for ${cz.damage}! (${target.hp} HP)`);
-          if (target.hp <= 0) {
-            target.state = "dead";
-            messages.push(`${target.name} is down!`);
+          const t = survivors.find(s => s.id === target.id)!;
+          t.hp -= cz.damage;
+          t.nerve = Math.max(0, t.nerve - 1);
+          messages.push(`${cz.type[0].toUpperCase() + cz.type.slice(1)} hits ${t.name} for ${cz.damage}! (${t.hp} HP)`);
+          if (t.hp <= 0) {
+            t.state = "dead";
+            messages.push(`${t.name} is down!`);
             survivors.forEach(s => {
-              if (s.id !== target.id && s.state !== "dead") s.nerve = Math.max(0, s.nerve - 4);
+              if (s.id !== t.id && s.state !== "dead") s.nerve = Math.max(0, s.nerve - 4);
             });
           }
           break;
         } else {
           const blocked = getBlockedSet(zombies, survivors, i);
-          const next = zombieMoveToward(cz, closest, blocked);
+          const next = zombieMoveToward(cz, target, blocked);
           if (!next) break;
 
-          // Check overwatch
           const ow = processOverwatch(cz, next, survivors, messages);
           survivors = ow.survivors;
           overwatchHits += ow.hits;
@@ -244,6 +335,18 @@ export function processZombiePhase(
             break;
           }
 
+          // Check trap on destination
+          const trapTile = terrain.find(t => t.x === next.x && t.y === next.y && t.type === "trap" && !t.triggered);
+          if (trapTile) {
+            const trapResult = triggerTrap(trapTile, cz, messages);
+            terrain = terrain.map(t => t === trapTile ? { ...t, triggered: true } : t);
+            newHp -= trapResult.damage;
+            if (trapResult.stagger) zombies[i] = { ...cz, staggered: true };
+            if (trapResult.noiseEvent) noiseEvents.push(trapResult.noiseEvent);
+            if (trapResult.noiseRipple) noiseRipples.push(trapResult.noiseRipple);
+            if (newHp <= 0) { zombies[i] = { ...cz, hp: 0, state: "dead" }; messages.push(`Trap kills the ${cz.type}!`); break; }
+          }
+
           const stepFacing = coordToDir(cz, next);
           zombies[i] = { ...cz, x: next.x, y: next.y, facing: stepFacing, hp: newHp };
         }
@@ -251,5 +354,5 @@ export function processZombiePhase(
     }
   }
 
-  return { zombies, survivors, messages, noiseEvents, noiseRipples, overwatchHits, zocDamage };
+  return { zombies, survivors, terrain, messages, noiseEvents, noiseRipples, overwatchHits, zocDamage };
 }

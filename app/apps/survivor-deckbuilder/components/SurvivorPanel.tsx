@@ -23,6 +23,7 @@ interface SurvivorPanelProps {
   onToggleThrowMode: () => void;
   onToggleMolotovMode: () => void;
   onToggleRangedMode: () => void;
+  onSetTrap: () => void;
   throwMode: boolean;
   molotovMode: boolean;
   rangedMode: boolean;
@@ -34,7 +35,7 @@ export default function SurvivorPanel({
   selectedWeaponIdx, onSelectWeapon,
   onBreakFree, onUseBandage, onUseMedkit, onOverwatch, onDisengage,
   onDropItem, onPickupLoot, onSearchContainer,
-  onToggleThrowMode, onToggleMolotovMode, onToggleRangedMode,
+  onToggleThrowMode, onToggleMolotovMode, onToggleRangedMode, onSetTrap,
   throwMode, molotovMode, rangedMode,
 }: SurvivorPanelProps) {
   if (!s) {
@@ -46,10 +47,13 @@ export default function SurvivorPanel({
   }
 
   const freeSlots = s.totalSlots - s.inventory.length;
-  const actionsLeft = freeSlots - s.actionsUsed;
+  const critPenalty = s.hp <= 2 ? 1 : 0;
+  const actionsLeft = Math.max(0, freeSlots - s.actionsUsed + (s.statusEffects.includes("adrenaline") ? 1 : 0) - critPenalty);
+  const isCritical = s.hp <= 2;
   const hasBandage = s.inventory.some(i => i.name === "Bandage");
   const hasMedkit = s.inventory.some(i => i.name === "Medkit");
-  const hasDistraction = s.inventory.some(i => i.type === "distraction");
+  const hasDistraction = s.inventory.some(i => i.type === "distraction" && !i.isTrap);
+  const hasTrap = s.inventory.some(i => i.isTrap);
   const hasMolotov = s.inventory.some(i => i.name === "Molotov");
   const hasRanged = s.inventory.some(i => (i.rangedRange ?? 0) > 0 && (i.ammo ?? 0) > 0);
 
@@ -67,9 +71,20 @@ export default function SurvivorPanel({
         </span>
       </div>
 
+      {/* Critical state warning */}
+      {isCritical && (
+        <div style={{
+          background: "#4a1a1a", border: "1px solid #8a2a2a", borderRadius: 3,
+          padding: "2px 6px", marginBottom: 4, fontSize: 9, color: "#f88",
+          animation: "panic-pulse 0.8s ease-in-out infinite",
+        }}>
+          ⚠ CRITICAL — actions reduced
+        </div>
+      )}
+
       {/* HP Bar */}
       <div style={{ display: "flex", gap: 4, marginBottom: 3, alignItems: "center" }}>
-        <span style={{ fontSize: 9, color: "#888", width: 20 }}>HP</span>
+        <span style={{ fontSize: 9, color: isCritical ? "#f66" : "#888", width: 20 }}>HP</span>
         <div style={{ flex: 1, height: 7, background: "#333", borderRadius: 3, overflow: "hidden" }}>
           <div style={{
             width: `${(s.hp / s.maxHp) * 100}%`, height: "100%",
@@ -205,6 +220,16 @@ export default function SurvivorPanel({
             style={btnStyle(throwMode ? "#5a5a1a" : "#3a3a1a", "#6a6a3a")}
           >
             {throwMode ? "Cancel Throw" : "Throw"}
+          </button>
+        )}
+
+        {hasTrap && actionsLeft > 0 && s.state === "active" && (
+          <button
+            onClick={onSetTrap}
+            style={btnStyle("#1a3a1a", "#3a6a3a")}
+            title="Place trap on current tile (costs 1 action)"
+          >
+            Set Trap
           </button>
         )}
 
