@@ -1,5 +1,6 @@
 import { Zombie, Survivor, NoiseEvent, NoiseRipple, Coord, TerrainTile } from './types';
 import { manhattan, zombieMoveToward, zombieCanSee, coordToDir, getAdjacentCoords, DIRS, inBounds, isObstacle } from './grid';
+import { GRID_W, GRID_H, REINFORCEMENT_INTERVAL } from './constants';
 
 export interface ZombiePhaseResult {
   zombies: Zombie[];
@@ -56,7 +57,8 @@ function triggerTrap(
 export function processZombiePhase(
   zombiesIn: Zombie[],
   survivorsIn: Survivor[],
-  terrainIn: TerrainTile[]
+  terrainIn: TerrainTile[],
+  turn: number
 ): ZombiePhaseResult {
   const zombies = zombiesIn.map(z => ({ ...z }));
   let survivors = survivorsIn.map(s => ({ ...s }));
@@ -65,6 +67,23 @@ export function processZombiePhase(
   const noiseEvents: NoiseEvent[] = [];
   const noiseRipples: NoiseRipple[] = [];
   const zocDamage: { survivorId: number; amount: number }[] = [];
+
+  // --- DOWNED COUNTDOWN ---
+  for (const s of survivors) {
+    if (s.state === "downed") {
+      s.downedTurns -= 1;
+      if (s.downedTurns <= 0) {
+        s.state = "dead";
+        messages.push(`${s.name} bleeds out. Gone.`);
+        // Witness nerve hit
+        survivors.forEach(sv => {
+          if (sv.id !== s.id && sv.state !== "dead") sv.nerve = Math.max(0, sv.nerve - 4);
+        });
+      } else {
+        messages.push(`${s.name} is downed — ${s.downedTurns} turn${s.downedTurns !== 1 ? "s" : ""} to stabilize!`);
+      }
+    }
+  }
 
   // --- HERD BEHAVIOR ---
   const agitatedZombies = zombies.filter(z => z.state === "agitated" && z.hp > 0);
@@ -116,18 +135,28 @@ export function processZombiePhase(
     // --- GRABBING ---
     if (z.state === "grabbing") {
       const target = survivors.find(s => s.id === z.grabTarget);
-      if (target && target.state !== "dead") {
+      if (target && target.state !== "dead" && target.state !== "downed") {
         target.hp -= z.damage;
         target.nerve = Math.max(0, target.nerve - 1);
-        messages.push(`${z.type[0].toUpperCase() + z.type.slice(1)} deals ${z.damage} to ${target.name}! (${target.hp} HP)`);
+        messages.push(`${z.type[0].toUpperCase() + z.type.slice(1)} deals ${z.damage} to ${target.name}! (${Math.max(0, target.hp)} HP)`);
         if (target.hp <= 0) {
-          target.state = "dead";
-          messages.push(`${target.name} is down!`);
+          target.hp = 0;
+          target.state = "downed";
+          target.downedTurns = 3;
+          messages.push(`${target.name} goes down! 3 turns to stabilize!`);
           zombies[i] = { ...z, state: "agitated", grabTarget: null };
           survivors.forEach(s => {
-            if (s.id !== target.id && s.state !== "dead") s.nerve = Math.max(0, s.nerve - 4);
+            if (s.id !== target.id && s.state !== "dead") s.nerve = Math.max(0, s.nerve - 2);
           });
         }
+      } else if (target && target.state === "downed") {
+        // Coup de grâce on downed survivor
+        target.state = "dead";
+        messages.push(`${z.type[0].toUpperCase() + z.type.slice(1)} finishes off ${target.name}!`);
+        zombies[i] = { ...z, state: "agitated", grabTarget: null };
+        survivors.forEach(s => {
+          if (s.id !== target.id && s.state !== "dead") s.nerve = Math.max(0, s.nerve - 4);
+        });
       } else {
         zombies[i] = { ...z, state: "agitated", grabTarget: null };
       }
@@ -294,14 +323,25 @@ export function processZombiePhase(
           break;
         } else if (dist === 1 && !cz.canGrab) {
           const t = survivors.find(s => s.id === target.id)!;
-          t.hp -= cz.damage;
-          t.nerve = Math.max(0, t.nerve - 1);
-          messages.push(`${cz.type[0].toUpperCase() + cz.type.slice(1)} hits ${t.name} for ${cz.damage}! (${t.hp} HP)`);
-          if (t.hp <= 0) {
+          if (t.state === "downed") {
+            // Coup de grâce on a downed survivor
             t.state = "dead";
-            messages.push(`${t.name} is down!`);
+            messages.push(`${cz.type[0].toUpperCase() + cz.type.slice(1)} finishes off ${t.name}!`);
             survivors.forEach(s => {
               if (s.id !== t.id && s.state !== "dead") s.nerve = Math.max(0, s.nerve - 4);
+            });
+            break;
+          }
+          t.hp -= cz.damage;
+          t.nerve = Math.max(0, t.nerve - 1);
+          messages.push(`${cz.type[0].toUpperCase() + cz.type.slice(1)} hits ${t.name} for ${cz.damage}! (${Math.max(0, t.hp)} HP)`);
+          if (t.hp <= 0) {
+            t.hp = 0;
+            t.state = "downed";
+            t.downedTurns = 3;
+            messages.push(`${t.name} goes down! 3 turns to stabilize!`);
+            survivors.forEach(s => {
+              if (s.id !== t.id && s.state !== "dead") s.nerve = Math.max(0, s.nerve - 2);
             });
           }
           break;
@@ -328,6 +368,44 @@ export function processZombiePhase(
           zombies[i] = { ...cz, x: next.x, y: next.y, facing: stepFacing, hp: newHp };
         }
       }
+    }
+  }
+
+  // --- REINFORCEMENT WAVES: every REINFORCEMENT_INTERVAL turns, a shambler enters from a random free edge ---
+  if (turn > 0 && turn % REINFORCEMENT_INTERVAL === 0) {
+    const occupied = new Set<string>();
+    zombies.forEach(z => { if (z.hp > 0) occupied.add(`${z.x},${z.y}`); });
+    survivors.forEach(s => { if (s.state !== "dead") occupied.add(`${s.x},${s.y}`); });
+
+    // Collect all free, unobstructed edge tiles
+    const edgeTiles: Coord[] = [];
+    for (let x = 0; x < GRID_W; x++) {
+      for (const y of [0, GRID_H - 1]) {
+        if (!isObstacle(x, y) && !occupied.has(`${x},${y}`)) edgeTiles.push({ x, y });
+      }
+    }
+    for (let y = 1; y < GRID_H - 1; y++) {
+      for (const x of [0, GRID_W - 1]) {
+        if (!isObstacle(x, y) && !occupied.has(`${x},${y}`)) edgeTiles.push({ x, y });
+      }
+    }
+
+    if (edgeTiles.length > 0) {
+      const spawn = edgeTiles[Math.floor(Math.random() * edgeTiles.length)];
+      const newId = Math.max(0, ...zombies.map(z => z.id)) + 1;
+      zombies.push({
+        id: newId, x: spawn.x, y: spawn.y,
+        hp: 4, maxHp: 4, state: "agitated", type: "shambler", facing: "S",
+        grabTarget: null, patrolPath: null, patrolIdx: 0,
+        alertTurnsLeft: 0, alertSource: null, alertOrigin: null,
+        damage: 2, speed: 2, groanRadius: 2,
+        knockbackResistant: false, canGrab: true,
+        lowProfile: false, explodesOnDeath: false, explosionRadius: 0, explosionDamage: 0,
+        staggered: false, lastAttackedBySurvivor: undefined,
+      });
+      messages.push(`⚠ Reinforcements! A shambler enters from (${spawn.x},${spawn.y})!`);
+      noiseEvents.push({ x: spawn.x, y: spawn.y, radius: 2, intensity: 1 });
+      noiseRipples.push({ x: spawn.x, y: spawn.y, radius: 2, intensity: 1, id: Date.now() + 9000 });
     }
   }
 

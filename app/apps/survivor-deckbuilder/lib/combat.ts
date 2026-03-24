@@ -58,6 +58,17 @@ export function processAttack(
     }
   }
 
+  // Grab auto-break: if this zombie is grabbing someone AND attacker is a different survivor, break grip
+  if (z.state === "grabbing" && z.grabTarget !== null && z.grabTarget !== survivorId) {
+    const freed = survivors.find(ss => ss.id === z.grabTarget);
+    if (freed) {
+      freed.state = "active";
+      messages.push(`${s.name} breaks ${z.type}'s grip! ${freed.name} is free!`);
+    }
+    z.grabTarget = null;
+    z.state = "agitated";
+  }
+
   // Focus fire stagger: second different survivor attacking same zombie
   if (!isRanged && z.lastAttackedBySurvivor !== undefined && z.lastAttackedBySurvivor !== survivorId) {
     z.staggered = true;
@@ -202,8 +213,22 @@ export function processAttack(
   if (!isRanged) s.actionsUsed += 1;
   s.nerve = Math.min(s.maxNerve, s.nerve + nerveChange);
 
+  // Weapon noise at attacker position
   noiseEvents.push({ x: s.x, y: s.y, radius: noiseR, intensity: getNoiseIntensity(noiseR) });
   noiseRipples.push({ x: s.x, y: s.y, radius: noiseR, intensity: getNoiseIntensity(noiseR), id: Date.now() });
+
+  // Combat noise at zombie position — failed kill = injured groan (radius 2), kill = body thump (radius 1)
+  const wasDormant = zombiesIn.find(zz => zz.id === zombieId)?.state === "dormant";
+  if (z.state === "dead" || z.hp <= 0) {
+    // Stealth kill on dormant = quiet thump; non-stealth = louder
+    const thumpR = wasDormant ? 1 : 2;
+    noiseEvents.push({ x: z.x, y: z.y, radius: thumpR, intensity: 1 });
+    noiseRipples.push({ x: z.x, y: z.y, radius: thumpR, intensity: 1, id: Date.now() + 50 });
+  } else if (z.hp > 0) {
+    // Injured zombie groans — alerts nearby dormant zombies
+    noiseEvents.push({ x: z.x, y: z.y, radius: 2, intensity: 1 });
+    noiseRipples.push({ x: z.x, y: z.y, radius: 2, intensity: 1, id: Date.now() + 50 });
+  }
 
   let msg = `${s.name} hits ${z.type} for ${damage}!`;
   if (killed || z.hp <= 0) msg += " Killed!";

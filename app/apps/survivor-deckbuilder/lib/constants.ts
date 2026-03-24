@@ -103,6 +103,9 @@ function makeZombie(id: number, x: number, y: number, type: string, facing: Dire
   };
 }
 
+// How often (in turns) reinforcement zombies enter from the map edges
+export const REINFORCEMENT_INTERVAL = 8;
+
 function makeSurvivor(id: number, name: string, x: number, y: number, items: InventoryItem[]): Survivor {
   return {
     id, name, x, y, hp: 10, maxHp: 10, totalSlots: 5,
@@ -111,6 +114,7 @@ function makeSurvivor(id: number, name: string, x: number, y: number, items: Inv
     overwatching: false, overwatchAttacks: 0,
     adrenalineNextTurn: false, disengaging: false,
     emergencyMoveUsed: false,
+    downedTurns: 0, moveActionsThisTurn: 0,
   };
 }
 
@@ -171,6 +175,8 @@ export const initStage2Survivors = (carried: Survivor[]): Survivor[] =>
     disengaging: false,
     emergencyMoveUsed: false,
     adrenalineNextTurn: false,
+    downedTurns: 0,
+    moveActionsThisTurn: 0,
   }));
 
 export const initStage2Zombies = (): Zombie[] => [

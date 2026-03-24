@@ -71,8 +71,19 @@ export default function SurvivorPanel({
         </span>
       </div>
 
+      {/* Downed state warning */}
+      {s.state === "downed" && (
+        <div style={{
+          background: "#3a1a00", border: "1px solid #cc4400", borderRadius: 3,
+          padding: "3px 6px", marginBottom: 4, fontSize: 10, color: "#ff7733",
+          fontWeight: "bold",
+        }}>
+          ☠ DOWNED — {s.downedTurns} turn{s.downedTurns !== 1 ? "s" : ""} until death · ally must stabilize
+        </div>
+      )}
+
       {/* Critical state warning */}
-      {isCritical && (
+      {isCritical && s.state !== "downed" && (
         <div style={{
           background: "#4a1a1a", border: "1px solid #8a2a2a", borderRadius: 3,
           padding: "2px 6px", marginBottom: 4, fontSize: 9, color: "#f88",
@@ -172,11 +183,11 @@ export default function SurvivorPanel({
           {s.statusEffects.map((eff, i) => (
             <span key={i} style={{
               padding: "1px 4px", borderRadius: 2, fontSize: 8,
-              background: eff === "bleeding" ? "#4a1a1a" : "#4a4a1a",
-              color: eff === "bleeding" ? "#f66" : "#ff0",
-              border: `1px solid ${eff === "bleeding" ? "#6a2a2a" : "#6a6a2a"}`,
+              background: eff === "bleeding" ? "#4a1a1a" : eff === "wounded" ? "#3a2a0a" : eff === "exhausted" ? "#1a1a3a" : "#4a4a1a",
+              color: eff === "bleeding" ? "#f66" : eff === "wounded" ? "#fa8" : eff === "exhausted" ? "#88f" : "#ff0",
+              border: `1px solid ${eff === "bleeding" ? "#6a2a2a" : eff === "wounded" ? "#6a4a1a" : eff === "exhausted" ? "#3a3a6a" : "#6a6a2a"}`,
             }}>
-              {eff === "bleeding" ? "BLEEDING" : "ADRENALINE"}
+              {eff === "bleeding" ? "BLEEDING" : eff === "wounded" ? "WOUNDED" : eff === "exhausted" ? "EXHAUSTED" : "ADRENALINE"}
             </span>
           ))}
         </div>

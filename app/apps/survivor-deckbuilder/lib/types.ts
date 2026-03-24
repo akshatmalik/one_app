@@ -4,7 +4,7 @@ export type ZombieState = "dormant" | "alert" | "wary" | "agitated" | "grabbing"
 
 export type ZombieType = "shambler" | "crawler" | "bloater" | "screamer" | "brute";
 
-export type StatusEffect = "bleeding" | "adrenaline";
+export type StatusEffect = "bleeding" | "adrenaline" | "exhausted" | "wounded";
 
 export type TerrainType = "glass" | "metal" | "puddle" | "trap";
 
@@ -38,7 +38,7 @@ export interface Survivor {
   totalSlots: number;
   inventory: InventoryItem[];
   actionsUsed: number;
-  state: "active" | "dead" | "grabbed";
+  state: "active" | "dead" | "grabbed" | "downed";
   nerve: number;
   maxNerve: number;
   statusEffects: StatusEffect[];
@@ -47,6 +47,8 @@ export interface Survivor {
   adrenalineNextTurn: boolean;
   disengaging: boolean;
   emergencyMoveUsed: boolean;
+  downedTurns: number;       // turns until bleedout when downed (0 = not downed)
+  moveActionsThisTurn: number; // tracks movement-only turns for exhaustion
 }
 
 export interface Zombie {

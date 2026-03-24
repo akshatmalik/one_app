@@ -94,9 +94,9 @@ export default function DeadWeightPrototype() {
   const actionsLeft = (s: Survivor) => {
     const base = freeSlots(s) - s.actionsUsed;
     const bonus = s.statusEffects.includes("adrenaline") ? 1 : 0;
-    // Critical state: hp ≤ 2 costs 1 action (survivor is struggling)
     const critPenalty = s.hp <= 2 ? 1 : 0;
-    return Math.max(0, base + bonus - critPenalty);
+    const exhaustPenalty = s.statusEffects.includes("exhausted") ? 1 : 0;
+    return Math.max(0, base + bonus - critPenalty - exhaustPenalty);
   };
 
   const getBlockedSet = useCallback((excludeSurvivorId: number = -1): Set<string> => {
@@ -155,7 +155,7 @@ export default function DeadWeightPrototype() {
     }
     setSelectedWeaponIdx(null);
 
-    if (s.state === "grabbed" || s.overwatching || s.nerve <= 0) {
+    if (s.state === "grabbed" || s.state === "downed" || s.overwatching || s.nerve <= 0) {
       setReachableTiles(new Map());
       setAttackTargets([]);
       setRangedTargets([]);
@@ -219,10 +219,11 @@ export default function DeadWeightPrototype() {
           addMsg(`${s.name} steps on ${terrainNames[ter.type]}! Noise ${ter.noiseOnStep}.`);
         }
 
+        const moveCost = isEmergencyMove ? 0 : cost;
         if (newHp <= 0) {
-          return { ...s, x: tx, y: ty, hp: 0, state: "dead" as const, actionsUsed: s.actionsUsed + (isEmergencyMove ? 0 : cost), emergencyMoveUsed: isEmergencyMove ? true : s.emergencyMoveUsed };
+          return { ...s, x: tx, y: ty, hp: 0, state: "dead" as const, actionsUsed: s.actionsUsed + moveCost, emergencyMoveUsed: isEmergencyMove ? true : s.emergencyMoveUsed, moveActionsThisTurn: s.moveActionsThisTurn + moveCost };
         }
-        return { ...s, x: tx, y: ty, hp: newHp, actionsUsed: s.actionsUsed + (isEmergencyMove ? 0 : cost), emergencyMoveUsed: isEmergencyMove ? true : s.emergencyMoveUsed };
+        return { ...s, x: tx, y: ty, hp: newHp, actionsUsed: s.actionsUsed + moveCost, emergencyMoveUsed: isEmergencyMove ? true : s.emergencyMoveUsed, moveActionsThisTurn: s.moveActionsThisTurn + moveCost };
       });
       return newSurvivors;
     });
@@ -335,6 +336,27 @@ export default function DeadWeightPrototype() {
 
   // Overwatch removed — kept as no-op so SurvivorPanel prop type still resolves
   const enterOverwatch = useCallback(() => {}, []);
+
+  const stabilize = useCallback(() => {
+    if (selectedSurvivor === null || phase !== "player") return;
+    const s = survivors.find(sv => sv.id === selectedSurvivor);
+    if (!s || s.state !== "active" || actionsLeft(s) <= 0) return;
+    const downed = survivors.find(sv =>
+      sv.state === "downed" && manhattan(s, { x: sv.x, y: sv.y }) === 1
+    );
+    if (!downed) return;
+    saveUndoState();
+    setSurvivors(prev => prev.map(sv => {
+      if (sv.id === selectedSurvivor) return { ...sv, actionsUsed: sv.actionsUsed + 1 };
+      if (sv.id === downed.id) return {
+        ...sv, state: "active" as const, hp: 1, downedTurns: 0,
+        statusEffects: [...sv.statusEffects.filter(e => e !== "wounded"), "wounded" as const],
+      };
+      return sv;
+    }));
+    addMsg(`${s.name} stabilizes ${downed.name}! On feet at 1 HP — wounded.`);
+    setTimeout(() => selectSurvivor(selectedSurvivor), 50);
+  }, [selectedSurvivor, phase, survivors, addMsg, selectSurvivor, saveUndoState]);
 
   const disengage = useCallback(() => {
     if (selectedSurvivor === null || phase !== "player") return;
@@ -463,6 +485,16 @@ export default function DeadWeightPrototype() {
   }, [phase, survivors]);
 
   const endPlayerPhase = useCallback(() => {
+    // Exhaustion: survivor who used 3+ actions ALL for movement gets -1 action next turn
+    setSurvivors(prev => prev.map(s => {
+      if (s.state !== "active") return s;
+      const sprinted = s.moveActionsThisTurn >= 3 && s.actionsUsed === s.moveActionsThisTurn && s.actionsUsed > 0;
+      if (sprinted && !s.statusEffects.includes("exhausted")) {
+        addMsg(`${s.name} sprinted — exhausted next turn. -1 action.`);
+        return { ...s, statusEffects: [...s.statusEffects, "exhausted" as const] };
+      }
+      return s;
+    }));
     setSelectedSurvivor(null);
     setReachableTiles(new Map());
     setAttackTargets([]);
@@ -475,7 +507,7 @@ export default function DeadWeightPrototype() {
     undoSnapshotRef.current = null;
     setHasUndo(false);
     setPhase("noise");
-  }, []);
+  }, [addMsg]);
 
   // --- Noise Resolution Phase ---
   useEffect(() => {
@@ -505,7 +537,7 @@ export default function DeadWeightPrototype() {
   useEffect(() => {
     if (phase !== "zombie") return;
     const timer = setTimeout(() => {
-      const result = processZombiePhase(zombies, survivors, terrain);
+      const result = processZombiePhase(zombies, survivors, terrain, turn);
       setZombies(result.zombies);
       setSurvivors(result.survivors);
       setTerrain(result.terrain);
@@ -615,11 +647,12 @@ export default function DeadWeightPrototype() {
             addMsg(`${s.name} is bleeding! -1 HP (${newHp})`);
           }
 
-          // Adrenaline: apply from last turn's kills
+          // Adrenaline: apply from last turn's kills. Clear exhausted (lasted one turn).
           const hasAdrenaline = s.adrenalineNextTurn;
-          const effects = hasAdrenaline
+          const effects = (hasAdrenaline
             ? (newEffects.includes("adrenaline") ? newEffects : [...newEffects, "adrenaline" as const])
-            : newEffects.filter(e => e !== "adrenaline");
+            : newEffects.filter(e => e !== "adrenaline")
+          ).filter(e => e !== "exhausted");
 
           // Panicked check
           if (newNerve <= 0) {
@@ -634,6 +667,7 @@ export default function DeadWeightPrototype() {
             hp: newHp, nerve: newNerve,
             actionsUsed: 0, overwatching: false, overwatchAttacks: 0,
             disengaging: false, adrenalineNextTurn: false, emergencyMoveUsed: false,
+            moveActionsThisTurn: 0,
             statusEffects: effects,
           };
         });
@@ -788,6 +822,9 @@ export default function DeadWeightPrototype() {
   const selS = survivors.find(s => s.id === selectedSurvivor) || null;
   const lootOnTile = selS ? loot.find(l => l.x === selS.x && l.y === selS.y) || null : null;
   const containerOnTile = selS ? containers.find(c => manhattan(selS, { x: c.x, y: c.y }) <= 1 && !c.searched) || null : null;
+  const downedAllyAdjacent = selS && selS.state === "active"
+    ? survivors.find(sv => sv.state === "downed" && manhattan(selS, { x: sv.x, y: sv.y }) === 1) || null
+    : null;
 
   // Update throw targets when mode changes
   useEffect(() => {
@@ -915,6 +952,16 @@ export default function DeadWeightPrototype() {
               color: "#aaa", borderRadius: 4, fontSize: 12, fontWeight: "bold",
               cursor: "pointer", fontFamily: "'Courier New', monospace", flexShrink: 0,
             }} title="Undo last action">↩ UNDO</button>
+          )}
+          {phase === "player" && downedAllyAdjacent && (
+            <button onClick={stabilize} style={{
+              flex: 1, padding: "8px", background: "#4a2a0a",
+              border: "1px solid #8a5a1a", color: "#fa8",
+              borderRadius: 4, fontSize: 11, fontWeight: "bold",
+              cursor: "pointer", fontFamily: "'Courier New', monospace",
+            }} title="Stabilize downed ally (1 action)">
+              STABILIZE {downedAllyAdjacent.name} [{downedAllyAdjacent.downedTurns}T]
+            </button>
           )}
           {phase === "player" && (
             <button onClick={tryEndTurn} style={{
