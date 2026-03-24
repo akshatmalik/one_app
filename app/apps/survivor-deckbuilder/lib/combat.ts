@@ -220,8 +220,9 @@ export function throwDistraction(
   let terrain = terrainIn.map(t => ({ ...t }));
 
   const throwNoise = distraction.throwNoise ?? 2;
-  noiseEvents.push({ x: targetX, y: targetY, radius: throwNoise, intensity: getNoiseIntensity(throwNoise) });
-  noiseRipples.push({ x: targetX, y: targetY, radius: throwNoise, intensity: getNoiseIntensity(throwNoise), id: Date.now() + 777 });
+  // Distractions always use intensity 1 (alert/investigate) — zombies walk to landing spot, never agitate
+  noiseEvents.push({ x: targetX, y: targetY, radius: throwNoise, intensity: 1 });
+  noiseRipples.push({ x: targetX, y: targetY, radius: throwNoise, intensity: 1, id: Date.now() + 777 });
 
   messages.push(`${s.name} throws ${distraction.name}! Zombies will investigate the landing spot.`);
 

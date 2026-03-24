@@ -36,6 +36,14 @@ export default function DeadWeightPrototype() {
   const [showInfo, setShowInfo] = useState(false);
   const gridRef = useRef<HTMLDivElement>(null);
 
+  const addMsg = useCallback((msg: string) => {
+    setMessages(prev => [msg, ...prev].slice(0, 8));
+  }, []);
+
+  const addMsgs = useCallback((msgs: string[]) => {
+    setMessages(prev => [...msgs, ...prev].slice(0, 8));
+  }, []);
+
   // Undo system — snapshot before each player action
   const undoSnapshotRef = useRef<{
     survivors: Survivor[]; zombies: Zombie[]; loot: LootItem[]; terrain: TerrainTile[];
@@ -79,14 +87,6 @@ export default function DeadWeightPrototype() {
     setRangedMode(false);
     addMsg("↩ Action undone.");
   }, [phase, addMsg]);
-
-  const addMsg = useCallback((msg: string) => {
-    setMessages(prev => [msg, ...prev].slice(0, 8));
-  }, []);
-
-  const addMsgs = useCallback((msgs: string[]) => {
-    setMessages(prev => [...msgs, ...prev].slice(0, 8));
-  }, []);
 
   const freeSlots = (s: Survivor) => s.totalSlots - s.inventory.length;
   const actionsLeft = (s: Survivor) => {
