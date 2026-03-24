@@ -42,16 +42,6 @@ export const MINI_APPS: MiniApp[] = [
     isNew: true,
   },
   {
-    id: 'last-light',
-    name: 'Last Light',
-    description: 'AI-powered text adventure survival game with dynamic storytelling',
-    icon: '🧟',
-    path: '/apps/last-light',
-    color: '#1F2937',
-    tags: ['game', 'story', 'ai'],
-    isNew: true,
-  },
-  {
     id: 'survivor-deckbuilder',
     name: 'Survivor Deck-Builder',
     description: 'Tactical deck-building zombie survival game with expeditions and card synergies',
