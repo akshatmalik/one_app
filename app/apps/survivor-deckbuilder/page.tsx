@@ -1,167 +1,54 @@
 'use client';
 
 import { useState, useCallback, useEffect, useRef } from "react";
-
-const GRID_W = 14;
-const GRID_H = 10;
-const TILE = 52;
-
-// Obstacle map: 1 = obstacle
-const OBSTACLES = new Set([
-  // Serving counter (row 9)
-  "3,9","4,9","5,9","6,9","7,9","8,9",
-  // Shelf (row 8)
-  "11,8","12,8",
-  // Table row upper (rows 6-7)
-  "1,7","1,6","4,7","4,6","7,7","7,6","10,7","10,6",
-  // Table row lower (rows 3-4)
-  "1,4","1,3","4,4","4,3","7,4","7,3",
-  // Food cart
-  "12,4",
-]);
-
-const DOOR_TILES = new Set(["3,0","10,0"]);
-
-interface InventoryItem {
-  name: string;
-  type: "weapon" | "consumable";
-  damage?: number;
-  noiseRadius: number;
-  durability?: number;
-  heal?: number;
-}
-
-interface Survivor {
-  id: number;
-  name: string;
-  x: number;
-  y: number;
-  hp: number;
-  maxHp: number;
-  totalSlots: number;
-  inventory: InventoryItem[];
-  actionsUsed: number;
-  state: "active" | "dead" | "grabbed";
-}
-
-interface Zombie {
-  id: number;
-  x: number;
-  y: number;
-  hp: number;
-  maxHp: number;
-  state: "dormant" | "agitated" | "grabbing" | "dead";
-  grabTarget: number | null;
-  patrolPath: { x: number; y: number }[] | null;
-  patrolIdx?: number;
-}
-
-interface NoiseEvent {
-  x: number;
-  y: number;
-  radius: number;
-}
-
-interface NoiseRipple extends NoiseEvent {
-  id: number;
-}
-
-const isObstacle = (x: number, y: number) => OBSTACLES.has(`${x},${y}`);
-const inBounds = (x: number, y: number) => x >= 0 && x < GRID_W && y >= 0 && y < GRID_H;
-const manhattan = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
-
-function bfsReachable(start: { x: number; y: number }, maxSteps: number, blockedSet: Set<string>): Map<string, number> {
-  const reachable = new Map<string, number>();
-  const queue: Array<{ x: number; y: number; steps: number }> = [{ ...start, steps: 0 }];
-  const visited = new Set([`${start.x},${start.y}`]);
-  while (queue.length > 0) {
-    const cur = queue.shift()!;
-    reachable.set(`${cur.x},${cur.y}`, cur.steps);
-    if (cur.steps >= maxSteps) continue;
-    for (const [dx, dy] of [[0,1],[0,-1],[1,0],[-1,0]]) {
-      const nx = cur.x + dx, ny = cur.y + dy;
-      const key = `${nx},${ny}`;
-      if (!visited.has(key) && inBounds(nx, ny) && !isObstacle(nx, ny) && !blockedSet.has(key)) {
-        visited.add(key);
-        queue.push({ x: nx, y: ny, steps: cur.steps + 1 });
-      }
-    }
-  }
-  return reachable;
-}
-
-function bfsPath(start: { x: number; y: number }, end: { x: number; y: number }, blockedSet: Set<string>): { x: number; y: number }[] | null {
-  const queue: Array<{ x: number; y: number; path: { x: number; y: number }[] }> = [{ ...start, path: [start] }];
-  const visited = new Set([`${start.x},${start.y}`]);
-  while (queue.length > 0) {
-    const cur = queue.shift()!;
-    if (cur.x === end.x && cur.y === end.y) return cur.path;
-    for (const [dx, dy] of [[0,1],[0,-1],[1,0],[-1,0]]) {
-      const nx = cur.x + dx, ny = cur.y + dy;
-      const key = `${nx},${ny}`;
-      if (!visited.has(key) && inBounds(nx, ny) && !isObstacle(nx, ny) && !blockedSet.has(key)) {
-        visited.add(key);
-        queue.push({ x: nx, y: ny, path: [...cur.path, { x: nx, y: ny }] });
-      }
-    }
-  }
-  return null;
-}
-
-function zombieMoveToward(zombie: { x: number; y: number }, target: { x: number; y: number }, blockedSet: Set<string>): { x: number; y: number } | null {
-  let best: { x: number; y: number } | null = null;
-  let bestDist = Infinity;
-  for (const [dx, dy] of [[0,1],[0,-1],[1,0],[-1,0]]) {
-    const nx = zombie.x + dx, ny = zombie.y + dy;
-    const key = `${nx},${ny}`;
-    if (inBounds(nx, ny) && !isObstacle(nx, ny) && !blockedSet.has(key)) {
-      const d = manhattan({ x: nx, y: ny }, target);
-      if (d < bestDist) { bestDist = d; best = { x: nx, y: ny }; }
-    }
-  }
-  return best;
-}
-
-const initSurvivors = (): Survivor[] => [
-  { id: 0, name: "Scout", x: 3, y: 1, hp: 10, maxHp: 10, totalSlots: 4,
-    inventory: [{ name: "Knife", damage: 1, noiseRadius: 1, durability: 99, type: "weapon" }],
-    actionsUsed: 0, state: "active" },
-  { id: 1, name: "Fighter", x: 10, y: 1, hp: 10, maxHp: 10, totalSlots: 4,
-    inventory: [
-      { name: "Bat", damage: 2, noiseRadius: 2, durability: 6, type: "weapon" },
-      { name: "Bandage", heal: 3, noiseRadius: 1, type: "consumable" }
-    ],
-    actionsUsed: 0, state: "active" },
-];
-
-const initZombies = (): Zombie[] => [
-  { id: 0, x: 5, y: 8, hp: 3, maxHp: 3, state: "dormant", grabTarget: null, patrolPath: null },
-  { id: 1, x: 8, y: 8, hp: 3, maxHp: 3, state: "dormant", grabTarget: null, patrolPath: null },
-  { id: 2, x: 6, y: 5, hp: 3, maxHp: 3, state: "dormant", grabTarget: null,
-    patrolPath: [{x:6,y:5},{x:7,y:5},{x:8,y:5},{x:9,y:5},{x:8,y:5},{x:7,y:5}], patrolIdx: 0 },
-  { id: 3, x: 2, y: 6, hp: 3, maxHp: 3, state: "dormant", grabTarget: null, patrolPath: null },
-  { id: 4, x: 11, y: 7, hp: 3, maxHp: 3, state: "dormant", grabTarget: null, patrolPath: null },
-];
-
-const PHASE = { PLAYER: "player", NOISE: "noise", ZOMBIE: "zombie", GAMEOVER: "gameover", WIN: "win" };
+import { Survivor, Zombie, LootItem, TerrainTile, ContainerTile, NoiseEvent, NoiseRipple, Phase, TurnSummary } from "./lib/types";
+import { GRID_W, GRID_H, TILE, initSurvivors, initZombies, initLoot, initTerrain, initContainers, ITEMS, NERVE_SHAKY } from "./lib/constants";
+import { bfsReachable, manhattan, isObstacle, hasLineOfSight, getVisionCone } from "./lib/grid";
+import { resolveNoise, getNoiseIntensity } from "./lib/noise";
+import { processZombiePhase } from "./lib/zombie-ai";
+import { processAttack, processRangedAttack, throwDistraction, throwMolotov, getZocDamage } from "./lib/combat";
+import GameGrid from "./components/GameGrid";
+import SurvivorPanel from "./components/SurvivorPanel";
 
 export default function DeadWeightPrototype() {
   const [survivors, setSurvivors] = useState<Survivor[]>(initSurvivors);
   const [zombies, setZombies] = useState<Zombie[]>(initZombies);
-  const [phase, setPhase] = useState<string>(PHASE.PLAYER);
+  const [loot, setLoot] = useState<LootItem[]>(initLoot);
+  const [terrain, setTerrain] = useState<TerrainTile[]>(initTerrain);
+  const [containers, setContainers] = useState<ContainerTile[]>(initContainers);
+  const [phase, setPhase] = useState<Phase>("player");
   const [selectedSurvivor, setSelectedSurvivor] = useState<number | null>(null);
   const [reachableTiles, setReachableTiles] = useState<Map<string, number>>(new Map());
   const [attackTargets, setAttackTargets] = useState<number[]>([]);
+  const [rangedTargets, setRangedTargets] = useState<number[]>([]);
+  const [throwTargets, setThrowTargets] = useState<Set<string>>(new Set());
   const [noiseEvents, setNoiseEvents] = useState<NoiseEvent[]>([]);
   const [noiseRipples, setNoiseRipples] = useState<NoiseRipple[]>([]);
   const [messages, setMessages] = useState<string[]>(["Your turn. Tap a survivor to select."]);
-  const [turn, setTurn] = useState<number>(1);
-  const [compoundIntegrity, setCompoundIntegrity] = useState<number>(10);
+  const [turn, setTurn] = useState(1);
+  const [throwMode, setThrowMode] = useState(false);
+  const [molotovMode, setMolotovMode] = useState(false);
+  const [rangedMode, setRangedMode] = useState(false);
+  const [showEndTurnConfirm, setShowEndTurnConfirm] = useState(false);
+  const [turnSummary, setTurnSummary] = useState<TurnSummary | null>(null);
+  const [nextLootId, setNextLootId] = useState(100);
   const gridRef = useRef<HTMLDivElement>(null);
 
   const addMsg = useCallback((msg: string) => {
-    setMessages(prev => [msg, ...prev].slice(0, 6));
+    setMessages(prev => [msg, ...prev].slice(0, 8));
   }, []);
+
+  const addMsgs = useCallback((msgs: string[]) => {
+    setMessages(prev => [...msgs, ...prev].slice(0, 8));
+  }, []);
+
+  const freeSlots = (s: Survivor) => s.totalSlots - s.inventory.length;
+  const actionsLeft = (s: Survivor) => {
+    const base = freeSlots(s) - s.actionsUsed;
+    // Adrenaline bonus
+    const bonus = s.statusEffects.includes("adrenaline") ? 1 : 0;
+    return base + bonus;
+  };
 
   const getBlockedSet = useCallback((excludeSurvivorId: number = -1): Set<string> => {
     const blocked = new Set<string>();
@@ -170,525 +57,655 @@ export default function DeadWeightPrototype() {
     return blocked;
   }, [survivors, zombies]);
 
-  const freeSlots = (s: Survivor) => s.totalSlots - s.inventory.length;
-  const actionsLeft = (s: Survivor) => freeSlots(s) - s.actionsUsed;
+  const computeTargets = useCallback((s: Survivor) => {
+    // Melee targets
+    const melee = zombies.filter(z => z.hp > 0 && manhattan(s, z) === 1 && s.inventory.some(i => i.type === "weapon"));
+    setAttackTargets(melee.map(z => z.id));
+
+    // Ranged targets
+    const rangedWeapon = s.inventory.find(i => (i.rangedRange ?? 0) > 0 && (i.ammo ?? 0) > 0);
+    if (rangedWeapon) {
+      const ranged = zombies.filter(z =>
+        z.hp > 0 && manhattan(s, z) <= rangedWeapon.rangedRange! && manhattan(s, z) > 0 &&
+        hasLineOfSight(s, z)
+      );
+      setRangedTargets(ranged.map(z => z.id));
+    } else {
+      setRangedTargets([]);
+    }
+  }, [zombies]);
+
+  const computeThrowTargets = useCallback((s: Survivor) => {
+    const distraction = s.inventory.find(i => i.type === "distraction");
+    const molotov = s.inventory.find(i => i.name === "Molotov");
+    const item = molotovMode ? molotov : distraction;
+    if (!item) { setThrowTargets(new Set()); return; }
+    const range = item.throwRange ?? 3;
+    const targets = new Set<string>();
+    for (let dx = -range; dx <= range; dx++) {
+      for (let dy = -range; dy <= range; dy++) {
+        if (Math.abs(dx) + Math.abs(dy) > range || (dx === 0 && dy === 0)) continue;
+        const tx = s.x + dx, ty = s.y + dy;
+        if (tx >= 0 && tx < GRID_W && ty >= 0 && ty < GRID_H && !isObstacle(tx, ty)) {
+          targets.add(`${tx},${ty}`);
+        }
+      }
+    }
+    setThrowTargets(targets);
+  }, [molotovMode]);
 
   const selectSurvivor = useCallback((sid: number) => {
-    if (phase !== PHASE.PLAYER) return;
+    if (phase !== "player") return;
     const s = survivors.find(sv => sv.id === sid);
     if (!s || s.state === "dead") return;
     setSelectedSurvivor(sid);
+    setThrowMode(false);
+    setMolotovMode(false);
+    setRangedMode(false);
+
+    if (s.overwatching || s.nerve <= 0) {
+      setReachableTiles(new Map());
+      setAttackTargets([]);
+      setRangedTargets([]);
+      setThrowTargets(new Set());
+      return;
+    }
+
     const remaining = actionsLeft(s);
     const blocked = getBlockedSet(sid);
-    const reach = bfsReachable({ x: s.x, y: s.y }, remaining, blocked);
-    setReachableTiles(reach);
-    const targets = zombies.filter(z => z.hp > 0 && manhattan(s, z) === 1);
-    setAttackTargets(targets.map(z => z.id));
-  }, [phase, survivors, zombies, getBlockedSet]);
+    setReachableTiles(bfsReachable({ x: s.x, y: s.y }, remaining, blocked));
+    computeTargets(s);
+    setThrowTargets(new Set());
+  }, [phase, survivors, getBlockedSet, computeTargets]);
+
+  // --- Player Actions ---
 
   const moveSurvivor = useCallback((tx: number, ty: number) => {
-    if (selectedSurvivor === null || phase !== PHASE.PLAYER) return;
+    if (selectedSurvivor === null || phase !== "player") return;
     const key = `${tx},${ty}`;
     if (!reachableTiles.has(key)) return;
     const cost = reachableTiles.get(key)!;
     if (cost === 0) return;
 
-    setSurvivors(prev => prev.map(s => {
-      if (s.id !== selectedSurvivor) return s;
-      const newS = { ...s, x: tx, y: ty, actionsUsed: s.actionsUsed + cost };
-      return newS;
-    }));
+    setSurvivors(prev => {
+      const newSurvivors = prev.map(s => {
+        if (s.id !== selectedSurvivor) return s;
 
-    setTimeout(() => selectSurvivor(selectedSurvivor), 50);
-  }, [selectedSurvivor, phase, reachableTiles, selectSurvivor]);
-
-  const attackZombie = useCallback((zid: number) => {
-    if (selectedSurvivor === null || phase !== PHASE.PLAYER) return;
-    const s = survivors.find(sv => sv.id === selectedSurvivor);
-    if (!s || actionsLeft(s) <= 0) return;
-    const weapon = s.inventory.find(i => i.type === "weapon");
-    if (!weapon) { addMsg("No weapon!"); return; }
-    const z = zombies.find(zz => zz.id === zid);
-    if (!z || z.hp <= 0 || manhattan(s, z) !== 1) return;
-
-    const damage = weapon.damage!;
-    const noiseR = weapon.noiseRadius;
-    const newHp = z.hp - damage;
-    const killed = newHp <= 0;
-
-    setZombies(prev => prev.map(zz => {
-      if (zz.id !== zid) return zz;
-      if (killed) {
-        if (zz.grabTarget !== null) {
-          setSurvivors(sp => sp.map(ss => ss.id === zz.grabTarget ? { ...ss, state: "active" } : ss));
+        // Zone of control check
+        const zoc = getZocDamage(s, s.x, s.y, tx, ty, zombies);
+        let newHp = s.hp - zoc.damage;
+        if (zoc.damage > 0) {
+          addMsg(`${s.name} takes ${zoc.damage} ZoC damage fleeing ${zoc.attackers.join(", ")}!`);
         }
-        return { ...zz, hp: 0, state: "dead", grabTarget: null };
-      }
-      return { ...zz, hp: newHp };
-    }));
 
-    const newDur = (weapon.durability ?? 0) - 1;
-    const weaponBroke = newDur <= 0;
+        // Terrain noise
+        const ter = terrain.find(t => t.x === tx && t.y === ty);
+        if (ter) {
+          setNoiseEvents(prev => [...prev, { x: tx, y: ty, radius: ter.noiseOnStep, intensity: getNoiseIntensity(ter.noiseOnStep) }]);
+          setNoiseRipples(prev => [...prev, { x: tx, y: ty, radius: ter.noiseOnStep, intensity: getNoiseIntensity(ter.noiseOnStep), id: Date.now() + 333 }]);
+          const terrainNames: Record<string, string> = { glass: "glass shards", metal: "metal grating", puddle: "a puddle" };
+          addMsg(`${s.name} steps on ${terrainNames[ter.type]}! Noise ${ter.noiseOnStep}.`);
+        }
 
-    setSurvivors(prev => prev.map(ss => {
-      if (ss.id !== selectedSurvivor) return ss;
-      let newInv = ss.inventory.map(i => {
-        if (i === weapon) return { ...i, durability: newDur };
-        return i;
+        if (newHp <= 0) {
+          return { ...s, x: tx, y: ty, hp: 0, state: "dead" as const, actionsUsed: s.actionsUsed + cost };
+        }
+        return { ...s, x: tx, y: ty, hp: newHp, actionsUsed: s.actionsUsed + cost };
       });
-      if (weaponBroke) {
-        newInv = ss.inventory.filter(i => i !== weapon);
-      }
-      return { ...ss, actionsUsed: ss.actionsUsed + 1, inventory: newInv };
-    }));
-
-    setNoiseEvents(prev => [...prev, { x: s.x, y: s.y, radius: noiseR }]);
-    setNoiseRipples(prev => [...prev, { x: s.x, y: s.y, radius: noiseR, id: Date.now() }]);
-
-    let msg = `${s.name} hits zombie for ${damage}!`;
-    if (killed) msg += " Zombie killed!";
-    if (weaponBroke) msg += ` ${weapon.name} broke!`;
-    addMsg(msg);
+      return newSurvivors;
+    });
 
     setTimeout(() => selectSurvivor(selectedSurvivor), 50);
-  }, [selectedSurvivor, phase, survivors, zombies, addMsg, selectSurvivor]);
+  }, [selectedSurvivor, phase, reachableTiles, zombies, terrain, addMsg, selectSurvivor]);
 
-  const useBandage = useCallback(() => {
-    if (selectedSurvivor === null || phase !== PHASE.PLAYER) return;
+  const handleAttack = useCallback((zid: number) => {
+    if (selectedSurvivor === null || phase !== "player") return;
+    const s = survivors.find(sv => sv.id === selectedSurvivor);
+    if (!s || actionsLeft(s) <= 0 || s.overwatching || s.nerve <= 0) return;
+
+    const result = processAttack(selectedSurvivor, zid, survivors, zombies, loot, terrain, nextLootId);
+    setSurvivors(result.survivors);
+    setZombies(result.zombies);
+    setLoot(result.loot);
+    setTerrain(result.terrain);
+    setNoiseEvents(prev => [...prev, ...result.noiseEvents]);
+    setNoiseRipples(prev => [...prev, ...result.noiseRipples]);
+    result.messages.forEach(m => addMsg(m));
+
+    setTimeout(() => selectSurvivor(selectedSurvivor), 50);
+  }, [selectedSurvivor, phase, survivors, zombies, loot, terrain, nextLootId, addMsg, selectSurvivor]);
+
+  const handleThrowTile = useCallback((tx: number, ty: number) => {
+    if (selectedSurvivor === null || phase !== "player") return;
     const s = survivors.find(sv => sv.id === selectedSurvivor);
     if (!s || actionsLeft(s) <= 0) return;
-    const bandage = s.inventory.find(i => i.type === "consumable" && i.name === "Bandage");
-    if (!bandage) return;
-    const healed = Math.min(s.maxHp, s.hp + (bandage.heal ?? 0));
+
+    if (molotovMode) {
+      const result = throwMolotov(selectedSurvivor, tx, ty, survivors, zombies, terrain);
+      if (!result) return;
+      setSurvivors(result.survivors);
+      setZombies(result.zombies);
+      setTerrain(result.terrain);
+      setNoiseEvents(prev => [...prev, ...result.noiseEvents]);
+      setNoiseRipples(prev => [...prev, ...result.noiseRipples]);
+      result.messages.forEach(m => addMsg(m));
+      setMolotovMode(false);
+    } else {
+      const result = throwDistraction(selectedSurvivor, tx, ty, survivors, terrain, nextLootId);
+      if (!result) return;
+      setSurvivors(result.survivors);
+      setTerrain(result.terrain);
+      setNoiseEvents(prev => [...prev, ...result.noiseEvents]);
+      setNoiseRipples(prev => [...prev, ...result.noiseRipples]);
+      result.messages.forEach(m => addMsg(m));
+      setThrowMode(false);
+    }
+
+    setTimeout(() => selectSurvivor(selectedSurvivor), 50);
+  }, [selectedSurvivor, phase, survivors, zombies, terrain, nextLootId, molotovMode, addMsg, selectSurvivor]);
+
+  const handleRangedAttack = useCallback((tx: number, ty: number) => {
+    if (selectedSurvivor === null || phase !== "player") return;
+    const result = processRangedAttack(selectedSurvivor, tx, ty, survivors, zombies, loot, terrain, nextLootId);
+    if (!result) return;
+    setSurvivors(result.survivors);
+    setZombies(result.zombies);
+    setNoiseEvents(prev => [...prev, ...result.noiseEvents]);
+    setNoiseRipples(prev => [...prev, ...result.noiseRipples]);
+    result.messages.forEach(m => addMsg(m));
+    setRangedMode(false);
+    setTimeout(() => selectSurvivor(selectedSurvivor), 50);
+  }, [selectedSurvivor, phase, survivors, zombies, loot, terrain, nextLootId, addMsg, selectSurvivor]);
+
+  const useBandageOrMedkit = useCallback((itemName: string) => {
+    if (selectedSurvivor === null || phase !== "player") return;
+    const s = survivors.find(sv => sv.id === selectedSurvivor);
+    if (!s || actionsLeft(s) <= 0) return;
+    const item = s.inventory.find(i => i.name === itemName);
+    if (!item) return;
+
+    const healed = Math.min(s.maxHp, s.hp + (item.heal ?? 0));
+    const removeBleeding = itemName === "Bandage" || itemName === "Medkit";
+
     setSurvivors(prev => prev.map(ss => {
       if (ss.id !== selectedSurvivor) return ss;
-      return { ...ss, hp: healed, actionsUsed: ss.actionsUsed + 1, inventory: ss.inventory.filter(i => i !== bandage) };
+      let effects = [...ss.statusEffects];
+      if (removeBleeding) effects = effects.filter(e => e !== "bleeding");
+      return {
+        ...ss, hp: healed, actionsUsed: ss.actionsUsed + 1,
+        inventory: ss.inventory.filter(i => i !== item),
+        statusEffects: effects,
+        nerve: Math.min(ss.maxNerve, ss.nerve + 1),
+      };
     }));
-    setNoiseEvents(prev => [...prev, { x: s.x, y: s.y, radius: bandage.noiseRadius }]);
-    addMsg(`${s.name} used bandage. Healed to ${healed} HP.`);
+    setNoiseEvents(prev => [...prev, { x: s.x, y: s.y, radius: item.noiseRadius, intensity: 1 }]);
+    addMsg(`${s.name} used ${itemName}. Healed to ${healed} HP.`);
     setTimeout(() => selectSurvivor(selectedSurvivor), 50);
   }, [selectedSurvivor, phase, survivors, addMsg, selectSurvivor]);
 
   const breakFree = useCallback(() => {
-    if (selectedSurvivor === null || phase !== PHASE.PLAYER) return;
+    if (selectedSurvivor === null || phase !== "player") return;
     const s = survivors.find(sv => sv.id === selectedSurvivor);
     if (!s || s.state !== "grabbed" || actionsLeft(s) <= 0) return;
-    setSurvivors(prev => prev.map(ss => {
-      if (ss.id !== selectedSurvivor) return ss;
-      return { ...ss, state: "active", actionsUsed: ss.actionsUsed + 1 };
-    }));
+    setSurvivors(prev => prev.map(ss =>
+      ss.id !== selectedSurvivor ? ss :
+      { ...ss, state: "active", actionsUsed: ss.actionsUsed + 1 }
+    ));
     setZombies(prev => prev.map(z => z.grabTarget === selectedSurvivor ? { ...z, state: "agitated", grabTarget: null } : z));
-    setNoiseEvents(prev => [...prev, { x: s.x, y: s.y, radius: 1 }]);
+    setNoiseEvents(prev => [...prev, { x: s.x, y: s.y, radius: 1, intensity: 1 }]);
     addMsg(`${s.name} broke free!`);
     setTimeout(() => selectSurvivor(selectedSurvivor), 50);
   }, [selectedSurvivor, phase, survivors, addMsg, selectSurvivor]);
 
+  const enterOverwatch = useCallback(() => {
+    if (selectedSurvivor === null || phase !== "player") return;
+    const s = survivors.find(sv => sv.id === selectedSurvivor);
+    if (!s || s.state !== "active" || s.overwatching) return;
+    const remaining = actionsLeft(s);
+    if (remaining <= 0) return;
+    const weapon = s.inventory.find(i => i.type === "weapon");
+    if (!weapon) { addMsg("Need a weapon for overwatch!"); return; }
+    setSurvivors(prev => prev.map(ss =>
+      ss.id !== selectedSurvivor ? ss :
+      { ...ss, overwatching: true, overwatchAttacks: remaining, actionsUsed: ss.actionsUsed + remaining }
+    ));
+    addMsg(`${s.name} enters overwatch with ${remaining} reaction attack${remaining > 1 ? "s" : ""}!`);
+    setTimeout(() => selectSurvivor(selectedSurvivor), 50);
+  }, [selectedSurvivor, phase, survivors, addMsg, selectSurvivor]);
+
+  const disengage = useCallback(() => {
+    if (selectedSurvivor === null || phase !== "player") return;
+    const s = survivors.find(sv => sv.id === selectedSurvivor);
+    if (!s || actionsLeft(s) <= 0 || s.disengaging) return;
+    setSurvivors(prev => prev.map(ss =>
+      ss.id !== selectedSurvivor ? ss :
+      { ...ss, disengaging: true, actionsUsed: ss.actionsUsed + 1 }
+    ));
+    addMsg(`${s.name} carefully disengages. Safe to move.`);
+    setTimeout(() => selectSurvivor(selectedSurvivor), 50);
+  }, [selectedSurvivor, phase, survivors, addMsg, selectSurvivor]);
+
+  const dropItem = useCallback((idx: number) => {
+    if (selectedSurvivor === null || phase !== "player") return;
+    const s = survivors.find(sv => sv.id === selectedSurvivor);
+    if (!s) return;
+    const item = s.inventory[idx];
+    if (!item) return;
+
+    // Drop on ground as loot (free action)
+    const newLootId = nextLootId;
+    setNextLootId(prev => prev + 1);
+    setLoot(prev => [...prev, { id: newLootId, x: s.x, y: s.y, item: { ...item } }]);
+    setSurvivors(prev => prev.map(ss => {
+      if (ss.id !== selectedSurvivor) return ss;
+      const newInv = [...ss.inventory];
+      newInv.splice(idx, 1);
+      return { ...ss, inventory: newInv };
+    }));
+    addMsg(`${s.name} drops ${item.name}. +1 action slot!`);
+    setTimeout(() => selectSurvivor(selectedSurvivor), 50);
+  }, [selectedSurvivor, phase, survivors, nextLootId, addMsg, selectSurvivor]);
+
+  const pickupLoot = useCallback(() => {
+    if (selectedSurvivor === null || phase !== "player") return;
+    const s = survivors.find(sv => sv.id === selectedSurvivor);
+    if (!s || actionsLeft(s) <= 0 || freeSlots(s) <= 0) return;
+    const lootItem = loot.find(l => l.x === s.x && l.y === s.y);
+    if (!lootItem) return;
+
+    setLoot(prev => prev.filter(l => l.id !== lootItem.id));
+    setSurvivors(prev => prev.map(ss => {
+      if (ss.id !== selectedSurvivor) return ss;
+      return { ...ss, inventory: [...ss.inventory, { ...lootItem.item }], actionsUsed: ss.actionsUsed + 1 };
+    }));
+    addMsg(`${s.name} picks up ${lootItem.item.name}. Weight +1.`);
+    setTimeout(() => selectSurvivor(selectedSurvivor), 50);
+  }, [selectedSurvivor, phase, survivors, loot, addMsg, selectSurvivor]);
+
+  const searchContainer = useCallback(() => {
+    if (selectedSurvivor === null || phase !== "player") return;
+    const s = survivors.find(sv => sv.id === selectedSurvivor);
+    if (!s || actionsLeft(s) <= 0) return;
+
+    // Must be adjacent to container
+    const cont = containers.find(c => {
+      const dist = manhattan(s, { x: c.x, y: c.y });
+      return dist <= 1 && !c.searched;
+    });
+    if (!cont) return;
+
+    const found = cont.lootTable[Math.floor(Math.random() * cont.lootTable.length)];
+    const newLootId = nextLootId;
+    setNextLootId(prev => prev + 1);
+    setLoot(prev => [...prev, { id: newLootId, x: cont.x, y: cont.y, item: { ...found } }]);
+    setContainers(prev => prev.map(c => c === cont ? { ...c, searched: true } : c));
+    setSurvivors(prev => prev.map(ss =>
+      ss.id !== selectedSurvivor ? ss :
+      { ...ss, actionsUsed: ss.actionsUsed + 1 }
+    ));
+    setNoiseEvents(prev => [...prev, { x: cont.x, y: cont.y, radius: 1, intensity: 1 }]);
+    setNoiseRipples(prev => [...prev, { x: cont.x, y: cont.y, radius: 1, intensity: 1, id: Date.now() + 444 }]);
+    addMsg(`${s.name} searches and finds ${found.name}!`);
+    setTimeout(() => selectSurvivor(selectedSurvivor), 50);
+  }, [selectedSurvivor, phase, survivors, containers, nextLootId, addMsg, selectSurvivor]);
+
+  // --- End Turn ---
+
+  const tryEndTurn = useCallback(() => {
+    if (phase !== "player") return;
+    const hasActionsLeft = survivors.some(s => s.state !== "dead" && !s.overwatching && s.nerve > 0 && actionsLeft(s) > 0);
+    if (hasActionsLeft) {
+      setShowEndTurnConfirm(true);
+    } else {
+      endPlayerPhase();
+    }
+  }, [phase, survivors]);
+
   const endPlayerPhase = useCallback(() => {
-    if (phase !== PHASE.PLAYER) return;
     setSelectedSurvivor(null);
     setReachableTiles(new Map());
     setAttackTargets([]);
-    setPhase(PHASE.NOISE);
-  }, [phase]);
+    setRangedTargets([]);
+    setThrowTargets(new Set());
+    setThrowMode(false);
+    setMolotovMode(false);
+    setRangedMode(false);
+    setShowEndTurnConfirm(false);
+    setPhase("noise");
+  }, []);
 
-  // Noise resolution
+  // --- Noise Resolution Phase ---
   useEffect(() => {
-    if (phase !== PHASE.NOISE) return;
+    if (phase !== "noise") return;
     const timer = setTimeout(() => {
-      let events = [...noiseEvents];
-      let newZombies = zombies.map(z => ({ ...z }));
-      let changed = true;
-      let iterations = 0;
-      while (changed && iterations < 20) {
-        changed = false;
-        iterations++;
-        for (const evt of events) {
-          for (let i = 0; i < newZombies.length; i++) {
-            const z = newZombies[i];
-            if (z.state === "dormant" && z.hp > 0) {
-              const dist = manhattan(evt, z);
-              if (dist <= evt.radius) {
-                newZombies[i] = { ...z, state: "agitated" };
-                events.push({ x: z.x, y: z.y, radius: 2 });
-                setNoiseRipples(prev => [...prev, { x: z.x, y: z.y, radius: 2, id: Date.now() + i }]);
-                changed = true;
-                addMsg(`Zombie at (${z.x},${z.y}) wakes up!`);
-              }
-            }
-          }
-        }
-      }
-      setZombies(newZombies);
+      const result = resolveNoise(noiseEvents, zombies, survivors);
+      setZombies(result.zombies);
+      setNoiseRipples(prev => [...prev, ...result.newRipples]);
+      result.messages.forEach(m => addMsg(m));
       setNoiseEvents([]);
-      setPhase(PHASE.ZOMBIE);
+
+      setTurnSummary(prev => ({
+        zombiesWoke: (prev?.zombiesWoke || 0) + result.zombiesWoke,
+        zombiesKilled: prev?.zombiesKilled || 0,
+        damageTaken: prev?.damageTaken || [],
+        overwatchHits: prev?.overwatchHits || 0,
+        zocHits: prev?.zocHits || 0,
+      }));
+
+      setPhase("zombie");
     }, 400);
     return () => clearTimeout(timer);
-  }, [phase, noiseEvents, zombies, addMsg]);
+  }, [phase, noiseEvents, zombies, survivors, addMsg]);
 
-  // Zombie phase
+  // --- Zombie Phase ---
   useEffect(() => {
-    if (phase !== PHASE.ZOMBIE) return;
+    if (phase !== "zombie") return;
     const timer = setTimeout(() => {
-      let newZombies = zombies.map(z => ({ ...z }));
-      let newSurvivors = survivors.map(s => ({ ...s }));
+      const result = processZombiePhase(zombies, survivors);
+      setZombies(result.zombies);
+      setSurvivors(result.survivors);
+      result.messages.forEach(m => addMsg(m));
 
-      for (let i = 0; i < newZombies.length; i++) {
-        const z = newZombies[i];
-        if (z.hp <= 0) continue;
-
-        if (z.state === "grabbing") {
-          const target = newSurvivors.find(s => s.id === z.grabTarget);
-          if (target && target.state !== "dead") {
-            target.hp -= 2;
-            addMsg(`Zombie deals 2 damage to ${target.name}! (${target.hp} HP)`);
-            if (target.hp <= 0) {
-              target.state = "dead";
-              addMsg(`${target.name} is down!`);
-              newZombies[i] = { ...z, state: "agitated", grabTarget: null };
-            }
-          }
-          continue;
-        }
-
-        if (z.state === "dormant" && z.patrolPath) {
-          const nextIdx = ((z.patrolIdx || 0) + 1) % z.patrolPath.length;
-          const next = z.patrolPath[nextIdx];
-          const blocked = new Set<string>();
-          newSurvivors.forEach(s => { if (s.state !== "dead") blocked.add(`${s.x},${s.y}`); });
-          newZombies.forEach((zz, j) => { if (j !== i && zz.hp > 0) blocked.add(`${zz.x},${zz.y}`); });
-          if (!blocked.has(`${next.x},${next.y}`)) {
-            newZombies[i] = { ...z, x: next.x, y: next.y, patrolIdx: nextIdx };
-          }
-          continue;
-        }
-
-        if (z.state === "agitated") {
-          const aliveSurvivors = newSurvivors.filter(s => s.state !== "dead");
-          if (aliveSurvivors.length === 0) continue;
-          let closest = aliveSurvivors[0];
-          let closestDist = manhattan(z, closest);
-          for (const s of aliveSurvivors) {
-            const d = manhattan(z, s);
-            if (d < closestDist) { closest = s; closestDist = d; }
-          }
-
-          if (closestDist === 1) {
-            newZombies[i] = { ...z, state: "grabbing", grabTarget: closest.id };
-            const t = newSurvivors.find(s => s.id === closest.id);
-            if (t) t.state = "grabbed";
-            addMsg(`Zombie grabs ${closest.name}!`);
-          } else {
-            const blocked = new Set<string>();
-            newSurvivors.forEach(s => { if (s.state !== "dead") blocked.add(`${s.x},${s.y}`); });
-            newZombies.forEach((zz, j) => { if (j !== i && zz.hp > 0) blocked.add(`${zz.x},${zz.y}`); });
-            const next = zombieMoveToward(z, closest, blocked);
-            if (next) newZombies[i] = { ...z, x: next.x, y: next.y };
-          }
-        }
+      // Process any noise events from zombie phase (screamer groans)
+      if (result.noiseEvents.length > 0) {
+        setNoiseEvents(prev => [...prev, ...result.noiseEvents]);
+        setNoiseRipples(prev => [...prev, ...result.noiseRipples]);
       }
 
-      setZombies(newZombies);
-      setSurvivors(newSurvivors);
+      const summary: TurnSummary = {
+        zombiesWoke: turnSummary?.zombiesWoke || 0,
+        zombiesKilled: result.zombies.filter(z => z.hp <= 0).length - zombies.filter(z => z.hp <= 0).length,
+        damageTaken: [],
+        overwatchHits: (turnSummary?.overwatchHits || 0) + result.overwatchHits,
+        zocHits: 0,
+      };
 
-      const aliveS = newSurvivors.filter(s => s.state !== "dead");
-      const aliveZ = newZombies.filter(z => z.hp > 0);
+      // Check win/lose
+      const aliveS = result.survivors.filter(s => s.state !== "dead");
+      const aliveZ = result.zombies.filter(z => z.hp > 0);
+
       if (aliveS.length === 0) {
-        setPhase(PHASE.GAMEOVER);
+        setPhase("gameover");
         addMsg("All survivors down. Game over.");
         return;
       }
       if (aliveZ.length === 0) {
-        setPhase(PHASE.WIN);
+        setPhase("win");
         addMsg("All zombies cleared! Room secure.");
         return;
       }
 
-      setSurvivors(prev => prev.map(s => s.state !== "dead" ? { ...s, actionsUsed: 0 } : s));
+      // Start new turn - apply status effects, reset actions
+      setSurvivors(prev => prev.map(s => {
+        if (s.state === "dead") return s;
+        let newHp = s.hp;
+        let newNerve = s.nerve;
+        const newEffects = [...s.statusEffects];
+
+        // Bleeding
+        if (newEffects.includes("bleeding")) {
+          newHp -= 1;
+          if (newHp <= 0) {
+            addMsg(`${s.name} bleeds out!`);
+            return { ...s, hp: 0, state: "dead" as const, actionsUsed: 0, overwatching: false, overwatchAttacks: 0 };
+          }
+          addMsg(`${s.name} is bleeding! -1 HP (${newHp})`);
+        }
+
+        // Adrenaline: apply from last turn's kills, add as status effect for this turn
+        const hasAdrenaline = s.adrenalineNextTurn;
+        const effects = hasAdrenaline
+          ? (newEffects.includes("adrenaline") ? newEffects : [...newEffects, "adrenaline" as const])
+          : newEffects.filter(e => e !== "adrenaline");
+
+        // Panicked check
+        if (newNerve <= 0) {
+          addMsg(`${s.name} is panicking! Can't act this turn.`);
+          newNerve = 1; // recover 1 nerve per turn
+        }
+
+        return {
+          ...s,
+          hp: newHp, nerve: newNerve,
+          actionsUsed: 0, overwatching: false, overwatchAttacks: 0,
+          disengaging: false, adrenalineNextTurn: false,
+          statusEffects: effects,
+        };
+      }));
+
       setTurn(t => t + 1);
-      setPhase(PHASE.PLAYER);
+      setTurnSummary(null);
+      setPhase("player");
       addMsg("Your turn.");
     }, 600);
     return () => clearTimeout(timer);
-  }, [phase, zombies, survivors, addMsg]);
+  }, [phase, zombies, survivors, addMsg, turnSummary]);
 
-  // Clear ripples after animation
+  // Clear ripples
   useEffect(() => {
     if (noiseRipples.length === 0) return;
     const timer = setTimeout(() => setNoiseRipples([]), 1500);
     return () => clearTimeout(timer);
   }, [noiseRipples]);
 
+  // --- Tile Click Handler ---
   const handleTileClick = useCallback((tx: number, ty: number) => {
-    if (phase !== PHASE.PLAYER) return;
+    if (phase !== "player") return;
 
-    // Check if clicking a survivor
+    // Throw mode: throw to target tile
+    if ((throwMode || molotovMode) && throwTargets.has(`${tx},${ty}`)) {
+      handleThrowTile(tx, ty);
+      return;
+    }
+
+    // Ranged mode: shoot at zombie
+    if (rangedMode) {
+      const targetZ = zombies.find(z => z.x === tx && z.y === ty && z.hp > 0 && rangedTargets.includes(z.id));
+      if (targetZ) {
+        handleRangedAttack(tx, ty);
+        return;
+      }
+    }
+
+    // Click survivor to select
     const clickedSurvivor = survivors.find(s => s.x === tx && s.y === ty && s.state !== "dead");
     if (clickedSurvivor) {
       selectSurvivor(clickedSurvivor.id);
       return;
     }
 
-    // Check if clicking a zombie to attack
+    // Click zombie to attack (melee)
     const clickedZombie = zombies.find(z => z.x === tx && z.y === ty && z.hp > 0);
-    if (clickedZombie && attackTargets.includes(clickedZombie.id)) {
-      attackZombie(clickedZombie.id);
-      return;
+    if (clickedZombie) {
+      if (attackTargets.includes(clickedZombie.id)) {
+        handleAttack(clickedZombie.id);
+        return;
+      }
+      if (rangedTargets.includes(clickedZombie.id)) {
+        handleRangedAttack(tx, ty);
+        return;
+      }
     }
 
-    // Otherwise try to move
+    // Move
     if (selectedSurvivor !== null) {
       moveSurvivor(tx, ty);
     }
-  }, [phase, survivors, zombies, selectedSurvivor, attackTargets, selectSurvivor, attackZombie, moveSurvivor]);
+  }, [phase, throwMode, molotovMode, rangedMode, throwTargets, survivors, zombies,
+      selectedSurvivor, attackTargets, rangedTargets,
+      selectSurvivor, handleAttack, moveSurvivor, handleThrowTile, handleRangedAttack]);
 
   const restart = () => {
     setSurvivors(initSurvivors());
     setZombies(initZombies());
-    setPhase(PHASE.PLAYER);
+    setLoot(initLoot());
+    setTerrain(initTerrain());
+    setContainers(initContainers());
+    setPhase("player");
     setSelectedSurvivor(null);
     setReachableTiles(new Map());
     setAttackTargets([]);
+    setRangedTargets([]);
+    setThrowTargets(new Set());
     setNoiseEvents([]);
     setNoiseRipples([]);
     setMessages(["Your turn. Tap a survivor to select."]);
     setTurn(1);
-    setCompoundIntegrity(10);
+    setThrowMode(false);
+    setMolotovMode(false);
+    setRangedMode(false);
+    setShowEndTurnConfirm(false);
+    setTurnSummary(null);
+    setNextLootId(100);
   };
 
-  const selS = survivors.find(s => s.id === selectedSurvivor);
+  const selS = survivors.find(s => s.id === selectedSurvivor) || null;
+  const lootOnTile = selS ? loot.find(l => l.x === selS.x && l.y === selS.y) || null : null;
+  const containerOnTile = selS ? containers.find(c => manhattan(selS, { x: c.x, y: c.y }) <= 1 && !c.searched) || null : null;
+
+  // Update throw targets when mode changes
+  useEffect(() => {
+    if ((throwMode || molotovMode) && selS) {
+      computeThrowTargets(selS);
+    } else {
+      setThrowTargets(new Set());
+    }
+  }, [throwMode, molotovMode, selS, computeThrowTargets]);
 
   return (
     <div style={{
       width: "100%", maxWidth: 540, margin: "0 auto", height: "100vh",
       display: "flex", flexDirection: "column",
       background: "#1a1a1a", color: "#e0e0e0", fontFamily: "'Courier New', monospace",
-      overflow: "hidden", userSelect: "none"
+      overflow: "hidden", userSelect: "none",
     }}>
       {/* Header */}
       <div style={{
-        padding: "8px 12px", display: "flex", justifyContent: "space-between", alignItems: "center",
-        borderBottom: "1px solid #333", background: "#111", flexShrink: 0
+        padding: "6px 12px", display: "flex", justifyContent: "space-between", alignItems: "center",
+        borderBottom: "1px solid #333", background: "#111", flexShrink: 0,
       }}>
-        <span style={{ fontSize: 14, fontWeight: "bold", color: "#c44" }}>DEAD WEIGHT</span>
-        <span style={{ fontSize: 12, color: "#888" }}>Turn {turn}</span>
-        <span style={{ fontSize: 12, color: compoundIntegrity > 5 ? "#6a6" : "#c44" }}>
-          Integrity: {compoundIntegrity}
+        <span style={{ fontSize: 13, fontWeight: "bold", color: "#c44" }}>DEAD WEIGHT</span>
+        <span style={{ fontSize: 11, color: "#888" }}>Turn {turn}</span>
+        <span style={{ fontSize: 10, color: "#888" }}>
+          {zombies.filter(z => z.hp > 0).length} zombies left
         </span>
       </div>
-
 
       {/* Grid */}
       <div ref={gridRef} style={{
         flex: "1 1 auto", overflowX: "auto", overflowY: "hidden",
-        WebkitOverflowScrolling: "touch", minHeight: 0
+        WebkitOverflowScrolling: "touch", minHeight: 0,
       }}>
-        <div style={{
-          width: GRID_W * TILE, height: GRID_H * TILE, position: "relative",
-          background: "#2a2a2a", margin: "4px 0"
-        }}>
-          {/* Floor tiles */}
-          {Array.from({ length: GRID_H }, (_, y) =>
-            Array.from({ length: GRID_W }, (_, x) => {
-              const isObs = isObstacle(x, y);
-              const isDoor = DOOR_TILES.has(`${x},${y}`);
-              const key = `${x},${y}`;
-              const isReachable = reachableTiles.has(key) && (reachableTiles.get(key) ?? 0) > 0;
-              const isSelected = selS && selS.x === x && selS.y === y;
-
-              let bg = "#3a3a3a";
-              let border = "1px solid #2a2a2a";
-              if (isObs) { bg = "#5a4a2a"; border = "1px solid #6a5a3a"; }
-              if (isDoor) { bg = "#2a4a2a"; border = "1px solid #3a6a3a"; }
-              if (isReachable && !isObs) { bg = "#2a3a2a"; border = "1px solid #4a7a4a"; }
-
-              return (
-                <div
-                  key={key}
-                  onClick={() => !isObs && handleTileClick(x, y)}
-                  style={{
-                    position: "absolute",
-                    left: x * TILE, top: (GRID_H - 1 - y) * TILE,
-                    width: TILE - 2, height: TILE - 2,
-                    background: bg, border,
-                    cursor: isObs ? "default" : "pointer",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    fontSize: 9, color: "#555", boxSizing: "content-box"
-                  }}
-                >
-                  {isObs && <span style={{ fontSize: 16 }}>▪</span>}
-                  {isDoor && <span style={{ fontSize: 10, color: "#6a6" }}>DOOR</span>}
-                </div>
-              );
-            })
-          )}
-
-          {/* Noise ripples */}
-          {noiseRipples.map(r => (
-            <div key={r.id} style={{
-              position: "absolute",
-              left: r.x * TILE + TILE / 2 - r.radius * TILE,
-              top: (GRID_H - 1 - r.y) * TILE + TILE / 2 - r.radius * TILE,
-              width: r.radius * 2 * TILE, height: r.radius * 2 * TILE,
-              border: `2px solid ${r.radius <= 1 ? "rgba(100,180,255,0.5)" : "rgba(255,200,50,0.5)"}`,
-              borderRadius: "50%", pointerEvents: "none",
-              animation: "ripple 1s ease-out forwards"
-            }} />
-          ))}
-
-          {/* Zombies */}
-          {zombies.filter(z => z.hp > 0).map(z => {
-            const isTarget = attackTargets.includes(z.id);
-            const colors: Record<string, string> = {
-              dormant: "#666", agitated: "#c44", grabbing: "#f66", dead: "#333"
-            };
-            return (
-              <div
-                key={`z${z.id}`}
-                onClick={() => isTarget && attackZombie(z.id)}
-                style={{
-                  position: "absolute",
-                  left: z.x * TILE + 4, top: (GRID_H - 1 - z.y) * TILE + 4,
-                  width: TILE - 10, height: TILE - 10,
-                  background: colors[z.state] || "#666",
-                  border: isTarget ? "2px solid #ff0" : "2px solid #400",
-                  borderRadius: 4, cursor: isTarget ? "pointer" : "default",
-                  display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-                  fontSize: 10, color: "#fff", fontWeight: "bold",
-                  transition: "left 0.3s, top 0.3s",
-                  boxShadow: z.state === "agitated" ? "0 0 8px #c44" : "none"
-                }}
-              >
-                <span style={{ fontSize: 16 }}>Z</span>
-                <span style={{ fontSize: 8 }}>{z.hp}/{z.maxHp}</span>
-                {z.state === "agitated" && <span style={{ position: "absolute", top: -14, fontSize: 14, color: "#ff0" }}>!</span>}
-                {z.state === "grabbing" && <span style={{ position: "absolute", top: -14, fontSize: 10, color: "#f66" }}>GRAB</span>}
-              </div>
-            );
-          })}
-
-          {/* Survivors */}
-          {survivors.filter(s => s.state !== "dead").map(s => {
-            const isSelected = selectedSurvivor === s.id;
-            const isGrabbed = s.state === "grabbed";
-            return (
-              <div
-                key={`s${s.id}`}
-                onClick={() => handleTileClick(s.x, s.y)}
-                style={{
-                  position: "absolute",
-                  left: s.x * TILE + 4, top: (GRID_H - 1 - s.y) * TILE + 4,
-                  width: TILE - 10, height: TILE - 10,
-                  background: isGrabbed ? "#a86a20" : (s.id === 0 ? "#2a6a2a" : "#2a4a8a"),
-                  border: isSelected ? "2px solid #fff" : "2px solid #040",
-                  borderRadius: "50%", cursor: "pointer",
-                  display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-                  fontSize: 10, color: "#fff", fontWeight: "bold",
-                  transition: "left 0.3s, top 0.3s",
-                  boxShadow: isSelected ? "0 0 12px rgba(255,255,255,0.4)" : "none",
-                  zIndex: 10
-                }}
-              >
-                <span style={{ fontSize: 9 }}>{s.name[0]}</span>
-                <span style={{ fontSize: 8 }}>{s.hp}/{s.maxHp}</span>
-              </div>
-            );
-          })}
-        </div>
+        <GameGrid
+          survivors={survivors}
+          zombies={zombies}
+          loot={loot}
+          terrain={terrain}
+          containers={containers}
+          selectedSurvivor={selectedSurvivor}
+          reachableTiles={reachableTiles}
+          attackTargets={attackTargets}
+          rangedTargets={rangedTargets}
+          throwTargets={throwTargets}
+          noiseRipples={noiseRipples}
+          showVisionCones={selectedSurvivor !== null}
+          onTileClick={handleTileClick}
+        />
       </div>
 
       {/* UI Panel */}
       <div style={{
         flexShrink: 0, borderTop: "1px solid #333", background: "#111",
-        padding: "8px 12px", minHeight: 180
+        padding: "6px 10px", minHeight: 170, overflowY: "auto",
       }}>
-        {/* Selected survivor info */}
-        {selS ? (
-          <div style={{ marginBottom: 8 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-              <span style={{ fontWeight: "bold", fontSize: 14, color: "#fff" }}>{selS.name}</span>
-              <span style={{ fontSize: 12, color: "#aaa" }}>
-                Actions: {actionsLeft(selS)}/{freeSlots(selS)} | Free slots: {freeSlots(selS)}
-              </span>
-            </div>
-            <div style={{ display: "flex", gap: 4, marginBottom: 4 }}>
-              <div style={{
-                flex: 1, height: 8, background: "#333", borderRadius: 4, overflow: "hidden"
-              }}>
-                <div style={{
-                  width: `${(selS.hp / selS.maxHp) * 100}%`, height: "100%",
-                  background: selS.hp > 5 ? "#4a4" : "#c44", borderRadius: 4
-                }} />
-              </div>
-              <span style={{ fontSize: 10, color: "#aaa" }}>{selS.hp}HP</span>
-            </div>
-            <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 4 }}>
-              {selS.inventory.map((item, idx) => (
-                <span key={idx} style={{
-                  padding: "2px 6px", background: "#2a2a2a", border: "1px solid #444",
-                  borderRadius: 3, fontSize: 10, color: "#ccc"
-                }}>
-                  {item.name}{item.durability && item.durability < 99 ? ` (${item.durability})` : ""}
-                </span>
-              ))}
-              {Array.from({ length: freeSlots(selS) }, (_, i) => (
-                <span key={`empty${i}`} style={{
-                  padding: "2px 6px", background: "#1a1a1a", border: "1px dashed #333",
-                  borderRadius: 3, fontSize: 10, color: "#555"
-                }}>empty</span>
-              ))}
-            </div>
-            {selS.state === "grabbed" && actionsLeft(selS) > 0 && (
-              <button onClick={breakFree} style={{
-                padding: "4px 12px", background: "#a86a20", border: "1px solid #c88a30",
-                color: "#fff", borderRadius: 4, fontSize: 11, cursor: "pointer", marginRight: 4
-              }}>Break Free (1 action)</button>
-            )}
-            {selS.inventory.find(i => i.type === "consumable" && i.name === "Bandage") && actionsLeft(selS) > 0 && selS.hp < selS.maxHp && (
-              <button onClick={useBandage} style={{
-                padding: "4px 12px", background: "#2a5a2a", border: "1px solid #4a8a4a",
-                color: "#fff", borderRadius: 4, fontSize: 11, cursor: "pointer"
-              }}>Use Bandage (1 action)</button>
-            )}
-          </div>
-        ) : (
-          <div style={{ fontSize: 12, color: "#666", marginBottom: 8 }}>
-            Tap a survivor to select and see their actions.
-          </div>
-        )}
+        <SurvivorPanel
+          survivor={selS}
+          lootOnTile={lootOnTile || null}
+          containerOnTile={containerOnTile || null}
+          canAttack={attackTargets.length > 0}
+          canRangedAttack={rangedTargets.length > 0}
+          canThrow={selS?.inventory.some(i => i.type === "distraction") || false}
+          canMolotov={selS?.inventory.some(i => i.name === "Molotov") || false}
+          onBreakFree={breakFree}
+          onUseBandage={() => useBandageOrMedkit("Bandage")}
+          onUseMedkit={() => useBandageOrMedkit("Medkit")}
+          onOverwatch={enterOverwatch}
+          onDisengage={disengage}
+          onDropItem={dropItem}
+          onPickupLoot={pickupLoot}
+          onSearchContainer={searchContainer}
+          onToggleThrowMode={() => { setThrowMode(!throwMode); setMolotovMode(false); setRangedMode(false); }}
+          onToggleMolotovMode={() => { setMolotovMode(!molotovMode); setThrowMode(false); setRangedMode(false); }}
+          onToggleRangedMode={() => { setRangedMode(!rangedMode); setThrowMode(false); setMolotovMode(false); }}
+          throwMode={throwMode}
+          molotovMode={molotovMode}
+          rangedMode={rangedMode}
+        />
 
         {/* Action buttons */}
-        <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-          {phase === PHASE.PLAYER && (
-            <button onClick={endPlayerPhase} style={{
-              flex: 1, padding: "10px", background: "#333", border: "1px solid #555",
-              color: "#fff", borderRadius: 6, fontSize: 14, fontWeight: "bold",
-              cursor: "pointer", fontFamily: "'Courier New', monospace"
+        <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
+          {phase === "player" && (
+            <button onClick={tryEndTurn} style={{
+              flex: 1, padding: "8px", background: "#333", border: "1px solid #555",
+              color: "#fff", borderRadius: 4, fontSize: 13, fontWeight: "bold",
+              cursor: "pointer", fontFamily: "'Courier New', monospace",
             }}>END TURN</button>
           )}
-          {(phase === PHASE.GAMEOVER || phase === PHASE.WIN) && (
+          {(phase === "gameover" || phase === "win") && (
             <button onClick={restart} style={{
-              flex: 1, padding: "10px", background: phase === PHASE.WIN ? "#2a5a2a" : "#5a2a2a",
-              border: "1px solid #555", color: "#fff", borderRadius: 6, fontSize: 14,
-              fontWeight: "bold", cursor: "pointer", fontFamily: "'Courier New', monospace"
+              flex: 1, padding: "8px", background: phase === "win" ? "#2a5a2a" : "#5a2a2a",
+              border: "1px solid #555", color: "#fff", borderRadius: 4, fontSize: 13,
+              fontWeight: "bold", cursor: "pointer", fontFamily: "'Courier New', monospace",
             }}>RESTART</button>
           )}
         </div>
 
         {/* Messages */}
-        <div style={{ maxHeight: 60, overflowY: "auto" }}>
+        <div style={{ maxHeight: 50, overflowY: "auto" }}>
           {messages.map((m, i) => (
-            <div key={i} style={{
-              fontSize: 10, color: i === 0 ? "#ccc" : "#555",
-              padding: "1px 0"
-            }}>{m}</div>
+            <div key={i} style={{ fontSize: 9, color: i === 0 ? "#ccc" : "#555", padding: "1px 0" }}>{m}</div>
           ))}
         </div>
       </div>
+
+      {/* End Turn Confirmation Modal */}
+      {showEndTurnConfirm && (
+        <div style={{
+          position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)",
+          display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100,
+        }}>
+          <div style={{
+            background: "#222", border: "1px solid #555", borderRadius: 8,
+            padding: "16px 24px", maxWidth: 300, textAlign: "center",
+          }}>
+            <div style={{ fontSize: 13, color: "#fff", marginBottom: 12 }}>
+              {survivors.filter(s => s.state !== "dead" && !s.overwatching && s.nerve > 0 && actionsLeft(s) > 0)
+                .map(s => `${s.name} has ${actionsLeft(s)} action${actionsLeft(s) > 1 ? "s" : ""} left`)
+                .join(". ")}.
+              <br />End turn anyway?
+            </div>
+            <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
+              <button onClick={endPlayerPhase} style={{
+                padding: "6px 16px", background: "#5a2a2a", border: "1px solid #8a4a4a",
+                color: "#fff", borderRadius: 4, cursor: "pointer", fontFamily: "'Courier New', monospace",
+              }}>Yes, End Turn</button>
+              <button onClick={() => setShowEndTurnConfirm(false)} style={{
+                padding: "6px 16px", background: "#333", border: "1px solid #555",
+                color: "#fff", borderRadius: 4, cursor: "pointer", fontFamily: "'Courier New', monospace",
+              }}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <style>{`
         @keyframes ripple {
           0% { opacity: 0.8; transform: scale(0.3); }
           100% { opacity: 0; transform: scale(1); }
+        }
+        @keyframes panic-pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.5; }
         }
       `}</style>
     </div>
