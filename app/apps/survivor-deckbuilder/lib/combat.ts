@@ -336,14 +336,18 @@ export function throwMolotov(
   const noiseRipples: NoiseRipple[] = [];
   const messages: string[] = [];
 
-  // Falloff model: center 6 dmg, adjacent (cardinal) 3 dmg
+  // Falloff model: center 6, cardinal 3, diagonal 2
   const CENTER_DMG = 6;
-  const ADJACENT_DMG = 3;
+  const CARDINAL_DMG = 3;
+  const DIAGONAL_DMG = 2;
 
   type HitTile = { x: number; y: number; dmg: number };
   const hitTiles: HitTile[] = [{ x: targetX, y: targetY, dmg: CENTER_DMG }];
   for (const [dx, dy] of [[0,1],[0,-1],[1,0],[-1,0]] as [number, number][]) {
-    hitTiles.push({ x: targetX + dx, y: targetY + dy, dmg: ADJACENT_DMG });
+    hitTiles.push({ x: targetX + dx, y: targetY + dy, dmg: CARDINAL_DMG });
+  }
+  for (const [dx, dy] of [[1,1],[1,-1],[-1,1],[-1,-1]] as [number, number][]) {
+    hitTiles.push({ x: targetX + dx, y: targetY + dy, dmg: DIAGONAL_DMG });
   }
 
   // Fire spreads onto puddles at adjacent damage
