@@ -227,7 +227,7 @@ export default function GameGrid({
         return (
           <div
             key={`z${z.id}`}
-            onClick={() => isTarget && onTileClick(z.x, z.y)}
+            onClick={() => onTileClick(z.x, z.y)}
             style={{
               position: "absolute",
               left: z.x * TILE + 4, top: (GRID_H - 1 - z.y) * TILE + 4,
