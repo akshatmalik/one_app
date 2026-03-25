@@ -48,15 +48,15 @@ export const EXIT_DOOR: Coord = { x: 6, y: 9 };
 // --- Item Definitions ---
 
 export const ITEMS: Record<string, InventoryItem> = {
-  knife:         { name: "Knife",         type: "weapon",      damage: 1, noiseRadius: 1, durability: 99 },
-  bat:           { name: "Bat",           type: "weapon",      damage: 2, noiseRadius: 2, durability: 6, knockback: true },
-  pipe:          { name: "Pipe",          type: "weapon",      damage: 2, noiseRadius: 2, durability: 4, knockback: true },
+  knife:         { name: "Knife",         type: "weapon",      damage: 2, noiseRadius: 1, durability: 99 },
+  bat:           { name: "Bat",           type: "weapon",      damage: 2, noiseRadius: 2, durability: 8, knockback: true },
+  pipe:          { name: "Pipe",          type: "weapon",      damage: 2, noiseRadius: 2, durability: 6, knockback: true },
   // Crowbar: more durable than bat, louder, can search containers from 2 tiles away
-  crowbar:       { name: "Crowbar",       type: "weapon",      damage: 2, noiseRadius: 3, durability: 8, knockback: false, crowbar: true },
-  pistol:        { name: "Pistol",        type: "weapon",      damage: 3, noiseRadius: 8, durability: 99, rangedRange: 3, ammo: 2 },
+  crowbar:       { name: "Crowbar",       type: "weapon",      damage: 3, noiseRadius: 3, durability: 10, knockback: false, crowbar: true },
+  pistol:        { name: "Pistol",        type: "weapon",      damage: 3, noiseRadius: 8, durability: 99, rangedRange: 3, ammo: 3 },
   bandage:       { name: "Bandage",       type: "consumable",  heal: 3,   noiseRadius: 1 },
   medkit:        { name: "Medkit",        type: "consumable",  heal: 5,   noiseRadius: 1 },
-  molotov:       { name: "Molotov",       type: "consumable",  damage: 2, noiseRadius: 8, areaEffect: true, throwRange: 4 },
+  molotov:       { name: "Molotov",       type: "consumable",  damage: 3, noiseRadius: 8, areaEffect: true, throwRange: 5 },
   lockpick:      { name: "Lockpick",      type: "consumable",  noiseRadius: 0 },
   brick:         { name: "Brick",         type: "distraction", noiseRadius: 0, throwRange: 4, throwNoise: 3 },
   alarm_clock:   { name: "Alarm Clock",   type: "distraction", noiseRadius: 0, throwRange: 3, throwNoise: 5 },
