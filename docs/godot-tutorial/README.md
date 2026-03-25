@@ -23,18 +23,29 @@ A tactical survival game where 2 survivors navigate zombie-infested maps. The **
 - `Signals` replace React's state callbacks
 - Free, ships on all platforms
 
+## Design Pillars
+
+**Mobile-first portrait** — Designed for 390×844 (iPhone-size). The grid scrolls under a panning camera. Action buttons are pinned at the bottom in the thumb zone, always visible. This is what makes it feel like a native mobile game rather than a ported PC game.
+
+**CI/CD from day one** — Every commit triggers a GitHub Actions build. Every push to `main` deploys a live playable HTML5 version to GitHub Pages. You always have a shareable URL to test on your phone.
+
+---
+
 ## Phases
 
 | Phase | What You Build | File |
 |-------|---------------|------|
-| 1 | Project setup, grid, terrain | [phase-1-setup-and-grid.md](./phase-1-setup-and-grid.md) |
+| **0** | **CI/CD: GitHub Actions + HTML5 deploy** | [phase-0-cicd.md](./phase-0-cicd.md) |
+| 1 | Project setup, portrait grid, scrollable camera | [phase-1-setup-and-grid.md](./phase-1-setup-and-grid.md) |
 | 2 | Survivors: movement, selection, action points | [phase-2-survivors.md](./phase-2-survivors.md) |
 | 3 | Items, inventory, and the action economy | [phase-3-inventory.md](./phase-3-inventory.md) |
 | 4 | Noise system and zombie state machine | [phase-4-noise-and-zombies.md](./phase-4-noise-and-zombies.md) |
 | 5 | Combat: melee, ranged, throws, traps | [phase-5-combat.md](./phase-5-combat.md) |
-| 6 | UI: survivor panel, HP/nerve bars, action buttons | [phase-6-ui.md](./phase-6-ui.md) |
+| 6 | UI: pinned mobile action panel, survivor tabs, bars | [phase-6-ui.md](./phase-6-ui.md) |
 | 7 | Turn phases, win/lose conditions, stage 2 | [phase-7-turns-and-stages.md](./phase-7-turns-and-stages.md) |
 | 8 | Sprites, animations, and visual polish | [phase-8-sprites-and-polish.md](./phase-8-sprites-and-polish.md) |
+
+**Do Phase 0 and Phase 1 together** — set up CI before writing game code so every commit is testable on your phone immediately.
 
 ## Concept Mapping (React → Godot)
 
@@ -96,6 +107,10 @@ await get_tree().create_timer(0.3).timeout
 
 ```
 survivor_deckbuilder/          ← Godot project root
+├── .github/
+│   └── workflows/
+│       └── export.yml         ← CI/CD: build + deploy on every push
+├── export_presets.cfg         ← HTML5 export config (committed to git)
 ├── project.godot
 ├── autoloads/
 │   ├── GameState.gd           ← Central game state
@@ -114,18 +129,19 @@ survivor_deckbuilder/          ← Godot project root
 │   │   ├── Item.tscn          ← Loot on ground
 │   │   └── NoiseRipple.tscn   ← Expanding circle effect
 │   └── ui/
-│       ├── SurvivorPanel.tscn ← Right panel (stats + inventory)
-│       ├── ActionBar.tscn     ← Action buttons
+│       ├── ActionPanel.tscn   ← Pinned bottom panel (stats + inventory + buttons)
+│       ├── HUD.tscn           ← Pinned top bar (turn, phase)
 │       └── GameOverScreen.tscn
 ├── scripts/
 │   ├── game/
 │   │   ├── Survivor.gd
 │   │   ├── Zombie.gd
 │   │   ├── Item.gd
+│   │   ├── GridCamera.gd      ← touch pan + follow survivor + bounds clamping
 │   │   └── NoiseRipple.gd
 │   └── ui/
-│       ├── SurvivorPanel.gd
-│       └── ActionBar.gd
+│       ├── ActionPanel.gd     ← pinned bottom panel: stats + inventory + actions
+│       └── HUD.gd             ← pinned top bar
 ├── assets/
 │   ├── sprites/
 │   │   ├── survivors/

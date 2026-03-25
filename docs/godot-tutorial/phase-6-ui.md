@@ -1,43 +1,85 @@
-# Phase 6: UI — Survivor Panel, Bars, Status, Turn Indicator
+# Phase 6: UI — Mobile Action Panel, Bars, Status, Turn Indicator
 
 ## Goal
 By the end of this phase:
-- Polished Survivor Panel with HP/Nerve bars, weight bar, status tags
-- Turn counter and phase indicator at the top of screen
+- **Pinned bottom panel** always visible at the bottom of the screen (never scrolls)
+- Survivor stats (HP/Nerve bars, weight bar, status tags) in the panel
+- Action buttons in the panel, thumb-reachable
+- HUD at the top (turn counter, phase)
 - Game Over and Stage Cleared overlays
 - Action feedback: flash on damage, color shift on low HP/nerve
 
 ---
 
-## Step 1: Final SurvivorPanel Layout
+## Mobile UI Philosophy
 
-The complete `SurvivorPanel.tscn` tree:
+The screen is split into three fixed zones, all in a `CanvasLayer` (unaffected by camera pan):
 
 ```
-SurvivorPanel (PanelContainer)
-  anchors: right=1.0, top=0, bottom=1.0, left=0.75
-└── MarginContainer (8px margins)
+┌────────────────────────────┐  ← CanvasLayer
+│ HUD (60px)                 │  Turn number, phase, panic warning
+├────────────────────────────┤
+│                            │
+│   (grid scrolls here)      │  Camera2D handles this area
+│                            │
+├────────────────────────────┤
+│ ACTION PANEL (210px)       │  Always pinned, always touchable
+│  [Scout ❤7 ⚡8  Act:3]    │  → tap survivor tab to switch
+│  [inv slot][slot][slot]    │  → tap item to use/select
+│  [Attack][Shoot][Throw]    │  → action buttons
+│  [Overwatch][Disengage][⏭]│
+└────────────────────────────┘
+```
+
+The action panel has **two tabs**: tap the survivor portrait to switch between Scout and Fighter. Both survivors' stats are always one tap away without leaving the panel.
+
+---
+
+## Step 1: ActionPanel Layout
+
+The complete `ActionPanel.tscn` tree (anchored to bottom of screen):
+
+```
+ActionPanel (PanelContainer)
+  anchors: left=0, right=1, bottom=1, top=1
+  offset_top: -210                         ← 210px tall, pinned at bottom
+└── MarginContainer (6px margins)
     └── VBoxContainer
-        ├── NameLabel            ← "Scout"
-        ├── StateLabel           ← "ACTIVE" / "DOWNED ☠ 3" / "GRABBED"
-        ├── CriticalWarning      ← "⚠ CRITICAL" (blinks, hidden by default)
         │
-        ├── HPSection (HBoxContainer)
-        │   ├── Label: "HP"
-        │   ├── HPBar (ProgressBar, custom style)
-        │   └── HPText: "6/8"
+        ├── SurvivorTabs (HBoxContainer)   ← one button per survivor
+        │   ├── ScoutTab (Button)          ← tap to select Scout
+        │   └── FighterTab (Button)        ← tap to select Fighter
         │
-        ├── NerveSection (HBoxContainer)
-        │   ├── Label: "Nerve"
-        │   ├── NerveBar (ProgressBar)
-        │   └── NerveText: "8/10"
+        ├── StatsRow (HBoxContainer)
+        │   ├── NameLabel                  ← "Scout"
+        │   ├── StateLabel                 ← "[OW]" / "DOWNED" etc.
+        │   └── CriticalWarning            ← "⚠ CRIT" (blinks)
         │
-        ├── ActionsLabel         ← "Actions: 3"
-        ├── WeightBar (HBoxContainer)  ← 5 colored slot squares
+        ├── BarsRow (HBoxContainer)
+        │   ├── HPSection (VBoxContainer)
+        │   │   ├── HPBar (ProgressBar)
+        │   │   └── HPText: "7/8"
+        │   ├── NerveSection (VBoxContainer)
+        │   │   ├── NerveBar (ProgressBar)
+        │   │   └── NerveText: "8/10"
+        │   ├── ActionsLabel: "Act: 3"
+        │   └── WeightBar (HBoxContainer)  ← 5 mini slot squares
         │
-        ├── StatusTags (HBoxContainer) ← bleeding, adrenaline, etc.
+        ├── StatusTags (HBoxContainer)     ← BLEEDING / WOUNDED etc.
         │
-        ├── Separator (HSeparator)
+        ├── InventoryRow (HBoxContainer)   ← up to 5 item buttons, scrollable
+        │   └── ScrollContainer
+        │       └── HBoxContainer
+        │           ├── ItemBtn1
+        │           └── ...
+        │
+        └── ActionButtons (GridContainer, 3 columns)
+            ├── btn_attack      "⚔"
+            ├── btn_shoot       "🔫"
+            ├── btn_throw       "↗"
+            ├── btn_overwatch   "◯"
+            ├── btn_disengage   "→"
+            └── btn_end_turn    "⏭ END"
         │
         ├── InventoryLabel: "INVENTORY"
         ├── InventoryList (VBoxContainer)  ← dynamic item buttons
@@ -57,16 +99,56 @@ SurvivorPanel (PanelContainer)
 
 ---
 
-## Step 2: SurvivorPanel.gd — Complete
+## Step 2: Survivor Tab Switching
+
+The top row of the panel shows a button per survivor. Tapping switches the selected survivor without touching the grid.
 
 ```gdscript
-# scripts/ui/SurvivorPanel.gd
+# In ActionPanel.gd
+
+func _setup_survivor_tabs() -> void:
+    for i in range(GameState.survivors.size()):
+        var tab: Button = Button.new()
+        tab.text = GameState.survivors[i]["name"]
+        tab.custom_minimum_size = Vector2(80, 36)
+        tab.pressed.connect(_on_survivor_tab_pressed.bind(i))
+        $MC/VBox/SurvivorTabs.add_child(tab)
+
+func _on_survivor_tab_pressed(index: int) -> void:
+    if GameState.survivors[index]["state"] == "dead":
+        return
+    GameState.selected_survivor_index = index
+    SignalBus.survivor_selected.emit(index)
+    # Camera follows: GridCamera._on_survivor_selected() handles this
+
+func _refresh_survivor_tabs() -> void:
+    var tabs = $MC/VBox/SurvivorTabs.get_children()
+    for i in range(tabs.size()):
+        var s: Dictionary = GameState.survivors[i]
+        var tab: Button = tabs[i]
+        var is_selected: bool = (GameState.selected_survivor_index == i)
+
+        # Highlight selected tab
+        tab.modulate = Color.WHITE if is_selected else Color(0.6, 0.6, 0.6)
+
+        # Show HP inline on tab for quick read
+        tab.text = "%s\n❤%d" % [s["name"], s["hp"]]
+        tab.disabled = (s["state"] == "dead")
+```
+
+---
+
+## Step 3: ActionPanel.gd — Complete
+
+```gdscript
+# scripts/ui/ActionPanel.gd
 extends PanelContainer
 
 func _ready() -> void:
     SignalBus.ui_refresh_requested.connect(_refresh)
     SignalBus.survivor_selected.connect(func(_i): _refresh())
     _setup_action_buttons()
+    _setup_survivor_tabs()
     _refresh()
 
 func _refresh() -> void:
@@ -248,15 +330,18 @@ func _start_blink(node: Control) -> void:
 
 ---
 
-## Step 3: Top HUD — Turn Counter & Phase Indicator
+## Step 4: Top HUD — Turn Counter & Phase Indicator
 
 Add to `Main.tscn` inside the `UI/CanvasLayer`:
 
 ```
-HUD (HBoxContainer)    ← top center, anchored top-center
-├── TurnLabel          ← "Turn 1"
-├── PhaseLabel         ← "PLAYER PHASE"
-└── PanicLabel         ← "⚠ PANIC" (shows when any survivor panicked)
+HUD (PanelContainer)
+  anchors: left=0, right=1, top=0, bottom=0
+  offset_bottom: 60                        ← 60px tall, pinned at top
+└── HBoxContainer
+    ├── TurnLabel          ← "Turn 1"
+    ├── PhaseLabel         ← "PLAYER PHASE"
+    └── PanicLabel         ← "⚠ PANIC"
 ```
 
 ```gdscript
@@ -292,7 +377,7 @@ func _on_phase_changed(phase: int) -> void:
 
 ---
 
-## Step 4: Game Over Overlay
+## Step 5: Game Over Overlay
 
 Add `GameOverScreen.tscn` as a child of `UI/CanvasLayer`:
 
@@ -332,7 +417,7 @@ func _restart() -> void:
 
 ---
 
-## Step 5: Visual Feedback — Damage Flash
+## Step 6: Visual Feedback — Damage Flash
 
 When a survivor or zombie takes damage, flash them red briefly.
 
@@ -354,7 +439,7 @@ Emit these in `CombatSystem` after applying damage. Connect in `Survivor.gd` and
 
 ---
 
-## Step 6: Survivor Selection Switching
+## Step 7: Survivor Selection — Keyboard Fallback
 
 Add keyboard shortcut `Tab` to cycle between survivors:
 
@@ -384,7 +469,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 ---
 
-## Step 7: Tile Info Tooltip
+## Step 8: Tile Info Tooltip
 
 When hovering a tile, show a small tooltip in the bottom-left corner:
 
@@ -432,19 +517,34 @@ Create a `TileTooltip` label at the bottom of the screen connected to `tile_hove
 
 ## Phase 6 Checklist
 
+**Mobile Layout**
+- [ ] ActionPanel pinned to bottom 210px, never scrolls
+- [ ] HUD pinned to top 60px, never scrolls
+- [ ] Grid area fills the middle, camera pans independently
+- [ ] Survivor tab buttons: tap to switch selected survivor
+- [ ] Survivor name + HP shown on tab for quick reference
+
+**Stats**
 - [ ] HP and Nerve bars with correct color coding (green/yellow/red)
 - [ ] Weight bar (5 slots, filled = red, empty = green)
 - [ ] Status tags (BLEEDING, WOUNDED, EXHAUSTED, ADRENALINE) with colors
 - [ ] Downed warning with countdown blinks
 - [ ] Critical HP warning blinks
+
+**HUD**
 - [ ] Turn counter and phase label at top of screen
 - [ ] Phase label flashes yellow on phase transition
+- [ ] Panic warning shows when any survivor has nerve = 0
+
+**Feedback**
 - [ ] Game Over overlay on all survivors dead
 - [ ] Stage Cleared overlay when survivors reach exit
 - [ ] Damage flash (red) on survivors and zombies
-- [ ] Tab to cycle between survivors
-- [ ] Escape to cancel action mode
-- [ ] Tile hover tooltip
+
+**Input**
+- [ ] Tap survivor tab to switch without touching grid
+- [ ] Escape/back to cancel action mode
+- [ ] Tile hover tooltip (shown at top of action panel on mobile)
 
 ---
 
