@@ -82,7 +82,7 @@ interface ZombieDefaults {
 export const ZOMBIE_TYPES: Record<string, ZombieDefaults> = {
   shambler: { hp: 3,  damage: 2, speed: 2, groanRadius: 2, knockbackResistant: false, canGrab: true,  lowProfile: false, explodesOnDeath: false, explosionRadius: 0, explosionDamage: 0, label: "Shambler", emoji: "Z" },
   crawler:  { hp: 2,  damage: 1, speed: 3, groanRadius: 2, knockbackResistant: false, canGrab: false, lowProfile: true,  explodesOnDeath: false, explosionRadius: 0, explosionDamage: 0, label: "Crawler",  emoji: "C" },
-  bloater:  { hp: 6,  damage: 2, speed: 2, groanRadius: 2, knockbackResistant: false, canGrab: false, lowProfile: false, explodesOnDeath: true,  explosionRadius: 1, explosionDamage: 1, label: "Bloater",  emoji: "B" },
+  bloater:  { hp: 6,  damage: 2, speed: 2, groanRadius: 2, knockbackResistant: false, canGrab: false, lowProfile: false, explodesOnDeath: true,  explosionRadius: 1, explosionDamage: 3, label: "Bloater",  emoji: "B" },
   screamer: { hp: 2,  damage: 0, speed: 0, groanRadius: 3, knockbackResistant: false, canGrab: false, lowProfile: false, explodesOnDeath: false, explosionRadius: 0, explosionDamage: 0, label: "Screamer", emoji: "!" },
   brute:    { hp: 8,  damage: 3, speed: 2, groanRadius: 2, knockbackResistant: true,  canGrab: false, lowProfile: false, explodesOnDeath: false, explosionRadius: 0, explosionDamage: 0, label: "Brute",    emoji: "X" },
 };

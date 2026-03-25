@@ -335,17 +335,24 @@ export function throwMolotov(
   const noiseEvents: NoiseEvent[] = [];
   const noiseRipples: NoiseRipple[] = [];
   const messages: string[] = [];
-  const dmg = molotov.damage ?? 2;
 
-  const hitTiles: Coord[] = [{ x: targetX, y: targetY }];
+  // Falloff model: center 6 dmg, adjacent (cardinal) 3 dmg
+  const CENTER_DMG = 6;
+  const ADJACENT_DMG = 3;
+
+  type HitTile = { x: number; y: number; dmg: number };
+  const hitTiles: HitTile[] = [{ x: targetX, y: targetY, dmg: CENTER_DMG }];
   for (const [dx, dy] of [[0,1],[0,-1],[1,0],[-1,0]] as [number, number][]) {
-    hitTiles.push({ x: targetX + dx, y: targetY + dy });
+    hitTiles.push({ x: targetX + dx, y: targetY + dy, dmg: ADJACENT_DMG });
   }
 
+  // Fire spreads onto puddles at adjacent damage
+  const hitCoords = new Set(hitTiles.map(h => `${h.x},${h.y}`));
   const hitPuddles = terrain.filter(t => t.type === "puddle" && hitTiles.some(h => h.x === t.x && h.y === t.y));
   for (const puddle of hitPuddles) {
-    if (!hitTiles.some(h => h.x === puddle.x && h.y === puddle.y)) {
-      hitTiles.push({ x: puddle.x, y: puddle.y });
+    if (!hitCoords.has(`${puddle.x},${puddle.y}`)) {
+      hitTiles.push({ x: puddle.x, y: puddle.y, dmg: ADJACENT_DMG });
+      hitCoords.add(`${puddle.x},${puddle.y}`);
     }
     messages.push("Fire spreads across the puddle!");
   }
@@ -353,8 +360,8 @@ export function throwMolotov(
   for (const tile of hitTiles) {
     const z = zombies.find(zz => zz.hp > 0 && zz.x === tile.x && zz.y === tile.y);
     if (z) {
-      z.hp -= dmg;
-      messages.push(`Molotov hits ${z.type} for ${dmg}!`);
+      z.hp -= tile.dmg;
+      messages.push(`Molotov hits ${z.type} for ${tile.dmg}!`);
       if (z.hp <= 0) {
         z.state = "dead"; z.hp = 0;
         messages.push(`${z.type[0].toUpperCase() + z.type.slice(1)} burned down!`);
@@ -366,8 +373,9 @@ export function throwMolotov(
     }
     const sv = survivors.find(ss => ss.state !== "dead" && ss.x === tile.x && ss.y === tile.y);
     if (sv && sv.id !== survivorId) {
-      sv.hp -= 1;
-      messages.push(`${sv.name} caught in molotov blast! -1 HP`);
+      const friendlyDmg = tile.dmg === CENTER_DMG ? 2 : 1;
+      sv.hp -= friendlyDmg;
+      messages.push(`${sv.name} caught in molotov blast! -${friendlyDmg} HP`);
     }
   }
 
