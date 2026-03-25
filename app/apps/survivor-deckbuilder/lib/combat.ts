@@ -1,7 +1,7 @@
 import { Survivor, Zombie, NoiseEvent, NoiseRipple, LootItem, TerrainTile, Coord } from './types';
 import { manhattan, isFlanking, directionDelta, oppositeDir, inBounds, isObstacle, hasLineOfSight, getAdjacentCoords, coordToDir } from './grid';
 import { getNoiseIntensity } from './noise';
-import { ALERT_INVESTIGATE_TURNS, BRICK_ALERT_TURNS } from './constants';
+import { ALERT_INVESTIGATE_TURNS, BRICK_ALERT_TURNS, FLARE_ALERT_TURNS } from './constants';
 
 export interface AttackResult {
   survivors: Survivor[];
@@ -43,10 +43,30 @@ export function processAttack(
   let damage = weapon.damage ?? 1;
   const noiseR = weapon.noiseRadius;
 
-  // Flanking bonus: +1 damage from behind
+  // Flanking bonus: +1 damage — requires an ally on the OPPOSITE (front) side of the zombie simultaneously
   if (!isRanged && isFlanking(s, z)) {
-    damage += 1;
-    messages.push("Flanking bonus! +1 damage from behind.");
+    const frontDelta = directionDelta(z.facing);
+    const allyInFront = survivors.some(sv =>
+      sv.id !== survivorId &&
+      sv.state === "active" &&
+      sv.x === z.x + frontDelta.x &&
+      sv.y === z.y + frontDelta.y
+    );
+    if (allyInFront) {
+      damage += 1;
+      messages.push("Flanking! +1 damage — caught between two survivors.");
+    }
+  }
+
+  // Grab auto-break: if this zombie is grabbing someone AND attacker is a different survivor, break grip
+  if (z.state === "grabbing" && z.grabTarget !== null && z.grabTarget !== survivorId) {
+    const freed = survivors.find(ss => ss.id === z.grabTarget);
+    if (freed) {
+      freed.state = "active";
+      messages.push(`${s.name} breaks ${z.type}'s grip! ${freed.name} is free!`);
+    }
+    z.grabTarget = null;
+    z.state = "agitated";
   }
 
   // Focus fire stagger: second different survivor attacking same zombie
@@ -193,8 +213,22 @@ export function processAttack(
   if (!isRanged) s.actionsUsed += 1;
   s.nerve = Math.min(s.maxNerve, s.nerve + nerveChange);
 
+  // Weapon noise at attacker position
   noiseEvents.push({ x: s.x, y: s.y, radius: noiseR, intensity: getNoiseIntensity(noiseR) });
   noiseRipples.push({ x: s.x, y: s.y, radius: noiseR, intensity: getNoiseIntensity(noiseR), id: Date.now() });
+
+  // Combat noise at zombie position — failed kill = injured groan (radius 2), kill = body thump (radius 1)
+  const wasDormant = zombiesIn.find(zz => zz.id === zombieId)?.state === "dormant";
+  if (z.state === "dead" || z.hp <= 0) {
+    // Stealth kill on dormant = quiet thump; non-stealth = louder
+    const thumpR = wasDormant ? 1 : 2;
+    noiseEvents.push({ x: z.x, y: z.y, radius: thumpR, intensity: 1 });
+    noiseRipples.push({ x: z.x, y: z.y, radius: thumpR, intensity: 1, id: Date.now() + 50 });
+  } else if (z.hp > 0) {
+    // Injured zombie groans — alerts nearby dormant zombies
+    noiseEvents.push({ x: z.x, y: z.y, radius: 2, intensity: 1 });
+    noiseRipples.push({ x: z.x, y: z.y, radius: 2, intensity: 1, id: Date.now() + 50 });
+  }
 
   let msg = `${s.name} hits ${z.type} for ${damage}!`;
   if (killed || z.hp <= 0) msg += " Killed!";
@@ -253,7 +287,9 @@ export function throwDistraction(
   // Brick and Glass Bottle → alert only (intensity 1), brick stays alert much longer
   const agitates = throwNoise >= 4;
   const intensity = agitates ? 2 : 1;
-  const alertDuration = distraction.name === "Brick" ? BRICK_ALERT_TURNS : ALERT_INVESTIGATE_TURNS;
+  const alertDuration = distraction.name === "Brick" ? BRICK_ALERT_TURNS
+    : distraction.name === "Flare" ? FLARE_ALERT_TURNS
+    : ALERT_INVESTIGATE_TURNS;
 
   noiseEvents.push({ x: targetX, y: targetY, radius: throwNoise, intensity, alertDuration });
   noiseRipples.push({ x: targetX, y: targetY, radius: throwNoise, intensity, id: Date.now() + 777 });
@@ -299,17 +335,28 @@ export function throwMolotov(
   const noiseEvents: NoiseEvent[] = [];
   const noiseRipples: NoiseRipple[] = [];
   const messages: string[] = [];
-  const dmg = molotov.damage ?? 2;
 
-  const hitTiles: Coord[] = [{ x: targetX, y: targetY }];
+  // Falloff model: center 6, cardinal 3, diagonal 2
+  const CENTER_DMG = 6;
+  const CARDINAL_DMG = 3;
+  const DIAGONAL_DMG = 2;
+
+  type HitTile = { x: number; y: number; dmg: number };
+  const hitTiles: HitTile[] = [{ x: targetX, y: targetY, dmg: CENTER_DMG }];
   for (const [dx, dy] of [[0,1],[0,-1],[1,0],[-1,0]] as [number, number][]) {
-    hitTiles.push({ x: targetX + dx, y: targetY + dy });
+    hitTiles.push({ x: targetX + dx, y: targetY + dy, dmg: CARDINAL_DMG });
+  }
+  for (const [dx, dy] of [[1,1],[1,-1],[-1,1],[-1,-1]] as [number, number][]) {
+    hitTiles.push({ x: targetX + dx, y: targetY + dy, dmg: DIAGONAL_DMG });
   }
 
+  // Fire spreads onto puddles at adjacent damage
+  const hitCoords = new Set(hitTiles.map(h => `${h.x},${h.y}`));
   const hitPuddles = terrain.filter(t => t.type === "puddle" && hitTiles.some(h => h.x === t.x && h.y === t.y));
   for (const puddle of hitPuddles) {
-    if (!hitTiles.some(h => h.x === puddle.x && h.y === puddle.y)) {
-      hitTiles.push({ x: puddle.x, y: puddle.y });
+    if (!hitCoords.has(`${puddle.x},${puddle.y}`)) {
+      hitTiles.push({ x: puddle.x, y: puddle.y, dmg: CARDINAL_DMG });
+      hitCoords.add(`${puddle.x},${puddle.y}`);
     }
     messages.push("Fire spreads across the puddle!");
   }
@@ -317,8 +364,8 @@ export function throwMolotov(
   for (const tile of hitTiles) {
     const z = zombies.find(zz => zz.hp > 0 && zz.x === tile.x && zz.y === tile.y);
     if (z) {
-      z.hp -= dmg;
-      messages.push(`Molotov hits ${z.type} for ${dmg}!`);
+      z.hp -= tile.dmg;
+      messages.push(`Molotov hits ${z.type} for ${tile.dmg}!`);
       if (z.hp <= 0) {
         z.state = "dead"; z.hp = 0;
         messages.push(`${z.type[0].toUpperCase() + z.type.slice(1)} burned down!`);
@@ -330,8 +377,9 @@ export function throwMolotov(
     }
     const sv = survivors.find(ss => ss.state !== "dead" && ss.x === tile.x && ss.y === tile.y);
     if (sv && sv.id !== survivorId) {
-      sv.hp -= 1;
-      messages.push(`${sv.name} caught in molotov blast! -1 HP`);
+      const friendlyDmg = tile.dmg === CENTER_DMG ? 2 : 1;
+      sv.hp -= friendlyDmg;
+      messages.push(`${sv.name} caught in molotov blast! -${friendlyDmg} HP`);
     }
   }
 

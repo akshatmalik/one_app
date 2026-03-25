@@ -227,7 +227,7 @@ export default function GameGrid({
         return (
           <div
             key={`z${z.id}`}
-            onClick={() => isTarget && onTileClick(z.x, z.y)}
+            onClick={() => onTileClick(z.x, z.y)}
             style={{
               position: "absolute",
               left: z.x * TILE + 4, top: (GRID_H - 1 - z.y) * TILE + 4,
@@ -283,6 +283,7 @@ export default function GameGrid({
       {survivors.filter(s => s.state !== "dead").map(s => {
         const isSelected = selectedSurvivor === s.id;
         const isGrabbed = s.state === "grabbed";
+        const isDowned = s.state === "downed";
         const lowNerve = s.nerve <= 3;
         const panicked = s.nerve <= 0;
 
@@ -294,23 +295,26 @@ export default function GameGrid({
               position: "absolute",
               left: s.x * TILE + 4, top: (GRID_H - 1 - s.y) * TILE + 4,
               width: TILE - 10, height: TILE - 10,
-              background: panicked ? "#8a2a2a" :
+              background: isDowned ? "#2a1500" :
+                          panicked ? "#8a2a2a" :
                           isGrabbed ? "#a86a20" :
                           lowNerve ? "#5a4a2a" :
                           (s.id === 0 ? "#2a6a2a" : "#2a4a8a"),
-              border: isSelected ? "2px solid #fff" : "2px solid #040",
+              border: isDowned ? "2px solid #cc4400" :
+                      isSelected ? "2px solid #fff" : "2px solid #040",
               borderRadius: "50%", cursor: "pointer",
               display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-              fontSize: 10, color: "#fff", fontWeight: "bold",
+              fontSize: 10, color: isDowned ? "#ff7733" : "#fff", fontWeight: "bold",
               transition: "left 0.15s, top 0.15s",
-              opacity: !isSelected && focusMode ? 0.55 : 1,
-              boxShadow: isSelected ? "0 0 14px rgba(255,255,255,0.6)" : "none",
+              opacity: isDowned ? 0.85 : (!isSelected && focusMode ? 0.55 : 1),
+              boxShadow: isDowned ? "0 0 10px rgba(200,60,0,0.7)" :
+                         isSelected ? "0 0 14px rgba(255,255,255,0.6)" : "none",
               zIndex: 10,
-              animation: panicked ? "panic-pulse 0.5s infinite" : undefined,
+              animation: panicked && !isDowned ? "panic-pulse 0.5s infinite" : undefined,
             }}
           >
-            <span style={{ fontSize: 9 }}>{s.name[0]}</span>
-            <span style={{ fontSize: 7 }}>{s.hp}/{s.maxHp}</span>
+            <span style={{ fontSize: 9 }}>{isDowned ? "☠" : s.name[0]}</span>
+            <span style={{ fontSize: 7 }}>{isDowned ? `${s.downedTurns}T` : `${s.hp}/${s.maxHp}`}</span>
 
             {/* Overwatch indicator */}
             {s.overwatching && (
@@ -329,6 +333,11 @@ export default function GameGrid({
               <span style={{
                 position: "absolute", bottom: -10, right: 2, fontSize: 8, color: "#ff0",
               }}>&#9889;</span>
+            )}
+            {s.statusEffects.includes("exhausted") && (
+              <span style={{
+                position: "absolute", top: -14, right: 2, fontSize: 8, color: "#88f",
+              }}>💤</span>
             )}
           </div>
         );

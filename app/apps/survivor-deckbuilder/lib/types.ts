@@ -1,14 +1,14 @@
 export type Direction = "N" | "S" | "E" | "W";
 
-export type ZombieState = "dormant" | "alert" | "agitated" | "grabbing" | "dead";
+export type ZombieState = "dormant" | "alert" | "wary" | "agitated" | "grabbing" | "dead";
 
 export type ZombieType = "shambler" | "crawler" | "bloater" | "screamer" | "brute";
 
-export type StatusEffect = "bleeding" | "adrenaline";
+export type StatusEffect = "bleeding" | "adrenaline" | "exhausted" | "wounded";
 
 export type TerrainType = "glass" | "metal" | "puddle" | "trap";
 
-export type Phase = "player" | "noise" | "zombie" | "gameover" | "win";
+export type Phase = "player" | "noise" | "zombie" | "gameover" | "win" | "stagecomplete";
 
 export interface InventoryItem {
   name: string;
@@ -24,7 +24,8 @@ export interface InventoryItem {
   ammo?: number;
   knockback?: boolean;
   isTrap?: boolean;
-  trapType?: "wire" | "nail";
+  trapType?: "wire" | "nail" | "bear";
+  crowbar?: boolean;
 }
 
 export interface Survivor {
@@ -37,7 +38,7 @@ export interface Survivor {
   totalSlots: number;
   inventory: InventoryItem[];
   actionsUsed: number;
-  state: "active" | "dead" | "grabbed";
+  state: "active" | "dead" | "grabbed" | "downed";
   nerve: number;
   maxNerve: number;
   statusEffects: StatusEffect[];
@@ -46,6 +47,8 @@ export interface Survivor {
   adrenalineNextTurn: boolean;
   disengaging: boolean;
   emergencyMoveUsed: boolean;
+  downedTurns: number;       // turns until bleedout when downed (0 = not downed)
+  moveActionsThisTurn: number; // tracks movement-only turns for exhaustion
 }
 
 export interface Zombie {
@@ -88,7 +91,7 @@ export interface TerrainTile {
   y: number;
   type: TerrainType;
   noiseOnStep: number;
-  trapType?: "wire" | "nail";
+  trapType?: "wire" | "nail" | "bear";
   triggered?: boolean;
 }
 
@@ -118,6 +121,14 @@ export interface NoiseRipple {
 export interface Coord {
   x: number;
   y: number;
+}
+
+export interface GameLogEntry {
+  turn: number;
+  stage: number;
+  survivors: { id: number; name: string; x: number; y: number; hp: number; nerve: number; items: string[]; state: string }[];
+  zombies: { id: number; type: string; x: number; y: number; hp: number; state: string }[];
+  messages: string[];
 }
 
 export interface TurnSummary {
