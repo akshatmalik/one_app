@@ -355,7 +355,7 @@ export function throwMolotov(
   const hitPuddles = terrain.filter(t => t.type === "puddle" && hitTiles.some(h => h.x === t.x && h.y === t.y));
   for (const puddle of hitPuddles) {
     if (!hitCoords.has(`${puddle.x},${puddle.y}`)) {
-      hitTiles.push({ x: puddle.x, y: puddle.y, dmg: ADJACENT_DMG });
+      hitTiles.push({ x: puddle.x, y: puddle.y, dmg: CARDINAL_DMG });
       hitCoords.add(`${puddle.x},${puddle.y}`);
     }
     messages.push("Fire spreads across the puddle!");
