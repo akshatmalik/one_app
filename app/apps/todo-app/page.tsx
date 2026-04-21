@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { ChevronLeft, ChevronRight, ChevronDown, History, Sparkles, LogIn, LogOut, BarChart3, ChevronsRight, X } from 'lucide-react';
 import { Task } from './lib/types';
@@ -8,12 +8,16 @@ import { useTasks } from './hooks/useTasks';
 import { useStats } from './hooks/useStats';
 import { useSettings } from './hooks/useSettings';
 import { useDayNotes } from './hooks/useDayNotes';
+import { usePepTalk } from './hooks/usePepTalk';
 import { TaskInput } from './components/TaskInput';
 import { TaskList } from './components/TaskList';
 import { ReviewPastTasksModal } from './components/ReviewPastTasksModal';
 import { StatsView } from './components/StatsView';
 import { StartDateSetup } from './components/StartDateSetup';
 import { DayNotesEditor } from './components/DayNotesEditor';
+import { DailyPepTalk } from './components/DailyPepTalk';
+import { SillyQuickStarts } from './components/SillyQuickStarts';
+import { PepTalkContext } from './lib/ai-service';
 import { useAuthContext } from '@/lib/AuthContext';
 import { useToast } from '@/components/Toast';
 import { repository } from './lib/storage';
@@ -255,10 +259,43 @@ export default function TodoApp() {
 
   const dayNumber = settings ? calculateDayNumber(selectedDate, settings.startDate) : null;
 
+  // Pep talk context — rebuilt when the material task state changes
+  const pepTalkContext: PepTalkContext | null = useMemo(() => {
+    if (loading) return null;
+    const topIncomplete = incompleteTasks[0];
+    const categoriesSet = new Set<string>();
+    [...incompleteTasks, ...completedTasks].forEach(t => {
+      if (t.category) categoriesSet.add(t.category);
+    });
+    const completionRate = stats.total > 0 ? (stats.completed / stats.total) * 100 : 0;
+
+    return {
+      dayNumber,
+      totalTasks: stats.total,
+      completedTasks: stats.completed,
+      topPriorityText: topIncomplete?.text,
+      topPriorityLevel: topIncomplete?.priority,
+      categories: Array.from(categoriesSet).slice(0, 5),
+      currentStreak: weeklyStats?.currentStreak ?? 0,
+      longestStreak: weeklyStats?.longestStreak ?? 0,
+      overdueCount: pastTasks.length,
+      completionRate,
+      viewingToday: isToday,
+      dateLabel: formatDate(selectedDate),
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, stats.total, stats.completed, incompleteTasks, completedTasks, pastTasks.length, weeklyStats?.currentStreak, weeklyStats?.longestStreak, dayNumber, isToday, selectedDate]);
+
+  const { talk: pepTalk, loading: pepTalkLoading, regenerate: regeneratePepTalk } = usePepTalk(
+    selectedDate,
+    pepTalkContext,
+    activeTab === 'tasks' && !loading && !!pepTalkContext,
+  );
+
   if (authLoading || settingsLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#0a0a0f]">
-        <div className="text-white/20 text-sm">Loading...</div>
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#1a1530] via-[#15152a] to-[#0f0f1f]">
+        <div className="text-white/50 text-sm">Loading...</div>
       </div>
     );
   }
@@ -271,16 +308,23 @@ export default function TodoApp() {
   const progressPercent = stats.total > 0 ? (stats.completed / stats.total) * 100 : 0;
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#0a0a0f]">
+    <div className="min-h-screen flex flex-col bg-gradient-to-br from-[#1f1a38] via-[#171530] to-[#10101e] relative">
+      {/* Ambient glow — makes the dark feel lit, not empty */}
+      <div aria-hidden className="pointer-events-none fixed inset-0 overflow-hidden">
+        <div className="absolute -top-32 -left-20 w-96 h-96 rounded-full bg-purple-500/10 blur-3xl" />
+        <div className="absolute top-40 -right-24 w-96 h-96 rounded-full bg-pink-500/8 blur-3xl" />
+        <div className="absolute bottom-0 left-1/3 w-[32rem] h-[32rem] rounded-full bg-indigo-500/8 blur-3xl" />
+      </div>
+
       {/* Minimal sticky header */}
-      <div className="sticky top-0 z-40 bg-[#0a0a0f]/95 backdrop-blur-xl border-b border-white/[0.04]">
+      <div className="relative z-10 sticky top-0 bg-[#171530]/80 backdrop-blur-xl border-b border-white/[0.08]">
         <div className="max-w-2xl mx-auto px-5">
 
           {/* Top bar: back + actions */}
           <div className="h-11 flex items-center justify-between">
             <Link
               href="/"
-              className="flex items-center gap-1 text-white/25 hover:text-white/50 transition-colors"
+              className="flex items-center gap-1 text-white/50 hover:text-white/90 transition-colors"
             >
               <ChevronLeft size={15} />
               <span className="text-xs font-medium">Home</span>
@@ -290,7 +334,7 @@ export default function TodoApp() {
               {stats.total === 0 && activeTab === 'tasks' && (
                 <button
                   onClick={handleLoadSampleTasks}
-                  className="p-2 text-white/20 hover:text-white/50 transition-colors rounded-lg"
+                  className="p-2 text-white/45 hover:text-purple-300 hover:bg-white/5 transition-colors rounded-lg"
                   aria-label="Load sample tasks"
                 >
                   <Sparkles size={14} />
@@ -299,7 +343,7 @@ export default function TodoApp() {
               {isToday && activeTab === 'tasks' && (
                 <button
                   onClick={() => setIsReviewModalOpen(true)}
-                  className="p-2 text-white/20 hover:text-white/50 transition-colors rounded-lg"
+                  className="p-2 text-white/45 hover:text-white/90 hover:bg-white/5 transition-colors rounded-lg"
                   aria-label="Review past tasks"
                 >
                   <History size={14} />
@@ -308,7 +352,7 @@ export default function TodoApp() {
               {user ? (
                 <button
                   onClick={signOut}
-                  className="p-2 text-white/20 hover:text-white/50 transition-colors rounded-lg"
+                  className="p-2 text-white/45 hover:text-white/90 hover:bg-white/5 transition-colors rounded-lg"
                   aria-label="Sign out"
                 >
                   <LogOut size={14} />
@@ -316,7 +360,7 @@ export default function TodoApp() {
               ) : (
                 <button
                   onClick={signIn}
-                  className="p-2 text-white/20 hover:text-white/50 transition-colors rounded-lg"
+                  className="p-2 text-white/45 hover:text-white/90 hover:bg-white/5 transition-colors rounded-lg"
                   aria-label="Sign in"
                 >
                   <LogIn size={14} />
@@ -331,7 +375,7 @@ export default function TodoApp() {
               <div className="flex items-center gap-1">
                 <button
                   onClick={handlePreviousDay}
-                  className="p-2 text-white/20 hover:text-white/50 transition-colors rounded-lg"
+                  className="p-2 text-white/45 hover:text-white/90 hover:bg-white/5 transition-colors rounded-lg"
                   aria-label="Previous day"
                 >
                   <ChevronLeft size={17} />
@@ -341,19 +385,19 @@ export default function TodoApp() {
                   onClick={handleTodayClick}
                   className="flex-1 flex flex-col items-center py-1 group"
                 >
-                  <span className="text-xl font-semibold text-white/90 tracking-tight group-hover:text-white transition-colors">
+                  <span className="text-xl font-semibold bg-gradient-to-r from-white to-white/85 bg-clip-text text-transparent tracking-tight group-hover:from-purple-200 group-hover:to-pink-200 transition-all">
                     {formatDate(selectedDate)}
                   </span>
                   {dayNumber !== null && (
-                    <span className="text-[11px] text-white/20 mt-0.5">
-                      {new Date(selectedDate + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric' })} · Day {dayNumber}
+                    <span className="text-[11px] text-white/55 mt-0.5">
+                      {new Date(selectedDate + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric' })} · <span className="text-purple-300/80">Day {dayNumber}</span>
                     </span>
                   )}
                 </button>
 
                 <button
                   onClick={handleNextDay}
-                  className="p-2 text-white/20 hover:text-white/50 transition-colors rounded-lg"
+                  className="p-2 text-white/45 hover:text-white/90 hover:bg-white/5 transition-colors rounded-lg"
                   aria-label="Next day"
                 >
                   <ChevronRight size={17} />
@@ -363,13 +407,13 @@ export default function TodoApp() {
               {/* Progress bar */}
               {stats.total > 0 && (
                 <div className="mt-2.5 flex items-center gap-3">
-                  <div className="flex-1 h-px bg-white/[0.07] overflow-hidden">
+                  <div className="flex-1 h-1.5 bg-white/[0.08] rounded-full overflow-hidden">
                     <div
-                      className="h-full bg-gradient-to-r from-purple-500/50 to-emerald-500/50 transition-all duration-700 ease-out"
+                      className="h-full bg-gradient-to-r from-purple-400 via-pink-400 to-emerald-400 transition-all duration-700 ease-out rounded-full shadow-sm shadow-purple-500/30"
                       style={{ width: `${progressPercent}%` }}
                     />
                   </div>
-                  <span className="text-[11px] text-white/20 tabular-nums">
+                  <span className="text-[11px] text-white/60 tabular-nums font-medium">
                     {stats.completed}/{stats.total}
                   </span>
                 </div>
@@ -386,8 +430,8 @@ export default function TodoApp() {
                 className={clsx(
                   'px-4 py-2 text-xs font-medium transition-all border-b-2 capitalize tracking-wide',
                   activeTab === tab
-                    ? 'text-white/80 border-white/30'
-                    : 'text-white/25 border-transparent hover:text-white/45'
+                    ? 'text-white/95 border-purple-400'
+                    : 'text-white/45 border-transparent hover:text-white/75'
                 )}
               >
                 {tab}
@@ -409,11 +453,20 @@ export default function TodoApp() {
       )}
 
       {/* Main Content */}
-      <div className="flex-1 px-6 py-6 overflow-hidden flex flex-col">
+      <div className="relative z-10 flex-1 px-6 py-6 overflow-hidden flex flex-col">
         <div className="max-w-2xl mx-auto w-full flex-1 flex flex-col">
           {activeTab === 'tasks' ? (
             <>
+              {/* AI Pep Talk */}
+              <DailyPepTalk
+                talk={pepTalk}
+                loading={pepTalkLoading}
+                onRegenerate={regeneratePepTalk}
+              />
+
               <TaskInput onAdd={handleAddTask} />
+
+              {isToday && <SillyQuickStarts onAdd={handleAddTask} />}
 
               {/* Past incomplete tasks — shown inline on today */}
               {isToday && pastTasks.length > 0 && (
@@ -422,15 +475,15 @@ export default function TodoApp() {
                     onClick={() => setPastCollapsed(c => !c)}
                     className="flex items-center gap-2 w-full mb-2 py-1 group"
                   >
-                    <span className="text-[10px] font-semibold text-white/25 uppercase tracking-widest">
+                    <span className="text-[10px] font-semibold text-white/55 uppercase tracking-widest">
                       Previous days
                     </span>
-                    <span className="text-[10px] text-white/20 bg-white/[0.05] px-1.5 py-0.5 rounded-full">
+                    <span className="text-[10px] text-purple-200/90 bg-purple-500/20 px-1.5 py-0.5 rounded-full font-medium">
                       {pastTasks.length}
                     </span>
                     <ChevronDown
                       size={11}
-                      className={clsx('text-white/20 ml-auto transition-transform duration-200', pastCollapsed && '-rotate-90')}
+                      className={clsx('text-white/45 ml-auto transition-transform duration-200', pastCollapsed && '-rotate-90')}
                     />
                   </button>
 
@@ -439,24 +492,24 @@ export default function TodoApp() {
                       {pastTasks.map(task => (
                         <div
                           key={task.id}
-                          className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-white/[0.02] border border-white/[0.05]"
+                          className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-white/[0.05] border border-white/10 hover:bg-white/[0.07] transition-colors"
                         >
                           {/* Complete circle */}
                           <button
                             onClick={() => handleCompletePastTask(task.id)}
-                            className="w-4 h-4 rounded-full border border-white/15 hover:border-emerald-500/50 hover:bg-emerald-500/10 transition-all shrink-0"
+                            className="w-4 h-4 rounded-full border border-white/30 hover:border-emerald-400 hover:bg-emerald-500/20 transition-all shrink-0"
                             aria-label="Complete"
                           />
                           {/* Task text */}
-                          <span className="flex-1 text-sm text-white/45 truncate">{task.text}</span>
+                          <span className="flex-1 text-sm text-white/70 truncate">{task.text}</span>
                           {/* Date label */}
-                          <span className="text-[10px] text-white/20 shrink-0">
+                          <span className="text-[10px] text-white/45 shrink-0">
                             {new Date(task.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                           </span>
                           {/* Move to today */}
                           <button
                             onClick={() => handleMovePastTaskToToday(task.id)}
-                            className="p-1 text-white/20 hover:text-purple-400 transition-colors shrink-0"
+                            className="p-1 text-white/45 hover:text-purple-300 transition-colors shrink-0"
                             aria-label="Move to today"
                           >
                             <ChevronsRight size={13} />
@@ -464,7 +517,7 @@ export default function TodoApp() {
                           {/* Delete */}
                           <button
                             onClick={() => handleDeletePastTask(task.id)}
-                            className="p-1 text-white/20 hover:text-red-400 transition-colors shrink-0"
+                            className="p-1 text-white/45 hover:text-red-400 transition-colors shrink-0"
                             aria-label="Delete"
                           >
                             <X size={13} />
@@ -475,7 +528,7 @@ export default function TodoApp() {
                       {/* Bulk action */}
                       <button
                         onClick={handleMoveAllToToday}
-                        className="text-[11px] text-white/20 hover:text-white/40 transition-colors text-left py-1.5 pl-2 flex items-center gap-1"
+                        className="text-[11px] text-white/50 hover:text-purple-300 transition-colors text-left py-1.5 pl-2 flex items-center gap-1"
                       >
                         <ChevronsRight size={12} />
                         Move all to today
@@ -486,7 +539,7 @@ export default function TodoApp() {
               )}
 
               {loading ? (
-                <div className="text-center py-12 text-white/30 text-sm">Loading...</div>
+                <div className="text-center py-12 text-white/55 text-sm">Loading...</div>
               ) : (
                 <TaskList
                   incompleteTasks={incompleteTasks}
@@ -498,7 +551,7 @@ export default function TodoApp() {
               )}
             </>
           ) : activeTab === 'notes' ? (
-            <div className="flex-1 bg-white/[0.02] border border-white/5 rounded-2xl overflow-hidden">
+            <div className="flex-1 bg-white/[0.04] border border-white/10 rounded-2xl overflow-hidden">
               <DayNotesEditor
                 date={selectedDate}
                 dayNumber={dayNumber}
@@ -510,7 +563,7 @@ export default function TodoApp() {
           ) : (
             <>
               {statsLoading ? (
-                <div className="text-center py-12 text-white/30 text-sm">Loading stats...</div>
+                <div className="text-center py-12 text-white/55 text-sm">Loading stats...</div>
               ) : statsError ? (
                 <div className="text-center py-12">
                   <div className="bg-red-500/10 border border-red-500/20 rounded-lg px-4 py-3 text-sm text-red-400 inline-block">
@@ -527,11 +580,11 @@ export default function TodoApp() {
               ) : (
                 <div className="text-center py-20">
                   <div className="max-w-md mx-auto">
-                    <div className="w-16 h-16 bg-purple-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                      <BarChart3 size={32} className="text-purple-400/50" />
+                    <div className="w-16 h-16 bg-gradient-to-br from-purple-500/25 to-pink-500/20 rounded-full flex items-center justify-center mx-auto mb-4 ring-1 ring-white/10">
+                      <BarChart3 size={32} className="text-purple-300" />
                     </div>
-                    <h3 className="text-lg font-medium text-white/70 mb-2">No stats yet</h3>
-                    <p className="text-white/40 text-sm">
+                    <h3 className="text-lg font-medium text-white/90 mb-2">No stats yet</h3>
+                    <p className="text-white/60 text-sm">
                       Complete some tasks to start seeing your statistics and progress tracking.
                     </p>
                   </div>

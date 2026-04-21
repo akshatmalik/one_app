@@ -24,12 +24,12 @@ export function StartDateSetup({ onSetStartDate }: StartDateSetupProps) {
   };
 
   return (
-    <div className="min-h-[calc(100vh-60px)] flex items-center justify-center px-6">
+    <div className="min-h-screen flex items-center justify-center px-6 bg-gradient-to-br from-[#1f1a38] via-[#171530] to-[#10101e]">
       <div className="max-w-md w-full">
-        <div className="bg-white/[0.03] border border-white/10 rounded-2xl p-8">
+        <div className="bg-white/[0.05] border border-white/10 rounded-2xl p-8 shadow-xl shadow-purple-500/10">
           <div className="flex items-center justify-center mb-6">
-            <div className="w-16 h-16 bg-purple-600/20 rounded-2xl flex items-center justify-center">
-              <Calendar size={32} className="text-purple-400" />
+            <div className="w-16 h-16 bg-gradient-to-br from-purple-500/30 to-pink-500/30 ring-1 ring-white/10 rounded-2xl flex items-center justify-center">
+              <Calendar size={32} className="text-purple-200" />
             </div>
           </div>
 

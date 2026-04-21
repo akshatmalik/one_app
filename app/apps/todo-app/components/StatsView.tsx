@@ -72,10 +72,10 @@ export function StatsView({ weeklyStats, monthlyStats, weeklyData, monthlyData }
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       return (
-        <div className="bg-[#1a1a24] border border-white/10 rounded-lg px-3 py-2 text-sm">
-          <p className="text-white/90 font-medium">{label}</p>
+        <div className="bg-[#2a2342] border border-white/15 rounded-lg px-3 py-2 text-sm shadow-lg shadow-black/30">
+          <p className="text-white/95 font-medium">{label}</p>
           {payload.map((entry: any, index: number) => (
-            <p key={index} className="text-white/60">
+            <p key={index} className="text-white/75">
               {entry.name}: {entry.value}
             </p>
           ))}
@@ -89,15 +89,15 @@ export function StatsView({ weeklyStats, monthlyStats, weeklyData, monthlyData }
     <div className="space-y-6">
       {/* Period Toggle */}
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-white">Statistics</h2>
-        <div className="flex bg-white/[0.03] border border-white/10 rounded-lg p-1">
+        <h2 className="text-lg font-semibold text-white/95">Statistics</h2>
+        <div className="flex bg-white/[0.05] border border-white/10 rounded-lg p-1">
           <button
             onClick={() => setPeriod('week')}
             className={clsx(
               'px-4 py-1.5 text-sm font-medium rounded-md transition-all',
               period === 'week'
-                ? 'bg-purple-600 text-white'
-                : 'text-white/60 hover:text-white/80'
+                ? 'bg-gradient-to-br from-purple-500 to-pink-500 text-white shadow-sm shadow-purple-500/30'
+                : 'text-white/65 hover:text-white/90'
             )}
           >
             Weekly
@@ -107,8 +107,8 @@ export function StatsView({ weeklyStats, monthlyStats, weeklyData, monthlyData }
             className={clsx(
               'px-4 py-1.5 text-sm font-medium rounded-md transition-all',
               period === 'month'
-                ? 'bg-purple-600 text-white'
-                : 'text-white/60 hover:text-white/80'
+                ? 'bg-gradient-to-br from-purple-500 to-pink-500 text-white shadow-sm shadow-purple-500/30'
+                : 'text-white/65 hover:text-white/90'
             )}
           >
             Monthly
@@ -153,12 +153,12 @@ export function StatsView({ weeklyStats, monthlyStats, weeklyData, monthlyData }
             {priorityData.map((p) => (
               <div key={p.priority} className="space-y-1">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-white/70">{p.name}</span>
-                  <span className="text-white/50">
+                  <span className="text-white/85">{p.name}</span>
+                  <span className="text-white/65">
                     {p.completed}/{p.total} ({p.total > 0 ? ((p.completed / p.total) * 100).toFixed(0) : 0}%)
                   </span>
                 </div>
-                <div className="h-2 bg-white/5 rounded-full overflow-hidden">
+                <div className="h-2 bg-white/10 rounded-full overflow-hidden">
                   <div
                     className="h-full rounded-full transition-all duration-500"
                     style={{
@@ -194,12 +194,12 @@ export function StatsView({ weeklyStats, monthlyStats, weeklyData, monthlyData }
           {/* Category details */}
           <div className="mt-4 space-y-2">
             {categoryData.map((cat, idx) => (
-              <div key={idx} className="flex items-center justify-between p-2 bg-white/[0.02] rounded-lg">
-                <span className="text-sm text-white/70">{cat.name}</span>
+              <div key={idx} className="flex items-center justify-between p-2 bg-white/[0.05] border border-white/5 rounded-lg">
+                <span className="text-sm text-white/85">{cat.name}</span>
                 <div className="flex items-center gap-3 text-xs">
-                  <span className="text-purple-400">{cat.points} pts</span>
-                  <span className="text-white/50">{cat.completed}/{cat.total}</span>
-                  <span className="text-emerald-400">{cat.completionRate.toFixed(0)}%</span>
+                  <span className="text-purple-300 font-medium">{cat.points} pts</span>
+                  <span className="text-white/65">{cat.completed}/{cat.total}</span>
+                  <span className="text-emerald-300 font-medium">{cat.completionRate.toFixed(0)}%</span>
                 </div>
               </div>
             ))}
@@ -261,13 +261,13 @@ export function StatsView({ weeklyStats, monthlyStats, weeklyData, monthlyData }
 
       {/* Streak Info */}
       {stats.currentStreak > 0 && (
-        <div className="p-4 bg-gradient-to-br from-orange-500/10 to-red-500/10 border border-orange-500/20 rounded-xl">
+        <div className="p-4 bg-gradient-to-br from-orange-500/20 via-pink-500/10 to-red-500/15 border border-orange-400/30 rounded-xl shadow-sm shadow-orange-500/10">
           <div className="flex items-center gap-3 mb-2">
-            <Flame size={20} className="text-orange-400" />
-            <h3 className="text-sm font-medium text-white">On Fire! 🔥</h3>
+            <Flame size={20} className="text-orange-300" />
+            <h3 className="text-sm font-semibold text-white/95">On Fire!</h3>
           </div>
-          <p className="text-white/60 text-sm">
-            You&apos;re on a <span className="text-orange-400 font-semibold">{stats.currentStreak}-day streak</span>!
+          <p className="text-white/80 text-sm">
+            You&apos;re on a <span className="text-orange-300 font-semibold">{stats.currentStreak}-day streak</span>!
             {stats.currentStreak === stats.longestStreak
               ? " This is your best streak yet!"
               : ` Your best is ${stats.longestStreak} days. Keep going!`}
@@ -286,38 +286,38 @@ function StatCard({ icon, label, value, subValue, color = 'default' }: {
   color?: 'default' | 'emerald' | 'blue' | 'purple' | 'orange';
 }) {
   const colors = {
-    default: 'bg-white/[0.02] border-white/5',
-    emerald: 'bg-emerald-500/10 border-emerald-500/20',
-    blue: 'bg-blue-500/10 border-blue-500/20',
-    purple: 'bg-purple-500/10 border-purple-500/20',
-    orange: 'bg-orange-500/10 border-orange-500/20',
+    default: 'bg-white/[0.05] border-white/10',
+    emerald: 'bg-emerald-500/15 border-emerald-400/30',
+    blue: 'bg-blue-500/15 border-blue-400/30',
+    purple: 'bg-purple-500/15 border-purple-400/30',
+    orange: 'bg-orange-500/15 border-orange-400/30',
   };
   const textColors = {
-    default: 'text-white/40',
-    emerald: 'text-emerald-400',
-    blue: 'text-blue-400',
-    purple: 'text-purple-400',
-    orange: 'text-orange-400',
+    default: 'text-white/60',
+    emerald: 'text-emerald-300',
+    blue: 'text-blue-300',
+    purple: 'text-purple-300',
+    orange: 'text-orange-300',
   };
 
   return (
-    <div className={clsx('p-3 rounded-xl border transition-all', colors[color])}>
+    <div className={clsx('p-3 rounded-xl border transition-all hover:brightness-110', colors[color])}>
       <div className="flex items-center gap-2 mb-1">
         <span className={textColors[color]}>{icon}</span>
-        <span className="text-xs text-white/40">{label}</span>
+        <span className="text-xs text-white/60">{label}</span>
       </div>
-      <div className="text-lg font-semibold text-white/90">{value}</div>
-      {subValue && <div className="text-xs text-white/30 mt-0.5">{subValue}</div>}
+      <div className="text-lg font-semibold text-white/95">{value}</div>
+      {subValue && <div className="text-xs text-white/50 mt-0.5">{subValue}</div>}
     </div>
   );
 }
 
 function ChartCard({ title, icon, children }: { title: string; icon: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div className="p-4 bg-white/[0.02] border border-white/5 rounded-xl">
+    <div className="p-4 bg-white/[0.04] border border-white/10 rounded-xl">
       <div className="flex items-center gap-2 mb-4">
-        <span className="text-white/40">{icon}</span>
-        <h3 className="text-sm font-medium text-white/70">{title}</h3>
+        <span className="text-purple-300">{icon}</span>
+        <h3 className="text-sm font-medium text-white/85">{title}</h3>
       </div>
       {children}
     </div>

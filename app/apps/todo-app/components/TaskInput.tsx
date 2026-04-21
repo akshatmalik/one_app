@@ -34,19 +34,19 @@ export function TaskInput({ onAdd }: TaskInputProps) {
           value={text}
           onChange={(e) => setText(e.target.value)}
           placeholder="What needs to be done? Use @category !1-4"
-          className="flex-1 px-4 py-3 bg-white/[0.03] border border-white/5 text-white rounded-xl text-sm focus:outline-none focus:bg-white/[0.05] focus:border-white/10 transition-all placeholder:text-white/30"
+          className="flex-1 px-4 py-3 bg-white/[0.06] border border-white/10 text-white/95 rounded-xl text-sm focus:outline-none focus:bg-white/[0.09] focus:border-purple-400/40 focus:ring-2 focus:ring-purple-400/20 transition-all placeholder:text-white/45"
           disabled={isAdding}
         />
         <button
           type="submit"
           disabled={!text.trim() || isAdding}
-          className="px-4 py-3 bg-purple-600 text-white rounded-xl hover:bg-purple-500 disabled:bg-white/5 disabled:text-white/20 disabled:cursor-not-allowed transition-all"
+          className="px-4 py-3 bg-gradient-to-br from-purple-500 to-pink-500 text-white rounded-xl hover:from-purple-400 hover:to-pink-400 hover:shadow-lg hover:shadow-purple-500/30 disabled:from-white/10 disabled:to-white/10 disabled:text-white/35 disabled:shadow-none disabled:cursor-not-allowed transition-all"
         >
           <Plus size={18} className={isAdding ? 'animate-spin' : ''} />
         </button>
       </form>
-      <p className="text-xs text-white/30 mb-4 px-1">
-        Tip: Use <span className="text-purple-400">@work</span> for categories, <span className="text-red-400">!1</span> <span className="text-orange-400">!2</span> <span className="text-blue-400">!3</span> <span className="text-white/40">!4</span> for priority
+      <p className="text-xs text-white/55 mb-4 px-1">
+        Tip: Use <span className="text-purple-300 font-medium">@work</span> for categories, <span className="text-red-300 font-medium">!1</span> <span className="text-orange-300 font-medium">!2</span> <span className="text-blue-300 font-medium">!3</span> <span className="text-white/65 font-medium">!4</span> for priority
       </p>
     </div>
   );
