@@ -16,6 +16,7 @@ import { StatsView } from './components/StatsView';
 import { StartDateSetup } from './components/StartDateSetup';
 import { DayNotesEditor } from './components/DayNotesEditor';
 import { DailyPepTalk } from './components/DailyPepTalk';
+import { SillyQuickStarts } from './components/SillyQuickStarts';
 import { PepTalkContext } from './lib/ai-service';
 import { useAuthContext } from '@/lib/AuthContext';
 import { useToast } from '@/components/Toast';
@@ -464,6 +465,8 @@ export default function TodoApp() {
               />
 
               <TaskInput onAdd={handleAddTask} />
+
+              {isToday && <SillyQuickStarts onAdd={handleAddTask} />}
 
               {/* Past incomplete tasks — shown inline on today */}
               {isToday && pastTasks.length > 0 && (
