@@ -1668,6 +1668,8 @@ function NowPlayingCard({ game, allGames, onClick, onQuickLog, sortBy = 'hours',
   eloTierRank?: { tier: GameTier; rank: number };
 }) {
   const [isFlipped, setIsFlipped] = useState(false);
+  const [checkInHours, setCheckInHours] = useState(1);
+  const [checkInDone, setCheckInDone] = useState(false);
   const rarity = getCardRarity(game);
   const relationship = getRelationshipStatus(game, allGames);
   const streak = getGameStreak(game);
@@ -1680,9 +1682,6 @@ function NowPlayingCard({ game, allGames, onClick, onQuickLog, sortBy = 'hours',
   const moodPulse = getCardMoodPulse(game);
   const progressRing = getProgressRingData(game, allGames);
   const shelfExpiry = getShelfLifeExpiry(game, allGames);
-  const avgSession = game.playLogs && game.playLogs.length > 0
-    ? Math.round(game.playLogs.reduce((s, l) => s + l.hours, 0) / game.playLogs.length * 10) / 10
-    : 2;
 
   const handleFlip = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -1857,13 +1856,32 @@ function NowPlayingCard({ game, allGames, onClick, onQuickLog, sortBy = 'hours',
             )}
           </div>
 
-          {/* Check-in button row */}
-          <div className="px-3 pb-2.5 pt-1">
+          {/* Check-in stepper */}
+          <div className="px-3 pb-2.5 pt-1 flex items-center gap-1.5">
             <button
-              onClick={(e) => { e.stopPropagation(); onQuickLog(avgSession); }}
-              className="w-full px-4 py-2 bg-blue-600/20 text-blue-300 rounded-lg text-xs font-bold active:bg-blue-600/40 transition-all flex items-center justify-center gap-1.5 border border-blue-500/10"
+              onClick={(e) => { e.stopPropagation(); setCheckInHours(h => Math.max(0.5, Math.round((h - 0.5) * 10) / 10)); }}
+              className="w-7 h-7 flex items-center justify-center rounded-lg bg-white/5 text-white/40 text-sm font-bold active:bg-white/10 transition-all shrink-0"
+            >−</button>
+            <span className="text-xs font-bold text-blue-300 text-center w-8 shrink-0">{checkInHours}h</span>
+            <button
+              onClick={(e) => { e.stopPropagation(); setCheckInHours(h => Math.round((h + 0.5) * 10) / 10); }}
+              className="w-7 h-7 flex items-center justify-center rounded-lg bg-white/5 text-white/40 text-sm font-bold active:bg-white/10 transition-all shrink-0"
+            >+</button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onQuickLog(checkInHours);
+                setCheckInDone(true);
+                setTimeout(() => { setCheckInDone(false); setCheckInHours(1); }, 1500);
+              }}
+              className={clsx(
+                'flex-1 h-7 flex items-center justify-center gap-1 rounded-lg text-xs font-bold transition-all',
+                checkInDone
+                  ? 'bg-emerald-500/20 text-emerald-400'
+                  : 'bg-blue-600/20 text-blue-300 active:bg-blue-600/40 border border-blue-500/10'
+              )}
             >
-              <Clock size={12} /> Check In
+              {checkInDone ? <><Check size={11} /> Done!</> : <><Clock size={11} /> Check In</>}
             </button>
           </div>
 
