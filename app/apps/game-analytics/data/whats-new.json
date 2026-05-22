@@ -3,6 +3,12 @@
     {
       "date": "2026-05-22",
       "area": "Games tab",
+      "title": "Filter by what you're actually doing with each game",
+      "body": "The old All / Owned / Wishlist filter is now replaced with smarter status pills: All, Playing, Done, Backlog, Wishlist, Dropped — each showing a live count. Tap 'Playing' to instantly see everything in progress. Tap 'Done' to browse your completed games. Only statuses you actually have games in will appear."
+    },
+    {
+      "date": "2026-05-22",
+      "area": "Games tab",
       "title": "Search your library instantly",
       "body": "A search bar now lives at the top of the Games tab. Type a game name, genre, or platform and your list narrows in real time. Works great when you have a big library and just want to find that one game quickly."
     },
