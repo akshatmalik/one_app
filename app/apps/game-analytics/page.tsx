@@ -46,7 +46,7 @@ import { ErrorLogPanel, ErrorLogButton } from './components/ErrorLogPanel';
 import { WhatsNewModal } from './components/WhatsNewModal';
 import clsx from 'clsx';
 
-type ViewMode = 'all' | 'owned' | 'wishlist';
+type ViewMode = 'all' | 'playing' | 'completed' | 'backlog' | 'wishlist' | 'abandoned';
 type TabMode = 'games' | 'timeline' | 'stats' | 'ai-coach' | 'up-next' | 'discover' | 'leaderboard' | 'buy-queue';
 type CardViewMode = 'poster' | 'compact';
 
@@ -266,6 +266,16 @@ export default function GameAnalyticsPage() {
     return getSpendingForecast(games, year, currentBudget?.yearlyBudget);
   }, [games, budgets]);
 
+  // Filter counts for the status filter bar
+  const filterCounts = useMemo(() => ({
+    all: gamesWithMetrics.length,
+    playing: gamesWithMetrics.filter(g => g.status === 'In Progress').length,
+    completed: gamesWithMetrics.filter(g => g.status === 'Completed').length,
+    backlog: gamesWithMetrics.filter(g => g.status === 'Not Started').length,
+    wishlist: gamesWithMetrics.filter(g => g.status === 'Wishlist').length,
+    abandoned: gamesWithMetrics.filter(g => g.status === 'Abandoned').length,
+  }), [gamesWithMetrics]);
+
   // Calculate week and month data for AI chat
   const weekData = useMemo(() => {
     try {
@@ -445,9 +455,14 @@ export default function GameAnalyticsPage() {
 
   const filteredGames = gamesWithMetrics
     .filter(g => {
-      if (viewMode === 'owned') return g.status !== 'Wishlist';
-      if (viewMode === 'wishlist') return g.status === 'Wishlist';
-      return true;
+      switch (viewMode) {
+        case 'playing': return g.status === 'In Progress';
+        case 'completed': return g.status === 'Completed';
+        case 'backlog': return g.status === 'Not Started';
+        case 'wishlist': return g.status === 'Wishlist';
+        case 'abandoned': return g.status === 'Abandoned';
+        default: return true;
+      }
     })
     .filter(g => {
       if (!searchQuery.trim()) return true;
@@ -489,6 +504,15 @@ export default function GameAnalyticsPage() {
           return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       }
     });
+
+  const statusFilterOptions = [
+    { value: 'all' as ViewMode, label: 'All' },
+    { value: 'playing' as ViewMode, label: 'Playing' },
+    { value: 'completed' as ViewMode, label: 'Done' },
+    { value: 'backlog' as ViewMode, label: 'Backlog' },
+    { value: 'wishlist' as ViewMode, label: 'Wishlist' },
+    { value: 'abandoned' as ViewMode, label: 'Dropped' },
+  ].filter(f => f.value === 'all' || filterCounts[f.value] !== 0);
 
   return (
     <div className="min-h-[calc(100vh-60px)] flex flex-col">
@@ -1014,26 +1038,32 @@ export default function GameAnalyticsPage() {
                       <p className="text-[11px] text-white/30 px-1">
                         {filteredGames.length === 0
                           ? 'No matches'
-                          : `${filteredGames.length} of ${gamesWithMetrics.filter(g => viewMode === 'owned' ? g.status !== 'Wishlist' : viewMode === 'wishlist' ? g.status === 'Wishlist' : true).length} game${filteredGames.length !== 1 ? 's' : ''}`
+                          : `${filteredGames.length} of ${filterCounts[viewMode]} game${filteredGames.length !== 1 ? 's' : ''}`
                         }
                       </p>
                     )}
                   </div>
                 )}
               <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-                <div className="flex items-center gap-1 bg-white/[0.02] rounded-lg p-1">
-                  {(['all', 'owned', 'wishlist'] as ViewMode[]).map((mode) => (
+                <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide pb-0.5">
+                  {statusFilterOptions.map(({ value, label }) => (
                     <button
-                      key={mode}
-                      onClick={() => setViewMode(mode)}
+                      key={value}
+                      onClick={() => setViewMode(value)}
                       className={clsx(
-                        'px-3 py-1 rounded-md text-xs font-medium transition-all capitalize',
-                        viewMode === mode
-                          ? 'bg-white/10 text-white'
-                          : 'text-white/40 hover:text-white/60'
+                        'flex-shrink-0 flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-all whitespace-nowrap',
+                        viewMode === value
+                          ? 'bg-white/15 text-white'
+                          : 'text-white/40 hover:text-white/60 hover:bg-white/5'
                       )}
                     >
-                      {mode}
+                      {label}
+                      <span className={clsx(
+                        'text-[10px] leading-none px-1.5 py-0.5 rounded-full',
+                        viewMode === value ? 'bg-white/20 text-white/80' : 'bg-white/5 text-white/30'
+                      )}>
+                        {filterCounts[value]}
+                      </span>
                     </button>
                   ))}
                 </div>

@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-05-22 22:00 — Games Tab — Status filter pills with live counts
+
+**Files**: app/apps/game-analytics/page.tsx
+**Risk**: not risky
+
+Replaced the coarse All/Owned/Wishlist filter with granular status pills: All, Playing, Done, Backlog, Wishlist, Dropped — each showing a live count of how many games match. Pills for empty statuses are hidden automatically, so the bar stays tidy. Users with large libraries can now jump straight to "what I'm currently playing" or "everything I've completed" in one tap. Pairs naturally with the search bar: e.g. filter to Playing then search for a game name.
+
+FOLLOW-UP: Could add color accents to each status pill (blue for Playing, green for Done, purple for Wishlist) to make them even more scannable at a glance.
+
 ## 2026-05-22 18:00 — Games Tab — Game search bar
 
 **Files**: app/apps/game-analytics/page.tsx
