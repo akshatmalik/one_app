@@ -43,6 +43,7 @@ import { useTrophies } from './hooks/useTrophies';
 import { TrophyShowcase } from './components/TrophyShowcase';
 import { TrophyToast } from './components/TrophyToast';
 import { ErrorLogPanel, ErrorLogButton } from './components/ErrorLogPanel';
+import { WhatsNewModal } from './components/WhatsNewModal';
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist';
@@ -207,6 +208,7 @@ export default function GameAnalyticsPage() {
   });
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showErrorLog, setShowErrorLog] = useState(false);
+  const [showWhatsNew, setShowWhatsNew] = useState(false);
 
   // Week recap data for header strip
   const weekRecap = useMemo(() => {
@@ -561,6 +563,15 @@ export default function GameAnalyticsPage() {
                 )}
               </div>
               <ErrorLogButton onClick={() => setShowErrorLog(true)} />
+              <button
+                onClick={() => setShowWhatsNew(true)}
+                className="flex items-center gap-1.5 px-2.5 py-2 bg-white/5 text-white/60 hover:text-white/80 rounded-lg transition-all text-sm"
+                title="What's New"
+                aria-label="What's New"
+              >
+                <Sparkles size={14} />
+                <span className="hidden sm:inline text-[12px]">What&apos;s New</span>
+              </button>
               <button
                 onClick={() => setIsFormOpen(true)}
                 className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-500 transition-all text-sm font-medium"
@@ -1307,6 +1318,11 @@ export default function GameAnalyticsPage() {
       {/* Error Log Panel */}
       {showErrorLog && (
         <ErrorLogPanel onClose={() => setShowErrorLog(false)} />
+      )}
+
+      {/* What's New Modal */}
+      {showWhatsNew && (
+        <WhatsNewModal onClose={() => setShowWhatsNew(false)} />
       )}
 
       {/* Export Panel */}
