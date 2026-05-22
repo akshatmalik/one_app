@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical, Download, Gift, ShoppingCart } from 'lucide-react';
+import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical, Download, Gift, ShoppingCart, Search, X } from 'lucide-react';
 import { useGames } from './hooks/useGames';
 import { useAnalytics, GameWithMetrics } from './hooks/useAnalytics';
 import { useBudget } from './hooks/useBudget';
@@ -202,6 +202,7 @@ export default function GameAnalyticsPage() {
     if (typeof window === 'undefined') return false;
     return localStorage.getItem('ga-group-sections') === 'true';
   });
+  const [searchQuery, setSearchQuery] = useState('');
   const [recapCollapsed, setRecapCollapsed] = useState(() => {
     if (typeof window === 'undefined') return false;
     return localStorage.getItem('ga-recap-collapsed') === 'true';
@@ -447,6 +448,17 @@ export default function GameAnalyticsPage() {
       if (viewMode === 'owned') return g.status !== 'Wishlist';
       if (viewMode === 'wishlist') return g.status === 'Wishlist';
       return true;
+    })
+    .filter(g => {
+      if (!searchQuery.trim()) return true;
+      const q = searchQuery.trim().toLowerCase();
+      return (
+        g.name.toLowerCase().includes(q) ||
+        (g.genre && g.genre.toLowerCase().includes(q)) ||
+        (g.platform && g.platform.toLowerCase().includes(q)) ||
+        (g.franchise && g.franchise.toLowerCase().includes(q)) ||
+        (g.notes && g.notes.toLowerCase().includes(q))
+      );
     })
     .sort((a, b) => {
       switch (sortBy) {
@@ -976,6 +988,38 @@ export default function GameAnalyticsPage() {
 
             {/* View Mode Filter & Sort (only for games tab) */}
             {tabMode === 'games' && (
+              <div className="flex flex-col gap-3">
+                {/* Search bar */}
+                {games.length > 0 && (
+                  <div className="space-y-1">
+                    <div className="relative">
+                      <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
+                      <input
+                        type="text"
+                        value={searchQuery}
+                        onChange={e => setSearchQuery(e.target.value)}
+                        placeholder="Search games, genres, platforms…"
+                        className="w-full pl-8 pr-8 py-2 bg-white/[0.03] border border-white/10 text-white text-sm rounded-lg placeholder:text-white/25 focus:outline-none focus:border-purple-500/40 focus:bg-white/[0.05] transition-all"
+                      />
+                      {searchQuery && (
+                        <button
+                          onClick={() => setSearchQuery('')}
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 transition-colors"
+                        >
+                          <X size={14} />
+                        </button>
+                      )}
+                    </div>
+                    {searchQuery.trim() && (
+                      <p className="text-[11px] text-white/30 px-1">
+                        {filteredGames.length === 0
+                          ? 'No matches'
+                          : `${filteredGames.length} of ${gamesWithMetrics.filter(g => viewMode === 'owned' ? g.status !== 'Wishlist' : viewMode === 'wishlist' ? g.status === 'Wishlist' : true).length} game${filteredGames.length !== 1 ? 's' : ''}`
+                        }
+                      </p>
+                    )}
+                  </div>
+                )}
               <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
                 <div className="flex items-center gap-1 bg-white/[0.02] rounded-lg p-1">
                   {(['all', 'owned', 'wishlist'] as ViewMode[]).map((mode) => (
@@ -1075,6 +1119,7 @@ export default function GameAnalyticsPage() {
                   </div>
                 </div>
               </div>
+            </div>
             )}
           </div>
 
@@ -1089,7 +1134,17 @@ export default function GameAnalyticsPage() {
                 </div>
               ) : filteredGames.length === 0 ? (
                 <div className="text-center py-16">
-                  <p className="text-white/30 text-sm">No games in this category</p>
+                  {searchQuery.trim() ? (
+                    <>
+                      <Search size={32} className="mx-auto mb-3 text-white/10" />
+                      <p className="text-white/30 text-sm">No games match &ldquo;{searchQuery}&rdquo;</p>
+                      <button onClick={() => setSearchQuery('')} className="mt-2 text-xs text-purple-400/70 hover:text-purple-400 transition-colors">
+                        Clear search
+                      </button>
+                    </>
+                  ) : (
+                    <p className="text-white/30 text-sm">No games in this category</p>
+                  )}
                 </div>
               ) : (
                 <GameCardList
