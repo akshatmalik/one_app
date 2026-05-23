@@ -531,43 +531,40 @@ export function LeaderboardTab({ gamesWithMetrics, userId, eloTierConfig }: Lead
   async function handlePick(winnerId: string, loserId: string) {
     if (!currentPair || submitting) return;
 
-    // Immediately flash the chosen winner before the async round-trip
+    // Flash the chosen winner immediately
     setPickedWinnerId(winnerId);
 
+    // Show result toast immediately — we already have the ELOs, no need to wait
+    const winnerR = rankings.find(r => r.gameId === winnerId);
+    const loserR = rankings.find(r => r.gameId === loserId);
+    const winnerGame = gamesWithMetrics.find(g => g.id === winnerId);
+    const loserGame = gamesWithMetrics.find(g => g.id === loserId);
+    if (winnerGame && loserGame) {
+      const wElo = winnerR?.eloScore ?? 1000;
+      const lElo = loserR?.eloScore ?? 1000;
+      const expectedWin = 1 / (1 + Math.pow(10, (lElo - wElo) / 400));
+      const k = 32;
+      setLastResult({
+        winner: winnerGame.name,
+        loser: loserGame.name,
+        winnerChange: Math.round(k * (1 - expectedWin)),
+        loserChange: Math.round(k * (0 - (1 - expectedWin))),
+      });
+      setShowResult(true);
+      if (resultTimerRef.current) clearTimeout(resultTimerRef.current);
+      resultTimerRef.current = setTimeout(() => {
+        setShowResult(false);
+        setPickedWinnerId(null);
+      }, 800);
+    }
+
+    // Persist the battle — optimistic state updates inside recordBattle ensure
+    // the next pair appears immediately without waiting for Firebase.
     try {
-      // Snapshot current ELOs for the result display
-      const winnerR = rankings.find(r => r.gameId === winnerId);
-      const loserR = rankings.find(r => r.gameId === loserId);
-
       await recordBattle(winnerId, loserId);
-
-      // Show result flash
-      const winnerGame = gamesWithMetrics.find(g => g.id === winnerId);
-      const loserGame = gamesWithMetrics.find(g => g.id === loserId);
-      if (winnerGame && loserGame) {
-        const wElo = winnerR?.eloScore ?? 1000;
-        const lElo = loserR?.eloScore ?? 1000;
-        const expectedWin = 1 / (1 + Math.pow(10, (lElo - wElo) / 400));
-        const k = 32;
-        const wChange = Math.round(k * (1 - expectedWin));
-        const lChange = Math.round(k * (0 - (1 - expectedWin)));
-        setLastResult({
-          winner: winnerGame.name,
-          loser: loserGame.name,
-          winnerChange: wChange,
-          loserChange: lChange,
-        });
-        setShowResult(true);
-        if (resultTimerRef.current) clearTimeout(resultTimerRef.current);
-        resultTimerRef.current = setTimeout(() => {
-          setShowResult(false);
-          setPickedWinnerId(null);
-        }, 800);
-      }
-
-      // Next pair is set via the useEffect watching battles
     } catch (err) {
       setPickedWinnerId(null);
+      setShowResult(false);
       logError('Battle pick failed', 'handlePick', err);
     }
   }

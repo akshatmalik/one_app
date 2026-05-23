@@ -230,44 +230,80 @@ export function useRankings(
   }, [battles, rankings]);
 
   const recordBattle = useCallback(async (winnerId: string, loserId: string) => {
+    // Get or create rankings for both games
+    const winnerRanking = rankings.find(r => r.gameId === winnerId) ?? {
+      gameId: winnerId, period, periodKey,
+      eloScore: INITIAL_ELO, wins: 0, losses: 0, battlesCount: 0, lastBattleAt: '',
+    };
+    const loserRanking = rankings.find(r => r.gameId === loserId) ?? {
+      gameId: loserId, period, periodKey,
+      eloScore: INITIAL_ELO, wins: 0, losses: 0, battlesCount: 0, lastBattleAt: '',
+    };
+
+    const { winnerChange, loserChange } = computeEloChanges(
+      winnerRanking.eloScore,
+      loserRanking.eloScore,
+      winnerRanking.battlesCount,
+      loserRanking.battlesCount,
+    );
+
+    const now = new Date().toISOString();
+    const existingWinner = rankings.find(r => r.gameId === winnerId);
+    const existingLoser = rankings.find(r => r.gameId === loserId);
+
+    // Optimistically update local state immediately so the UI responds without
+    // waiting for Firebase round-trips.
+    setBattles(prev => [{
+      id: `opt-${Date.now()}`,
+      userId: userId || '',
+      period, periodKey, winnerId, loserId,
+      winnerEloChange: winnerChange,
+      loserEloChange: loserChange,
+      battleDate: now, createdAt: now, updatedAt: now,
+    } as RatingBattle, ...prev]);
+
+    setRankings(prev => {
+      const filtered = prev.filter(r => r.gameId !== winnerId && r.gameId !== loserId);
+      const newWinner: GameRanking = {
+        id: existingWinner?.id ?? `opt-${winnerId}`,
+        userId: userId || '',
+        gameId: winnerId, period, periodKey,
+        eloScore: Math.max(100, winnerRanking.eloScore + winnerChange),
+        wins: winnerRanking.wins + 1,
+        losses: winnerRanking.losses,
+        battlesCount: winnerRanking.battlesCount + 1,
+        lastBattleAt: now,
+        createdAt: existingWinner?.createdAt ?? now,
+        updatedAt: now,
+      };
+      const newLoser: GameRanking = {
+        id: existingLoser?.id ?? `opt-${loserId}`,
+        userId: userId || '',
+        gameId: loserId, period, periodKey,
+        eloScore: Math.max(100, loserRanking.eloScore + loserChange),
+        wins: loserRanking.wins,
+        losses: loserRanking.losses + 1,
+        battlesCount: loserRanking.battlesCount + 1,
+        lastBattleAt: now,
+        createdAt: existingLoser?.createdAt ?? now,
+        updatedAt: now,
+      };
+      return [...filtered, newWinner, newLoser].sort((a, b) => b.eloScore - a.eloScore);
+    });
+
+    // Persist to storage in the background
     setSubmitting(true);
     try {
-      // Get or create rankings for both games
-      const winnerRanking = rankings.find(r => r.gameId === winnerId) ?? {
-        gameId: winnerId, period, periodKey,
-        eloScore: INITIAL_ELO, wins: 0, losses: 0, battlesCount: 0, lastBattleAt: '',
-      };
-      const loserRanking = rankings.find(r => r.gameId === loserId) ?? {
-        gameId: loserId, period, periodKey,
-        eloScore: INITIAL_ELO, wins: 0, losses: 0, battlesCount: 0, lastBattleAt: '',
-      };
-
-      const { winnerChange, loserChange } = computeEloChanges(
-        winnerRanking.eloScore,
-        loserRanking.eloScore,
-        winnerRanking.battlesCount,
-        loserRanking.battlesCount,
-      );
-
-      const now = new Date().toISOString();
-
-      // Save battle record first
       await battleRepository.create({
-        period,
-        periodKey,
-        winnerId,
-        loserId,
+        period, periodKey, winnerId, loserId,
         winnerEloChange: winnerChange,
         loserEloChange: loserChange,
         battleDate: now,
       });
 
-      // Update rankings
       await Promise.all([
         rankingRepository.upsert({
-          gameId: winnerId,
-          period,
-          periodKey,
+          gameId: winnerId, period, periodKey,
           eloScore: Math.max(100, winnerRanking.eloScore + winnerChange),
           wins: winnerRanking.wins + 1,
           losses: winnerRanking.losses,
@@ -275,9 +311,7 @@ export function useRankings(
           lastBattleAt: now,
         }),
         rankingRepository.upsert({
-          gameId: loserId,
-          period,
-          periodKey,
+          gameId: loserId, period, periodKey,
           eloScore: Math.max(100, loserRanking.eloScore + loserChange),
           wins: loserRanking.wins,
           losses: loserRanking.losses + 1,
@@ -286,7 +320,8 @@ export function useRankings(
         }),
       ]);
 
-      await refresh();
+      // Sync server state in the background without blocking the UI
+      refresh().catch(err => logError('Background refresh failed', 'useRankings.recordBattle', err));
     } catch (err) {
       const url = extractIndexUrl(err);
       if (url) setIndexError(url);
