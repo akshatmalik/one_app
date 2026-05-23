@@ -36,18 +36,20 @@ export function BuyQueueTab({ userId, wishlistGames, allGames, budgets, yearSpen
     entries,
     activeEntries,
     maybeEntries,
+    deferredEntries,
     upcomingEntries,
     availableEntries,
     purchasedEntries,
     loading,
     plannedSpend,
     maybeSpend,
+    deferredSpend,
     releasingSoon,
     addEntry,
     updateEntry,
     deleteEntry,
     markPurchased,
-    toggleMaybe,
+    setIntent,
   } = usePurchaseQueue(userId);
 
   const [showAddModal, setShowAddModal] = useState(false);
@@ -73,11 +75,11 @@ export function BuyQueueTab({ userId, wishlistGames, allGames, budgets, yearSpen
   // Sale season
   const saleSeason = useMemo(() => getSaleSeasonIndicator(), []);
 
-  // Deal alerts
+  // Deal alerts — committed watches plus deferred (deferred is the discount-watch bucket)
   const dealsAtTarget = useMemo(() =>
-    activeEntries.filter(e =>
+    [...activeEntries, ...deferredEntries].filter(e =>
       e.currentPrice != null && e.targetPrice != null && e.currentPrice <= e.targetPrice
-    ), [activeEntries]);
+    ), [activeEntries, deferredEntries]);
 
   // Stats
   const stats = useMemo(() => {
@@ -315,6 +317,12 @@ export function BuyQueueTab({ userId, wishlistGames, allGames, budgets, yearSpen
               <span>{maybeEntries.length} maybe</span>
             </div>
           )}
+          {deferredEntries.length > 0 && (
+            <div className="flex items-center gap-1.5 text-xs text-blue-400/70">
+              <Tag size={12} />
+              <span>{deferredEntries.length} deferred</span>
+            </div>
+          )}
           {releasingSoon > 0 && (
             <div className="flex items-center gap-1.5 text-xs text-purple-400">
               <Calendar size={12} />
@@ -439,7 +447,7 @@ export function BuyQueueTab({ userId, wishlistGames, allGames, budgets, yearSpen
       )}
 
       {/* Empty state (Feature #18) */}
-      {activeEntries.length === 0 && maybeEntries.length === 0 && (
+      {activeEntries.length === 0 && maybeEntries.length === 0 && deferredEntries.length === 0 && (
         <div className="text-center py-16 space-y-4">
           <div className="w-16 h-16 rounded-2xl bg-white/[0.03] flex items-center justify-center mx-auto">
             <ShoppingCart size={28} className="text-white/10" />
@@ -491,7 +499,7 @@ export function BuyQueueTab({ userId, wishlistGames, allGames, budgets, yearSpen
                     onUpdate={updateEntry}
                     onMarkPurchased={handleMarkPurchased}
                     onDelete={handleDelete}
-                    onToggleMaybe={() => toggleMaybe(entry.id)}
+                    onSetIntent={(intent) => setIntent(entry.id, intent)}
                   />
                 ))}
               </div>
@@ -517,7 +525,7 @@ export function BuyQueueTab({ userId, wishlistGames, allGames, budgets, yearSpen
                     onUpdate={updateEntry}
                     onMarkPurchased={handleMarkPurchased}
                     onDelete={handleDelete}
-                    onToggleMaybe={() => toggleMaybe(entry.id)}
+                    onSetIntent={(intent) => setIntent(entry.id, intent)}
                   />
                 ))}
               </div>
@@ -544,7 +552,34 @@ export function BuyQueueTab({ userId, wishlistGames, allGames, budgets, yearSpen
                     onUpdate={updateEntry}
                     onMarkPurchased={handleMarkPurchased}
                     onDelete={handleDelete}
-                    onToggleMaybe={() => toggleMaybe(entry.id)}
+                    onSetIntent={(intent) => setIntent(entry.id, intent)}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Deferred section — waiting for a deal */}
+          {deferredEntries.length > 0 && (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <Tag size={13} className="text-blue-400/70" />
+                <h3 className="text-xs font-medium text-white/50 uppercase tracking-wider">Deferred — Waiting for a Deal</h3>
+                <span className="text-[11px] text-white/25">{deferredEntries.length}</span>
+                {deferredSpend > 0 && (
+                  <span className="text-[11px] text-blue-400/40 ml-auto">{formatMoney(deferredSpend)} at full price</span>
+                )}
+              </div>
+              <div className="space-y-2">
+                {deferredEntries.map(entry => (
+                  <BuyQueueCard
+                    key={entry.id}
+                    entry={entry}
+                    allGames={allGames}
+                    onUpdate={updateEntry}
+                    onMarkPurchased={handleMarkPurchased}
+                    onDelete={handleDelete}
+                    onSetIntent={(intent) => setIntent(entry.id, intent)}
                   />
                 ))}
               </div>
@@ -581,7 +616,7 @@ export function BuyQueueTab({ userId, wishlistGames, allGames, budgets, yearSpen
                       onUpdate={updateEntry}
                       onMarkPurchased={handleMarkPurchased}
                       onDelete={handleDelete}
-                      onToggleMaybe={() => toggleMaybe(entry.id)}
+                      onSetIntent={(intent) => setIntent(entry.id, intent)}
                     />
                   ))}
                 </div>
@@ -663,9 +698,9 @@ export function BuyQueueTab({ userId, wishlistGames, allGames, budgets, yearSpen
       )}
 
       {/* Wishlist nudge (Feature #13) */}
-      {wishlistGames.length > 0 && (activeEntries.length > 0 || maybeEntries.length > 0) && (
+      {wishlistGames.length > 0 && (activeEntries.length > 0 || maybeEntries.length > 0 || deferredEntries.length > 0) && (
         (() => {
-          const queuedNames = new Set([...activeEntries, ...maybeEntries].map(e => e.gameName.toLowerCase()));
+          const queuedNames = new Set([...activeEntries, ...maybeEntries, ...deferredEntries].map(e => e.gameName.toLowerCase()));
           const untracked = wishlistGames.filter(g => !queuedNames.has(g.name.toLowerCase()));
           if (untracked.length === 0) return null;
           return (

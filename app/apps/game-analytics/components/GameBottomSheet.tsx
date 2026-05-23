@@ -61,6 +61,8 @@ export function GameBottomSheet({
   isInQueue,
 }: GameBottomSheetProps) {
   const [expanded, setExpanded] = useState(false);
+  const [showAwards, setShowAwards] = useState(false);
+  const [showJourney, setShowJourney] = useState(false);
   const sheetRef = useRef<HTMLDivElement>(null);
   const dragStartY = useRef<number | null>(null);
   const currentTranslateY = useRef(0);
@@ -264,13 +266,18 @@ export function GameBottomSheet({
           {/* Awards Won */}
           {game.awards && game.awards.length > 0 && (
             <div className="px-5 pb-4">
-              <div className="flex items-center gap-2 mb-3">
+              <button
+                onClick={() => setShowAwards(v => !v)}
+                className="w-full flex items-center gap-2 mb-3"
+              >
                 <Trophy size={13} className="text-amber-400 shrink-0" />
                 <span className="text-sm font-medium text-white/70">Awards Won</span>
                 <span className="text-[10px] px-1.5 py-0.5 bg-amber-500/15 text-amber-400 rounded-full font-bold ml-auto">
                   {game.awards.length}
                 </span>
-              </div>
+                {showAwards ? <ChevronUp size={15} className="text-white/30" /> : <ChevronDown size={15} className="text-white/30" />}
+              </button>
+              {showAwards && (
               <div className="flex flex-col gap-1.5">
                 {game.awards
                   .slice()
@@ -298,6 +305,7 @@ export function GameBottomSheet({
                     );
                   })}
               </div>
+              )}
             </div>
           )}
 
@@ -361,8 +369,17 @@ export function GameBottomSheet({
           {/* Journey */}
           {(game.playLogs && game.playLogs.length > 0) && (
             <div className="px-5 pb-4">
-              <span className="text-sm font-medium text-white/70 block mb-3">The Journey</span>
-              <GameJourney game={game} />
+              <button
+                onClick={() => setShowJourney(v => !v)}
+                className="w-full flex items-center gap-2 mb-3"
+              >
+                <span className="text-sm font-medium text-white/70">The Journey</span>
+                <span className="text-[10px] px-1.5 py-0.5 bg-white/5 text-white/40 rounded-full font-bold ml-auto">
+                  {game.playLogs.length} sessions
+                </span>
+                {showJourney ? <ChevronUp size={15} className="text-white/30" /> : <ChevronDown size={15} className="text-white/30" />}
+              </button>
+              {showJourney && <GameJourney game={game} />}
             </div>
           )}
 

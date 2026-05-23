@@ -1,108 +1,131 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import { PurchaseQueueEntry } from '../lib/types';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { PurchaseQueueEntry, PurchaseIntent } from '../lib/types';
 import { purchaseQueueRepository } from '../lib/purchase-queue-storage';
+
+function sortEntries(data: PurchaseQueueEntry[]): PurchaseQueueEntry[] {
+  return [...data].sort((a, b) => {
+    if (a.priority !== b.priority) return a.priority - b.priority;
+    return new Date(a.addedAt).getTime() - new Date(b.addedAt).getTime();
+  });
+}
+
+// Migrate legacy `isMaybe` flag into the `intent` field so the rest of the app
+// only has to reason about one source of truth.
+function normalizeIntent(e: PurchaseQueueEntry): PurchaseQueueEntry {
+  if (e.intent) return e;
+  return { ...e, intent: e.isMaybe ? 'maybe' : 'committed' };
+}
+
+const priceOf = (e: PurchaseQueueEntry): number =>
+  e.targetPrice ?? e.currentPrice ?? e.msrpEstimate ?? 0;
 
 export function usePurchaseQueue(userId: string | null) {
   const [entries, setEntries] = useState<PurchaseQueueEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const refresh = useCallback(async () => {
+  // Mirror of `entries` for snapshot/rollback inside async mutations.
+  const entriesRef = useRef<PurchaseQueueEntry[]>([]);
+  useEffect(() => { entriesRef.current = entries; }, [entries]);
+
+  // `showLoading` only on the initial load so background re-syncs never blank the tab.
+  const refresh = useCallback(async (showLoading = false) => {
     try {
-      setLoading(true);
+      if (showLoading) setLoading(true);
       const data = await purchaseQueueRepository.getAll();
-      // Sort by priority ascending, then by addedAt
-      data.sort((a, b) => {
-        if (a.priority !== b.priority) return a.priority - b.priority;
-        return new Date(a.addedAt).getTime() - new Date(b.addedAt).getTime();
-      });
-      setEntries(data);
+      setEntries(sortEntries(data.map(normalizeIntent)));
     } catch (e) {
       console.error('Failed to load purchase queue', e);
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
     purchaseQueueRepository.setUserId(userId || 'local-user');
-    refresh();
+    refresh(true);
   }, [userId, refresh]);
 
   const addEntry = useCallback(async (
     data: Omit<PurchaseQueueEntry, 'id' | 'userId' | 'createdAt' | 'updatedAt'>
   ): Promise<PurchaseQueueEntry> => {
     const entry = await purchaseQueueRepository.create(data);
-    await refresh();
+    setEntries(prev => sortEntries([...prev, normalizeIntent(entry)]));
     return entry;
-  }, [refresh]);
+  }, []);
 
+  // Optimistic: apply locally first, persist in the background, roll back on failure.
   const updateEntry = useCallback(async (
     id: string,
     updates: Partial<PurchaseQueueEntry>
   ): Promise<void> => {
-    await purchaseQueueRepository.update(id, updates);
-    await refresh();
-  }, [refresh]);
+    const snapshot = entriesRef.current;
+    const now = new Date().toISOString();
+    setEntries(prev => sortEntries(prev.map(e => e.id === id ? { ...e, ...updates, updatedAt: now } : e)));
+    try {
+      await purchaseQueueRepository.update(id, updates);
+    } catch (e) {
+      console.error('Failed to update purchase queue entry', e);
+      setEntries(snapshot);
+      throw e;
+    }
+  }, []);
 
   const deleteEntry = useCallback(async (id: string): Promise<void> => {
-    await purchaseQueueRepository.delete(id);
-    await refresh();
-  }, [refresh]);
+    const snapshot = entriesRef.current;
+    setEntries(prev => prev.filter(e => e.id !== id));
+    try {
+      await purchaseQueueRepository.delete(id);
+    } catch (e) {
+      console.error('Failed to delete purchase queue entry', e);
+      setEntries(snapshot);
+      throw e;
+    }
+  }, []);
 
   const markPurchased = useCallback(async (id: string, purchasePrice?: number): Promise<void> => {
-    await purchaseQueueRepository.update(id, {
+    await updateEntry(id, {
       purchased: true,
       purchasedAt: new Date().toISOString(),
       purchasePrice,
     });
-    await refresh();
-  }, [refresh]);
+  }, [updateEntry]);
 
-  const toggleMaybe = useCallback(async (id: string): Promise<void> => {
-    const entry = entries.find(e => e.id === id);
-    if (!entry) return;
-    await purchaseQueueRepository.update(id, { isMaybe: !entry.isMaybe });
-    await refresh();
-  }, [entries, refresh]);
+  const setIntent = useCallback(async (id: string, intent: PurchaseIntent): Promise<void> => {
+    // Keep the legacy flag in sync for any older client/data path.
+    await updateEntry(id, { intent, isMaybe: intent === 'maybe' });
+  }, [updateEntry]);
 
-  // Derived: entries split into committed watches, maybes, and purchased
+  // ── Derived buckets ──────────────────────────────────────────────
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  const activeEntries = entries.filter(e => !e.purchased && !e.isMaybe);
-  const maybeEntries = entries.filter(e => !e.purchased && e.isMaybe);
+  const notPurchased = entries.filter(e => !e.purchased);
+  const activeEntries = notPurchased.filter(e => e.intent === 'committed');
+  const maybeEntries = notPurchased.filter(e => e.intent === 'maybe');
+  const deferredEntries = notPurchased.filter(e => e.intent === 'deferred');
   const purchasedEntries = entries.filter(e => e.purchased);
 
   const upcomingEntries = activeEntries.filter(e => {
     if (!e.releaseDate) return false;
-    const rel = new Date(e.releaseDate);
-    return rel > today;
+    return new Date(e.releaseDate) > today;
   });
 
   const availableEntries = activeEntries.filter(e => {
     if (!e.releaseDate) return true;
-    const rel = new Date(e.releaseDate);
-    return rel <= today;
+    return new Date(e.releaseDate) <= today;
   });
 
-  // Quick stats — plannedSpend is committed watches only (maybes excluded from budget)
-  const plannedSpend = activeEntries.reduce((sum, e) => {
-    const price = e.targetPrice ?? e.currentPrice ?? e.msrpEstimate ?? 0;
-    return sum + price;
-  }, 0);
+  // Budget plan counts committed games only — maybe & deferred are excluded.
+  const plannedSpend = activeEntries.reduce((sum, e) => sum + priceOf(e), 0);
+  const maybeSpend = maybeEntries.reduce((sum, e) => sum + priceOf(e), 0);
+  const deferredSpend = deferredEntries.reduce((sum, e) => sum + priceOf(e), 0);
 
-  const maybeSpend = maybeEntries.reduce((sum, e) => {
-    const price = e.targetPrice ?? e.currentPrice ?? e.msrpEstimate ?? 0;
-    return sum + price;
-  }, 0);
-
-  // releasingSoon includes both committed and maybe (informational)
-  const releasingSoon = [...activeEntries, ...maybeEntries].filter(e => {
+  // releasingSoon is informational — includes every non-purchased intent.
+  const releasingSoon = notPurchased.filter(e => {
     if (!e.releaseDate) return false;
-    const rel = new Date(e.releaseDate);
-    const diff = (rel.getTime() - today.getTime()) / (1000 * 60 * 60 * 24);
+    const diff = (new Date(e.releaseDate).getTime() - today.getTime()) / (1000 * 60 * 60 * 24);
     return diff > 0 && diff <= 90;
   }).length;
 
@@ -110,18 +133,20 @@ export function usePurchaseQueue(userId: string | null) {
     entries,
     activeEntries,
     maybeEntries,
+    deferredEntries,
     upcomingEntries,
     availableEntries,
     purchasedEntries,
     loading,
     plannedSpend,
     maybeSpend,
+    deferredSpend,
     releasingSoon,
     addEntry,
     updateEntry,
     deleteEntry,
     markPurchased,
-    toggleMaybe,
+    setIntent,
     refresh,
   };
 }

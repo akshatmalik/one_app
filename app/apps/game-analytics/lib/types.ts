@@ -267,6 +267,17 @@ export interface ErrorLogEntry {
 
 // ── Purchase Queue ────────────────────────────────────────────────
 
+// Purchase intent — how committed you are to buying this game.
+//   committed = counts toward the budget plan ("watching")
+//   maybe     = soft interest, excluded from budget totals
+//   deferred  = want it, but waiting for a discount/later — excluded from budget, home for deal alerts
+export type PurchaseIntent = 'committed' | 'maybe' | 'deferred';
+
+export interface PriceObservation {
+  date: string;   // YYYY-MM-DD
+  price: number;
+}
+
 export interface PurchaseQueueEntry {
   id: string;
   userId: string;
@@ -294,7 +305,9 @@ export interface PurchaseQueueEntry {
   purchased: boolean;
   purchasedAt?: string;
   purchasePrice?: number;     // What you actually paid
-  isMaybe?: boolean;          // Soft interest — not committed to budget/tracking
+  isMaybe?: boolean;          // Legacy soft-interest flag — superseded by `intent`, kept for migration
+  intent?: PurchaseIntent;    // committed | maybe | deferred (defaults to committed when absent)
+  priceHistory?: PriceObservation[];  // Manual price observations over time
 
   addedAt: string;
   createdAt: string;
