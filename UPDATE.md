@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-05-23 06:00 — Navigation — Tab labels + Cmd/Ctrl+K search shortcut
+
+**Files**: app/apps/game-analytics/page.tsx
+**Risk**: not risky
+
+Added visible text labels under every tab icon (both rows + the Export/Recap/Awards utility buttons), so users can immediately tell what each of the 11 navigation targets does without guessing. Also wired up Cmd/Ctrl+K to jump directly to the search bar from any tab, and updated the search placeholder to advertise the shortcut.
+
+FOLLOW-UP: Consider whether the two-row tab layout should become a single horizontal-scroll row for smaller phones.
+
 ## 2026-05-22 18:00 — Games Tab — Game search bar
 
 **Files**: app/apps/game-analytics/page.tsx

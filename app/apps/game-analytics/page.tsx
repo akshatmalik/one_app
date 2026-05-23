@@ -203,6 +203,7 @@ export default function GameAnalyticsPage() {
     return localStorage.getItem('ga-group-sections') === 'true';
   });
   const [searchQuery, setSearchQuery] = useState('');
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const [recapCollapsed, setRecapCollapsed] = useState(() => {
     if (typeof window === 'undefined') return false;
     return localStorage.getItem('ga-recap-collapsed') === 'true';
@@ -210,6 +211,19 @@ export default function GameAnalyticsPage() {
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showErrorLog, setShowErrorLog] = useState(false);
   const [showWhatsNew, setShowWhatsNew] = useState(false);
+
+  // Cmd/Ctrl+K focuses the search bar
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setTabMode('games');
+        setTimeout(() => searchInputRef.current?.focus(), 50);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
 
   // Week recap data for header strip
   const weekRecap = useMemo(() => {
@@ -928,23 +942,24 @@ export default function GameAnalyticsPage() {
               {/* Row 1: Games, Timeline, Stats, AI Coach */}
               <div className="flex items-center gap-1.5">
                 {([
-                  { id: 'games',    icon: <List size={16} />,          title: 'Games' },
-                  { id: 'timeline', icon: <Calendar size={16} />,      title: 'Timeline' },
-                  { id: 'stats',    icon: <BarChart3 size={16} />,     title: 'Stats' },
-                  { id: 'ai-coach', icon: <MessageCircle size={16} />, title: 'AI Coach' },
+                  { id: 'games',    icon: <List size={14} />,          title: 'Games' },
+                  { id: 'timeline', icon: <Calendar size={14} />,      title: 'Timeline' },
+                  { id: 'stats',    icon: <BarChart3 size={14} />,     title: 'Stats' },
+                  { id: 'ai-coach', icon: <MessageCircle size={14} />, title: 'Coach' },
                 ] as const).map((tab) => (
                   <button
                     key={tab.id}
                     onClick={() => setTabMode(tab.id)}
                     title={tab.title}
                     className={clsx(
-                      'flex-1 flex items-center justify-center py-2.5 rounded-lg transition-all',
+                      'flex-1 flex flex-col items-center justify-center py-2 gap-0.5 rounded-lg transition-all',
                       tabMode === tab.id
                         ? 'bg-white/10 text-white'
                         : 'bg-white/[0.02] text-white/40 hover:text-white/60'
                     )}
                   >
                     {tab.icon}
+                    <span className="text-[9px] font-medium leading-none">{tab.title}</span>
                   </button>
                 ))}
               </div>
@@ -952,36 +967,40 @@ export default function GameAnalyticsPage() {
               {/* Row 2: Up Next, Discover, Leaderboard, Buy Queue + utilities */}
               <div className="flex items-center gap-1.5">
                 {([
-                  { id: 'up-next',     icon: <ListOrdered size={16} />, title: 'Up Next' },
-                  { id: 'discover',    icon: <Compass size={16} />,     title: 'Discover' },
-                  { id: 'leaderboard', icon: <Trophy size={16} />,      title: 'Ranks' },
-                  { id: 'buy-queue',   icon: <ShoppingCart size={16} />, title: 'Buy Queue' },
+                  { id: 'up-next',     icon: <ListOrdered size={14} />, title: 'Queue' },
+                  { id: 'discover',    icon: <Compass size={14} />,     title: 'Discover' },
+                  { id: 'leaderboard', icon: <Trophy size={14} />,      title: 'Ranks' },
+                  { id: 'buy-queue',   icon: <ShoppingCart size={14} />, title: 'Buy' },
                 ] as const).map((tab) => (
                   <button
                     key={tab.id}
                     onClick={() => setTabMode(tab.id)}
                     title={tab.title}
                     className={clsx(
-                      'flex-1 flex items-center justify-center py-2.5 rounded-lg transition-all',
+                      'flex-1 flex flex-col items-center justify-center py-2 gap-0.5 rounded-lg transition-all',
                       tabMode === tab.id
                         ? 'bg-white/10 text-white'
                         : 'bg-white/[0.02] text-white/40 hover:text-white/60'
                     )}
                   >
                     {tab.icon}
+                    <span className="text-[9px] font-medium leading-none">{tab.title}</span>
                   </button>
                 ))}
                 <button onClick={() => setShowExport(true)} title="Export data"
-                  className="flex-1 flex items-center justify-center py-2.5 rounded-lg bg-white/[0.02] text-white/30 hover:text-white/60 transition-all">
-                  <Download size={16} />
+                  className="flex-1 flex flex-col items-center justify-center py-2 gap-0.5 rounded-lg bg-white/[0.02] text-white/30 hover:text-white/60 transition-all">
+                  <Download size={14} />
+                  <span className="text-[9px] font-medium leading-none">Export</span>
                 </button>
                 <button onClick={() => setWrappedYear(new Date().getFullYear())} title="Yearly Wrapped"
-                  className="flex-1 flex items-center justify-center py-2.5 rounded-lg bg-white/[0.02] text-purple-400/50 hover:text-purple-400 transition-all">
-                  <Gift size={16} />
+                  className="flex-1 flex flex-col items-center justify-center py-2 gap-0.5 rounded-lg bg-white/[0.02] text-purple-400/50 hover:text-purple-400 transition-all">
+                  <Gift size={14} />
+                  <span className="text-[9px] font-medium leading-none">Recap</span>
                 </button>
                 <button onClick={() => setShowAwardsHub(true)} title="Awards Hub"
-                  className="flex-1 flex items-center justify-center py-2.5 rounded-lg bg-white/[0.02] text-amber-400/50 hover:text-amber-400 transition-all">
-                  <Star size={16} />
+                  className="flex-1 flex flex-col items-center justify-center py-2 gap-0.5 rounded-lg bg-white/[0.02] text-amber-400/50 hover:text-amber-400 transition-all">
+                  <Star size={14} />
+                  <span className="text-[9px] font-medium leading-none">Awards</span>
                 </button>
               </div>
             </div>
@@ -995,10 +1014,11 @@ export default function GameAnalyticsPage() {
                     <div className="relative">
                       <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
                       <input
+                        ref={searchInputRef}
                         type="text"
                         value={searchQuery}
                         onChange={e => setSearchQuery(e.target.value)}
-                        placeholder="Search games, genres, platforms…"
+                        placeholder="Search games, genres, platforms… (⌘K)"
                         className="w-full pl-8 pr-8 py-2 bg-white/[0.03] border border-white/10 text-white text-sm rounded-lg placeholder:text-white/25 focus:outline-none focus:border-purple-500/40 focus:bg-white/[0.05] transition-all"
                       />
                       {searchQuery && (

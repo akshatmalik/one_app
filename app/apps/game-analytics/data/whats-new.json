@@ -1,6 +1,12 @@
 {
   "entries": [
     {
+      "date": "2026-05-23",
+      "area": "Navigation",
+      "title": "Every tab now has a label",
+      "body": "The two rows of navigation icons now show short text labels (Games, Timeline, Stats, Coach, Queue, Discover, Ranks, Buy, Export, Recap, Awards) so you always know exactly where you are. Also: press ⌘K (or Ctrl+K) anywhere to jump straight to the search bar."
+    },
+    {
       "date": "2026-05-22",
       "area": "Games tab",
       "title": "Search your library instantly",
