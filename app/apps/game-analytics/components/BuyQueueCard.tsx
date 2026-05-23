@@ -4,9 +4,9 @@ import { useState } from 'react';
 import {
   ExternalLink, Check, Trash2, ChevronDown, ChevronUp, GripVertical,
   Calendar, Star, Zap, Target, TrendingDown, TrendingUp, Minus,
-  AlertCircle, Clock, Edit3, HelpCircle, ShoppingCart
+  AlertCircle, Clock, Edit3, HelpCircle, ShoppingCart, Tag
 } from 'lucide-react';
-import { PurchaseQueueEntry } from '../lib/types';
+import { PurchaseQueueEntry, PurchaseIntent } from '../lib/types';
 import { Game } from '../lib/types';
 import {
   getBuyConfidence,
@@ -22,8 +22,14 @@ interface Props {
   onUpdate: (id: string, updates: Partial<PurchaseQueueEntry>) => Promise<void>;
   onMarkPurchased: (id: string, price?: number) => Promise<void>;
   onDelete: (id: string) => void;
-  onToggleMaybe?: () => void;
+  onSetIntent?: (intent: PurchaseIntent) => void;
 }
+
+const INTENT_OPTIONS: { value: PurchaseIntent; label: string; icon: typeof ShoppingCart; active: string }[] = [
+  { value: 'committed', label: 'Watching', icon: ShoppingCart, active: 'bg-emerald-500/15 text-emerald-400' },
+  { value: 'maybe', label: 'Maybe', icon: HelpCircle, active: 'bg-amber-500/15 text-amber-400' },
+  { value: 'deferred', label: 'Deferred', icon: Tag, active: 'bg-blue-500/15 text-blue-400' },
+];
 
 function daysUntil(dateStr: string): number {
   const today = new Date();
@@ -64,7 +70,10 @@ function getConfidenceColor(score: number): string {
   return 'text-red-400 bg-red-500/15';
 }
 
-export function BuyQueueCard({ entry, allGames, onUpdate, onMarkPurchased, onDelete, onToggleMaybe }: Props) {
+export function BuyQueueCard({ entry, allGames, onUpdate, onMarkPurchased, onDelete, onSetIntent }: Props) {
+  const intent: PurchaseIntent = entry.intent ?? (entry.isMaybe ? 'maybe' : 'committed');
+  const isMaybe = intent === 'maybe';
+  const isDeferred = intent === 'deferred';
   const [expanded, setExpanded] = useState(false);
   const [editingCurrentPrice, setEditingCurrentPrice] = useState(false);
   const [editingTargetPrice, setEditingTargetPrice] = useState(false);
@@ -89,12 +98,34 @@ export function BuyQueueCard({ entry, allGames, onUpdate, onMarkPurchased, onDel
   const handlePriceBlur = async (field: 'currentPrice' | 'targetPrice') => {
     const val = parseFloat(priceInput);
     if (!isNaN(val) && val >= 0) {
-      await onUpdate(entry.id, { [field]: val });
+      if (field === 'currentPrice') {
+        const today = new Date().toISOString().split('T')[0];
+        const history = entry.priceHistory ? [...entry.priceHistory] : [];
+        const last = history[history.length - 1];
+        if (last && last.date === today) {
+          history[history.length - 1] = { date: today, price: val };
+        } else if (!last || last.price !== val) {
+          history.push({ date: today, price: val });
+        }
+        await onUpdate(entry.id, { currentPrice: val, priceHistory: history });
+      } else {
+        await onUpdate(entry.id, { [field]: val });
+      }
     }
     setEditingCurrentPrice(false);
     setEditingTargetPrice(false);
     setPriceInput('');
   };
+
+  // Manual price history (Feature: price tracking)
+  const priceHistory = entry.priceHistory ?? [];
+  const lowestSeen = priceHistory.length > 0 ? Math.min(...priceHistory.map(p => p.price)) : null;
+  const firstSeen = priceHistory.length > 0 ? priceHistory[0].price : null;
+  const priceTrend =
+    entry.currentPrice != null && firstSeen != null
+      ? entry.currentPrice < firstSeen ? 'down' : entry.currentPrice > firstSeen ? 'up' : 'flat'
+      : null;
+  const atLowest = lowestSeen != null && entry.currentPrice != null && entry.currentPrice <= lowestSeen;
 
   const handleReleaseDateBlur = async () => {
     if (releaseDateInput) {
@@ -124,11 +155,13 @@ export function BuyQueueCard({ entry, allGames, onUpdate, onMarkPurchased, onDel
   return (
     <div className={clsx(
       'rounded-xl overflow-hidden transition-all',
-      entry.isMaybe
+      isMaybe
         ? 'border border-dashed border-amber-500/25 opacity-90'
-        : isAtTarget
-          ? 'border-2 border-emerald-500/40 buy-queue-price-glow'
-          : 'border border-white/8 hover:border-white/12'
+        : isDeferred
+          ? 'border border-dashed border-blue-500/25 opacity-95'
+          : isAtTarget
+            ? 'border-2 border-emerald-500/40 buy-queue-price-glow'
+            : 'border border-white/8 hover:border-white/12'
     )}>
       {/* Poster Banner (Feature #2) */}
       {entry.thumbnail ? (
@@ -172,10 +205,16 @@ export function BuyQueueCard({ entry, allGames, onUpdate, onMarkPurchased, onDel
                   Day 1
                 </span>
               )}
-              {entry.isMaybe && (
+              {isMaybe && (
                 <span className="flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 flex-shrink-0 backdrop-blur-sm">
                   <HelpCircle size={9} />
                   Maybe
+                </span>
+              )}
+              {isDeferred && (
+                <span className="flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300 flex-shrink-0 backdrop-blur-sm">
+                  <Tag size={9} />
+                  Deferred
                 </span>
               )}
             </div>
@@ -197,10 +236,16 @@ export function BuyQueueCard({ entry, allGames, onUpdate, onMarkPurchased, onDel
                     Day 1
                   </span>
                 )}
-                {entry.isMaybe && (
+                {isMaybe && (
                   <span className="flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400 flex-shrink-0">
                     <HelpCircle size={9} />
                     Maybe
+                  </span>
+                )}
+                {isDeferred && (
+                  <span className="flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-400 flex-shrink-0">
+                    <Tag size={9} />
+                    Deferred
                   </span>
                 )}
               </div>
@@ -334,6 +379,21 @@ export function BuyQueueCard({ entry, allGames, onUpdate, onMarkPurchased, onDel
           )}
         </div>
 
+        {/* Manual price history */}
+        {lowestSeen != null && priceHistory.length >= 2 && (
+          <div className="mt-1.5 flex items-center gap-1.5 text-[10px] text-white/30">
+            {priceTrend === 'down' ? <TrendingDown size={9} className="text-emerald-400/60" /> :
+             priceTrend === 'up' ? <TrendingUp size={9} className="text-red-400/50" /> :
+             <Minus size={9} className="text-white/20" />}
+            <span>
+              Lowest seen <span className={clsx('font-medium', atLowest ? 'text-emerald-400' : 'text-white/50')}>${lowestSeen}</span>
+            </span>
+            <span className="text-white/15">·</span>
+            <span className="text-white/20">{priceHistory.length} prices tracked</span>
+            {atLowest && <span className="text-[9px] px-1 py-0.5 rounded bg-emerald-500/15 text-emerald-400">best yet</span>}
+          </div>
+        )}
+
         {/* Intelligence line — price context (Feature #6) */}
         {allGames.length > 0 && priceContext.insight !== 'Not enough data yet' && (
           <div className="mt-1.5 flex items-center gap-1 text-[10px] text-white/25">
@@ -454,23 +514,27 @@ export function BuyQueueCard({ entry, allGames, onUpdate, onMarkPurchased, onDel
               </div>
             )}
 
-            {/* Maybe toggle */}
-            {onToggleMaybe && (
-              <button
-                onClick={onToggleMaybe}
-                className={clsx(
-                  'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-all',
-                  entry.isMaybe
-                    ? 'bg-blue-500/10 text-blue-400 hover:bg-blue-500/20'
-                    : 'bg-amber-500/10 text-amber-400/70 hover:bg-amber-500/20 hover:text-amber-400'
-                )}
-              >
-                {entry.isMaybe ? (
-                  <><ShoppingCart size={12} /> Commit</>
-                ) : (
-                  <><HelpCircle size={12} /> Maybe</>
-                )}
-              </button>
+            {/* Intent control: Watching / Maybe / Deferred */}
+            {onSetIntent && (
+              <div className="flex items-center rounded-lg bg-white/5 overflow-hidden">
+                {INTENT_OPTIONS.map(opt => {
+                  const Icon = opt.icon;
+                  const selected = intent === opt.value;
+                  return (
+                    <button
+                      key={opt.value}
+                      onClick={() => onSetIntent(opt.value)}
+                      className={clsx(
+                        'flex items-center gap-1 px-2.5 py-1.5 text-[11px] transition-all',
+                        selected ? opt.active : 'text-white/30 hover:text-white/55'
+                      )}
+                    >
+                      <Icon size={11} />
+                      {opt.label}
+                    </button>
+                  );
+                })}
+              </div>
             )}
 
             {/* Delete */}

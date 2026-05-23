@@ -21,6 +21,7 @@ function getAIModel() {
 }
 
 // Cache keys
+const GAME_INSIGHT_CACHE = 'game-insight-pack-v1';
 const GAME_ONELINER_CACHE = 'game-oneliners-cache';
 const MONTHLY_RECAP_CACHE = 'monthly-recap-cache';
 const CHAPTER_TITLES_CACHE = 'chapter-titles-cache';
@@ -382,11 +383,169 @@ Return one line per period in format "Period Label: Title Here". Periods with no
   }
 }
 
+// ─── Game Card Insight Pack ──────────────────────────────────────────────────
+
+export interface SimilarGameSuggestion {
+  name: string;
+  genre: string;
+  reason: string;
+}
+
+export interface GameInsightPack {
+  narrativeSentence: string;  // "The Sentence" — cinematic summary of this game in your life
+  uniquenessInsight: string;  // "The Only One" — AI-phrased uniqueness
+  tasteInsight: string;       // "What This Reveals" — what this game says about you
+  similarGames: SimilarGameSuggestion[]; // "You Might Also Love" — 3 games outside your library
+  milestoneNarrative: string; // narrative about how fast/slow you hit milestones
+}
+
+export async function generateGameInsightPack(
+  game: Game,
+  allGames: Game[],
+  uniquenessStatements: string[],
+  milestoneSummary: Array<{ hours: number; daysToReach: number; isFastest: boolean; libraryAvgDays: number | null }>
+): Promise<GameInsightPack> {
+  const totalHours = game.hours + (game.playLogs?.reduce((s, l) => s + l.hours, 0) || 0);
+  const cacheKey = `${game.id}-${Math.floor(totalHours)}-${game.rating}`;
+
+  const cached = getCache<Record<string, GameInsightPack>>(GAME_INSIGHT_CACHE);
+  if (cached && cached[cacheKey]) return cached[cacheKey];
+
+  const ownedGames = allGames.filter(g => g.status !== 'Wishlist' && g.id !== game.id);
+  const topRated = [...ownedGames]
+    .sort((a, b) => b.rating - a.rating)
+    .slice(0, 6)
+    .map(g => `${g.name} (${g.rating}/10, ${g.genre || '?'})`);
+
+  const topPlayed = [...ownedGames]
+    .sort((a, b) => {
+      const aH = a.hours + (a.playLogs?.reduce((s, l) => s + l.hours, 0) || 0);
+      const bH = b.hours + (b.playLogs?.reduce((s, l) => s + l.hours, 0) || 0);
+      return bH - aH;
+    })
+    .slice(0, 5)
+    .map(g => {
+      const h = g.hours + (g.playLogs?.reduce((s, l) => s + l.hours, 0) || 0);
+      return `${g.name} (${h}h, ${g.genre || '?'})`;
+    });
+
+  const genreStats: Record<string, { count: number; totalRating: number }> = {};
+  ownedGames.forEach(g => {
+    if (!g.genre) return;
+    if (!genreStats[g.genre]) genreStats[g.genre] = { count: 0, totalRating: 0 };
+    genreStats[g.genre].count++;
+    genreStats[g.genre].totalRating += g.rating;
+  });
+  const genreContext = Object.entries(genreStats)
+    .sort((a, b) => b[1].count - a[1].count)
+    .slice(0, 5)
+    .map(([genre, s]) => `${genre} (${s.count} games, avg ${(s.totalRating / s.count).toFixed(1)}/10)`)
+    .join(', ');
+
+  const milestoneContext = milestoneSummary.length > 0
+    ? milestoneSummary
+        .map(m =>
+          `${m.hours}h reached on day ${m.daysToReach}` +
+          (m.libraryAvgDays ? ` (library avg ${m.libraryAvgDays}d)` : '') +
+          (m.isFastest ? ' ← FASTEST in library' : '')
+        )
+        .join(' | ')
+    : 'No play-log milestone data';
+
+  const excludeNames = allGames.map(g => g.name).filter(Boolean).join(', ');
+  const costPerHr = totalHours > 0 && game.price > 0 ? (game.price / totalHours).toFixed(2) : 'N/A';
+
+  const prompt = `You are an insightful, sharp gaming companion. Analyze this specific game in the context of the player's full library.
+
+=== THE GAME ===
+Name: ${game.name} | Genre: ${game.genre || 'Unknown'} | Platform: ${game.platform || 'Unknown'} | Franchise: ${game.franchise || 'None'}
+Status: ${game.status} | Hours: ${totalHours}h | Sessions: ${game.playLogs?.length || 0} | Rating: ${game.rating}/10
+Price: $${game.price} | Cost/hr: $${costPerHr}
+Purchased: ${game.datePurchased || '?'} | Started: ${game.startDate || '?'} | Completed: ${game.endDate || 'N/A'}
+
+=== LIBRARY CONTEXT ===
+Total owned games: ${ownedGames.length}
+Top rated: ${topRated.join(', ')}
+Most played: ${topPlayed.join(', ')}
+Genre breakdown: ${genreContext || 'No genre data'}
+
+=== MILESTONE SPEED ===
+${milestoneContext}
+
+=== UNIQUENESS STATEMENTS (computed from data) ===
+${uniquenessStatements.slice(0, 6).join('\n') || 'None computed'}
+
+=== EXCLUDE THESE (already in library) ===
+${excludeNames.slice(0, 200)}
+
+Generate EXACTLY 5 outputs separated by "|||". No extra text, no numbering.
+
+OUTPUT 1 — NARRATIVE SENTENCE (max 18 words):
+One cinematic sentence capturing this game's story in this player's life. Be specific with real numbers. Don't start with "You". Make it feel like a movie trailer line.
+
+OUTPUT 2 — UNIQUENESS INSIGHT (max 22 words):
+Take the most striking uniqueness statement above and rephrase it as a revelation. Make it feel like something the player would want to screenshot. Use specific facts.
+
+OUTPUT 3 — TASTE INSIGHT (max 45 words):
+What does playing/rating this game reveal about this player's deeper gaming identity? Be analytically sharp. Reference patterns from their library. Don't be generic. E.g.: "You're drawn to systems that reward patience — every game you've rated 8+ here shares that thread."
+
+OUTPUT 4 — SIMILAR GAMES (exactly 3 games NOT in the exclude list):
+Format: GameName|Genre|Why (max 12 words per line). 3 lines total. Base suggestions on what the player loves about this game AND their wider taste profile.
+
+OUTPUT 5 — MILESTONE NARRATIVE (max 28 words):
+If milestone data exists, write something specific and interesting about how fast or slow they hit milestones here vs their library. If no data, comment on their play pattern for this game.`;
+
+  const fallback: GameInsightPack = {
+    narrativeSentence: '',
+    uniquenessInsight: uniquenessStatements[0] || '',
+    tasteInsight: '',
+    similarGames: [],
+    milestoneNarrative: '',
+  };
+
+  try {
+    const model = getAIModel();
+    const result = await model.generateContent(prompt);
+    const text = result.response.text().trim();
+    const parts = text.split('|||').map((s: string) => s.trim());
+
+    if (parts.length < 4) return fallback;
+
+    const similarGames: SimilarGameSuggestion[] = (parts[3] || '')
+      .split('\n')
+      .filter(Boolean)
+      .slice(0, 3)
+      .map(line => {
+        const [name, genre, reason] = line.split('|').map(s => s.trim());
+        return name && reason ? { name, genre: genre || 'Unknown', reason } : null;
+      })
+      .filter((x): x is SimilarGameSuggestion => x !== null);
+
+    const pack: GameInsightPack = {
+      narrativeSentence: parts[0] || '',
+      uniquenessInsight: parts[1] || uniquenessStatements[0] || '',
+      tasteInsight: parts[2] || '',
+      similarGames,
+      milestoneNarrative: parts[4] || '',
+    };
+
+    const existing = cached || {};
+    existing[cacheKey] = pack;
+    setCache(GAME_INSIGHT_CACHE, existing);
+
+    return pack;
+  } catch (error) {
+    console.error('AI game insight pack error:', error);
+    return fallback;
+  }
+}
+
 /**
  * Clear all game AI caches
  */
 export function clearGameAICache(): void {
   if (typeof window === 'undefined') return;
+  localStorage.removeItem(GAME_INSIGHT_CACHE);
   localStorage.removeItem(GAME_ONELINER_CACHE);
   localStorage.removeItem(MONTHLY_RECAP_CACHE);
   localStorage.removeItem(CHAPTER_TITLES_CACHE);
