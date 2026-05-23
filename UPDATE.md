@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-05-23 00:00 — Game Detail — One-tap "Done!" completion flow
+
+**Files**: app/apps/game-analytics/components/GameBottomSheet.tsx, app/apps/game-analytics/page.tsx
+**Risk**: not risky
+
+Added a "Done!" button to the game detail bottom sheet that lets users mark an in-progress game as completed in 2 taps instead of opening the full edit form (7+ steps before). Tapping "Done!" shows an inline panel with a pre-filled date (today) and an optional star rating row for unrated games; confirming calls updateGame with status=Completed and closes the sheet.
+
+FOLLOW-UP: Could extend the panel to let users write a quick one-line review at completion time.
+
 ## 2026-05-22 18:00 — Games Tab — Game search bar
 
 **Files**: app/apps/game-analytics/page.tsx

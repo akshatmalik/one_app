@@ -1466,6 +1466,17 @@ export default function GameAnalyticsPage() {
               showToast('Failed to update', 'error');
             }
           }}
+          onMarkComplete={async ({ endDate, rating }) => {
+            try {
+              const updates: Partial<Game> = { status: 'Completed', endDate };
+              if (rating) updates.rating = rating;
+              await updateGame(detailGame.id, updates);
+              showToast(`🎉 ${detailGame.name} marked as completed!`, 'success');
+              setDetailGame(null);
+            } catch (err) {
+              showToast('Failed to mark as completed', 'error');
+            }
+          }}
           isInQueue={isInQueue(detailGame.id)}
         />
       )}

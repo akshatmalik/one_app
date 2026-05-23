@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useRef, useEffect } from 'react';
-import { X, Clock, Star, ChevronDown, ChevronUp, ListPlus, Check, Heart, Edit3, Trash2, Gamepad2, Trophy } from 'lucide-react';
+import { X, Clock, Star, ChevronDown, ChevronUp, ListPlus, Check, Heart, Edit3, Trash2, Gamepad2, Trophy, PartyPopper } from 'lucide-react';
 import { Game } from '../lib/types';
 import { GameWithMetrics } from '../hooks/useAnalytics';
 import {
@@ -35,6 +35,7 @@ interface GameBottomSheetProps {
   onOpenPlayLog: () => void;
   onToggleQueue: () => void;
   onToggleSpecial: () => void;
+  onMarkComplete: (data: { endDate: string; rating?: number }) => void;
   isInQueue: boolean;
 }
 
@@ -58,10 +59,22 @@ export function GameBottomSheet({
   onOpenPlayLog,
   onToggleQueue,
   onToggleSpecial,
+  onMarkComplete,
   isInQueue,
 }: GameBottomSheetProps) {
   const [expanded, setExpanded] = useState(false);
   const sheetRef = useRef<HTMLDivElement>(null);
+
+  // Completion panel state
+  const todayStr = (() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  })();
+  const [showCompletePanel, setShowCompletePanel] = useState(false);
+  const [completionDate, setCompletionDate] = useState(todayStr);
+  const [completionRating, setCompletionRating] = useState(game.rating || 0);
+
+  const canMarkComplete = game.status !== 'Completed' && game.status !== 'Wishlist' && game.status !== 'Abandoned';
   const dragStartY = useRef<number | null>(null);
   const currentTranslateY = useRef(0);
 
@@ -418,14 +431,106 @@ export function GameBottomSheet({
           </div>
         </div>
 
+        {/* Inline Completion Panel — slides up from above the actions bar */}
+        {showCompletePanel && (
+          <>
+            <div
+              className="absolute inset-0 bg-black/40 z-10"
+              onClick={() => setShowCompletePanel(false)}
+            />
+            <div className="absolute bottom-[68px] left-0 right-0 z-20 px-4 pb-2 animate-bottom-sheet-up">
+              <div className="bg-[#13131f] border border-emerald-500/20 rounded-2xl p-4 shadow-2xl">
+                <div className="flex items-center gap-2 mb-4">
+                  <PartyPopper size={16} className="text-emerald-400 shrink-0" />
+                  <span className="text-sm font-semibold text-white/90">Mark as Completed</span>
+                  <button
+                    onClick={() => setShowCompletePanel(false)}
+                    className="ml-auto p-1 text-white/30 hover:text-white/60 transition-colors"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+
+                {/* Finish date */}
+                <div className="mb-4">
+                  <label className="block text-[11px] text-white/40 mb-1.5 uppercase tracking-wider">Finished on</label>
+                  <input
+                    type="date"
+                    value={completionDate}
+                    onChange={(e) => setCompletionDate(e.target.value)}
+                    max={todayStr}
+                    className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-emerald-500/50 transition-colors"
+                  />
+                </div>
+
+                {/* Star rating (optional — only show if unrated) */}
+                {game.rating === 0 && (
+                  <div className="mb-4">
+                    <label className="block text-[11px] text-white/40 mb-1.5 uppercase tracking-wider">
+                      Final rating <span className="text-white/20 normal-case">(optional)</span>
+                    </label>
+                    <div className="flex items-center gap-1.5">
+                      {[2, 4, 6, 8, 10].map((val) => (
+                        <button
+                          key={val}
+                          onClick={() => setCompletionRating(completionRating === val ? 0 : val)}
+                          className="flex-1 flex items-center justify-center py-1.5 transition-all"
+                        >
+                          <Star
+                            size={22}
+                            className={clsx(
+                              'transition-colors',
+                              completionRating >= val ? 'text-amber-400 fill-amber-400' : 'text-white/15'
+                            )}
+                          />
+                        </button>
+                      ))}
+                      {completionRating > 0 && (
+                        <span className="text-xs text-amber-400 font-bold ml-1 w-6 text-right">{completionRating}</span>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                <button
+                  onClick={() => {
+                    onMarkComplete({ endDate: completionDate, rating: completionRating > 0 ? completionRating : undefined });
+                    setShowCompletePanel(false);
+                  }}
+                  className="w-full flex items-center justify-center gap-2 py-3 bg-emerald-600/25 active:bg-emerald-600/40 text-emerald-400 border border-emerald-500/20 rounded-xl text-sm font-semibold transition-all"
+                >
+                  <Check size={15} /> Mark as Completed
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+
         {/* Sticky Actions Bar */}
         <div className="absolute bottom-0 left-0 right-0 bg-[#0e0e16]/95 backdrop-blur-md border-t border-white/5 p-3 flex items-center gap-2">
-          <button
-            onClick={() => onLogTime()}
-            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 bg-blue-600/20 active:bg-blue-600/30 text-blue-400 rounded-lg text-xs font-medium transition-all"
-          >
-            <Clock size={14} /> Log Time
-          </button>
+          {canMarkComplete ? (
+            <>
+              <button
+                onClick={() => onLogTime()}
+                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 bg-blue-600/20 active:bg-blue-600/30 text-blue-400 rounded-lg text-xs font-medium transition-all"
+              >
+                <Clock size={14} /> Log Time
+              </button>
+              <button
+                onClick={() => setShowCompletePanel(true)}
+                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 bg-emerald-600/20 active:bg-emerald-600/30 text-emerald-400 border border-emerald-500/10 rounded-lg text-xs font-semibold transition-all"
+              >
+                <Check size={14} /> Done!
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={() => onLogTime()}
+              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 bg-blue-600/20 active:bg-blue-600/30 text-blue-400 rounded-lg text-xs font-medium transition-all"
+            >
+              <Clock size={14} /> Log Time
+            </button>
+          )}
           <button
             onClick={onToggleQueue}
             className={clsx(
