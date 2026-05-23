@@ -2,8 +2,8 @@
 
 import { getAI, getGenerativeModel, GoogleAIBackend } from 'firebase/ai';
 import { initializeApp, getApps } from 'firebase/app';
-import { WeekInReviewData, MonthInReviewData, OscarAward } from './calculations';
-import { Game } from './types';
+import { WeekInReviewData, MonthInReviewData, OscarAward, buildTasteProfile } from './calculations';
+import { Game, TasteProfile } from './types';
 
 const firebaseConfig = {
   apiKey: "AIzaSyBS3IVvszDrm_zjjXu8TATgs1H-FlegHtM",
@@ -521,3 +521,197 @@ Pitch rules: each pitch is exactly 1 sentence, specific to that game's data, no 
     return { opening: '', pitches: {} };
   }
 }
+
+// ── AI REVIEW INTERVIEW ────────────────────────────────────────────
+// Gemini conducts a voice interview about a game: it transcribes the
+// player's spoken answers, reads them in light of the player's taste,
+// asks adaptive follow-ups, then synthesizes a reflective written review.
+
+export interface ReviewGameContext {
+  name: string;
+  rating: number;
+  genre?: string;
+  hours: number;
+  status: string;
+  platform?: string;
+}
+
+export interface ReviewInterviewTurn {
+  role: 'interviewer' | 'player';
+  text: string;
+}
+
+export interface ReviewInterviewResponse {
+  transcript: string;   // what the player just said (from audio); '' for the opening turn
+  nextQuestion: string; // '' when the interview is complete
+  done: boolean;
+  error?: string;
+}
+
+export interface RecordedAudioInput {
+  base64: string;
+  mimeType: string;
+}
+
+/** Build a compact, prompt-friendly taste summary from the library. */
+export function buildTasteSummary(allGames: Game[], excludeGameName?: string): string {
+  const games = excludeGameName
+    ? allGames.filter(g => g.name !== excludeGameName)
+    : allGames;
+  if (games.length === 0) return 'No prior library data yet — this may be one of their first tracked games.';
+
+  const profile: TasteProfile = buildTasteProfile(games);
+  const genreDetail = profile.favoriteGenreDetails
+    .slice(0, 4)
+    .map(d => `${d.genre} (avg ${d.avgRating.toFixed(1)}/10 over ${d.count})`)
+    .join(', ');
+  const top = profile.topGames
+    .slice(0, 4)
+    .map(g => `${g.name} ${g.rating.toFixed(1)}/10`)
+    .join(', ');
+
+  return [
+    `Overall avg rating: ${profile.avgRating.toFixed(1)}/10.`,
+    profile.topGenres.length ? `Favorite genres: ${profile.topGenres.slice(0, 4).join(', ')}.` : '',
+    genreDetail ? `Genre ratings: ${genreDetail}.` : '',
+    top ? `Top-rated games: ${top}.` : '',
+    profile.avoidGenres.length ? `Tends to dislike: ${profile.avoidGenres.slice(0, 3).join(', ')}.` : '',
+  ].filter(Boolean).join(' ');
+}
+
+function gameContextLine(game: ReviewGameContext): string {
+  return `"${game.name}" — rated ${game.rating.toFixed(1)}/10, ${game.genre || 'unknown genre'}, ${game.hours.toFixed(0)}h played, status: ${game.status}${game.platform ? `, on ${game.platform}` : ''}.`;
+}
+
+function historyText(history: ReviewInterviewTurn[]): string {
+  if (history.length === 0) return '(no exchange yet)';
+  return history
+    .map(t => `${t.role === 'interviewer' ? 'Interviewer' : 'Player'}: ${t.text}`)
+    .join('\n');
+}
+
+function stripJsonFences(raw: string): string {
+  return raw.replace(/^```[a-z]*\n?/i, '').replace(/\n?```$/i, '').trim();
+}
+
+/**
+ * One interview turn. If `audio` is null, generates the opening question.
+ * Otherwise transcribes the spoken answer and decides the next follow-up
+ * (or finishes). Adaptive — references the player's words and taste.
+ */
+export async function conductReviewInterview(params: {
+  game: ReviewGameContext;
+  tasteSummary: string;
+  history: ReviewInterviewTurn[];
+  audio: RecordedAudioInput | null;
+  questionsAsked: number;
+  maxQuestions: number;
+}): Promise<ReviewInterviewResponse> {
+  const { game, tasteSummary, history, audio, questionsAsked, maxQuestions } = params;
+  const model = getAIModel();
+
+  const base = `You are a sharp, warm interviewer helping a gamer reflect on a game they just rated, so they can write an honest review. Be specific and conversational, never generic or fawning. Ask about ONE thing at a time.
+
+Game: ${gameContextLine(game)}
+Player's taste profile: ${tasteSummary}
+
+Conversation so far:
+${historyText(history)}`;
+
+  if (!audio) {
+    // Opening question
+    const prompt = `${base}
+
+Write the opening interview question. Make it specific to this game and their ${game.rating.toFixed(1)}/10 rating — if that rating is notably high or low versus their taste, lean into that. One short, natural question.
+
+Respond with ONLY valid JSON (no markdown): {"transcript": "", "nextQuestion": "<your question>", "done": false}`;
+    try {
+      const result = await model.generateContent(prompt);
+      const parsed = JSON.parse(stripJsonFences(result.response.text().trim()));
+      return {
+        transcript: '',
+        nextQuestion: String(parsed.nextQuestion || ''),
+        done: false,
+      };
+    } catch (e) {
+      console.error('Review interview (opening) error:', e);
+      return {
+        transcript: '',
+        nextQuestion: `What stood out most about ${game.name}?`,
+        done: false,
+        error: String(e),
+      };
+    }
+  }
+
+  const shouldWrap = questionsAsked + 1 >= maxQuestions;
+  const prompt = `${base}
+
+The player just answered by voice — audio is attached.
+1. Transcribe what they said accurately and concisely (clean up filler words, keep their meaning and voice).
+2. Then decide the next move:
+   - If there is more worth exploring AND you have asked fewer than ${maxQuestions} questions, ask ONE follow-up that digs into something specific they said, or how this game compares to their taste. ${shouldWrap ? 'You have now reached the question limit, so set done=true and nextQuestion="".' : ''}
+   - If you have enough for a rich, honest review, set done=true and nextQuestion="".
+
+Respond with ONLY valid JSON (no markdown): {"transcript": "<what they said>", "nextQuestion": "<next question or empty>", "done": <true|false>}`;
+
+  try {
+    const result = await model.generateContent([
+      { text: prompt },
+      { inlineData: { mimeType: audio.mimeType, data: audio.base64 } },
+    ]);
+    const parsed = JSON.parse(stripJsonFences(result.response.text().trim()));
+    const done = Boolean(parsed.done) || shouldWrap;
+    return {
+      transcript: String(parsed.transcript || ''),
+      nextQuestion: done ? '' : String(parsed.nextQuestion || ''),
+      done,
+    };
+  } catch (e) {
+    console.error('Review interview (turn) error:', e);
+    return {
+      transcript: '',
+      nextQuestion: '',
+      done: true,
+      error: String(e),
+    };
+  }
+}
+
+/**
+ * Synthesize the interview into a first-person, reflective written review.
+ */
+export async function synthesizeGameReview(params: {
+  game: ReviewGameContext;
+  tasteSummary: string;
+  history: ReviewInterviewTurn[];
+}): Promise<{ review: string; error?: string }> {
+  const { game, tasteSummary, history } = params;
+  const model = getAIModel();
+
+  const prompt = `Based on this interview, write the player's review of ${game.name} in their own first-person voice.
+
+Game: ${gameContextLine(game)}
+Player's taste profile: ${tasteSummary}
+
+Interview:
+${historyText(history)}
+
+Write 3-5 sentences. Capture their actual opinions and reasoning from the conversation — the highs, the lows, who it's for. Reflective and honest, like a thoughtful friend describing the game. No marketing fluff, no star ratings, no "in conclusion". Do not invent details they didn't mention.
+
+Return ONLY the review prose — no headings, no quotes, no JSON.`;
+
+  try {
+    const result = await model.generateContent(prompt);
+    return { review: result.response.text().trim() };
+  } catch (e) {
+    console.error('Review synthesis error:', e);
+    // Fallback: stitch the player's own answers together.
+    const fallback = history
+      .filter(t => t.role === 'player')
+      .map(t => t.text)
+      .join(' ');
+    return { review: fallback, error: String(e) };
+  }
+}
+

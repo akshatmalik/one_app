@@ -794,7 +794,11 @@ export function LeaderboardTab({ gamesWithMetrics, userId, eloTierConfig }: Lead
                   >Auto-assign</button>
                   {assignedCount > 0 && (
                     <button
-                      onClick={clearAll}
+                      onClick={() => {
+                        if (window.confirm(`Reset all ${assignedCount} tier assignment${assignedCount === 1 ? '' : 's'}?\n\nThis clears your tier picks for this period and cannot be undone.`)) {
+                          clearAll();
+                        }
+                      }}
                       className="text-[10px] text-white/25 hover:text-white/50 transition-colors"
                     >Reset</button>
                   )}

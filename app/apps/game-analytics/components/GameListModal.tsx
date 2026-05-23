@@ -2,7 +2,7 @@
 
 import { X } from 'lucide-react';
 import { Game } from '../lib/types';
-import { getTotalHours } from '../lib/calculations';
+import { getTotalHours, formatRating } from '../lib/calculations';
 
 interface GameListModalProps {
   title: string;
@@ -69,7 +69,7 @@ export function GameListModal({ title, games, isOpen, onClose, renderGameInfo }:
                         renderGameInfo(game)
                       ) : (
                         <div className="text-xs text-white/40 mt-0.5">
-                          ${game.price} • {getTotalHours(game).toFixed(1)}h • {game.rating}/10
+                          ${game.price} • {getTotalHours(game).toFixed(1)}h • {formatRating(game.rating)}/10
                         </div>
                       )}
                     </div>

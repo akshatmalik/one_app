@@ -50,7 +50,7 @@ import {
   Heart,
 } from 'lucide-react';
 import { Game, GameStatus, AnalyticsSummary, BudgetSettings } from '../lib/types';
-import { calculateSummary, getCumulativeSpending, getHoursByMonth, getSpendingByMonth, parseLocalDate, getLibraryHealth } from '../lib/calculations';
+import { calculateSummary, getCumulativeSpending, getHoursByMonth, getSpendingByMonth, parseLocalDate, getLibraryHealth, getRatingTierBands, getCloseRatingGroups, getRatingDistributionFine, formatRating } from '../lib/calculations';
 import { GameWithMetrics } from '../hooks/useAnalytics';
 import { PeriodStatsPanel } from './PeriodStatsPanel';
 import { FunStatsPanel } from './FunStatsPanel';
@@ -251,11 +251,11 @@ export function StatsView({ games, summary, budgets = [], onSetBudget, trophies,
     costPerHour: g.metrics.costPerHour,
   }));
 
-  // Rating distribution
-  const ratingDistribution = Array.from({ length: 10 }, (_, i) => ({
-    rating: i + 1,
-    count: playedGames.filter(g => g.rating === i + 1).length,
-  }));
+  // Rating distribution — fine 0.5-point bands, plus rarity tiers and close-rating clusters
+  const ratingDistribution = getRatingDistributionFine(games);
+  const ratingTierBands = getRatingTierBands(games);
+  const closeRatingGroups = getCloseRatingGroups(games);
+  const topTierBand = ratingTierBands.find(b => b.count > 0);
 
   // Hours by genre for radar chart
   const genreHoursData = Object.entries(summary.hoursByGenre)
@@ -1374,28 +1374,93 @@ export function StatsView({ games, summary, budgets = [], onSetBudget, trophies,
           </ChartCard>
         )}
 
-        {/* Rating Distribution */}
-        <ChartCard title="Rating Distribution" icon={<Star size={16} />}>
-          <ResponsiveContainer width="100%" height={250}>
-            <BarChart data={ratingDistribution}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-              <XAxis dataKey="rating" tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 10 }} />
-              <YAxis tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 10 }} />
-              <Tooltip content={({ active, payload, label }) => {
-                if (active && payload && payload.length) {
-                  return (
-                    <div className="bg-[#1a1a24] border border-white/10 rounded-lg px-3 py-2 text-sm">
-                      <p className="text-white/90 font-medium">Rating: {label}/10</p>
-                      <p className="text-white/60">{payload[0].value} games</p>
+        {/* Rating Distribution — fine 0.5-point bands */}
+        {ratingDistribution.length > 0 && (
+          <ChartCard title="Rating Distribution" icon={<Star size={16} />}>
+            <ResponsiveContainer width="100%" height={250}>
+              <BarChart data={ratingDistribution}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                <XAxis dataKey="band" tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 10 }} interval={0} />
+                <YAxis allowDecimals={false} tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 10 }} />
+                <Tooltip content={({ active, payload }) => {
+                  if (active && payload && payload.length) {
+                    const d = payload[0].payload as { band: string; min: number; max: number; count: number };
+                    return (
+                      <div className="bg-[#1a1a24] border border-white/10 rounded-lg px-3 py-2 text-sm">
+                        <p className="text-white/90 font-medium">{formatRating(d.min)}–{formatRating(d.max)}</p>
+                        <p className="text-white/60">{d.count} {d.count === 1 ? 'game' : 'games'}</p>
+                      </div>
+                    );
+                  }
+                  return null;
+                }} />
+                <Bar dataKey="count" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </ChartCard>
+        )}
+
+        {/* Rating Breakdown — rarity tier bands + close-rating comparison */}
+        {ratingTierBands.some(b => b.count > 0) && (
+          <ChartCard title="Rating Breakdown" icon={<Star size={16} />}>
+            <div className="space-y-4">
+              {/* Headline: how rare the top tier is */}
+              {topTierBand && (
+                <p className="text-sm text-white/60">
+                  Only <span className="font-bold text-white">{topTierBand.count}</span>{' '}
+                  {topTierBand.count === 1 ? 'game' : 'games'} in your library{' '}
+                  {topTierBand.count === 1 ? 'sits' : 'sit'} in the{' '}
+                  <span className="font-semibold" style={{ color: topTierBand.color }}>{topTierBand.label}</span>{' '}
+                  tier ({topTierBand.range}) — {topTierBand.percentage}% of everything you&apos;ve rated.
+                </p>
+              )}
+
+              {/* Tier bands */}
+              <div className="space-y-1.5">
+                {ratingTierBands.filter(b => b.count > 0).map(band => (
+                  <div key={band.label} className="flex items-center gap-2">
+                    <div className="w-24 shrink-0 text-xs font-medium" style={{ color: band.color }}>
+                      {band.label}
                     </div>
-                  );
-                }
-                return null;
-              }} />
-              <Bar dataKey="count" fill="#f59e0b" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </ChartCard>
+                    <div className="w-12 shrink-0 text-[10px] text-white/30 tabular-nums">{band.range}</div>
+                    <div className="flex-1 h-2.5 rounded-full bg-white/[0.04] overflow-hidden">
+                      <div className="h-full rounded-full transition-all" style={{ width: `${band.percentage}%`, backgroundColor: band.color }} />
+                    </div>
+                    <div className="w-14 shrink-0 text-right text-xs text-white/50 tabular-nums">
+                      {band.count} · {band.percentage}%
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Close-rating comparison */}
+              {closeRatingGroups.length > 0 && (
+                <div className="pt-2 border-t border-white/5">
+                  <p className="text-[11px] uppercase tracking-wider text-white/30 mb-2">Games neck-and-neck</p>
+                  <div className="space-y-2.5">
+                    {closeRatingGroups.slice(0, 4).map(group => (
+                      <div key={group.label}>
+                        <div className="text-[11px] text-white/40 mb-1">{group.label}</div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {group.games.map(g => (
+                            <span
+                              key={g.name}
+                              className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-white/[0.04] text-xs text-white/70"
+                              title={`${g.hours.toFixed(0)}h${g.genre ? ' · ' + g.genre : ''}`}
+                            >
+                              <span className="truncate max-w-[120px]">{g.name}</span>
+                              <span className="font-bold text-amber-400 tabular-nums">{formatRating(g.rating)}</span>
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </ChartCard>
+        )}
 
         {/* Platform Distribution */}
         {platformData.length > 1 && (
