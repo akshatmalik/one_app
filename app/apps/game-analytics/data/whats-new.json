@@ -1,6 +1,12 @@
 {
   "entries": [
     {
+      "date": "2026-05-23",
+      "area": "Game detail",
+      "title": "One-tap \"Done!\" button to finish games",
+      "body": "Open any in-progress game and you'll see a new green \"Done!\" button next to \"Log Time\". Tap it, confirm the date (pre-filled to today), and the game is marked completed instantly — no need to open the edit form and dig through fields."
+    },
+    {
       "date": "2026-05-22",
       "area": "Games tab",
       "title": "Search your library instantly",
