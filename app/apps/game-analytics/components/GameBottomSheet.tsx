@@ -1,25 +1,26 @@
 'use client';
 
 import { useState, useMemo, useRef, useEffect } from 'react';
-import { X, Clock, Star, ChevronDown, ChevronUp, ListPlus, Check, Heart, Edit3, Trash2, Gamepad2, Trophy } from 'lucide-react';
+import { Clock, ChevronDown, ChevronUp, ListPlus, Check, Heart, Edit3, Trash2, Trophy, Sparkles, Zap } from 'lucide-react';
 import { Game } from '../lib/types';
 import { GameWithMetrics } from '../hooks/useAnalytics';
 import {
   getTotalHours,
   getCompletionProbability,
-  getValueOverTime,
   getValueTrajectory,
   getFranchiseInfo,
-  getRelativeTime,
   parseLocalDate,
   getProgressPercent,
-  calculateCostPerHour,
-  getROIRating,
   getRelationshipStatus,
   getCardRarity,
   generateGameBiography,
   getGameVerdicts,
+  getMilestoneTimings,
+  getLibraryRankBars,
+  getNextMilestone,
+  getLibraryUniqueness,
 } from '../lib/calculations';
+import { generateGameInsightPack, GameInsightPack } from '../lib/ai-game-service';
 import { RatingStars } from './RatingStars';
 import { GameJourney } from './GameJourney';
 import { QuickCheckIn } from './QuickCheckIn';
@@ -60,9 +61,11 @@ export function GameBottomSheet({
   onToggleSpecial,
   isInQueue,
 }: GameBottomSheetProps) {
-  const [expanded, setExpanded] = useState(false);
   const [showAwards, setShowAwards] = useState(false);
   const [showJourney, setShowJourney] = useState(false);
+  const [showRecords, setShowRecords] = useState(false);
+  const [insightPack, setInsightPack] = useState<GameInsightPack | null>(null);
+  const [insightLoading, setInsightLoading] = useState(true);
   const sheetRef = useRef<HTMLDivElement>(null);
   const dragStartY = useRef<number | null>(null);
   const currentTranslateY = useRef(0);
@@ -76,6 +79,31 @@ export function GameBottomSheet({
   const valTraj = useMemo(() => getValueTrajectory(game), [game]);
   const franchise = useMemo(() => getFranchiseInfo(game, allGames), [game, allGames]);
   const progressPct = useMemo(() => getProgressPercent(game), [game]);
+  const rankBars = useMemo(() => getLibraryRankBars(game, allGames), [game, allGames]);
+  const milestoneTimings = useMemo(() => getMilestoneTimings(game, allGames), [game, allGames]);
+  const nextMilestone = useMemo(() => getNextMilestone(game, allGames), [game, allGames]);
+  const uniqueness = useMemo(() => getLibraryUniqueness(game, allGames), [game, allGames]);
+
+  // Load AI insight pack in background when sheet opens
+  useEffect(() => {
+    let cancelled = false;
+    setInsightLoading(true);
+    setInsightPack(null);
+    generateGameInsightPack(
+      game,
+      allGames,
+      uniqueness.statements,
+      milestoneTimings.milestones.map(m => ({
+        hours: m.hours,
+        daysToReach: m.daysToReach,
+        isFastest: m.isFastest,
+        libraryAvgDays: m.libraryAvgDays,
+      }))
+    )
+      .then(pack => { if (!cancelled) { setInsightPack(pack); setInsightLoading(false); } })
+      .catch(() => { if (!cancelled) setInsightLoading(false); });
+    return () => { cancelled = true; };
+  }, [game.id, totalHours, game.rating]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const sortedLogs = useMemo(() => {
     if (!game.playLogs || game.playLogs.length === 0) return [];
@@ -256,10 +284,161 @@ export function GameBottomSheet({
             </div>
           </div>
 
+          {/* AI Narrative Sentence */}
+          <div className="px-5 pb-3">
+            {insightLoading ? (
+              <div className="h-5 bg-white/10 rounded-lg animate-pulse" />
+            ) : insightPack?.narrativeSentence ? (
+              <p className="text-[15px] font-semibold text-white/90 leading-snug">
+                {insightPack.narrativeSentence}
+              </p>
+            ) : null}
+          </div>
+
           {/* Biography */}
           {biography && (
             <div className="px-5 pb-4">
               <p className="text-sm text-white/45 leading-relaxed italic">{biography}</p>
+            </div>
+          )}
+
+          {/* Library Standing */}
+          <div className="mx-5 mb-4 p-4 bg-white/[0.03] rounded-xl border border-white/5">
+            <div className="flex items-center gap-2 mb-3">
+              <Trophy size={13} className="text-amber-400 shrink-0" />
+              <span className="text-sm font-medium text-white/70">Library Standing</span>
+            </div>
+            {(
+              [
+                { label: 'Hours', bar: rankBars.hours },
+                { label: 'Rating', bar: rankBars.rating },
+                { label: 'Value', bar: rankBars.value },
+                { label: 'Sessions', bar: rankBars.sessions },
+              ] as const
+            ).map(({ label, bar }) => (
+              <div key={label} className="flex items-center gap-2 mb-2 last:mb-0">
+                <span className="text-[11px] text-white/30 w-14 shrink-0">{label}</span>
+                <div className="flex-1 h-1.5 bg-white/5 rounded-full overflow-hidden">
+                  <div
+                    className={clsx('h-full rounded-full transition-all', bar.isChampion ? 'bg-amber-400' : 'bg-purple-500/70')}
+                    style={{ width: `${Math.max(3, bar.total > 0 ? bar.percentile : 0)}%` }}
+                  />
+                </div>
+                <span className={clsx('text-[11px] font-bold w-14 text-right shrink-0', bar.isChampion ? 'text-amber-400' : 'text-white/40')}>
+                  {bar.total > 0 ? bar.label : '—'}
+                  {bar.isChampion && ' 👑'}
+                </span>
+              </div>
+            ))}
+
+            {/* Next Milestone */}
+            {nextMilestone && (
+              <div className="mt-3 pt-3 border-t border-white/5">
+                <div className="flex items-center justify-between mb-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <Zap size={11} className="text-purple-400" />
+                    <span className="text-[11px] text-white/40">Next: {nextMilestone.description}</span>
+                  </div>
+                  <span className="text-[11px] font-medium text-purple-400">
+                    {nextMilestone.remaining}h to go
+                  </span>
+                </div>
+                <div className="h-1 bg-white/5 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-purple-500 rounded-full"
+                    style={{ width: `${Math.min(99, nextMilestone.progressPercent)}%` }}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* What This Reveals — Uniqueness + Taste Insights */}
+          {(insightLoading || insightPack?.uniquenessInsight || insightPack?.tasteInsight) && (
+            <div className="px-5 pb-4 space-y-2">
+              <div className="flex items-center gap-1.5 mb-1">
+                <Sparkles size={12} className="text-amber-400" />
+                <span className="text-[11px] font-medium text-white/40 uppercase tracking-wide">What This Reveals</span>
+              </div>
+              {insightLoading ? (
+                <>
+                  <div className="h-10 bg-white/10 rounded-xl animate-pulse" />
+                  <div className="h-10 bg-white/10 rounded-xl animate-pulse" />
+                </>
+              ) : (
+                <>
+                  {insightPack?.uniquenessInsight && (
+                    <div className="p-3 bg-amber-500/5 border border-amber-500/10 rounded-xl">
+                      <p className="text-xs text-amber-200/80 leading-relaxed">{insightPack.uniquenessInsight}</p>
+                    </div>
+                  )}
+                  {insightPack?.tasteInsight && (
+                    <div className="p-3 bg-blue-500/5 border border-blue-500/10 rounded-xl">
+                      <p className="text-xs text-blue-200/60 leading-relaxed italic">{insightPack.tasteInsight}</p>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Your Records — Milestone Timing */}
+          {milestoneTimings.hasData && (
+            <div className="px-5 pb-4">
+              <button
+                onClick={() => setShowRecords(v => !v)}
+                className="w-full flex items-center gap-2 mb-2"
+              >
+                <Clock size={13} className="text-blue-400 shrink-0" />
+                <span className="text-sm font-medium text-white/70">Your Records</span>
+                <span className="text-[10px] px-1.5 py-0.5 bg-white/5 text-white/30 rounded-full ml-auto">
+                  {milestoneTimings.milestones.length} milestones
+                </span>
+                {showRecords ? <ChevronUp size={14} className="text-white/30" /> : <ChevronDown size={14} className="text-white/30" />}
+              </button>
+
+              {showRecords && (
+                <div className="space-y-0">
+                  {/* AI milestone narrative */}
+                  {insightLoading ? (
+                    <div className="h-7 bg-white/10 rounded animate-pulse mb-3" />
+                  ) : insightPack?.milestoneNarrative ? (
+                    <p className="text-xs text-white/35 italic mb-3">{insightPack.milestoneNarrative}</p>
+                  ) : null}
+
+                  {milestoneTimings.milestones.map((m, i) => (
+                    <div key={m.hours} className={clsx(
+                      'flex items-center justify-between py-2',
+                      i < milestoneTimings.milestones.length - 1 && 'border-b border-white/5'
+                    )}>
+                      <div className="flex items-center gap-2">
+                        {m.isFastest ? (
+                          <span className="text-amber-400 text-xs leading-none">★</span>
+                        ) : (
+                          <span className="w-3" />
+                        )}
+                        <span className="text-xs text-white/50">{m.hours}h milestone</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-right">
+                        <span className="text-xs font-medium text-white/70">Day {m.daysToReach}</span>
+                        {m.libraryAvgDays && (
+                          <span className={clsx(
+                            'text-[10px]',
+                            m.daysToReach < m.libraryAvgDays ? 'text-emerald-400' : 'text-white/25'
+                          )}>
+                            vs avg {m.libraryAvgDays}d
+                          </span>
+                        )}
+                        {m.rank !== null && m.total >= 2 && (
+                          <span className="text-[10px] text-white/25">
+                            #{m.rank}/{m.total}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
@@ -363,6 +542,40 @@ export function GameBottomSheet({
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* You Might Also Love */}
+          {(insightLoading || (insightPack?.similarGames && insightPack.similarGames.length > 0)) && (
+            <div className="px-5 pb-4">
+              <div className="flex items-center gap-1.5 mb-3">
+                <Sparkles size={12} className="text-purple-400" />
+                <span className="text-sm font-medium text-white/70">You Might Also Love</span>
+              </div>
+              {insightLoading ? (
+                <div className="flex gap-2">
+                  {[1, 2, 3].map(i => (
+                    <div key={i} className="shrink-0 w-40 h-20 bg-white/10 rounded-xl animate-pulse" />
+                  ))}
+                </div>
+              ) : (
+                <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+                  {insightPack!.similarGames.map((sg, i) => (
+                    <div
+                      key={i}
+                      className="shrink-0 w-44 p-3 bg-white/[0.03] border border-white/5 rounded-xl"
+                    >
+                      <div className="text-xs font-semibold text-white/85 leading-tight mb-1 line-clamp-2">
+                        {sg.name}
+                      </div>
+                      {sg.genre && sg.genre !== 'Unknown' && (
+                        <div className="text-[10px] text-purple-400/80 mb-1.5">{sg.genre}</div>
+                      )}
+                      <p className="text-[10px] text-white/35 leading-relaxed">{sg.reason}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 

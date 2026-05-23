@@ -12607,6 +12607,325 @@ export function getPurchaseHistoryInsights(entries: PurchaseQueueEntry[]): {
   return { totalSaved, avgWaitDays, gamesFromQueue: purchased.length };
 }
 
+// ── Game Card Deep Insights ──────────────────────────────────────────────────
+
+export interface MilestoneTiming {
+  hours: number;
+  daysToReach: number;
+  sessionCount: number;
+  libraryAvgDays: number | null;
+  rank: number | null; // 1 = fastest in library, null = too few comparison points
+  total: number;       // how many other library games reached this milestone
+  isFastest: boolean;
+  isTop25: boolean;
+}
+
+export interface GameMilestoneTimings {
+  milestones: MilestoneTiming[];
+  fastestMilestone: number | null; // which milestone threshold was reached fastest vs library
+  hasData: boolean;
+}
+
+export function getMilestoneTimings(game: Game, allGames: Game[]): GameMilestoneTimings {
+  if (!game.playLogs || game.playLogs.length === 0) {
+    return { milestones: [], fastestMilestone: null, hasData: false };
+  }
+
+  const sortedLogs = [...game.playLogs].sort(
+    (a, b) => parseLocalDate(a.date).getTime() - parseLocalDate(b.date).getTime()
+  );
+  const firstSessionDate = parseLocalDate(sortedLogs[0].date);
+
+  const MILESTONES = [5, 10, 20, 30, 50, 100];
+  const hitTimes: Record<number, { days: number; sessionCount: number }> = {};
+
+  // Milestones already hit via manually-entered base hours have unknown timing — skip them
+  const alreadyHit = new Set(MILESTONES.filter(m => game.hours >= m));
+
+  let cumulative = game.hours;
+  let sessionCount = 0;
+
+  for (const log of sortedLogs) {
+    sessionCount++;
+    cumulative += log.hours;
+    const logDate = parseLocalDate(log.date);
+    const daysFromStart = Math.max(1, Math.round(
+      (logDate.getTime() - firstSessionDate.getTime()) / (24 * 60 * 60 * 1000)
+    ) + 1);
+    for (const m of MILESTONES) {
+      if (!hitTimes[m] && !alreadyHit.has(m) && cumulative >= m) {
+        hitTimes[m] = { days: daysFromStart, sessionCount };
+      }
+    }
+  }
+
+  if (Object.keys(hitTimes).length === 0) {
+    return { milestones: [], fastestMilestone: null, hasData: false };
+  }
+
+  // Build library comparison: for each milestone, how many days did each other game take?
+  const libraryGames = allGames.filter(g => g.id !== game.id && g.playLogs && g.playLogs.length > 0);
+  const libraryMilestoneDays: Record<number, number[]> = {};
+  MILESTONES.forEach(m => { libraryMilestoneDays[m] = []; });
+
+  for (const lg of libraryGames) {
+    const lgLogs = [...(lg.playLogs || [])].sort(
+      (a, b) => parseLocalDate(a.date).getTime() - parseLocalDate(b.date).getTime()
+    );
+    if (lgLogs.length === 0) continue;
+    const lgFirstDate = parseLocalDate(lgLogs[0].date);
+    const lgAlreadyHit = new Set(MILESTONES.filter(m => lg.hours >= m));
+    let lgCumulative = lg.hours;
+
+    for (const log of lgLogs) {
+      lgCumulative += log.hours;
+      const days = Math.max(1, Math.round(
+        (parseLocalDate(log.date).getTime() - lgFirstDate.getTime()) / (24 * 60 * 60 * 1000)
+      ) + 1);
+      for (const m of MILESTONES) {
+        if (!lgAlreadyHit.has(m) && lgCumulative >= m) {
+          libraryMilestoneDays[m].push(days);
+          lgAlreadyHit.add(m);
+        }
+      }
+    }
+  }
+
+  const milestones: MilestoneTiming[] = MILESTONES
+    .filter(m => hitTimes[m])
+    .map(m => {
+      const { days, sessionCount: sc } = hitTimes[m];
+      const libraryDays = libraryMilestoneDays[m];
+      const avgDays = libraryDays.length > 0
+        ? Math.round(libraryDays.reduce((a, b) => a + b, 0) / libraryDays.length)
+        : null;
+      const fasterCount = libraryDays.filter(d => d < days).length;
+      const rank = fasterCount + 1;
+      const total = libraryDays.length;
+      return {
+        hours: m,
+        daysToReach: days,
+        sessionCount: sc,
+        libraryAvgDays: avgDays,
+        rank: total >= 2 ? rank : null,
+        total,
+        isFastest: total >= 2 && rank === 1,
+        isTop25: total >= 4 && rank <= Math.ceil(total * 0.25),
+      };
+    });
+
+  const fastestMilestone = milestones.find(m => m.isFastest)?.hours ?? null;
+  return { milestones, fastestMilestone, hasData: milestones.length > 0 };
+}
+
+export interface LibraryRankBar {
+  rank: number;
+  total: number;
+  percentile: number; // 100 = top, 0 = bottom
+  isChampion: boolean;
+  label: string; // "#3 of 47"
+}
+
+export interface LibraryRankBars {
+  hours: LibraryRankBar;
+  rating: LibraryRankBar;
+  value: LibraryRankBar; // lower cost/hr = better
+  sessions: LibraryRankBar;
+}
+
+function makeRankBar(values: number[], gameValue: number | null, higherIsBetter: boolean): LibraryRankBar {
+  if (gameValue === null || values.length === 0) {
+    return { rank: 0, total: 0, percentile: 0, isChampion: false, label: 'N/A' };
+  }
+  const betterCount = values.filter(v => higherIsBetter ? v > gameValue : v < gameValue).length;
+  const rank = betterCount + 1;
+  const total = values.length;
+  const percentile = Math.round(((total - rank) / Math.max(total - 1, 1)) * 100);
+  return { rank, total, percentile, isChampion: rank === 1, label: `#${rank} of ${total}` };
+}
+
+export function getLibraryRankBars(game: Game, allGames: Game[]): LibraryRankBars {
+  const owned = allGames.filter(g => g.status !== 'Wishlist');
+  const totalHours = getTotalHours(game);
+  const sessions = game.playLogs?.length || 0;
+  const costPerHour = totalHours > 0 && game.price > 0 ? game.price / totalHours : null;
+
+  return {
+    hours: makeRankBar(owned.map(g => getTotalHours(g)), totalHours, true),
+    rating: makeRankBar(
+      owned.filter(g => g.rating > 0).map(g => g.rating),
+      game.rating > 0 ? game.rating : null,
+      true
+    ),
+    value: makeRankBar(
+      owned.filter(g => getTotalHours(g) > 0 && g.price > 0).map(g => g.price / getTotalHours(g)),
+      costPerHour,
+      false
+    ),
+    sessions: makeRankBar(owned.map(g => g.playLogs?.length || 0), sessions, true),
+  };
+}
+
+export interface NextMilestoneData {
+  description: string;
+  current: number;
+  target: number;
+  remaining: number;
+  progressPercent: number;
+  type: 'hours' | 'value';
+}
+
+export function getNextMilestone(game: Game, allGames: Game[]): NextMilestoneData | null {
+  const totalHours = getTotalHours(game);
+  const candidates: NextMilestoneData[] = [];
+
+  const HOUR_MILESTONES = [5, 10, 20, 30, 50, 100, 200, 500];
+  const nextHours = HOUR_MILESTONES.find(m => m > totalHours);
+  if (nextHours) {
+    const prev = Math.max(...HOUR_MILESTONES.filter(m => m <= totalHours), 0);
+    candidates.push({
+      description: nextHours === 100 ? 'Century Club' : `${nextHours}h milestone`,
+      current: totalHours,
+      target: nextHours,
+      remaining: Math.ceil(nextHours - totalHours),
+      progressPercent: prev === nextHours ? 100 : Math.round(((totalHours - prev) / (nextHours - prev)) * 100),
+      type: 'hours',
+    });
+  }
+
+  if (game.price > 0 && totalHours > 0) {
+    const costPerHour = game.price / totalHours;
+    const VALUE_TIERS = [
+      { label: 'Excellent value (≤$1/hr)', threshold: 1.0 },
+      { label: 'Good value (≤$3/hr)', threshold: 3.0 },
+      { label: 'Fair value (≤$5/hr)', threshold: 5.0 },
+    ];
+    for (const tier of VALUE_TIERS) {
+      if (costPerHour > tier.threshold) {
+        const hoursNeeded = game.price / tier.threshold;
+        const remaining = hoursNeeded - totalHours;
+        if (remaining > 0 && remaining <= 40) {
+          candidates.push({
+            description: tier.label,
+            current: totalHours,
+            target: Math.ceil(hoursNeeded),
+            remaining: Math.ceil(remaining),
+            progressPercent: Math.min(99, Math.round((totalHours / hoursNeeded) * 100)),
+            type: 'value',
+          });
+        }
+        break;
+      }
+    }
+  }
+
+  if (candidates.length === 0) return null;
+  return candidates.sort((a, b) => b.progressPercent - a.progressPercent)[0];
+}
+
+export interface LibraryUniquenessData {
+  statements: string[];
+  bestStatement: string;
+}
+
+export function getLibraryUniqueness(game: Game, allGames: Game[]): LibraryUniquenessData {
+  const statements: string[] = [];
+  const owned = allGames.filter(g => g.status !== 'Wishlist' && g.id !== game.id);
+  const totalHours = getTotalHours(game);
+
+  // Only [genre] game rated above 8
+  if (game.genre && game.rating >= 8) {
+    const sameGenreHighRated = owned.filter(g => g.genre === game.genre && g.rating >= 8);
+    if (sameGenreHighRated.length === 0) {
+      statements.push(`Your only ${game.genre} game rated ${game.rating}+`);
+    } else if (sameGenreHighRated.length === 1) {
+      statements.push(`One of only 2 ${game.genre} games you've loved this much`);
+    }
+  }
+
+  // Only completed game in genre
+  if (game.genre && game.status === 'Completed') {
+    const sameGenreCompleted = owned.filter(g => g.genre === game.genre && g.status === 'Completed');
+    if (sameGenreCompleted.length === 0) {
+      statements.push(`Your only completed ${game.genre} game`);
+    }
+  }
+
+  // First ever game in this genre
+  if (game.genre && (game.status === 'In Progress' || game.status === 'Completed')) {
+    const prevPlayed = owned.filter(g =>
+      g.genre === game.genre && (g.status === 'Completed' || g.status === 'In Progress' || g.status === 'Abandoned')
+    );
+    if (prevPlayed.length === 0) {
+      statements.push(`Your first-ever ${game.genre} game`);
+    }
+  }
+
+  // Hours rank
+  const hoursRank = owned.filter(g => getTotalHours(g) > totalHours).length + 1;
+  if (hoursRank <= 3 && totalHours >= 10) {
+    statements.push(`Your #${hoursRank} most-played game of all time`);
+  }
+
+  // Rating rank
+  const ratingRank = owned.filter(g => g.rating > game.rating).length + 1;
+  if (ratingRank <= 3 && game.rating >= 8) {
+    statements.push(`Your #${ratingRank} highest-rated game`);
+  }
+
+  // Only game from franchise
+  if (game.franchise) {
+    const franchiseCount = allGames.filter(g => g.franchise === game.franchise).length;
+    if (franchiseCount === 1) {
+      statements.push(`Your only game from the ${game.franchise} franchise`);
+    }
+  }
+
+  // Value champion
+  const costPerHour = totalHours > 0 && game.price > 0 ? game.price / totalHours : null;
+  if (costPerHour !== null) {
+    const betterValue = owned.filter(g => {
+      const h = getTotalHours(g);
+      return h > 0 && g.price > 0 && g.price / h < costPerHour;
+    }).length;
+    if (betterValue === 0 && totalHours > 0) {
+      statements.push(`Your best value game in the entire library`);
+    } else if (betterValue <= 2) {
+      statements.push(`Top 3 best value games in your library`);
+    }
+  }
+
+  // Perfect 10
+  if (game.rating === 10) {
+    const otherTens = owned.filter(g => g.rating === 10).length;
+    if (otherTens === 0) {
+      statements.push(`Your only perfect 10 — ever`);
+    } else {
+      statements.push(`One of ${otherTens + 1} perfect 10s you've ever given`);
+    }
+  }
+
+  // Most sessions
+  const sessions = game.playLogs?.length || 0;
+  if (sessions >= 5) {
+    const moreSessions = owned.filter(g => (g.playLogs?.length || 0) > sessions).length;
+    if (moreSessions === 0) {
+      statements.push(`Most sessions ever logged for a single game`);
+    }
+  }
+
+  // Soulmate: 100h+ AND 8+ rating
+  if (totalHours >= 100 && game.rating >= 8) {
+    const otherSoulmates = owned.filter(g => getTotalHours(g) >= 100 && g.rating >= 8).length;
+    if (otherSoulmates === 0) {
+      statements.push(`Your one and only soulmate game — 100h+ and you still love it`);
+    }
+  }
+
+  const bestStatement = statements[0] ?? '';
+  return { statements, bestStatement };
+}
+
 /**
  * Store URL Intelligence (Feature #19)
  */
