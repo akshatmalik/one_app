@@ -7,7 +7,6 @@ import {
   collection,
   doc,
   getDocs,
-  getDoc,
   setDoc,
   updateDoc,
   deleteDoc,
@@ -67,8 +66,8 @@ class FirebasePurchaseQueueRepository implements PurchaseQueueRepository {
     const cleaned = cleanUndefined(updates) as Record<string, unknown>;
     cleaned.updatedAt = new Date().toISOString();
     await updateDoc(ref, cleaned);
-    const snap = await getDoc(ref);
-    return snap.data() as PurchaseQueueEntry;
+    // No follow-up read: the caller applies the same change to local state optimistically.
+    return { id, ...cleaned } as unknown as PurchaseQueueEntry;
   }
 
   async delete(id: string): Promise<void> {
