@@ -342,6 +342,61 @@ function BattleCard({ game, ranking, onPick, disabled, isWinner, isLoser }: Batt
   );
 }
 
+// ── Compact pair row for batch mode ─────────────────────────────────
+
+interface CompactPairRowProps {
+  gameA: GameWithMetrics;
+  gameB: GameWithMetrics;
+  rankA?: GameRanking;
+  rankB?: GameRanking;
+  pickedId: string | null;
+  onPick: (winnerId: string) => void;
+  disabled?: boolean;
+}
+
+function CompactPairRow({ gameA, gameB, rankA, rankB, pickedId, onPick, disabled }: CompactPairRowProps) {
+  const aPicked = pickedId === gameA.id;
+  const bPicked = pickedId === gameB.id;
+
+  function GameSide({ game, rank, picked, other }: { game: GameWithMetrics; rank?: GameRanking; picked: boolean; other: boolean }) {
+    return (
+      <button
+        onClick={() => onPick(game.id)}
+        disabled={disabled}
+        className={clsx(
+          'flex items-center gap-2 px-2 py-2 rounded-xl transition-all w-full',
+          picked ? 'bg-emerald-500/15 border border-emerald-500/25' :
+          other  ? 'opacity-30' :
+          'hover:bg-white/[0.05] border border-transparent',
+          disabled && 'cursor-not-allowed',
+        )}
+      >
+        <div className="w-9 h-9 rounded-lg overflow-hidden bg-white/5 flex-shrink-0">
+          {game.thumbnail
+            ? <img src={game.thumbnail} alt={game.name} className="w-full h-full object-cover" />
+            : <div className="w-full h-full flex items-center justify-center text-base">🎮</div>}
+        </div>
+        <div className="flex-1 min-w-0 text-left">
+          <p className={clsx('text-xs font-semibold truncate leading-tight', picked ? 'text-emerald-300' : 'text-white/80')}>{game.name}</p>
+          <p className="text-[10px] text-white/30 mt-0.5">{rank?.eloScore ?? 1000}</p>
+        </div>
+        {picked && <CheckCircle2 size={13} className="text-emerald-400 flex-shrink-0" />}
+      </button>
+    );
+  }
+
+  return (
+    <div className={clsx(
+      'grid grid-cols-[1fr_28px_1fr] items-center gap-1 p-1.5 rounded-2xl border transition-colors',
+      (aPicked || bPicked) ? 'border-white/8 bg-white/[0.015]' : 'border-white/[0.05] bg-white/[0.005]',
+    )}>
+      <GameSide game={gameA} rank={rankA} picked={aPicked} other={bPicked} />
+      <span className="text-[9px] font-bold text-white/20 text-center">vs</span>
+      <GameSide game={gameB} rank={rankB} picked={bPicked} other={aPicked} />
+    </div>
+  );
+}
+
 // ── Main component ───────────────────────────────────────────────────
 
 type LeaderboardView = 'classic' | 'battle' | 'elo-rankings';
@@ -397,6 +452,12 @@ export function LeaderboardTab({ gamesWithMetrics, userId, eloTierConfig }: Lead
   const [pickedWinnerId, setPickedWinnerId] = useState<string | null>(null);
   const [battleKey, setBattleKey] = useState(0);
   const resultTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ── Batch mode state ─────────────────────────────────────────────
+  const [batchMode, setBatchMode] = useState(false);
+  const [batchPairs, setBatchPairs] = useState<[string, string][]>([]);
+  const [batchPicks, setBatchPicks] = useState<Record<string, string>>({});
+  const [batchSubmitting, setBatchSubmitting] = useState(false);
 
   // Eligible games for battles: for 'all', any owned game with rating/hours;
   // for specific periods, only games with play logs in that period window.
@@ -566,6 +627,47 @@ export function LeaderboardTab({ gamesWithMetrics, userId, eloTierConfig }: Lead
       setPickedWinnerId(null);
       setShowResult(false);
       logError('Battle pick failed', 'handlePick', err);
+    }
+  }
+
+  // ── Batch mode helpers ───────────────────────────────────────────
+  const BATCH_SIZE = 6;
+  const bPairKey = (a: string, b: string) => [a, b].sort().join('|');
+
+  function generateBatch() {
+    const pairs: [string, string][] = [];
+    const used = new Set<string>();
+    for (let i = 0; i < BATCH_SIZE; i++) {
+      const avail = tierEligibleIds.filter(id => !used.has(id));
+      if (avail.length < 2) break;
+      const pair = getNextPair(avail);
+      if (!pair) break;
+      pairs.push(pair);
+      used.add(pair[0]);
+      used.add(pair[1]);
+    }
+    setBatchPairs(pairs);
+    setBatchPicks({});
+  }
+
+  async function submitBatch() {
+    const toSubmit = batchPairs
+      .map(([a, b]) => {
+        const winnerId = batchPicks[bPairKey(a, b)];
+        return winnerId ? { winnerId, loserId: winnerId === a ? b : a } : null;
+      })
+      .filter(Boolean) as { winnerId: string; loserId: string }[];
+    if (!toSubmit.length) return;
+    setBatchSubmitting(true);
+    try {
+      for (const { winnerId, loserId } of toSubmit) {
+        await recordBattle(winnerId, loserId);
+      }
+      generateBatch();
+    } catch (err) {
+      logError('Batch submit failed', 'submitBatch', err);
+    } finally {
+      setBatchSubmitting(false);
     }
   }
 
@@ -997,82 +1099,159 @@ export function LeaderboardTab({ gamesWithMetrics, userId, eloTierConfig }: Lead
                 </div>
               ) : (
                 <>
-                  {/* Progress */}
+                  {/* Progress + mode toggle */}
                   <div className="flex items-center justify-between text-[11px] text-white/30">
                     <span>{battles.length} battles recorded this period</span>
-                    <span>
-                      {tierEligibleIds.length * (tierEligibleIds.length - 1) / 2} pairs{' '}
-                      {selectedBattleTier === 'all' ? 'across all tiers' : `in tier ${selectedBattleTier}`}
-                    </span>
+                    <div className="flex items-center gap-1 p-0.5 bg-white/[0.04] border border-white/[0.08] rounded-lg">
+                      <button
+                        onClick={() => setBatchMode(false)}
+                        className={clsx(
+                          'px-2 py-0.5 rounded text-[10px] font-medium transition-all',
+                          !batchMode ? 'bg-white/10 text-white/80' : 'text-white/30 hover:text-white/50',
+                        )}
+                      >1 at a time</button>
+                      <button
+                        onClick={() => { setBatchMode(true); generateBatch(); }}
+                        className={clsx(
+                          'px-2 py-0.5 rounded text-[10px] font-medium transition-all',
+                          batchMode ? 'bg-purple-500/30 text-purple-300 border border-purple-400/30' : 'text-white/30 hover:text-white/50',
+                        )}
+                      >Batch</button>
+                    </div>
                   </div>
 
-                  {/* Battle cards */}
-                  <div className="relative">
-                    {showResult && lastResult && (
-                      <div className="absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-black/50 backdrop-blur-[2px] pointer-events-none">
-                        <div className="battle-result-pop text-center space-y-1 px-4 py-3 rounded-xl bg-white/[0.06] border border-white/10">
-                          <p className="text-base font-bold text-white">{lastResult.winner} wins!</p>
-                          <p className="text-sm font-semibold text-emerald-400">+{lastResult.winnerChange} ELO</p>
+                  {batchMode ? (
+                    /* ── BATCH MODE ───────────────────────────────── */
+                    <div className="space-y-2">
+                      {batchPairs.length === 0 ? (
+                        <div className="text-center py-6 text-white/30 text-xs">
+                          No more new pairs to show.{' '}
+                          <button onClick={generateBatch} className="text-purple-400 hover:text-purple-300 underline">Refresh</button>
+                        </div>
+                      ) : (
+                        <>
+                          {batchPairs.map(([aId, bId]) => {
+                            const gameA = gamesWithMetrics.find(g => g.id === aId);
+                            const gameB = gamesWithMetrics.find(g => g.id === bId);
+                            if (!gameA || !gameB) return null;
+                            const rankA = rankings.find(r => r.gameId === aId);
+                            const rankB = rankings.find(r => r.gameId === bId);
+                            const key = bPairKey(aId, bId);
+                            return (
+                              <CompactPairRow
+                                key={key}
+                                gameA={gameA}
+                                gameB={gameB}
+                                rankA={rankA}
+                                rankB={rankB}
+                                pickedId={batchPicks[key] ?? null}
+                                onPick={winnerId => setBatchPicks(prev => ({ ...prev, [key]: winnerId }))}
+                                disabled={batchSubmitting}
+                              />
+                            );
+                          })}
+
+                          <div className="flex items-center gap-2 pt-1">
+                            <button
+                              onClick={submitBatch}
+                              disabled={batchSubmitting || Object.keys(batchPicks).length === 0}
+                              className={clsx(
+                                'flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all',
+                                Object.keys(batchPicks).length > 0
+                                  ? 'bg-purple-500/25 border border-purple-400/40 text-purple-300 hover:bg-purple-500/35'
+                                  : 'bg-white/[0.03] border border-white/[0.08] text-white/25 cursor-not-allowed',
+                              )}
+                            >
+                              {batchSubmitting
+                                ? 'Saving…'
+                                : Object.keys(batchPicks).length === 0
+                                  ? 'Pick a winner in each row'
+                                  : `Submit ${Object.keys(batchPicks).length} / ${batchPairs.length} picks`}
+                            </button>
+                            <button
+                              onClick={generateBatch}
+                              disabled={batchSubmitting}
+                              className="p-2.5 rounded-xl border border-white/[0.08] text-white/30 hover:text-white/50 hover:border-white/15 transition-colors"
+                              title="Shuffle new batch"
+                            >
+                              <RefreshCw size={13} />
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  ) : (
+                    /* ── SINGLE PAIR MODE ─────────────────────────── */
+                    <>
+                      {/* Battle cards */}
+                      <div className="relative">
+                        {showResult && lastResult && (
+                          <div className="absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-black/50 backdrop-blur-[2px] pointer-events-none">
+                            <div className="battle-result-pop text-center space-y-1 px-4 py-3 rounded-xl bg-white/[0.06] border border-white/10">
+                              <p className="text-base font-bold text-white">{lastResult.winner} wins!</p>
+                              <p className="text-sm font-semibold text-emerald-400">+{lastResult.winnerChange} ELO</p>
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="grid grid-cols-2 gap-3 group">
+                          {currentPair.map((gameId, idx) => {
+                            const game = gamesWithMetrics.find(g => g.id === gameId);
+                            const ranking = rankings.find(r => r.gameId === gameId);
+                            if (!game) return null;
+                            const otherId = currentPair[idx === 0 ? 1 : 0];
+                            const isWinner = pickedWinnerId === gameId;
+                            const isLoser  = pickedWinnerId !== null && pickedWinnerId !== gameId;
+                            return (
+                              <div
+                                key={`${gameId}-${battleKey}`}
+                                className={idx === 0 ? 'battle-enter-left' : 'battle-enter-right'}
+                              >
+                                <BattleCard
+                                  game={game}
+                                  ranking={ranking}
+                                  onPick={() => handlePick(gameId, otherId)}
+                                  disabled={submitting}
+                                  isWinner={isWinner}
+                                  isLoser={isLoser}
+                                />
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {/* VS separator */}
+                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 pointer-events-none">
+                          <div className="w-9 h-9 rounded-full bg-[#1a1a2e] border-2 border-white/10 flex items-center justify-center">
+                            <span className="text-[11px] font-black text-white/50">VS</span>
+                          </div>
                         </div>
                       </div>
-                    )}
 
-                    <div className="grid grid-cols-2 gap-3 group">
-                      {currentPair.map((gameId, idx) => {
-                        const game = gamesWithMetrics.find(g => g.id === gameId);
-                        const ranking = rankings.find(r => r.gameId === gameId);
-                        if (!game) return null;
-                        const otherId = currentPair[idx === 0 ? 1 : 0];
-                        const isWinner = pickedWinnerId === gameId;
-                        const isLoser  = pickedWinnerId !== null && pickedWinnerId !== gameId;
-                        return (
-                          <div
-                            key={`${gameId}-${battleKey}`}
-                            className={idx === 0 ? 'battle-enter-left' : 'battle-enter-right'}
-                          >
-                            <BattleCard
-                              game={game}
-                              ranking={ranking}
-                              onPick={() => handlePick(gameId, otherId)}
-                              disabled={submitting}
-                              isWinner={isWinner}
-                              isLoser={isLoser}
-                            />
-                          </div>
-                        );
-                      })}
-                    </div>
+                      {/* Skip pair */}
+                      <button
+                        onClick={() => {
+                          const shuffled = [...tierEligibleIds].sort(() => Math.random() - 0.5);
+                          const pair = getNextPair(shuffled);
+                          if (pair && (pair[0] !== currentPair[0] || pair[1] !== currentPair[1])) {
+                            setCurrentPair(pair);
+                          }
+                        }}
+                        className="w-full py-2 text-[11px] text-white/25 hover:text-white/40 transition-colors"
+                      >
+                        Skip this pair →
+                      </button>
 
-                    {/* VS separator */}
-                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 pointer-events-none">
-                      <div className="w-9 h-9 rounded-full bg-[#1a1a2e] border-2 border-white/10 flex items-center justify-center">
-                        <span className="text-[11px] font-black text-white/50">VS</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Skip pair */}
-                  <button
-                    onClick={() => {
-                      const shuffled = [...tierEligibleIds].sort(() => Math.random() - 0.5);
-                      const pair = getNextPair(shuffled);
-                      if (pair && (pair[0] !== currentPair[0] || pair[1] !== currentPair[1])) {
-                        setCurrentPair(pair);
-                      }
-                    }}
-                    className="w-full py-2 text-[11px] text-white/25 hover:text-white/40 transition-colors"
-                  >
-                    Skip this pair →
-                  </button>
-
-                  {currentPair && (() => {
-                    const pairCount = getBattleCount(currentPair[0], currentPair[1]);
-                    return pairCount > 0 ? (
-                      <p className="text-center text-[10px] text-white/25">
-                        This pair has battled {pairCount} time{pairCount !== 1 ? 's' : ''} before.
-                      </p>
-                    ) : null;
-                  })()}
+                      {currentPair && (() => {
+                        const pairCount = getBattleCount(currentPair[0], currentPair[1]);
+                        return pairCount > 0 ? (
+                          <p className="text-center text-[10px] text-white/25">
+                            This pair has battled {pairCount} time{pairCount !== 1 ? 's' : ''} before.
+                          </p>
+                        ) : null;
+                      })()}
+                    </>
+                  )}
                 </>
               )}
             </div>
