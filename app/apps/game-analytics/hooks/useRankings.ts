@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { GameRanking, RatingBattle, RankingPeriod } from '../lib/types';
 import { rankingRepository, battleRepository } from '../lib/ranking-storage';
 import { logError } from '../lib/error-log';
@@ -8,6 +8,8 @@ import { logError } from '../lib/error-log';
 // ── ELO helpers ──────────────────────────────────────────────────────
 
 const INITIAL_ELO = 1000;
+const FLUSH_AFTER_COUNT = 5;  // write to Firebase after this many pending battles
+const FLUSH_IDLE_MS     = 5000; // …or after 5 s of no new battles
 
 function kFactor(battlesCount: number): number {
   if (battlesCount < 10) return 32;
@@ -28,7 +30,7 @@ function computeEloChanges(
   const k = Math.max(kFactor(winnerBattles), kFactor(loserBattles));
   const expectedWin = expectedScore(winnerElo, loserElo);
   const winnerChange = Math.round(k * (1 - expectedWin));
-  const loserChange = Math.round(k * (0 - (1 - expectedWin)));
+  const loserChange  = Math.round(k * (0 - (1 - expectedWin)));
   return { winnerChange, loserChange };
 }
 
@@ -48,7 +50,6 @@ export function getPeriodKey(period: RankingPeriod, date = new Date()): string {
   }
 
   if (period === 'week') {
-    // ISO week
     const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
     const dayNum = d.getUTCDay() || 7;
     d.setUTCDate(d.getUTCDate() + 4 - dayNum);
@@ -73,9 +74,9 @@ export function getPeriodLabel(period: RankingPeriod, date = new Date()): string
   if (period === 'week') {
     const d = new Date(date);
     const day = d.getDay() || 7;
-    d.setDate(d.getDate() - day + 1); // Monday
+    d.setDate(d.getDate() - day + 1);
     const end = new Date(d);
-    end.setDate(end.getDate() + 6);   // Sunday
+    end.setDate(end.getDate() + 6);
     const fmt = (dt: Date) => dt.toLocaleString('en-US', { month: 'short', day: 'numeric' });
     const sameMonth = end.getMonth() === d.getMonth();
     return `${fmt(d)}–${sameMonth ? end.getDate() : fmt(end)}, ${d.getFullYear()}`;
@@ -85,23 +86,14 @@ export function getPeriodLabel(period: RankingPeriod, date = new Date()): string
 
 export function getPeriodRange(period: RankingPeriod, date = new Date()): { start: Date; end: Date } | null {
   if (period === 'all') return null;
-
   const y = date.getFullYear();
   const mo = date.getMonth();
-
-  if (period === 'year') {
-    return { start: new Date(y, 0, 1, 0, 0, 0), end: new Date(y, 11, 31, 23, 59, 59) };
-  }
-
-  if (period === 'month') {
-    return { start: new Date(y, mo, 1, 0, 0, 0), end: new Date(y, mo + 1, 0, 23, 59, 59) };
-  }
-
+  if (period === 'year')    return { start: new Date(y, 0, 1, 0, 0, 0),      end: new Date(y, 11, 31, 23, 59, 59) };
+  if (period === 'month')   return { start: new Date(y, mo, 1, 0, 0, 0),     end: new Date(y, mo + 1, 0, 23, 59, 59) };
   if (period === 'quarter') {
     const q = Math.floor(mo / 3);
     return { start: new Date(y, q * 3, 1, 0, 0, 0), end: new Date(y, q * 3 + 3, 0, 23, 59, 59) };
   }
-
   if (period === 'week') {
     const day = date.getDay() || 7;
     const monday = new Date(date);
@@ -112,18 +104,24 @@ export function getPeriodRange(period: RankingPeriod, date = new Date()): { star
     sunday.setHours(23, 59, 59, 999);
     return { start: monday, end: sunday };
   }
-
   return null;
 }
 
 // ── Firebase index error helper ──────────────────────────────────────
 
-/** Extract the "create index" URL that Firebase embeds in index-missing errors. */
 function extractIndexUrl(err: unknown): string | null {
   const msg = err instanceof Error ? err.message : String(err);
-  // Firebase format: "...You can create it here: https://console.firebase.google.com/..."
   const match = msg.match(/https:\/\/console\.firebase\.google\.com\/[^\s"]+/);
   return match ? match[0] : null;
+}
+
+// ── Write-buffer types ───────────────────────────────────────────────
+
+interface PendingBattle {
+  battleData: Omit<RatingBattle, 'id' | 'userId' | 'createdAt' | 'updatedAt'>;
+  // Final ranking state for both players at the time of the pick (used for upsert)
+  winnerRank: Omit<GameRanking, 'id' | 'userId' | 'createdAt' | 'updatedAt'>;
+  loserRank:  Omit<GameRanking, 'id' | 'userId' | 'createdAt' | 'updatedAt'>;
 }
 
 // ── Hook ─────────────────────────────────────────────────────────────
@@ -132,10 +130,13 @@ export interface UseRankingsReturn {
   rankings: GameRanking[];
   battles: RatingBattle[];
   loading: boolean;
-  submitting: boolean;
-  /** Non-null when a Firestore query fails due to a missing index. Contains the Firebase Console URL to create it. */
+  /** Number of battles picked but not yet written to Firebase. */
+  pendingCount: number;
   indexError: string | null;
-  recordBattle: (winnerId: string, loserId: string) => Promise<void>;
+  /** Synchronous — updates local state instantly, queues Firebase write. */
+  recordBattle: (winnerId: string, loserId: string) => void;
+  /** Manually flush pending writes (e.g. on navigate-away). */
+  flush: () => Promise<void>;
   refresh: () => Promise<void>;
   getBattleCount: (gameId1: string, gameId2: string) => number;
   getNextPair: (eligibleIds: string[]) => [string, string] | null;
@@ -146,11 +147,27 @@ export function useRankings(
   period: RankingPeriod,
   periodKey: string,
 ): UseRankingsReturn {
-  const [rankings, setRankings] = useState<GameRanking[]>([]);
-  const [battles, setBattles] = useState<RatingBattle[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
+  const [rankings, setRankings]     = useState<GameRanking[]>([]);
+  const [battles, setBattles]       = useState<RatingBattle[]>([]);
+  const [loading, setLoading]       = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
   const [indexError, setIndexError] = useState<string | null>(null);
+
+  // Always-current rankings ref — avoids stale-closure ELO reads during rapid picks
+  const rankingsRef  = useRef<GameRanking[]>([]);
+  // Write buffer and flush machinery (all refs → stable, no closure issues)
+  const pendingRef   = useRef<PendingBattle[]>([]);
+  const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flushingRef  = useRef(false);
+  // Keep userId/period/periodKey available to flush without adding to its deps
+  const userIdRef    = useRef(userId);
+  const periodRef    = useRef(period);
+  const periodKeyRef = useRef(periodKey);
+
+  useEffect(() => { rankingsRef.current  = rankings;  }, [rankings]);
+  useEffect(() => { userIdRef.current    = userId;    }, [userId]);
+  useEffect(() => { periodRef.current    = period;    }, [period]);
+  useEffect(() => { periodKeyRef.current = periodKey; }, [periodKey]);
 
   // Propagate userId to repos
   useEffect(() => {
@@ -179,7 +196,72 @@ export function useRankings(
 
   useEffect(() => { refresh(); }, [refresh]);
 
-  // Count battles between a specific pair (from already-loaded battles list)
+  // ── Flush: write buffered battles to Firebase ────────────────────
+  // Stable (empty deps) — safe to call from timers and cleanup effects.
+  // Uses only refs so it never goes stale.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const flush = useCallback(async () => {
+    if (flushingRef.current || pendingRef.current.length === 0) return;
+    flushingRef.current = true;
+
+    const batch = [...pendingRef.current];
+    pendingRef.current = [];
+    setPendingCount(0);
+
+    try {
+      // Write all battle records in parallel
+      await Promise.all(batch.map(pb => battleRepository.create(pb.battleData)));
+
+      // Upsert rankings: use the latest optimistic state for each affected game
+      // so the final Firebase value is always the most up-to-date ELO.
+      const affectedIds = new Set(batch.flatMap(pb => [pb.battleData.winnerId, pb.battleData.loserId]));
+      await Promise.all(Array.from(affectedIds).map(gameId => {
+        // Prefer the current optimistic state; fall back to the buffered snapshot
+        const live = rankingsRef.current.find(r => r.gameId === gameId);
+        const snap = batch.find(pb => pb.battleData.winnerId === gameId)?.winnerRank
+                  ?? batch.find(pb => pb.battleData.loserId  === gameId)?.loserRank;
+        const r = live ?? snap;
+        if (!r) return Promise.resolve();
+        return rankingRepository.upsert({
+          gameId:       r.gameId,
+          period:       periodRef.current,
+          periodKey:    periodKeyRef.current,
+          eloScore:     r.eloScore,
+          wins:         r.wins,
+          losses:       r.losses,
+          battlesCount: r.battlesCount,
+          lastBattleAt: r.lastBattleAt,
+        });
+      }));
+
+      setIndexError(null);
+    } catch (err) {
+      // Re-queue on failure so data isn't lost
+      pendingRef.current = [...batch, ...pendingRef.current];
+      setPendingCount(pendingRef.current.length);
+      const url = extractIndexUrl(err);
+      if (url) setIndexError(url);
+      logError('Failed to flush battles', 'useRankings.flush', err);
+    } finally {
+      flushingRef.current = false;
+    }
+  }, []); // stable — intentionally empty deps
+
+  // Flush when period/user changes (don't lose queued data across navigation)
+  useEffect(() => {
+    flush();
+  }, [period, periodKey, userId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Flush on unmount (user navigates away)
+  useEffect(() => {
+    return () => {
+      if (flushTimerRef.current) clearTimeout(flushTimerRef.current);
+      flush();
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── getBattleCount / getNextPair ─────────────────────────────────
+
   const getBattleCount = useCallback((id1: string, id2: string): number => {
     return battles.filter(b =>
       (b.winnerId === id1 && b.loserId === id2) ||
@@ -187,150 +269,131 @@ export function useRankings(
     ).length;
   }, [battles]);
 
-  // Smart matchmaking: pick pair with fewest battles, prefer untested pairs,
-  // break ties by closest ELO (most interesting match)
   const getNextPair = useCallback((eligibleIds: string[]): [string, string] | null => {
     if (eligibleIds.length < 2) return null;
 
-    // Build a map of battle counts per pair
-    const pairCounts: Map<string, number> = new Map();
     const pairKey = (a: string, b: string) => [a, b].sort().join('|');
-
+    const pairCounts = new Map<string, number>();
     battles.forEach(b => {
       const k = pairKey(b.winnerId, b.loserId);
       pairCounts.set(k, (pairCounts.get(k) || 0) + 1);
     });
 
-    // Build ELO map
-    const eloMap: Map<string, number> = new Map(
-      rankings.map(r => [r.gameId, r.eloScore])
-    );
+    const eloMap = new Map(rankings.map(r => [r.gameId, r.eloScore]));
 
     let bestPair: [string, string] | null = null;
-    let bestScore = Infinity; // lower = better candidate
+    let bestScore = Infinity;
 
     for (let i = 0; i < eligibleIds.length; i++) {
       for (let j = i + 1; j < eligibleIds.length; j++) {
         const a = eligibleIds[i];
         const b = eligibleIds[j];
-        const count = pairCounts.get(pairKey(a, b)) || 0;
-        const eloA = eloMap.get(a) ?? INITIAL_ELO;
-        const eloB = eloMap.get(b) ?? INITIAL_ELO;
-        const eloDiff = Math.abs(eloA - eloB);
-        // Score: primarily minimize battle count, then minimize elo difference
-        const score = count * 10000 + eloDiff;
-        if (score < bestScore) {
-          bestScore = score;
-          bestPair = [a, b];
-        }
+        const count  = pairCounts.get(pairKey(a, b)) || 0;
+        const eloDiff = Math.abs((eloMap.get(a) ?? INITIAL_ELO) - (eloMap.get(b) ?? INITIAL_ELO));
+        const score  = count * 10000 + eloDiff;
+        if (score < bestScore) { bestScore = score; bestPair = [a, b]; }
       }
     }
 
     return bestPair;
   }, [battles, rankings]);
 
-  const recordBattle = useCallback(async (winnerId: string, loserId: string) => {
-    // Get or create rankings for both games
-    const winnerRanking = rankings.find(r => r.gameId === winnerId) ?? {
+  // ── recordBattle: instant local update + queued Firebase write ───
+
+  const recordBattle = useCallback((winnerId: string, loserId: string) => {
+    const now = new Date().toISOString();
+
+    // Read from ref so rapid picks always see the latest ELOs (no stale closure)
+    const existingWinner = rankingsRef.current.find(r => r.gameId === winnerId);
+    const existingLoser  = rankingsRef.current.find(r => r.gameId === loserId);
+
+    const winnerBase = existingWinner ?? {
       gameId: winnerId, period, periodKey,
       eloScore: INITIAL_ELO, wins: 0, losses: 0, battlesCount: 0, lastBattleAt: '',
     };
-    const loserRanking = rankings.find(r => r.gameId === loserId) ?? {
+    const loserBase = existingLoser ?? {
       gameId: loserId, period, periodKey,
       eloScore: INITIAL_ELO, wins: 0, losses: 0, battlesCount: 0, lastBattleAt: '',
     };
 
     const { winnerChange, loserChange } = computeEloChanges(
-      winnerRanking.eloScore,
-      loserRanking.eloScore,
-      winnerRanking.battlesCount,
-      loserRanking.battlesCount,
+      winnerBase.eloScore, loserBase.eloScore,
+      winnerBase.battlesCount, loserBase.battlesCount,
     );
 
-    const now = new Date().toISOString();
-    const existingWinner = rankings.find(r => r.gameId === winnerId);
-    const existingLoser = rankings.find(r => r.gameId === loserId);
-
-    // Optimistically update local state immediately so the UI responds without
-    // waiting for Firebase round-trips.
+    // Optimistic local state — UI responds with zero Firebase latency
     setBattles(prev => [{
       id: `opt-${Date.now()}`,
       userId: userId || '',
       period, periodKey, winnerId, loserId,
       winnerEloChange: winnerChange,
-      loserEloChange: loserChange,
+      loserEloChange:  loserChange,
       battleDate: now, createdAt: now, updatedAt: now,
     } as RatingBattle, ...prev]);
 
+    const newWinner: GameRanking = {
+      id: existingWinner?.id ?? `opt-${winnerId}`,
+      userId: userId || '',
+      gameId: winnerId, period, periodKey,
+      eloScore:     Math.max(100, winnerBase.eloScore + winnerChange),
+      wins:         winnerBase.wins + 1,
+      losses:       winnerBase.losses,
+      battlesCount: winnerBase.battlesCount + 1,
+      lastBattleAt: now,
+      createdAt:  existingWinner?.createdAt ?? now,
+      updatedAt:  now,
+    };
+    const newLoser: GameRanking = {
+      id: existingLoser?.id ?? `opt-${loserId}`,
+      userId: userId || '',
+      gameId: loserId, period, periodKey,
+      eloScore:     Math.max(100, loserBase.eloScore + loserChange),
+      wins:         loserBase.wins,
+      losses:       loserBase.losses + 1,
+      battlesCount: loserBase.battlesCount + 1,
+      lastBattleAt: now,
+      createdAt:  existingLoser?.createdAt ?? now,
+      updatedAt:  now,
+    };
+
     setRankings(prev => {
-      const filtered = prev.filter(r => r.gameId !== winnerId && r.gameId !== loserId);
-      const newWinner: GameRanking = {
-        id: existingWinner?.id ?? `opt-${winnerId}`,
-        userId: userId || '',
-        gameId: winnerId, period, periodKey,
-        eloScore: Math.max(100, winnerRanking.eloScore + winnerChange),
-        wins: winnerRanking.wins + 1,
-        losses: winnerRanking.losses,
-        battlesCount: winnerRanking.battlesCount + 1,
-        lastBattleAt: now,
-        createdAt: existingWinner?.createdAt ?? now,
-        updatedAt: now,
-      };
-      const newLoser: GameRanking = {
-        id: existingLoser?.id ?? `opt-${loserId}`,
-        userId: userId || '',
-        gameId: loserId, period, periodKey,
-        eloScore: Math.max(100, loserRanking.eloScore + loserChange),
-        wins: loserRanking.wins,
-        losses: loserRanking.losses + 1,
-        battlesCount: loserRanking.battlesCount + 1,
-        lastBattleAt: now,
-        createdAt: existingLoser?.createdAt ?? now,
-        updatedAt: now,
-      };
-      return [...filtered, newWinner, newLoser].sort((a, b) => b.eloScore - a.eloScore);
+      const next = [
+        ...prev.filter(r => r.gameId !== winnerId && r.gameId !== loserId),
+        newWinner, newLoser,
+      ].sort((a, b) => b.eloScore - a.eloScore);
+      rankingsRef.current = next; // keep ref in sync immediately
+      return next;
     });
 
-    // Persist to storage in the background
-    setSubmitting(true);
-    try {
-      await battleRepository.create({
+    // Add to write buffer
+    pendingRef.current.push({
+      battleData: {
         period, periodKey, winnerId, loserId,
         winnerEloChange: winnerChange,
-        loserEloChange: loserChange,
+        loserEloChange:  loserChange,
         battleDate: now,
-      });
+      },
+      winnerRank: {
+        gameId: newWinner.gameId, period, periodKey,
+        eloScore: newWinner.eloScore, wins: newWinner.wins, losses: newWinner.losses,
+        battlesCount: newWinner.battlesCount, lastBattleAt: newWinner.lastBattleAt,
+      },
+      loserRank: {
+        gameId: newLoser.gameId, period, periodKey,
+        eloScore: newLoser.eloScore, wins: newLoser.wins, losses: newLoser.losses,
+        battlesCount: newLoser.battlesCount, lastBattleAt: newLoser.lastBattleAt,
+      },
+    });
+    setPendingCount(pendingRef.current.length);
 
-      await Promise.all([
-        rankingRepository.upsert({
-          gameId: winnerId, period, periodKey,
-          eloScore: Math.max(100, winnerRanking.eloScore + winnerChange),
-          wins: winnerRanking.wins + 1,
-          losses: winnerRanking.losses,
-          battlesCount: winnerRanking.battlesCount + 1,
-          lastBattleAt: now,
-        }),
-        rankingRepository.upsert({
-          gameId: loserId, period, periodKey,
-          eloScore: Math.max(100, loserRanking.eloScore + loserChange),
-          wins: loserRanking.wins,
-          losses: loserRanking.losses + 1,
-          battlesCount: loserRanking.battlesCount + 1,
-          lastBattleAt: now,
-        }),
-      ]);
-
-      // Sync server state in the background without blocking the UI
-      refresh().catch(err => logError('Background refresh failed', 'useRankings.recordBattle', err));
-    } catch (err) {
-      const url = extractIndexUrl(err);
-      if (url) setIndexError(url);
-      logError('Failed to record battle', 'useRankings.recordBattle', err);
-      throw err;
-    } finally {
-      setSubmitting(false);
+    // Flush now if threshold reached, otherwise reset the idle timer
+    if (flushTimerRef.current) clearTimeout(flushTimerRef.current);
+    if (pendingRef.current.length >= FLUSH_AFTER_COUNT) {
+      flush();
+    } else {
+      flushTimerRef.current = setTimeout(flush, FLUSH_IDLE_MS);
     }
-  }, [userId, rankings, period, periodKey, refresh]);
+  }, [userId, period, periodKey, flush]);
 
-  return { rankings, battles, loading, submitting, indexError, recordBattle, refresh, getBattleCount, getNextPair };
+  return { rankings, battles, loading, pendingCount, indexError, recordBattle, flush, refresh, getBattleCount, getNextPair };
 }
