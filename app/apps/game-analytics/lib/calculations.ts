@@ -13115,3 +13115,224 @@ export function getStoreUrl(gameName: string, platform?: string): { label: strin
 
   return stores;
 }
+
+// ─────────────────────────────────────────────────────────
+// Head-to-Head Game Comparison
+// ─────────────────────────────────────────────────────────
+
+export type ComparisonWinner = 'a' | 'b' | 'tie' | 'info';
+
+export interface ComparisonMetric {
+  key: string;
+  label: string;
+  displayA: string;
+  displayB: string;
+  rawA: number;
+  rawB: number;
+  winner: ComparisonWinner;
+  higherIsBetter: boolean;
+  weight: number; // how much this metric counts toward the overall winner (0 = info only)
+  emoji: string;
+}
+
+export interface GameComparisonData {
+  metrics: ComparisonMetric[];
+  winsA: number;
+  winsB: number;
+  pointsA: number;
+  pointsB: number;
+  overallWinner: 'a' | 'b' | 'tie';
+  verdict: string;
+  primaryEdgeA: string | null; // what A does best
+  primaryEdgeB: string | null; // what B does best
+}
+
+function statusScore(status: GameStatus): number {
+  switch (status) {
+    case 'Completed': return 4;
+    case 'In Progress': return 3;
+    case 'Not Started': return 2;
+    case 'Abandoned': return 1;
+    case 'Wishlist': return 0;
+  }
+}
+
+function valueRatingScore(vr: string): number {
+  switch (vr) {
+    case 'Excellent': return 4;
+    case 'Good': return 3;
+    case 'Fair': return 2;
+    case 'Poor': return 1;
+    default: return 0;
+  }
+}
+
+export function getGameComparison(gameA: Game, gameB: Game): GameComparisonData {
+  const mA = calculateMetrics(gameA);
+  const mB = calculateMetrics(gameB);
+  const hoursA = getTotalHours(gameA);
+  const hoursB = getTotalHours(gameB);
+  const sessionsA = (gameA.playLogs ?? []).length;
+  const sessionsB = (gameB.playLogs ?? []).length;
+
+  const bothPaid = gameA.price > 0 && gameB.price > 0;
+  const bothPlayed = hoursA > 0 && hoursB > 0;
+  const bothRated = gameA.rating > 0 && gameB.rating > 0;
+
+  const metricDefs: Omit<ComparisonMetric, 'winner'>[] = [
+    {
+      key: 'rating',
+      label: 'Rating',
+      displayA: gameA.rating > 0 ? `${gameA.rating}/10` : '—',
+      displayB: gameB.rating > 0 ? `${gameB.rating}/10` : '—',
+      rawA: gameA.rating,
+      rawB: gameB.rating,
+      higherIsBetter: true,
+      weight: bothRated ? 3 : 0,
+      emoji: '⭐',
+    },
+    {
+      key: 'hours',
+      label: 'Hours Played',
+      displayA: hoursA > 0 ? `${hoursA.toFixed(1)}h` : '—',
+      displayB: hoursB > 0 ? `${hoursB.toFixed(1)}h` : '—',
+      rawA: hoursA,
+      rawB: hoursB,
+      higherIsBetter: true,
+      weight: bothPlayed ? 2 : 0,
+      emoji: '⏱️',
+    },
+    {
+      key: 'cost_per_hour',
+      label: '$/Hour',
+      displayA: bothPaid && hoursA > 0 ? `$${mA.costPerHour.toFixed(2)}` : '—',
+      displayB: bothPaid && hoursB > 0 ? `$${mB.costPerHour.toFixed(2)}` : '—',
+      rawA: bothPaid && hoursA > 0 ? mA.costPerHour : -1,
+      rawB: bothPaid && hoursB > 0 ? mB.costPerHour : -1,
+      higherIsBetter: false, // lower $/hr = better value
+      weight: bothPaid && hoursA > 0 && hoursB > 0 ? 4 : 0,
+      emoji: '💰',
+    },
+    {
+      key: 'roi',
+      label: 'ROI Score',
+      displayA: hoursA > 0 && gameA.price > 0 ? mA.roi.toFixed(1) : '—',
+      displayB: hoursB > 0 && gameB.price > 0 ? mB.roi.toFixed(1) : '—',
+      rawA: hoursA > 0 && gameA.price > 0 ? mA.roi : -1,
+      rawB: hoursB > 0 && gameB.price > 0 ? mB.roi : -1,
+      higherIsBetter: true,
+      weight: hoursA > 0 && hoursB > 0 && gameA.price > 0 && gameB.price > 0 ? 3 : 0,
+      emoji: '📈',
+    },
+    {
+      key: 'sessions',
+      label: 'Sessions',
+      displayA: sessionsA > 0 ? `${sessionsA}` : '—',
+      displayB: sessionsB > 0 ? `${sessionsB}` : '—',
+      rawA: sessionsA,
+      rawB: sessionsB,
+      higherIsBetter: true,
+      weight: sessionsA > 0 || sessionsB > 0 ? 1 : 0,
+      emoji: '🎮',
+    },
+    {
+      key: 'price',
+      label: 'Price Paid',
+      displayA: gameA.acquiredFree ? 'Free' : gameA.price > 0 ? `$${gameA.price}` : '—',
+      displayB: gameB.acquiredFree ? 'Free' : gameB.price > 0 ? `$${gameB.price}` : '—',
+      rawA: gameA.acquiredFree ? 0 : gameA.price,
+      rawB: gameB.acquiredFree ? 0 : gameB.price,
+      higherIsBetter: false,
+      weight: 0, // informational only
+      emoji: '🏷️',
+    },
+    {
+      key: 'status',
+      label: 'Status',
+      displayA: gameA.status,
+      displayB: gameB.status,
+      rawA: statusScore(gameA.status),
+      rawB: statusScore(gameB.status),
+      higherIsBetter: true,
+      weight: 1,
+      emoji: '📊',
+    },
+    {
+      key: 'value_rating',
+      label: 'Value Tier',
+      displayA: hoursA > 0 && gameA.price > 0 ? mA.valueRating : '—',
+      displayB: hoursB > 0 && gameB.price > 0 ? mB.valueRating : '—',
+      rawA: hoursA > 0 && gameA.price > 0 ? valueRatingScore(mA.valueRating) : -1,
+      rawB: hoursB > 0 && gameB.price > 0 ? valueRatingScore(mB.valueRating) : -1,
+      higherIsBetter: true,
+      weight: 0, // informational (already captured by $/hr)
+      emoji: '🏆',
+    },
+  ];
+
+  const metrics: ComparisonMetric[] = metricDefs.map(m => {
+    let winner: ComparisonWinner = 'info';
+    if (m.weight > 0 && m.rawA >= 0 && m.rawB >= 0) {
+      const threshold = Math.max(Math.abs(m.rawA), Math.abs(m.rawB)) * 0.05; // 5% margin for ties
+      const diff = m.rawA - m.rawB;
+      if (Math.abs(diff) <= threshold) {
+        winner = 'tie';
+      } else if (m.higherIsBetter) {
+        winner = diff > 0 ? 'a' : 'b';
+      } else {
+        winner = diff < 0 ? 'a' : 'b';
+      }
+    }
+    return { ...m, winner };
+  });
+
+  // Tally weighted points
+  let pointsA = 0, pointsB = 0, winsA = 0, winsB = 0;
+  for (const m of metrics) {
+    if (m.winner === 'a') { pointsA += m.weight; winsA++; }
+    else if (m.winner === 'b') { pointsB += m.weight; winsB++; }
+    else if (m.winner === 'tie') { pointsA += m.weight / 2; pointsB += m.weight / 2; }
+  }
+
+  const overallWinner: 'a' | 'b' | 'tie' =
+    pointsA > pointsB + 0.5 ? 'a' : pointsB > pointsA + 0.5 ? 'b' : 'tie';
+
+  // Build verdict
+  let verdict = '';
+  if (overallWinner === 'tie') {
+    verdict = `These games are remarkably evenly matched — both excellent picks.`;
+  } else {
+    const winnerGame = overallWinner === 'a' ? gameA : gameB;
+    const loserGame = overallWinner === 'a' ? gameB : gameA;
+    const mWinner = overallWinner === 'a' ? mA : mB;
+    const hoursWinner = overallWinner === 'a' ? hoursA : hoursB;
+    if (hoursWinner > 0 && winnerGame.price > 0) {
+      verdict = `${winnerGame.name} wins with ${mWinner.valueRating.toLowerCase()} value at $${mWinner.costPerHour.toFixed(2)}/hr`;
+    } else if (winnerGame.rating > 0) {
+      verdict = `${winnerGame.name} wins with a stronger ${winnerGame.rating}/10 rating`;
+    } else {
+      verdict = `${winnerGame.name} edges out ${loserGame.name} overall`;
+    }
+  }
+
+  // Find primary edge for each game (the metric they win most convincingly)
+  function findPrimaryEdge(winner: 'a' | 'b'): string | null {
+    const won = metrics.filter(m => m.winner === winner && m.weight > 0);
+    if (won.length === 0) return null;
+    const top = won.sort((x, y) => y.weight - x.weight)[0];
+    const val = winner === 'a' ? top.displayA : top.displayB;
+    return `${top.emoji} ${top.label}: ${val}`;
+  }
+
+  return {
+    metrics,
+    winsA,
+    winsB,
+    pointsA,
+    pointsB,
+    overallWinner,
+    verdict,
+    primaryEdgeA: findPrimaryEdge('a'),
+    primaryEdgeB: findPrimaryEdge('b'),
+  };
+}

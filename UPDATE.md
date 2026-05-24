@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-05-24 00:00 — Games Tab — Head-to-Head Game Comparison
+
+**Files**: app/apps/game-analytics/lib/calculations.ts, app/apps/game-analytics/components/GameCompareModal.tsx, app/apps/game-analytics/page.tsx
+**Risk**: not risky
+
+Added a head-to-head game comparison feature. Tap the scale icon (⚖) on any game card to select it for comparison — a sticky purple banner appears confirming the selection. Tap any other card to instantly open a full comparison modal showing both games side-by-side across 8 metrics (rating, hours, $/hour, ROI, sessions, price, status, value tier) with colored WIN/TIE badges, dual progress bars, and a weighted overall winner verdict. Each game's strongest edge is highlighted at the bottom. The comparison logic uses a point-weighted system so $/hour (weight 4) and rating (weight 3) matter more than sessions (weight 1).
+
+FOLLOW-UP: Add a "compare from detail panel" button in GameBottomSheet, and consider a "top comparisons" history so users can revisit past face-offs.
+
 ## 2026-05-22 18:00 — Games Tab — Game search bar
 
 **Files**: app/apps/game-analytics/page.tsx

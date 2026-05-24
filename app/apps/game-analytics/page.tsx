@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical, Download, Gift, ShoppingCart, Search, X } from 'lucide-react';
+import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical, Download, Gift, ShoppingCart, Search, X, Scale } from 'lucide-react';
 import { useGames } from './hooks/useGames';
 import { useAnalytics, GameWithMetrics } from './hooks/useAnalytics';
 import { useBudget } from './hooks/useBudget';
@@ -44,6 +44,7 @@ import { TrophyShowcase } from './components/TrophyShowcase';
 import { TrophyToast } from './components/TrophyToast';
 import { ErrorLogPanel, ErrorLogButton } from './components/ErrorLogPanel';
 import { WhatsNewModal } from './components/WhatsNewModal';
+import { GameCompareModal } from './components/GameCompareModal';
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist';
@@ -210,6 +211,8 @@ export default function GameAnalyticsPage() {
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showErrorLog, setShowErrorLog] = useState(false);
   const [showWhatsNew, setShowWhatsNew] = useState(false);
+  const [compareGameId, setCompareGameId] = useState<string | null>(null);
+  const [compareGameIdB, setCompareGameIdB] = useState<string | null>(null);
 
   // Week recap data for header strip
   const weekRecap = useMemo(() => {
@@ -1184,6 +1187,17 @@ export default function GameAnalyticsPage() {
                   eloByGameId={eloByGameId}
                   tierAssignments={allTimeTiers}
                   eloTierRanks={eloTierRanks}
+                  compareGameId={compareGameId}
+                  onCompare={(game) => {
+                    if (!compareGameId) {
+                      setCompareGameId(game.id);
+                      showToast(`Comparing ${game.name} — tap another game`, 'info');
+                    } else if (compareGameId === game.id) {
+                      setCompareGameId(null);
+                    } else {
+                      setCompareGameIdB(game.id);
+                    }
+                  }}
                 />
               )}
             </>
@@ -1470,6 +1484,50 @@ export default function GameAnalyticsPage() {
           isInQueue={isInQueue(detailGame.id)}
         />
       )}
+
+      {/* Compare: sticky banner when one game selected */}
+      {compareGameId && !compareGameIdB && (() => {
+        const cg = games.find(g => g.id === compareGameId);
+        return cg ? (
+          <div className="fixed bottom-0 left-0 right-0 z-40 pointer-events-none">
+            <div className="max-w-md mx-auto px-3 pb-3 pointer-events-auto">
+              <div className="bg-violet-900/90 backdrop-blur-md border border-violet-500/30 rounded-xl px-4 py-3 flex items-center gap-3 shadow-2xl">
+                {cg.thumbnail ? (
+                  <img src={cg.thumbnail} alt="" className="w-8 h-8 rounded-lg object-cover shrink-0" />
+                ) : (
+                  <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center shrink-0">
+                    <Scale size={14} className="text-violet-300" />
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="text-[10px] text-violet-300/70 font-medium">Comparing</p>
+                  <p className="text-sm font-bold text-violet-100 truncate">{cg.name}</p>
+                </div>
+                <p className="text-xs text-violet-300/60 shrink-0">Tap another game</p>
+                <button
+                  onClick={() => setCompareGameId(null)}
+                  className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center text-violet-300/60 hover:text-violet-200 transition-colors shrink-0 ml-1"
+                >
+                  <X size={12} />
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null;
+      })()}
+
+      {/* Compare Modal */}
+      {compareGameId && compareGameIdB && (() => {
+        const cgA = games.find(g => g.id === compareGameId);
+        const cgB = games.find(g => g.id === compareGameIdB);
+        return cgA && cgB ? (
+          <GameCompareModal
+            gameA={cgA}
+            gameB={cgB}
+            onClose={() => { setCompareGameId(null); setCompareGameIdB(null); }}
+          />
+        ) : null;
+      })()}
     </div>
   );
 }
@@ -1556,6 +1614,8 @@ interface GameCardListProps {
   eloByGameId?: Map<string, GameRanking>;
   tierAssignments?: TierAssignmentMap;
   eloTierRanks?: Map<string, { tier: GameTier; rank: number }>;
+  compareGameId?: string | null;
+  onCompare?: (game: GameWithMetrics) => void;
 }
 
 function GameCardList({
@@ -1576,6 +1636,8 @@ function GameCardList({
   eloByGameId = new Map(),
   tierAssignments = {},
   eloTierRanks = new Map(),
+  compareGameId,
+  onCompare,
 }: GameCardListProps) {
   const sections = useMemo(() => groupBySection ? getGameSections(allGames) : [], [allGames, groupBySection]);
 
@@ -1624,16 +1686,17 @@ function GameCardList({
     const eloRanking = eloByGameId.get(game.id);
     const gameTier = tierAssignments[game.id] as GameTier | undefined;
     const eloTierRank = eloTierRanks.get(game.id);
+    const isSelectedForCompare = compareGameId === game.id;
     if (cardViewMode === 'poster') {
       return (
         <div key={game.id} className={animClass}>
-          <PosterCard game={game} allGames={allGames} idx={idx} onClick={() => onCardClick(game)} onQuickLog={(h) => onQuickLog(game, h)} isInQueue={isInQueue(game.id)} sortBy={sortBy} tintColor={gameColors.get(game.id)} aiQuip={gameQuips[game.id]?.quip} eloRanking={eloRanking} gameTier={gameTier} eloTierRank={eloTierRank} />
+          <PosterCard game={game} allGames={allGames} idx={idx} onClick={() => onCardClick(game)} onQuickLog={(h) => onQuickLog(game, h)} isInQueue={isInQueue(game.id)} sortBy={sortBy} tintColor={gameColors.get(game.id)} aiQuip={gameQuips[game.id]?.quip} eloRanking={eloRanking} gameTier={gameTier} eloTierRank={eloTierRank} isSelectedForCompare={isSelectedForCompare} onCompare={onCompare ? () => onCompare(game) : undefined} />
         </div>
       );
     }
     return (
       <div key={game.id} className={animClass}>
-        <CompactCard game={game} allGames={allGames} idx={idx} onClick={() => onCardClick(game)} onLogTime={() => onLogTime(game)} onToggleQueue={() => onToggleQueue(game)} onDelete={() => onDelete(game)} isInQueue={isInQueue(game.id)} sortBy={sortBy} tintColor={gameColors.get(game.id)} aiQuip={gameQuips[game.id]?.quip} eloRanking={eloRanking} gameTier={gameTier} eloTierRank={eloTierRank} />
+        <CompactCard game={game} allGames={allGames} idx={idx} onClick={() => onCardClick(game)} onLogTime={() => onLogTime(game)} onToggleQueue={() => onToggleQueue(game)} onDelete={() => onDelete(game)} isInQueue={isInQueue(game.id)} sortBy={sortBy} tintColor={gameColors.get(game.id)} aiQuip={gameQuips[game.id]?.quip} eloRanking={eloRanking} gameTier={gameTier} eloTierRank={eloTierRank} isSelectedForCompare={isSelectedForCompare} onCompare={onCompare ? () => onCompare(game) : undefined} />
       </div>
     );
   };
@@ -1993,7 +2056,7 @@ function NowPlayingCard({ game, allGames, onClick, onQuickLog, sortBy = 'hours',
 
 // --- Poster Card ---
 
-function PosterCard({ game, allGames, idx, onClick, onQuickLog, isInQueue, sortBy = 'hours', tintColor, aiQuip, eloRanking, gameTier, eloTierRank }: {
+function PosterCard({ game, allGames, idx, onClick, onQuickLog, isInQueue, sortBy = 'hours', tintColor, aiQuip, eloRanking, gameTier, eloTierRank, isSelectedForCompare, onCompare }: {
   game: GameWithMetrics;
   allGames: Game[];
   idx: number;
@@ -2006,6 +2069,8 @@ function PosterCard({ game, allGames, idx, onClick, onQuickLog, isInQueue, sortB
   eloRanking?: GameRanking;
   gameTier?: GameTier;
   eloTierRank?: { tier: GameTier; rank: number };
+  isSelectedForCompare?: boolean;
+  onCompare?: () => void;
 }) {
   const [isFlipped, setIsFlipped] = useState(false);
   const rarity = getCardRarity(game);
@@ -2223,6 +2288,22 @@ function PosterCard({ game, allGames, idx, onClick, onQuickLog, isInQueue, sortB
               <path d="M17 1l4 4-4 4" /><path d="M3 11V9a4 4 0 0 1 4-4h14" /><path d="M7 23l-4-4 4-4" /><path d="M21 13v2a4 4 0 0 1-4 4H3" />
             </svg>
           </button>
+
+          {/* Compare button */}
+          {onCompare && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onCompare(); }}
+              className={clsx(
+                'absolute bottom-[42px] left-2 w-5 h-5 rounded-full flex items-center justify-center transition-all z-10',
+                isSelectedForCompare
+                  ? 'bg-violet-500/40 text-violet-300'
+                  : 'bg-white/5 text-white/20 hover:text-violet-400 hover:bg-violet-500/20',
+              )}
+              title={isSelectedForCompare ? 'Cancel compare' : 'Compare this game'}
+            >
+              <Scale size={9} />
+            </button>
+          )}
         </div>
 
         {/* === BACK FACE === */}
@@ -2357,7 +2438,7 @@ function PosterCardBack({ game, allGames, onFlip, rarity, freshness, relationshi
 
 // --- Compact Card (original layout, fixed) ---
 
-function CompactCard({ game, allGames, idx, onClick, onLogTime, onToggleQueue, onDelete, isInQueue, sortBy = 'hours', tintColor, aiQuip, eloRanking, gameTier, eloTierRank }: {
+function CompactCard({ game, allGames, idx, onClick, onLogTime, onToggleQueue, onDelete, isInQueue, sortBy = 'hours', tintColor, aiQuip, eloRanking, gameTier, eloTierRank, isSelectedForCompare, onCompare }: {
   game: GameWithMetrics;
   allGames: Game[];
   idx: number;
@@ -2372,6 +2453,8 @@ function CompactCard({ game, allGames, idx, onClick, onLogTime, onToggleQueue, o
   eloRanking?: GameRanking;
   gameTier?: GameTier;
   eloTierRank?: { tier: GameTier; rank: number };
+  isSelectedForCompare?: boolean;
+  onCompare?: () => void;
 }) {
   const [isFlipped, setIsFlipped] = useState(false);
   const rarity = getCardRarity(game);
@@ -2628,6 +2711,18 @@ function CompactCard({ game, allGames, idx, onClick, onLogTime, onToggleQueue, o
               {isInQueue ? <Check size={12} /> : <ListPlus size={12} />}
               {isInQueue ? 'Queued' : 'Queue'}
             </button>
+            {onCompare && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onCompare(); }}
+                className={clsx(
+                  'p-1.5 rounded-lg transition-all',
+                  isSelectedForCompare ? 'text-violet-400 bg-violet-500/15' : 'text-white/20 hover:text-violet-400',
+                )}
+                title={isSelectedForCompare ? 'Cancel compare' : 'Compare this game'}
+              >
+                <Scale size={12} />
+              </button>
+            )}
             <div className="flex-1" />
             {/* Flip button */}
             <button

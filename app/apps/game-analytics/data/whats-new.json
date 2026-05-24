@@ -1,6 +1,12 @@
 {
   "entries": [
     {
+      "date": "2026-05-24",
+      "area": "Game Comparison",
+      "title": "Compare any two games head-to-head",
+      "body": "Tap the ⚖ icon on any game card to select it for comparison, then tap a second game to instantly see who wins. A side-by-side breakdown shows rating, hours, cost-per-hour, ROI, sessions, and more — each with a WIN badge and progress bar. The overall winner is calculated using a weighted score so value metrics matter most. Finally answer: which of those two games was the better purchase?"
+    },
+    {
       "date": "2026-05-22",
       "area": "Games tab",
       "title": "Search your library instantly",
