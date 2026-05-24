@@ -604,10 +604,11 @@ export async function conductReviewInterview(params: {
   tasteSummary: string;
   history: ReviewInterviewTurn[];
   audio: RecordedAudioInput | null;
+  textAnswer?: string;
   questionsAsked: number;
   maxQuestions: number;
 }): Promise<ReviewInterviewResponse> {
-  const { game, tasteSummary, history, audio, questionsAsked, maxQuestions } = params;
+  const { game, tasteSummary, history, audio, textAnswer, questionsAsked, maxQuestions } = params;
   const model = getAIModel();
 
   const base = `You are a sharp, warm interviewer helping a gamer reflect on a game they just rated, so they can write an honest review. Be specific and conversational, never generic or fawning. Ask about ONE thing at a time.
@@ -618,7 +619,7 @@ Player's taste profile: ${tasteSummary}
 Conversation so far:
 ${historyText(history)}`;
 
-  if (!audio) {
+  if (!audio && !textAnswer) {
     // Opening question
     const prompt = `${base}
 
@@ -645,6 +646,38 @@ Respond with ONLY valid JSON (no markdown): {"transcript": "", "nextQuestion": "
   }
 
   const shouldWrap = questionsAsked + 1 >= maxQuestions;
+
+  // Text answer path — no transcription needed
+  if (textAnswer && !audio) {
+    const prompt = `${base}
+
+The player typed this answer: "${textAnswer}"
+
+Decide the next move:
+- If there is more worth exploring AND you have asked fewer than ${maxQuestions} questions, ask ONE follow-up that digs into something specific they said, or how this game compares to their taste. ${shouldWrap ? 'You have now reached the question limit, so set done=true and nextQuestion="".' : ''}
+- If you have enough for a rich, honest review, set done=true and nextQuestion="".
+
+Respond with ONLY valid JSON (no markdown): {"nextQuestion": "<next question or empty>", "done": <true|false>}`;
+    try {
+      const result = await model.generateContent(prompt);
+      const parsed = JSON.parse(stripJsonFences(result.response.text().trim()));
+      const done = Boolean(parsed.done) || shouldWrap;
+      return {
+        transcript: textAnswer,
+        nextQuestion: done ? '' : String(parsed.nextQuestion || ''),
+        done,
+      };
+    } catch (e) {
+      console.error('Review interview (text turn) error:', e);
+      return {
+        transcript: textAnswer,
+        nextQuestion: '',
+        done: true,
+        error: String(e),
+      };
+    }
+  }
+
   const prompt = `${base}
 
 The player just answered by voice — audio is attached.
@@ -658,7 +691,7 @@ Respond with ONLY valid JSON (no markdown): {"transcript": "<what they said>", "
   try {
     const result = await model.generateContent([
       { text: prompt },
-      { inlineData: { mimeType: audio.mimeType, data: audio.base64 } },
+      { inlineData: { mimeType: audio!.mimeType, data: audio!.base64 } },
     ]);
     const parsed = JSON.parse(stripJsonFences(result.response.text().trim()));
     const done = Boolean(parsed.done) || shouldWrap;
@@ -668,7 +701,7 @@ Respond with ONLY valid JSON (no markdown): {"transcript": "<what they said>", "
       done,
     };
   } catch (e) {
-    console.error('Review interview (turn) error:', e);
+    console.error('Review interview (voice turn) error:', e);
     return {
       transcript: '',
       nextQuestion: '',
