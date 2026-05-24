@@ -1,6 +1,18 @@
 {
   "entries": [
     {
+      "date": "2026-05-24",
+      "area": "Games tab",
+      "title": "Compare any two games head-to-head",
+      "body": "Hit '⇌ Compare' in the Games toolbar, then tap two games to see them matched across hours, rating, cost-per-hour, ROI, sessions, and price — with animated bars, a trophy for each winner, and an overall verdict. Finally answer 'was Game X or Game Y the better investment?'"
+    },
+    {
+      "date": "2026-05-24",
+      "area": "Stats tab",
+      "title": "Gaming Goals now live in your Stats",
+      "body": "Set personal gaming goals — complete N games, log X hours, stay under a spending limit — and track your live progress right inside the Stats tab. Goals auto-update based on your real data as you play."
+    },
+    {
       "date": "2026-05-22",
       "area": "Games tab",
       "title": "Search your library instantly",

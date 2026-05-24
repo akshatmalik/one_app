@@ -44,6 +44,7 @@ import { TrophyShowcase } from './components/TrophyShowcase';
 import { TrophyToast } from './components/TrophyToast';
 import { ErrorLogPanel, ErrorLogButton } from './components/ErrorLogPanel';
 import { WhatsNewModal } from './components/WhatsNewModal';
+import { GameCompareModal } from './components/GameCompareModal';
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist';
@@ -210,6 +211,9 @@ export default function GameAnalyticsPage() {
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showErrorLog, setShowErrorLog] = useState(false);
   const [showWhatsNew, setShowWhatsNew] = useState(false);
+  const [compareMode, setCompareMode] = useState(false);
+  const [compareSelectedIds, setCompareSelectedIds] = useState<string[]>([]);
+  const [showCompareModal, setShowCompareModal] = useState(false);
 
   // Week recap data for header strip
   const weekRecap = useMemo(() => {
@@ -380,6 +384,26 @@ export default function GameAnalyticsPage() {
     const next = cardViewMode === 'poster' ? 'compact' : 'poster';
     setCardViewMode(next);
     localStorage.setItem('ga-card-view-mode', next);
+  };
+
+  const toggleCompareMode = () => {
+    setCompareMode(prev => {
+      if (prev) {
+        setCompareSelectedIds([]);
+        setShowCompareModal(false);
+      }
+      return !prev;
+    });
+  };
+
+  const handleCompareSelect = (game: GameWithMetrics) => {
+    setCompareSelectedIds(prev => {
+      if (prev.includes(game.id)) return prev.filter(id => id !== game.id);
+      if (prev.length >= 2) return [prev[1], game.id]; // replace oldest selection
+      const next = [...prev, game.id];
+      if (next.length === 2) setShowCompareModal(true);
+      return next;
+    });
   };
 
   const toggleGroupBySection = () => {
@@ -1070,6 +1094,19 @@ export default function GameAnalyticsPage() {
                   >
                     Sections
                   </button>
+                  {/* Compare toggle */}
+                  {games.length >= 2 && (
+                    <button
+                      onClick={toggleCompareMode}
+                      className={clsx(
+                        'px-2 py-1 border text-[10px] rounded-lg flex items-center gap-1',
+                        compareMode ? 'bg-cyan-500/10 border-cyan-500/30 text-cyan-400' : 'bg-white/[0.02] border-white/10 text-white/40'
+                      )}
+                      title="Compare two games head-to-head"
+                    >
+                      ⇌ Compare
+                    </button>
+                  )}
                   {/* ELO tier config */}
                   <div className="relative">
                     <button
@@ -1147,44 +1184,89 @@ export default function GameAnalyticsPage() {
                   )}
                 </div>
               ) : (
-                <GameCardList
-                  games={filteredGames}
-                  allGames={games}
-                  cardViewMode={cardViewMode}
-                  groupBySection={groupBySection}
-                  onCardClick={(game) => setDetailGame(game)}
-                  onLogTime={(game) => handleOpenPlayLog(game)}
-                  onQuickLog={handleQuickLog}
-                  onToggleQueue={async (game) => {
-                    try {
-                      if (isInQueue(game.id)) {
-                        await removeFromQueue(game.id);
-                        showToast('Removed from queue', 'success');
+                <>
+                  {/* Compare mode banner */}
+                  {compareMode && (
+                    <div className="mb-3 p-3 bg-cyan-500/10 border border-cyan-500/20 rounded-xl flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-medium text-cyan-300">
+                          {compareSelectedIds.length === 0
+                            ? 'Tap any two games to compare them head-to-head'
+                            : compareSelectedIds.length === 1
+                            ? 'Now pick a second game'
+                            : `Comparing ${compareSelectedIds.length} games`}
+                        </p>
+                        {compareSelectedIds.length > 0 && (
+                          <p className="text-[10px] text-cyan-400/60 mt-0.5">
+                            {compareSelectedIds.map(id => filteredGames.find(g => g.id === id)?.name).filter(Boolean).join(' vs ')}
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {compareSelectedIds.length === 2 && (
+                          <button
+                            onClick={() => setShowCompareModal(true)}
+                            className="px-3 py-1.5 bg-cyan-500 text-white text-xs font-medium rounded-lg hover:bg-cyan-400 transition-colors"
+                          >
+                            Compare
+                          </button>
+                        )}
+                        <button
+                          onClick={toggleCompareMode}
+                          className="px-2 py-1.5 text-xs text-white/40 hover:text-white/70 transition-colors"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  <GameCardList
+                    games={filteredGames}
+                    allGames={games}
+                    cardViewMode={cardViewMode}
+                    groupBySection={groupBySection}
+                    onCardClick={(game) => {
+                      if (compareMode) {
+                        handleCompareSelect(game);
                       } else {
-                        await addToQueue(game.id);
-                        showToast('Added to queue', 'success');
+                        setDetailGame(game);
                       }
-                    } catch (err) {
-                      showToast('Failed to update queue', 'error');
-                    }
-                  }}
-                  onToggleSpecial={async (game) => {
-                    try {
-                      await updateGame(game.id, { isSpecial: !game.isSpecial });
-                      showToast(game.isSpecial ? 'Removed special tag' : 'Marked as special', 'success');
-                    } catch (err) {
-                      showToast('Failed to update', 'error');
-                    }
-                  }}
-                  onDelete={(game) => handleDelete(game.id, game.name)}
-                  isInQueue={isInQueue}
-                  sortBy={sortBy}
-                  gameColors={gameColors}
-                  gameQuips={gameQuips}
-                  eloByGameId={eloByGameId}
-                  tierAssignments={allTimeTiers}
-                  eloTierRanks={eloTierRanks}
-                />
+                    }}
+                    onLogTime={(game) => handleOpenPlayLog(game)}
+                    onQuickLog={handleQuickLog}
+                    onToggleQueue={async (game) => {
+                      try {
+                        if (isInQueue(game.id)) {
+                          await removeFromQueue(game.id);
+                          showToast('Removed from queue', 'success');
+                        } else {
+                          await addToQueue(game.id);
+                          showToast('Added to queue', 'success');
+                        }
+                      } catch (err) {
+                        showToast('Failed to update queue', 'error');
+                      }
+                    }}
+                    onToggleSpecial={async (game) => {
+                      try {
+                        await updateGame(game.id, { isSpecial: !game.isSpecial });
+                        showToast(game.isSpecial ? 'Removed special tag' : 'Marked as special', 'success');
+                      } catch (err) {
+                        showToast('Failed to update', 'error');
+                      }
+                    }}
+                    onDelete={(game) => handleDelete(game.id, game.name)}
+                    isInQueue={isInQueue}
+                    sortBy={sortBy}
+                    gameColors={gameColors}
+                    gameQuips={gameQuips}
+                    eloByGameId={eloByGameId}
+                    tierAssignments={allTimeTiers}
+                    eloTierRanks={eloTierRanks}
+                    compareMode={compareMode}
+                    compareSelectedIds={compareSelectedIds}
+                  />
+                </>
               )}
             </>
           )}
@@ -1469,6 +1551,25 @@ export default function GameAnalyticsPage() {
           isInQueue={isInQueue(detailGame.id)}
         />
       )}
+
+      {/* Game Compare Modal */}
+      {showCompareModal && compareSelectedIds.length === 2 && (() => {
+        const gameA = gamesWithMetrics.find(g => g.id === compareSelectedIds[0]);
+        const gameB = gamesWithMetrics.find(g => g.id === compareSelectedIds[1]);
+        if (!gameA || !gameB) return null;
+        return (
+          <GameCompareModal
+            gameA={gameA}
+            gameB={gameB}
+            allGames={games}
+            onClose={() => setShowCompareModal(false)}
+            onSwap={() => {
+              setShowCompareModal(false);
+              setCompareSelectedIds([]);
+            }}
+          />
+        );
+      })()}
     </div>
   );
 }
@@ -1555,6 +1656,8 @@ interface GameCardListProps {
   eloByGameId?: Map<string, GameRanking>;
   tierAssignments?: TierAssignmentMap;
   eloTierRanks?: Map<string, { tier: GameTier; rank: number }>;
+  compareMode?: boolean;
+  compareSelectedIds?: string[];
 }
 
 function GameCardList({
@@ -1575,6 +1678,8 @@ function GameCardList({
   eloByGameId = new Map(),
   tierAssignments = {},
   eloTierRanks = new Map(),
+  compareMode = false,
+  compareSelectedIds = [],
 }: GameCardListProps) {
   const sections = useMemo(() => groupBySection ? getGameSections(allGames) : [], [allGames, groupBySection]);
 
@@ -1623,15 +1728,35 @@ function GameCardList({
     const eloRanking = eloByGameId.get(game.id);
     const gameTier = tierAssignments[game.id] as GameTier | undefined;
     const eloTierRank = eloTierRanks.get(game.id);
+    const isCompareSelected = compareSelectedIds.includes(game.id);
+    const compareOverlay = compareMode ? (
+      <div
+        className={clsx(
+          'absolute inset-0 rounded-xl pointer-events-none transition-all duration-200 z-10',
+          isCompareSelected
+            ? 'ring-2 ring-cyan-400 ring-offset-1 ring-offset-transparent bg-cyan-400/5'
+            : 'ring-1 ring-white/10',
+        )}
+      >
+        {isCompareSelected && (
+          <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-cyan-500 flex items-center justify-center shadow-lg">
+            <Check size={10} className="text-white" strokeWidth={3} />
+          </div>
+        )}
+      </div>
+    ) : null;
+
     if (cardViewMode === 'poster') {
       return (
-        <div key={game.id} className={animClass}>
+        <div key={game.id} className={clsx(animClass, 'relative')}>
+          {compareOverlay}
           <PosterCard game={game} allGames={allGames} idx={idx} onClick={() => onCardClick(game)} onQuickLog={(h) => onQuickLog(game, h)} isInQueue={isInQueue(game.id)} sortBy={sortBy} tintColor={gameColors.get(game.id)} aiQuip={gameQuips[game.id]?.quip} eloRanking={eloRanking} gameTier={gameTier} eloTierRank={eloTierRank} />
         </div>
       );
     }
     return (
-      <div key={game.id} className={animClass}>
+      <div key={game.id} className={clsx(animClass, 'relative')}>
+        {compareOverlay}
         <CompactCard game={game} allGames={allGames} idx={idx} onClick={() => onCardClick(game)} onLogTime={() => onLogTime(game)} onToggleQueue={() => onToggleQueue(game)} onDelete={() => onDelete(game)} isInQueue={isInQueue(game.id)} sortBy={sortBy} tintColor={gameColors.get(game.id)} aiQuip={gameQuips[game.id]?.quip} eloRanking={eloRanking} gameTier={gameTier} eloTierRank={eloTierRank} />
       </div>
     );

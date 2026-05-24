@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-05-24 — Games Tab — Head-to-head game comparison
+
+**Files**: app/apps/game-analytics/components/GameCompareModal.tsx (new), app/apps/game-analytics/page.tsx, app/apps/game-analytics/components/StatsView.tsx
+**Risk**: not risky
+
+Added a full head-to-head comparison feature: click "⇌ Compare" in the Games toolbar to enter compare mode, then tap any two games to see them matched across 6 categories (Hours Played, Rating, Cost/hr, ROI Score, Sessions Logged, Price Paid) with animated percentage bars, a per-category trophy for the winner, and an overall verdict ("dominates" / "edges it" / "dead heat"). Also wired the existing GoalsPanel component — which had been built but never rendered — into the Stats tab.
+
+FOLLOW-UP: Consider adding a "Compare with…" button in the Game Detail bottom sheet so users can compare from a specific game's context.
+
 ## 2026-05-22 18:00 — Games Tab — Game search bar
 
 **Files**: app/apps/game-analytics/page.tsx
