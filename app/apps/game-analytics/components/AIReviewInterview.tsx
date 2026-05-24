@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Mic, Square, Loader2, Sparkles, X, RefreshCw, Check, Pencil } from 'lucide-react';
+import { Mic, Square, Loader2, Sparkles, X, RefreshCw, Check, Pencil, Send } from 'lucide-react';
 import clsx from 'clsx';
 import { Game } from '../lib/types';
 import { formatRating } from '../lib/calculations';
@@ -25,20 +25,24 @@ interface AIReviewInterviewProps {
 const MAX_QUESTIONS = 5;
 
 type Phase = 'loading' | 'interviewing' | 'processing' | 'synthesizing' | 'review' | 'unsupported';
+type InputMode = 'voice' | 'text';
 
 export function AIReviewInterview({ game, allGames, initialReview, onComplete, onClose }: AIReviewInterviewProps) {
   const { isRecording, isSupported, error: recorderError, startRecording, stopRecording, cancelRecording } = useAudioRecorder();
 
-  const [phase, setPhase] = useState<Phase>(isSupported ? 'loading' : 'unsupported');
+  const [phase, setPhase] = useState<Phase>('loading');
+  const [inputMode, setInputMode] = useState<InputMode>(isSupported ? 'voice' : 'text');
   const [history, setHistory] = useState<ReviewInterviewTurn[]>([]);
   const [currentQuestion, setCurrentQuestion] = useState('');
   const [finalReview, setFinalReview] = useState(initialReview || '');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [elapsed, setElapsed] = useState(0);
+  const [typedAnswer, setTypedAnswer] = useState('');
 
   const tasteSummary = useMemo(() => buildTasteSummary(allGames, game.name), [allGames, game.name]);
   const questionsAsked = history.filter(t => t.role === 'interviewer').length + (currentQuestion ? 1 : 0);
   const transcriptEndRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Lock body scroll
   useEffect(() => {
@@ -57,6 +61,13 @@ export function AIReviewInterview({ game, allGames, initialReview, onComplete, o
   useEffect(() => {
     transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [history, currentQuestion]);
+
+  // Focus textarea when switching to text mode during interview
+  useEffect(() => {
+    if (inputMode === 'text' && phase === 'interviewing') {
+      setTimeout(() => textareaRef.current?.focus(), 50);
+    }
+  }, [inputMode, phase]);
 
   // Kick off the opening question
   useEffect(() => {
@@ -86,12 +97,7 @@ export function AIReviewInterview({ game, allGames, initialReview, onComplete, o
     setPhase('review');
   }, [game, tasteSummary]);
 
-  const handleStop = useCallback(async () => {
-    const audio = await stopRecording();
-    if (!audio) {
-      setErrorMsg('No audio captured — try again.');
-      return;
-    }
+  const processAnswer = useCallback(async (answerText: string, audio: Parameters<typeof conductReviewInterview>[0]['audio']) => {
     setPhase('processing');
     setErrorMsg(null);
 
@@ -105,13 +111,14 @@ export function AIReviewInterview({ game, allGames, initialReview, onComplete, o
       tasteSummary,
       history: historyWithQuestion,
       audio,
+      textAnswer: audio ? undefined : answerText,
       questionsAsked: historyWithQuestion.filter(t => t.role === 'interviewer').length,
       maxQuestions: MAX_QUESTIONS,
     });
 
     if (res.error && !res.transcript) {
       setErrorMsg('Could not process that answer. You can wrap up or try again.');
-      setCurrentQuestion(currentQuestion); // keep same question
+      setCurrentQuestion(currentQuestion);
       setPhase('interviewing');
       return;
     }
@@ -129,11 +136,26 @@ export function AIReviewInterview({ game, allGames, initialReview, onComplete, o
       setCurrentQuestion(res.nextQuestion);
       setPhase('interviewing');
     }
-  }, [stopRecording, history, currentQuestion, game, tasteSummary, synthesize]);
+  }, [history, currentQuestion, game, tasteSummary, synthesize]);
+
+  const handleStop = useCallback(async () => {
+    const audio = await stopRecording();
+    if (!audio) {
+      setErrorMsg('No audio captured — try again.');
+      return;
+    }
+    await processAnswer('', audio);
+  }, [stopRecording, processAnswer]);
+
+  const handleTextSend = useCallback(async () => {
+    const answer = typedAnswer.trim();
+    if (!answer) return;
+    setTypedAnswer('');
+    await processAnswer(answer, null);
+  }, [typedAnswer, processAnswer]);
 
   const handleWrapUp = useCallback(() => {
     if (isRecording) cancelRecording();
-    // Drop any unanswered pending question — synthesize from answered turns.
     if (history.filter(t => t.role === 'player').length === 0) {
       setPhase('review');
       return;
@@ -144,6 +166,11 @@ export function AIReviewInterview({ game, allGames, initialReview, onComplete, o
   const handleRegenerate = useCallback(() => {
     synthesize(history);
   }, [synthesize, history]);
+
+  const handleModeSwitch = useCallback((mode: InputMode) => {
+    if (isRecording) cancelRecording();
+    setInputMode(mode);
+  }, [isRecording, cancelRecording]);
 
   const mmss = `${Math.floor(elapsed / 60)}:${String(elapsed % 60).padStart(2, '0')}`;
   const answeredCount = history.filter(t => t.role === 'player').length;
@@ -174,18 +201,7 @@ export function AIReviewInterview({ game, allGames, initialReview, onComplete, o
 
         {/* Body */}
         <div className="flex-1 overflow-y-auto px-4 py-4">
-          {phase === 'unsupported' ? (
-            <div className="text-center py-8 space-y-3">
-              <p className="text-white/70 text-sm">Voice recording isn&apos;t supported in this browser.</p>
-              <p className="text-white/40 text-xs">Try Chrome, Edge, or Safari — or write your review manually.</p>
-              <button
-                onClick={() => setPhase('review')}
-                className="mt-2 px-4 py-2 rounded-xl bg-white/10 text-white/80 text-sm font-medium active:bg-white/15"
-              >
-                Write manually
-              </button>
-            </div>
-          ) : phase === 'review' ? (
+          {phase === 'review' ? (
             <div className="space-y-3">
               <label className="block text-xs font-medium text-white/50">Your review</label>
               <textarea
@@ -229,7 +245,7 @@ export function AIReviewInterview({ game, allGames, initialReview, onComplete, o
                 <div className="flex items-center gap-2 text-white/40 text-xs px-1 py-2">
                   <Loader2 size={14} className="animate-spin" />
                   {phase === 'loading' && 'Thinking of a good opener…'}
-                  {phase === 'processing' && 'Listening & transcribing…'}
+                  {phase === 'processing' && (inputMode === 'voice' ? 'Listening & transcribing…' : 'Thinking…')}
                   {phase === 'synthesizing' && 'Writing your review…'}
                 </div>
               )}
@@ -243,7 +259,7 @@ export function AIReviewInterview({ game, allGames, initialReview, onComplete, o
         </div>
 
         {/* Footer controls */}
-        <div className="flex-shrink-0 px-4 py-3 bg-[#12121a] border-t border-white/5">
+        <div className="flex-shrink-0 px-4 pb-4 pt-3 bg-[#12121a] border-t border-white/5 space-y-3">
           {phase === 'review' ? (
             <div className="flex gap-3">
               {history.length > 0 && (
@@ -263,27 +279,95 @@ export function AIReviewInterview({ game, allGames, initialReview, onComplete, o
               </button>
             </div>
           ) : phase === 'interviewing' ? (
-            <div className="flex items-center gap-3">
-              <button
-                onClick={isRecording ? handleStop : startRecording}
-                className={clsx(
-                  'flex-1 flex items-center justify-center gap-2 px-4 py-3.5 rounded-xl text-sm font-semibold transition-all',
-                  isRecording
-                    ? 'bg-red-500/90 text-white animate-pulse'
-                    : 'bg-purple-600 text-white active:bg-purple-500'
-                )}
-              >
-                {isRecording ? (<><Square size={16} className="fill-white" /> Stop · {mmss}</>) : (<><Mic size={18} /> Hold answer</>)}
-              </button>
-              {answeredCount > 0 && !isRecording && (
-                <button
-                  onClick={handleWrapUp}
-                  className="flex items-center gap-1.5 px-4 py-3.5 rounded-xl bg-white/5 text-white/70 text-sm font-medium active:bg-white/10"
-                >
-                  <Pencil size={14} /> Wrap up
-                </button>
+            <>
+              {/* Voice / Type toggle */}
+              {isSupported && (
+                <div className="flex rounded-xl bg-white/5 p-0.5 self-start w-fit mx-auto">
+                  <button
+                    onClick={() => handleModeSwitch('voice')}
+                    className={clsx(
+                      'flex items-center gap-1.5 px-3 py-1.5 rounded-[10px] text-xs font-medium transition-all',
+                      inputMode === 'voice'
+                        ? 'bg-white/10 text-white'
+                        : 'text-white/40 active:text-white/60'
+                    )}
+                  >
+                    <Mic size={12} /> Voice
+                  </button>
+                  <button
+                    onClick={() => handleModeSwitch('text')}
+                    className={clsx(
+                      'flex items-center gap-1.5 px-3 py-1.5 rounded-[10px] text-xs font-medium transition-all',
+                      inputMode === 'text'
+                        ? 'bg-white/10 text-white'
+                        : 'text-white/40 active:text-white/60'
+                    )}
+                  >
+                    <Pencil size={12} /> Type
+                  </button>
+                </div>
               )}
-            </div>
+
+              {inputMode === 'text' ? (
+                /* Text input mode */
+                <div className="space-y-2">
+                  <textarea
+                    ref={textareaRef}
+                    value={typedAnswer}
+                    onChange={e => setTypedAnswer(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        handleTextSend();
+                      }
+                    }}
+                    rows={3}
+                    placeholder="Type your answer… (Enter to send)"
+                    className="w-full px-3 py-2.5 bg-white/[0.03] border border-white/5 text-white rounded-xl text-sm focus:outline-none focus:bg-white/[0.05] focus:border-white/10 transition-all resize-none placeholder:text-white/30 leading-relaxed"
+                  />
+                  <div className="flex gap-2">
+                    {answeredCount > 0 && (
+                      <button
+                        onClick={handleWrapUp}
+                        className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-white/5 text-white/70 text-sm font-medium active:bg-white/10"
+                      >
+                        <Sparkles size={14} /> Wrap up
+                      </button>
+                    )}
+                    <button
+                      onClick={handleTextSend}
+                      disabled={!typedAnswer.trim()}
+                      className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-purple-600 text-white text-sm font-semibold active:bg-purple-500 disabled:opacity-40"
+                    >
+                      <Send size={14} /> Send
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                /* Voice input mode */
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={isRecording ? handleStop : startRecording}
+                    className={clsx(
+                      'flex-1 flex items-center justify-center gap-2 px-4 py-3.5 rounded-xl text-sm font-semibold transition-all',
+                      isRecording
+                        ? 'bg-red-500/90 text-white animate-pulse'
+                        : 'bg-purple-600 text-white active:bg-purple-500'
+                    )}
+                  >
+                    {isRecording ? (<><Square size={16} className="fill-white" /> Stop · {mmss}</>) : (<><Mic size={18} /> Hold answer</>)}
+                  </button>
+                  {answeredCount > 0 && !isRecording && (
+                    <button
+                      onClick={handleWrapUp}
+                      className="flex items-center gap-1.5 px-4 py-3.5 rounded-xl bg-white/5 text-white/70 text-sm font-medium active:bg-white/10"
+                    >
+                      <Sparkles size={14} /> Wrap up
+                    </button>
+                  )}
+                </div>
+              )}
+            </>
           ) : (
             <button
               disabled
