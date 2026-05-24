@@ -23,7 +23,7 @@ import { rankingRepository } from './lib/ranking-storage';
 import { BASELINE_GAMES_2025 } from './data/baseline-games';
 import { useAuthContext } from '@/lib/AuthContext';
 import { useToast } from '@/components/Toast';
-import { getROIRating, getWeekStatsForOffset, getGamesPlayedInTimeRange, getCompletionProbability, getGameHealthDot, getRelativeTime, getDaysContext, getSessionMomentum, getValueTrajectory, getGameSmartOneLiner, getFranchiseInfo, getProgressPercent, getShelfLife, parseLocalDate, getCardRarity, getRelationshipStatus, getGameStreak, getHeroNumber, getCardFreshness, getGameSections, getCardBackData, getContextualWhisper, getLibraryRank, getCardMoodPulse, getProgressRingData, getStatPopoverData, getWeekRecapData, getSmartNudges, getGamingCreditScore, getRotationStats, getSpendingForecast, getSpendingByMonth, getShelfLifeExpiry } from './lib/calculations';
+import { getROIRating, getWeekStatsForOffset, getGamesPlayedInTimeRange, getCompletionProbability, getGameHealthDot, getRelativeTime, getDaysContext, getSessionMomentum, getValueTrajectory, getGameSmartOneLiner, getFranchiseInfo, getProgressPercent, getShelfLife, parseLocalDate, getCardRarity, getRelationshipStatus, getGameStreak, getHeroNumber, getCardFreshness, getGameSections, getCardBackData, getContextualWhisper, getLibraryRank, getCardMoodPulse, getProgressRingData, getStatPopoverData, getWeekRecapData, getSmartNudges, getGamingCreditScore, getRotationStats, getSpendingForecast, getSpendingByMonth, getShelfLifeExpiry, formatRating, getRatingRank } from './lib/calculations';
 import { OnThisDayCard } from './components/OnThisDayCard';
 import { ActivityPulse } from './components/ActivityPulse';
 import { RandomPicker } from './components/RandomPicker';
@@ -1349,6 +1349,7 @@ export default function GameAnalyticsPage() {
           onSubmit={handleAddGame}
           onClose={handleCloseForm}
           initialGame={editingGame || undefined}
+          allGames={games}
           existingFranchises={Array.from(new Set(games.map(g => g.franchise).filter(Boolean) as string[]))}
         />
       )}
@@ -1750,6 +1751,7 @@ function NowPlayingCard({ game, allGames, onClick, onQuickLog, sortBy = 'hours',
   const momentum = getSessionMomentum(game);
   const whisper = getContextualWhisper(game, allGames);
   const libraryRank = getLibraryRank(game, allGames, sortBy);
+  const ratingRank = getRatingRank(game, allGames);
   const moodPulse = getCardMoodPulse(game);
   const progressRing = getProgressRingData(game, allGames);
   const shelfExpiry = getShelfLifeExpiry(game, allGames);
@@ -1904,8 +1906,14 @@ function NowPlayingCard({ game, allGames, onClick, onQuickLog, sortBy = 'hours',
               <Clock size={10} className="text-white/30" />
               <span>{game.totalHours}h</span>
             </div>
-            <div className="flex items-center gap-0.5">
+            <div className="flex items-center gap-1" title={ratingRank.label || undefined}>
               <RatingStars rating={game.rating} size={9} />
+              {game.rating > 0 && (
+                <span className="text-[10px] font-semibold text-white/50 tabular-nums">{formatRating(game.rating)}</span>
+              )}
+              {ratingRank.isTop && (
+                <span className="text-[10px] font-semibold text-amber-400/70 tabular-nums">#{ratingRank.rank}</span>
+              )}
             </div>
             {game.totalHours > 0 && game.price > 0 && (
               <span className={clsx('text-xs font-medium', getValueColor(game.metrics.valueRating))}>
@@ -2009,6 +2017,7 @@ function PosterCard({ game, allGames, idx, onClick, onQuickLog, isInQueue, sortB
   const momentum = getSessionMomentum(game);
   const whisper = getContextualWhisper(game, allGames);
   const libraryRank = getLibraryRank(game, allGames, sortBy);
+  const ratingRank = getRatingRank(game, allGames);
   const moodPulse = getCardMoodPulse(game);
   const progressRing = getProgressRingData(game, allGames);
   const shelfExpiry = getShelfLifeExpiry(game, allGames);
@@ -2166,8 +2175,14 @@ function PosterCard({ game, allGames, idx, onClick, onQuickLog, isInQueue, sortB
               <Clock size={10} className="text-white/30" />
               <span>{game.totalHours}h</span>
             </div>
-            <div className="flex items-center gap-0.5">
+            <div className="flex items-center gap-1" title={ratingRank.label || undefined}>
               <RatingStars rating={game.rating} size={9} />
+              {game.rating > 0 && (
+                <span className="text-[10px] font-semibold text-white/50 tabular-nums">{formatRating(game.rating)}</span>
+              )}
+              {ratingRank.isTop && (
+                <span className="text-[10px] font-semibold text-amber-400/70 tabular-nums">#{ratingRank.rank}</span>
+              )}
             </div>
             {game.totalHours > 0 && game.price > 0 && (
               <span className={clsx('text-xs font-medium', getValueColor(game.metrics.valueRating))}>
@@ -2371,6 +2386,7 @@ function CompactCard({ game, allGames, idx, onClick, onLogTime, onToggleQueue, o
   const momentum = getSessionMomentum(game);
   const whisper = getContextualWhisper(game, allGames);
   const libraryRank = getLibraryRank(game, allGames, sortBy);
+  const ratingRank = getRatingRank(game, allGames);
   const moodPulse = getCardMoodPulse(game);
   const progressRing = getProgressRingData(game, allGames);
   const lastPlayedStr = game.playLogs && game.playLogs.length > 0
@@ -2555,9 +2571,12 @@ function CompactCard({ game, allGames, idx, onClick, onLogTime, onToggleQueue, o
               <div className="text-white/80 font-medium text-xs">{game.totalHours}h</div>
               <div className="text-[9px] text-white/25">played</div>
             </div>
-            <div className="p-1.5 bg-white/[0.02] rounded-lg">
+            <div className="p-1.5 bg-white/[0.02] rounded-lg" title={ratingRank.label || undefined}>
               <div className="flex justify-center"><RatingStars rating={game.rating} size={9} /></div>
-              <div className="text-[9px] text-white/25">{game.rating}/10</div>
+              <div className="text-[9px] text-white/25">
+                {formatRating(game.rating)}
+                {ratingRank.isTop && <span className="text-amber-400/70 font-semibold"> · #{ratingRank.rank}</span>}
+              </div>
             </div>
             <div className="p-1.5 bg-white/[0.02] rounded-lg">
               {game.totalHours > 0 && game.price > 0 ? (

@@ -3,13 +3,15 @@
 import { useState, useRef, useEffect } from 'react';
 import { ChevronDown, X, Tag, DollarSign, Calendar, MessageSquare, Sparkles } from 'lucide-react';
 import { Game, GameStatus, PurchaseSource, SubscriptionSource } from '../lib/types';
-import { calculateCostPerHour, getValueRating } from '../lib/calculations';
+import { calculateCostPerHour, getValueRating, formatRating, getTotalHours } from '../lib/calculations';
+import { AIReviewInterview } from './AIReviewInterview';
 import clsx from 'clsx';
 
 interface GameFormProps {
   onSubmit: (game: Omit<Game, 'id' | 'userId' | 'createdAt' | 'updatedAt'>) => Promise<void>;
   onClose: () => void;
   initialGame?: Game;
+  allGames?: Game[];
   existingFranchises?: string[];
 }
 
@@ -97,8 +99,9 @@ function Section({ title, icon, defaultOpen = false, children, badge }: {
   );
 }
 
-export function GameForm({ onSubmit, onClose, initialGame, existingFranchises = [] }: GameFormProps) {
+export function GameForm({ onSubmit, onClose, initialGame, allGames = [], existingFranchises = [] }: GameFormProps) {
   const [loading, setLoading] = useState(false);
+  const [showInterview, setShowInterview] = useState(false);
   const [formData, setFormData] = useState({
     name: initialGame?.name || '',
     price: initialGame?.price !== undefined ? initialGame.price.toString() : '',
@@ -367,18 +370,27 @@ export function GameForm({ onSubmit, onClose, initialGame, existingFranchises = 
               </div>
             )}
 
-            {/* Rating — tap-to-rate circles */}
-            {showRating && (
+            {/* Rating — tap whole number, then fine-tune the decimal */}
+            {showRating && (() => {
+              const whole = Math.floor(formData.rating);
+              const decimal = Math.round((formData.rating - whole) * 10);
+              const labelKey = Math.min(10, Math.max(1, Math.round(formData.rating)));
+              return (
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <label className="text-xs font-medium text-white/50">Your Rating</label>
-                  <span className={clsx(
-                    'text-xs font-semibold px-2 py-0.5 rounded-full',
-                    getRatingColor(formData.rating)
-                  )}>
-                    {RATING_LABELS[formData.rating]}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg font-black text-white tabular-nums leading-none">{formatRating(formData.rating)}</span>
+                    <span className={clsx(
+                      'text-xs font-semibold px-2 py-0.5 rounded-full',
+                      getRatingColor(formData.rating)
+                    )}>
+                      {RATING_LABELS[labelKey]}
+                    </span>
+                  </div>
                 </div>
+
+                {/* Whole-number circles */}
                 <div className="flex gap-1.5 justify-between">
                   {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => (
                     <button
@@ -387,7 +399,7 @@ export function GameForm({ onSubmit, onClose, initialGame, existingFranchises = 
                       onClick={() => setFormData({ ...formData, rating: n })}
                       className={clsx(
                         'w-8 h-8 rounded-full text-xs font-bold transition-all flex items-center justify-center',
-                        formData.rating === n
+                        whole === n
                           ? getRatingColor(n)
                           : n <= formData.rating
                             ? 'bg-white/10 text-white/60'
@@ -398,8 +410,51 @@ export function GameForm({ onSubmit, onClose, initialGame, existingFranchises = 
                     </button>
                   ))}
                 </div>
+
+                {/* Fine-tune decimals */}
+                <div className="mt-2.5">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-[10px] text-white/30">Fine-tune</span>
+                    <span className="text-[10px] text-white/40 tabular-nums">{whole}.{decimal}</span>
+                  </div>
+                  <div className="flex gap-1 justify-between">
+                    {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map(d => {
+                      const disabled = whole >= 10 && d > 0;
+                      const selected = decimal === d;
+                      return (
+                        <button
+                          key={d}
+                          type="button"
+                          disabled={disabled}
+                          onClick={() => setFormData({ ...formData, rating: Math.min(10, whole + d / 10) })}
+                          className={clsx(
+                            'flex-1 h-7 rounded-lg text-[11px] font-semibold transition-all',
+                            disabled
+                              ? 'bg-white/[0.02] text-white/10 cursor-not-allowed'
+                              : selected
+                                ? 'bg-purple-500 text-white'
+                                : 'bg-white/[0.04] text-white/40 active:bg-white/[0.08]'
+                          )}
+                        >
+                          .{d}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Reflect with AI — voice interview that writes the review */}
+                <button
+                  type="button"
+                  onClick={() => setShowInterview(true)}
+                  className="mt-3 w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-purple-600/20 to-blue-600/20 border border-purple-500/30 text-purple-200 text-sm font-medium active:scale-[0.98] transition-all"
+                >
+                  <Sparkles size={14} /> Reflect with AI
+                  {formData.review && <span className="text-[10px] text-purple-300/60">· review saved</span>}
+                </button>
               </div>
-            )}
+              );
+            })()}
 
             {/* --- Collapsible Sections --- */}
 
@@ -631,6 +686,27 @@ export function GameForm({ onSubmit, onClose, initialGame, existingFranchises = 
           </button>
         </div>
       </div>
+
+      {/* AI Review Interview */}
+      {showInterview && (
+        <AIReviewInterview
+          game={{
+            name: formData.name.trim() || initialGame?.name || 'this game',
+            rating: formData.rating,
+            genre: formData.genre || undefined,
+            hours: parseFloat(formData.hours) || (initialGame ? getTotalHours(initialGame) : 0),
+            status: formData.status,
+            platform: formData.platform || undefined,
+          }}
+          allGames={allGames}
+          initialReview={formData.review}
+          onComplete={(review) => {
+            setFormData(prev => ({ ...prev, review }));
+            setShowInterview(false);
+          }}
+          onClose={() => setShowInterview(false)}
+        />
+      )}
     </div>
   );
 }

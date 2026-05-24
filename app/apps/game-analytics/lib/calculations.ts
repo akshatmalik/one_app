@@ -2905,6 +2905,172 @@ export function getRatingBiasAnalysis(games: Game[]): RatingBiasData {
 }
 
 // ========================================================================
+// DECIMAL RATING SYSTEM — precise ratings, tier bands, ranks, comparisons
+// ========================================================================
+
+/** Format a rating to one decimal place (e.g. 8 → "8.0", 8.5 → "8.5"). */
+export function formatRating(rating: number): string {
+  return rating.toFixed(1);
+}
+
+export interface RatingTierBand {
+  label: string;      // e.g. "Masterpiece"
+  range: string;      // e.g. "9.5+"
+  min: number;
+  max: number;        // inclusive upper bound
+  count: number;
+  percentage: number; // % of rated games in this band
+  color: string;      // hex for UI
+  games: Array<{ name: string; rating: number }>;
+}
+
+// Bands ordered high → low. max is inclusive.
+const RATING_BANDS: Array<Omit<RatingTierBand, 'count' | 'percentage' | 'games'>> = [
+  { label: 'Masterpiece', range: '9.5–10', min: 9.5, max: 10, color: '#fbbf24' },
+  { label: 'Phenomenal', range: '9.0–9.4', min: 9.0, max: 9.49, color: '#f59e0b' },
+  { label: 'Excellent', range: '8.5–8.9', min: 8.5, max: 8.99, color: '#34d399' },
+  { label: 'Great', range: '8.0–8.4', min: 8.0, max: 8.49, color: '#10b981' },
+  { label: 'Good', range: '7.0–7.9', min: 7.0, max: 7.99, color: '#3b82f6' },
+  { label: 'Decent', range: '6.0–6.9', min: 6.0, max: 6.99, color: '#6366f1' },
+  { label: 'Mixed', range: '5.0–5.9', min: 5.0, max: 5.99, color: '#a855f7' },
+  { label: 'Weak', range: 'Under 5', min: 0, max: 4.99, color: '#ef4444' },
+];
+
+/**
+ * Rarity / tier bands — shows how rare each rating tier is in the library.
+ * Emphasizes that high ratings are special.
+ */
+export function getRatingTierBands(games: Game[]): RatingTierBand[] {
+  const rated = games.filter(g => g.rating > 0 && g.status !== 'Wishlist');
+  const total = rated.length;
+
+  return RATING_BANDS.map(band => {
+    const inBand = rated
+      .filter(g => g.rating >= band.min && g.rating <= band.max)
+      .sort((a, b) => b.rating - a.rating);
+    return {
+      ...band,
+      count: inBand.length,
+      percentage: total > 0 ? Math.round((inBand.length / total) * 100) : 0,
+      games: inBand.map(g => ({ name: g.name, rating: g.rating })),
+    };
+  });
+}
+
+export interface RatingRank {
+  rank: number;       // 1-based rank by rating (1 = highest)
+  total: number;      // total rated games
+  percentile: number; // "top X%" — lower is better
+  label: string;      // e.g. "#2 of 64 · top 3%"
+  isTop: boolean;     // top 10% of library
+}
+
+/**
+ * Where a game's precise rating ranks within the library.
+ * Ties share the better rank (standard competition ranking).
+ */
+export function getRatingRank(game: Game, allGames: Game[]): RatingRank {
+  const rated = allGames.filter(g => g.rating > 0 && g.status !== 'Wishlist');
+  const total = rated.length;
+
+  if (game.rating <= 0 || total === 0) {
+    return { rank: 0, total, percentile: 0, label: '', isTop: false };
+  }
+
+  const higher = rated.filter(g => g.rating > game.rating).length;
+  const rank = higher + 1;
+  const percentile = Math.max(1, Math.round((rank / total) * 100));
+  const isTop = percentile <= 10;
+
+  return {
+    rank,
+    total,
+    percentile,
+    label: `#${rank} of ${total} · top ${percentile}%`,
+    isTop,
+  };
+}
+
+export interface CloseRatingGroup {
+  label: string; // e.g. "9.0–9.4"
+  min: number;
+  max: number;
+  games: Array<{ name: string; rating: number; hours: number; genre?: string }>;
+}
+
+/**
+ * Group games into tight half-point bands so close ratings can be compared
+ * side by side (e.g. what separates your 8.5s from your 9.0s).
+ * Only returns bands with 2+ games. Sorted high → low.
+ */
+export function getCloseRatingGroups(games: Game[]): CloseRatingGroup[] {
+  const rated = games.filter(g => g.rating > 0 && g.status !== 'Wishlist');
+  if (rated.length === 0) return [];
+
+  const buckets = new Map<number, CloseRatingGroup>();
+
+  for (const g of rated) {
+    // Floor to nearest 0.5 band (e.g. 8.7 → 8.5, 9.2 → 9.0)
+    const bandMin = Math.floor(g.rating * 2) / 2;
+    const bandMax = Math.min(10, bandMin + 0.49);
+    if (!buckets.has(bandMin)) {
+      buckets.set(bandMin, {
+        label: `${formatRating(bandMin)}–${formatRating(Math.min(10, bandMin + 0.4))}`,
+        min: bandMin,
+        max: bandMax,
+        games: [],
+      });
+    }
+    buckets.get(bandMin)!.games.push({
+      name: g.name,
+      rating: g.rating,
+      hours: getTotalHours(g),
+      genre: g.genre,
+    });
+  }
+
+  return Array.from(buckets.values())
+    .filter(b => b.games.length >= 2)
+    .map(b => ({ ...b, games: b.games.sort((a, c) => c.rating - a.rating) }))
+    .sort((a, b) => b.min - a.min);
+}
+
+export interface FineRatingBucket {
+  band: string; // e.g. "8.5"
+  min: number;
+  max: number;
+  count: number;
+}
+
+/**
+ * Rating distribution in 0.5-point bands (trimmed to the populated range),
+ * so decimal differences between 8.5s and 9.5s are visible.
+ */
+export function getRatingDistributionFine(games: Game[]): FineRatingBucket[] {
+  const rated = games.filter(g => g.rating > 0 && g.status !== 'Wishlist');
+  if (rated.length === 0) return [];
+
+  const buckets: FineRatingBucket[] = [];
+  for (let v = 1; v <= 10; v += 0.5) {
+    const min = v;
+    const max = v === 10 ? 10 : v + 0.49;
+    buckets.push({
+      band: formatRating(v),
+      min,
+      max,
+      count: rated.filter(g => g.rating >= min && g.rating <= max).length,
+    });
+  }
+
+  // Trim leading/trailing empty bands to keep the chart focused.
+  let start = 0;
+  let end = buckets.length - 1;
+  while (start < end && buckets[start].count === 0) start++;
+  while (end > start && buckets[end].count === 0) end--;
+  return buckets.slice(start, end + 1);
+}
+
+// ========================================================================
 // ENHANCEMENT PHASE 2: Advanced Analytics
 // ========================================================================
 
