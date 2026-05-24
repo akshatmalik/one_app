@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-05-24 — Games Tab — Head-to-Head Game Comparison
+
+**Files**: app/apps/game-analytics/components/GameComparePanel.tsx, app/apps/game-analytics/page.tsx
+**Risk**: not risky
+
+Added a full game comparison mode: tap "Compare" in the Games tab toolbar to enter selection mode, tap up to 3 games (blue ring + checkmark appears), then hit the floating "Compare" bar to see a side-by-side breakdown. The panel shows 7 metrics (Price, Total Hours, Cost/Hour, Rating, ROI Score, Sessions, Blend Score) as proportional bars with a trophy badge on the winner of each category. A weighted verdict tallies all wins and crowns an overall winner. On close, compare mode resets cleanly.
+
+FOLLOW-UP: Could surface the comparison from the bottom sheet detail panel ("Compare with another game" CTA), and add a shareable summary card for the verdict.
+
 ## 2026-05-22 18:00 — Games Tab — Game search bar
 
 **Files**: app/apps/game-analytics/page.tsx

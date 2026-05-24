@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical, Download, Gift, ShoppingCart, Search, X } from 'lucide-react';
+import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical, Download, Gift, ShoppingCart, Search, X, Layers, GitCompare } from 'lucide-react';
 import { useGames } from './hooks/useGames';
 import { useAnalytics, GameWithMetrics } from './hooks/useAnalytics';
 import { useBudget } from './hooks/useBudget';
@@ -45,6 +45,7 @@ import { TrophyToast } from './components/TrophyToast';
 import { ErrorLogPanel, ErrorLogButton } from './components/ErrorLogPanel';
 import { WhatsNewModal } from './components/WhatsNewModal';
 import { GameReviewChat } from './components/GameReviewChat';
+import { GameComparePanel } from './components/GameComparePanel';
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist';
@@ -212,6 +213,9 @@ export default function GameAnalyticsPage() {
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showErrorLog, setShowErrorLog] = useState(false);
   const [showWhatsNew, setShowWhatsNew] = useState(false);
+  const [compareMode, setCompareMode] = useState(false);
+  const [compareIds, setCompareIds] = useState<Set<string>>(new Set());
+  const [showComparePanel, setShowComparePanel] = useState(false);
 
   // Week recap data for header strip
   const weekRecap = useMemo(() => {
@@ -388,6 +392,30 @@ export default function GameAnalyticsPage() {
     const next = !groupBySection;
     setGroupBySection(next);
     localStorage.setItem('ga-group-sections', String(next));
+  };
+
+  const toggleCompareMode = () => {
+    setCompareMode(prev => {
+      if (prev) {
+        setCompareIds(new Set());
+        setShowComparePanel(false);
+      }
+      return !prev;
+    });
+  };
+
+  const handleToggleCompare = (gameId: string) => {
+    setCompareIds(prev => {
+      const next = new Set(prev);
+      if (next.has(gameId)) {
+        next.delete(gameId);
+      } else if (next.size < 3) {
+        next.add(gameId);
+      } else {
+        showToast('You can compare up to 3 games at once', 'info');
+      }
+      return next;
+    });
   };
 
   const handleSeedData = async () => {
@@ -1072,6 +1100,18 @@ export default function GameAnalyticsPage() {
                   >
                     Sections
                   </button>
+                  {/* Compare mode toggle */}
+                  <button
+                    onClick={toggleCompareMode}
+                    className={clsx(
+                      'px-2 py-1 border text-[10px] rounded-lg flex items-center gap-1',
+                      compareMode ? 'bg-blue-500/10 border-blue-500/20 text-blue-400' : 'bg-white/[0.02] border-white/10 text-white/40'
+                    )}
+                    title="Compare games side-by-side"
+                  >
+                    <Layers size={10} />
+                    Compare
+                  </button>
                   {/* ELO tier config */}
                   <div className="relative">
                     <button
@@ -1154,7 +1194,7 @@ export default function GameAnalyticsPage() {
                   allGames={games}
                   cardViewMode={cardViewMode}
                   groupBySection={groupBySection}
-                  onCardClick={(game) => setDetailGame(game)}
+                  onCardClick={(game) => compareMode ? handleToggleCompare(game.id) : setDetailGame(game)}
                   onLogTime={(game) => handleOpenPlayLog(game)}
                   onQuickLog={handleQuickLog}
                   onToggleQueue={async (game) => {
@@ -1186,7 +1226,41 @@ export default function GameAnalyticsPage() {
                   eloByGameId={eloByGameId}
                   tierAssignments={allTimeTiers}
                   eloTierRanks={eloTierRanks}
+                  compareMode={compareMode}
+                  compareIds={compareIds}
+                  onToggleCompare={handleToggleCompare}
                 />
+              )}
+
+              {/* Floating compare bar */}
+              {compareMode && (
+                <div className={clsx(
+                  'fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 px-4 py-3 rounded-2xl shadow-2xl transition-all duration-300',
+                  'bg-[#1a1a2e] border border-blue-500/30',
+                  compareIds.size === 0 ? 'opacity-80' : 'opacity-100'
+                )}>
+                  <Layers size={14} className="text-blue-400 flex-shrink-0" />
+                  <span className="text-sm text-white/70">
+                    {compareIds.size === 0
+                      ? 'Tap games to select (up to 3)'
+                      : `${compareIds.size} game${compareIds.size > 1 ? 's' : ''} selected`}
+                  </span>
+                  {compareIds.size >= 2 && (
+                    <button
+                      onClick={() => setShowComparePanel(true)}
+                      className="px-3 py-1.5 bg-blue-500 hover:bg-blue-400 text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5"
+                    >
+                      <GitCompare size={12} />
+                      Compare
+                    </button>
+                  )}
+                  <button
+                    onClick={toggleCompareMode}
+                    className="w-6 h-6 flex items-center justify-center rounded-full bg-white/10 text-white/40 hover:text-white hover:bg-white/20 transition-all"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
               )}
             </>
           )}
@@ -1492,6 +1566,19 @@ export default function GameAnalyticsPage() {
           onClose={() => setReviewChatGame(null)}
         />
       )}
+
+      {/* Game Compare Panel */}
+      {showComparePanel && compareIds.size >= 2 && (() => {
+        const selectedGames = gamesWithMetrics.filter(g => compareIds.has(g.id));
+        if (selectedGames.length < 2) return null;
+        return (
+          <GameComparePanel
+            games={selectedGames}
+            allGames={games}
+            onClose={() => setShowComparePanel(false)}
+          />
+        );
+      })()}
     </div>
   );
 }
@@ -1578,6 +1665,9 @@ interface GameCardListProps {
   eloByGameId?: Map<string, GameRanking>;
   tierAssignments?: TierAssignmentMap;
   eloTierRanks?: Map<string, { tier: GameTier; rank: number }>;
+  compareMode?: boolean;
+  compareIds?: Set<string>;
+  onToggleCompare?: (id: string) => void;
 }
 
 function GameCardList({
@@ -1598,6 +1688,9 @@ function GameCardList({
   eloByGameId = new Map(),
   tierAssignments = {},
   eloTierRanks = new Map(),
+  compareMode = false,
+  compareIds = new Set(),
+  onToggleCompare,
 }: GameCardListProps) {
   const sections = useMemo(() => groupBySection ? getGameSections(allGames) : [], [allGames, groupBySection]);
 
@@ -1646,16 +1739,44 @@ function GameCardList({
     const eloRanking = eloByGameId.get(game.id);
     const gameTier = tierAssignments[game.id] as GameTier | undefined;
     const eloTierRank = eloTierRanks.get(game.id);
+    const isSelected = compareIds.has(game.id);
+    const isMaxed = compareIds.size >= 3 && !isSelected;
+
+    const cardContent = cardViewMode === 'poster' ? (
+      <PosterCard game={game} allGames={allGames} idx={idx} onClick={() => onCardClick(game)} onQuickLog={(h) => onQuickLog(game, h)} isInQueue={isInQueue(game.id)} sortBy={sortBy} tintColor={gameColors.get(game.id)} aiQuip={gameQuips[game.id]?.quip} eloRanking={eloRanking} gameTier={gameTier} eloTierRank={eloTierRank} />
+    ) : (
+      <CompactCard game={game} allGames={allGames} idx={idx} onClick={() => onCardClick(game)} onLogTime={() => onLogTime(game)} onToggleQueue={() => onToggleQueue(game)} onDelete={() => onDelete(game)} isInQueue={isInQueue(game.id)} sortBy={sortBy} tintColor={gameColors.get(game.id)} aiQuip={gameQuips[game.id]?.quip} eloRanking={eloRanking} gameTier={gameTier} eloTierRank={eloTierRank} />
+    );
+
+    if (compareMode) {
+      return (
+        <div
+          key={game.id}
+          className={clsx(animClass, 'relative cursor-pointer', isMaxed && 'opacity-40 pointer-events-none')}
+          onClick={() => onToggleCompare?.(game.id)}
+        >
+          <div className={clsx('pointer-events-none rounded-xl transition-all', isSelected && 'ring-2 ring-blue-500')}>
+            {cardContent}
+          </div>
+          {isSelected && (
+            <div className="absolute top-2 right-2 z-10 w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center shadow-lg">
+              <Check size={13} className="text-white" />
+            </div>
+          )}
+        </div>
+      );
+    }
+
     if (cardViewMode === 'poster') {
       return (
         <div key={game.id} className={animClass}>
-          <PosterCard game={game} allGames={allGames} idx={idx} onClick={() => onCardClick(game)} onQuickLog={(h) => onQuickLog(game, h)} isInQueue={isInQueue(game.id)} sortBy={sortBy} tintColor={gameColors.get(game.id)} aiQuip={gameQuips[game.id]?.quip} eloRanking={eloRanking} gameTier={gameTier} eloTierRank={eloTierRank} />
+          {cardContent}
         </div>
       );
     }
     return (
       <div key={game.id} className={animClass}>
-        <CompactCard game={game} allGames={allGames} idx={idx} onClick={() => onCardClick(game)} onLogTime={() => onLogTime(game)} onToggleQueue={() => onToggleQueue(game)} onDelete={() => onDelete(game)} isInQueue={isInQueue(game.id)} sortBy={sortBy} tintColor={gameColors.get(game.id)} aiQuip={gameQuips[game.id]?.quip} eloRanking={eloRanking} gameTier={gameTier} eloTierRank={eloTierRank} />
+        {cardContent}
       </div>
     );
   };

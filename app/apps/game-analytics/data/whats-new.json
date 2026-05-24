@@ -1,6 +1,12 @@
 {
   "entries": [
     {
+      "date": "2026-05-24",
+      "area": "Games tab",
+      "title": "Compare any 2–3 games side by side",
+      "body": "Tap 'Compare' in the Games tab toolbar, select up to 3 games, then hit the floating bar to open a full comparison. See every key stat — price, hours, cost/hour, rating, ROI — as visual bars with a trophy on the winner. An overall verdict tells you which game came out on top."
+    },
+    {
       "date": "2026-05-22",
       "area": "Games tab",
       "title": "Search your library instantly",
