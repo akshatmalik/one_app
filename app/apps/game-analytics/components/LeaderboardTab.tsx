@@ -387,7 +387,7 @@ export function LeaderboardTab({ gamesWithMetrics, userId, eloTierConfig }: Lead
   const periodKey = useMemo(() => getPeriodKey(eloPeriod, targetDate), [eloPeriod, targetDate]);
   const currentPeriodLabel = useMemo(() => getPeriodLabel(eloPeriod, targetDate), [eloPeriod, targetDate]);
 
-  const { rankings, battles, loading: rankLoading, submitting, indexError, recordBattle, getBattleCount, getNextPair } =
+  const { rankings, battles, loading: rankLoading, pendingCount, indexError, recordBattle, getBattleCount, getNextPair } =
     useRankings(userId, eloPeriod, periodKey);
 
   // ── Battle state ────────────────────────────────────────────────
@@ -527,49 +527,39 @@ export function LeaderboardTab({ gamesWithMetrics, userId, eloTierConfig }: Lead
     return [...eloRanked, ...unranked];
   }, [eloRanked, eligibleGames]);
 
-  // Handle battle pick
-  async function handlePick(winnerId: string, loserId: string) {
-    if (!currentPair || submitting) return;
+  // Handle battle pick — fully synchronous, zero Firebase latency
+  function handlePick(winnerId: string, loserId: string) {
+    if (!currentPair) return;
 
-    // Immediately flash the chosen winner before the async round-trip
+    // Flash the chosen winner
     setPickedWinnerId(winnerId);
 
-    try {
-      // Snapshot current ELOs for the result display
-      const winnerR = rankings.find(r => r.gameId === winnerId);
-      const loserR = rankings.find(r => r.gameId === loserId);
-
-      await recordBattle(winnerId, loserId);
-
-      // Show result flash
-      const winnerGame = gamesWithMetrics.find(g => g.id === winnerId);
-      const loserGame = gamesWithMetrics.find(g => g.id === loserId);
-      if (winnerGame && loserGame) {
-        const wElo = winnerR?.eloScore ?? 1000;
-        const lElo = loserR?.eloScore ?? 1000;
-        const expectedWin = 1 / (1 + Math.pow(10, (lElo - wElo) / 400));
-        const k = 32;
-        const wChange = Math.round(k * (1 - expectedWin));
-        const lChange = Math.round(k * (0 - (1 - expectedWin)));
-        setLastResult({
-          winner: winnerGame.name,
-          loser: loserGame.name,
-          winnerChange: wChange,
-          loserChange: lChange,
-        });
-        setShowResult(true);
-        if (resultTimerRef.current) clearTimeout(resultTimerRef.current);
-        resultTimerRef.current = setTimeout(() => {
-          setShowResult(false);
-          setPickedWinnerId(null);
-        }, 800);
-      }
-
-      // Next pair is set via the useEffect watching battles
-    } catch (err) {
-      setPickedWinnerId(null);
-      logError('Battle pick failed', 'handlePick', err);
+    // Show result toast immediately (ELOs are already in local state)
+    const winnerR = rankings.find(r => r.gameId === winnerId);
+    const loserR  = rankings.find(r => r.gameId === loserId);
+    const winnerGame = gamesWithMetrics.find(g => g.id === winnerId);
+    const loserGame  = gamesWithMetrics.find(g => g.id === loserId);
+    if (winnerGame && loserGame) {
+      const wElo = winnerR?.eloScore ?? 1000;
+      const lElo = loserR?.eloScore  ?? 1000;
+      const expectedWin = 1 / (1 + Math.pow(10, (lElo - wElo) / 400));
+      const k = 32;
+      setLastResult({
+        winner: winnerGame.name,
+        loser:  loserGame.name,
+        winnerChange: Math.round(k * (1 - expectedWin)),
+        loserChange:  Math.round(k * (0 - (1 - expectedWin))),
+      });
+      setShowResult(true);
+      if (resultTimerRef.current) clearTimeout(resultTimerRef.current);
+      resultTimerRef.current = setTimeout(() => {
+        setShowResult(false);
+        setPickedWinnerId(null);
+      }, 800);
     }
+
+    // recordBattle is now sync — updates local state instantly, queues Firebase write
+    recordBattle(winnerId, loserId);
   }
 
   const SelectFilter = ({ value, onChange, options, label }: {
@@ -1007,6 +997,12 @@ export function LeaderboardTab({ gamesWithMetrics, userId, eloTierConfig }: Lead
                   {/* Progress */}
                   <div className="flex items-center justify-between text-[11px] text-white/30">
                     <span>{battles.length} battles recorded this period</span>
+                    {pendingCount > 0 && (
+                      <span className="flex items-center gap-1 text-amber-400/60">
+                        <RefreshCw size={10} className="animate-spin" />
+                        saving {pendingCount}…
+                      </span>
+                    )}
                     <span>
                       {tierEligibleIds.length * (tierEligibleIds.length - 1) / 2} pairs{' '}
                       {selectedBattleTier === 'all' ? 'across all tiers' : `in tier ${selectedBattleTier}`}
@@ -1041,7 +1037,7 @@ export function LeaderboardTab({ gamesWithMetrics, userId, eloTierConfig }: Lead
                               game={game}
                               ranking={ranking}
                               onPick={() => handlePick(gameId, otherId)}
-                              disabled={submitting}
+                              disabled={false}
                               isWinner={isWinner}
                               isLoser={isLoser}
                             />
