@@ -711,6 +711,80 @@ Respond with ONLY valid JSON (no markdown): {"transcript": "<what they said>", "
   }
 }
 
+// ── REVIEW CHAT ────────────────────────────────────────────────────
+// Persistent back-and-forth chat about a specific game.
+// Each call returns a single AI message. Caller saves history externally.
+
+const REVIEW_CATEGORIES = ['gameplay/mechanics', 'story/world', 'visuals/atmosphere', 'sound/music', 'value for money', 'replayability', 'who it\'s for'];
+
+export interface ReviewChatMessage {
+  role: 'user' | 'ai';
+  text: string;
+}
+
+export async function generateReviewChatResponse(params: {
+  game: ReviewGameContext;
+  tasteSummary: string;
+  history: ReviewChatMessage[];
+  userMessage: string | null; // null = opening message
+}): Promise<string> {
+  const { game, tasteSummary, history, userMessage } = params;
+  const model = getAIModel();
+
+  const gameInfo = `"${game.name}" — ${game.hours.toFixed(0)}h played, rated ${game.rating.toFixed(1)}/10, status: ${game.status}${game.genre ? `, genre: ${game.genre}` : ''}${game.platform ? `, on ${game.platform}` : ''}.`;
+
+  const historyText = history.length > 0
+    ? history.map(m => `${m.role === 'user' ? 'Player' : 'You'}: ${m.text}`).join('\n')
+    : '';
+
+  const coveredHints = history.map(m => m.text.toLowerCase()).join(' ');
+  const uncovered = REVIEW_CATEGORIES.filter(cat => {
+    const keywords = cat.split('/');
+    return !keywords.some(kw => coveredHints.includes(kw));
+  });
+
+  let prompt: string;
+
+  if (!userMessage) {
+    // Opening message — no user input yet
+    prompt = `You are a thoughtful friend helping a player reflect on a game they've spent time with. Your goal is to help them build a genuine, personal review through natural conversation over several messages.
+
+Game: ${gameInfo}
+Player's broader taste: ${tasteSummary}
+
+Write your opening message. Reference something specific from the data — their rating, hours, or status — to make it feel personal. Ask ONE focused question to kick things off. NOT "what did you think?" — something more specific, like what surprised them, how it compared to their expectations, or what they'd tell a friend.
+
+Keep it to 2-3 sentences total. Casual, warm, curious. No greeting like "Hey!" or "Hi there!".`;
+  } else {
+    prompt = `You are a thoughtful friend helping a player reflect on "${game.name}" and build a genuine personal review through conversation.
+
+Game: ${gameInfo}
+Player's broader taste: ${tasteSummary}
+
+Conversation so far:
+${historyText}
+
+Player just said: "${userMessage}"
+
+Respond naturally to what they said in 1-2 sentences. Then ask ONE specific follow-up question — either digging deeper into what they mentioned, or steering toward something not yet covered.
+
+Categories not yet touched: ${uncovered.length > 0 ? uncovered.join(', ') : 'all covered — feel free to wrap up or dig deeper'}.
+
+Stay casual and conversational. Respond to their actual words, don't just jump topics. 2-4 sentences total.`;
+  }
+
+  try {
+    const result = await model.generateContent(prompt);
+    return result.response.text().trim();
+  } catch (e) {
+    console.error('Review chat error:', e);
+    if (!userMessage) {
+      return `You've put ${game.hours.toFixed(0)} hours into ${game.name} and rated it ${game.rating.toFixed(1)}/10. What made you give it that score?`;
+    }
+    return "Tell me more about that — what specifically stood out?";
+  }
+}
+
 /**
  * Synthesize the interview into a first-person, reflective written review.
  */

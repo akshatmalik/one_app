@@ -33,6 +33,13 @@ export interface PlayLog {
   vibe?: SessionVibe;
 }
 
+export interface ReviewMessage {
+  id: string;
+  role: 'user' | 'ai';
+  text: string;
+  timestamp: string;
+}
+
 export interface Game {
   id: string;
   userId: string;
@@ -51,6 +58,7 @@ export interface Game {
   subscriptionSource?: SubscriptionSource; // Which subscription service provided the game
   notes?: string;
   review?: string; // Personal review/thoughts about the game
+  reviewMessages?: ReviewMessage[]; // Persistent review chat conversation
   datePurchased?: string;
   startDate?: string; // When you started playing
   endDate?: string; // When you finished/stopped
