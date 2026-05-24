@@ -15,7 +15,7 @@ import { TimelineView } from './components/TimelineView';
 import { StatsView } from './components/StatsView';
 import { AIChatTab } from './components/AIChatTab';
 import { UpNextTab } from './components/UpNextTab';
-import { Game, GameStatus, PlayLog, GameRanking, GameAward, AwardPeriodType, GameTier, TierAssignmentMap } from './lib/types';
+import { Game, GameStatus, PlayLog, GameRanking, GameAward, AwardPeriodType, GameTier, TierAssignmentMap, ReviewMessage } from './lib/types';
 import { useTierAssignments } from './hooks/useTierAssignments';
 import { gameRepository } from './lib/storage';
 import { useRankings } from './hooks/useRankings';
@@ -44,6 +44,7 @@ import { TrophyShowcase } from './components/TrophyShowcase';
 import { TrophyToast } from './components/TrophyToast';
 import { ErrorLogPanel, ErrorLogButton } from './components/ErrorLogPanel';
 import { WhatsNewModal } from './components/WhatsNewModal';
+import { GameReviewChat } from './components/GameReviewChat';
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist';
@@ -190,6 +191,7 @@ export default function GameAnalyticsPage() {
   const [wrappedYear, setWrappedYear] = useState<number | null>(null);
   const [showAwardsHub, setShowAwardsHub] = useState(false);
   const [detailGame, setDetailGame] = useState<GameWithMetrics | null>(null);
+  const [reviewChatGame, setReviewChatGame] = useState<GameWithMetrics | null>(null);
   const [statsCollapsed, setStatsCollapsed] = useState(() => {
     if (typeof window === 'undefined') return false;
     return localStorage.getItem('ga-stats-collapsed') === 'true';
@@ -1467,7 +1469,27 @@ export default function GameAnalyticsPage() {
               showToast('Failed to update', 'error');
             }
           }}
+          onOpenReviewChat={() => {
+            setReviewChatGame(detailGame);
+            setDetailGame(null);
+          }}
           isInQueue={isInQueue(detailGame.id)}
+        />
+      )}
+
+      {/* Game Review Chat */}
+      {reviewChatGame && (
+        <GameReviewChat
+          game={reviewChatGame}
+          allGames={games}
+          onSave={async (messages: ReviewMessage[]) => {
+            try {
+              await updateGame(reviewChatGame.id, { reviewMessages: messages });
+            } catch (e) {
+              // silent — messages are kept in local state
+            }
+          }}
+          onClose={() => setReviewChatGame(null)}
         />
       )}
     </div>

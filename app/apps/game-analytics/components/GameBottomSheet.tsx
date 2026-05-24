@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useRef, useEffect } from 'react';
-import { Clock, ChevronDown, ChevronUp, ListPlus, Check, Heart, Edit3, Trash2, Trophy, Sparkles, Zap } from 'lucide-react';
+import { Clock, ChevronDown, ChevronUp, ListPlus, Check, Heart, Edit3, Trash2, Trophy, Sparkles, Zap, MessageCircle } from 'lucide-react';
 import { Game } from '../lib/types';
 import { GameWithMetrics } from '../hooks/useAnalytics';
 import {
@@ -36,6 +36,7 @@ interface GameBottomSheetProps {
   onOpenPlayLog: () => void;
   onToggleQueue: () => void;
   onToggleSpecial: () => void;
+  onOpenReviewChat: () => void;
   isInQueue: boolean;
 }
 
@@ -59,6 +60,7 @@ export function GameBottomSheet({
   onOpenPlayLog,
   onToggleQueue,
   onToggleSpecial,
+  onOpenReviewChat,
   isInQueue,
 }: GameBottomSheetProps) {
   const [showAwards, setShowAwards] = useState(false);
@@ -620,10 +622,44 @@ export function GameBottomSheet({
             </div>
           )}
 
-          {/* Review */}
+          {/* Review Chat */}
+          <div className="mx-5 mb-4">
+            {game.reviewMessages && game.reviewMessages.length > 0 ? (
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium text-white/70">Review Chat</span>
+                  <span className="text-[10px] text-white/30">{game.reviewMessages.length} messages</span>
+                </div>
+                <button
+                  onClick={onOpenReviewChat}
+                  className="w-full p-3 bg-purple-500/5 border border-purple-500/15 rounded-xl text-left active:bg-purple-500/10 transition-all"
+                >
+                  <p className="text-xs text-white/50 leading-relaxed line-clamp-2 mb-2">
+                    {game.reviewMessages[game.reviewMessages.length - 1].text}
+                  </p>
+                  <span className="flex items-center gap-1 text-[10px] text-purple-400/60">
+                    <MessageCircle size={10} /> Continue conversation
+                  </span>
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={onOpenReviewChat}
+                className="w-full p-3 bg-white/[0.02] border border-white/5 rounded-xl text-left active:bg-white/[0.04] transition-all flex items-center gap-2"
+              >
+                <MessageCircle size={14} className="text-purple-400/50 shrink-0" />
+                <div>
+                  <span className="text-xs text-white/40 block">Start a review conversation</span>
+                  <span className="text-[10px] text-white/20">AI-guided · saves as you go</span>
+                </div>
+              </button>
+            )}
+          </div>
+
+          {/* Static review (from game form) */}
           {game.review && (
             <div className="mx-5 mb-4">
-              <span className="text-sm font-medium text-white/70 block mb-2">Your Review</span>
+              <span className="text-sm font-medium text-white/70 block mb-2">Quick Review</span>
               <div className="p-4 bg-white/[0.03] rounded-xl border border-white/5">
                 <p className="text-sm text-white/50 leading-relaxed whitespace-pre-wrap">{game.review}</p>
               </div>
@@ -655,6 +691,17 @@ export function GameBottomSheet({
             className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 bg-blue-600/20 active:bg-blue-600/30 text-blue-400 rounded-lg text-xs font-medium transition-all"
           >
             <Clock size={14} /> Log Time
+          </button>
+          <button
+            onClick={onOpenReviewChat}
+            className={
+              game.reviewMessages && game.reviewMessages.length > 0
+                ? 'px-3 py-2.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 bg-purple-500/20 text-purple-400 active:bg-purple-500/30'
+                : 'px-3 py-2.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 bg-white/5 text-white/50 active:bg-white/10'
+            }
+          >
+            <MessageCircle size={14} />
+            Review
           </button>
           <button
             onClick={onToggleQueue}
