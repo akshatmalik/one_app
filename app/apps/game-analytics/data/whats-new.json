@@ -1,6 +1,12 @@
 {
   "entries": [
     {
+      "date": "2026-05-25",
+      "area": "Session Tracking",
+      "title": "Track your play time in real time",
+      "body": "Click 'Track Session' in the Games tab, pick a game, and a live timer starts counting up. When you're done playing, hit 'Stop & Log' and the hours are saved automatically — no more guessing how long you played."
+    },
+    {
       "date": "2026-05-22",
       "area": "Games tab",
       "title": "Search your library instantly",

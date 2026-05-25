@@ -45,6 +45,7 @@ import { TrophyToast } from './components/TrophyToast';
 import { ErrorLogPanel, ErrorLogButton } from './components/ErrorLogPanel';
 import { WhatsNewModal } from './components/WhatsNewModal';
 import { GameReviewChat } from './components/GameReviewChat';
+import { LiveSessionTimer } from './components/LiveSessionTimer';
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist';
@@ -213,6 +214,22 @@ export default function GameAnalyticsPage() {
   const [showErrorLog, setShowErrorLog] = useState(false);
   const [showWhatsNew, setShowWhatsNew] = useState(false);
 
+  // Live session timer
+  const [activeTimer, setActiveTimer] = useState<{
+    gameId: string;
+    gameName: string;
+    thumbnail?: string;
+    startTime: number;
+  } | null>(() => {
+    if (typeof window === 'undefined') return null;
+    try {
+      const s = localStorage.getItem('ga-active-session-timer');
+      return s ? JSON.parse(s) : null;
+    } catch { return null; }
+  });
+  const [showTimerPicker, setShowTimerPicker] = useState(false);
+  const [timerPickerQuery, setTimerPickerQuery] = useState('');
+
   // Week recap data for header strip
   const weekRecap = useMemo(() => {
     if (games.length === 0) return null;
@@ -376,6 +393,30 @@ export default function GameAnalyticsPage() {
 
     await updateGame(game.id, updates);
     showToast(`Logged ${hours}h`, 'success');
+  };
+
+  const startSessionTimer = (game: Game) => {
+    const timer = { gameId: game.id, gameName: game.name, thumbnail: game.thumbnail, startTime: Date.now() };
+    setActiveTimer(timer);
+    try { localStorage.setItem('ga-active-session-timer', JSON.stringify(timer)); } catch {}
+    setShowTimerPicker(false);
+    setTimerPickerQuery('');
+    showToast(`Tracking ${game.name}`, 'success');
+  };
+
+  const stopSessionTimer = async (hours: number) => {
+    if (!activeTimer) return;
+    const gwm = gamesWithMetrics.find(g => g.id === activeTimer.gameId);
+    setActiveTimer(null);
+    try { localStorage.removeItem('ga-active-session-timer'); } catch {}
+    if (gwm) {
+      await handleQuickLog(gwm, hours);
+    }
+  };
+
+  const abandonSessionTimer = () => {
+    setActiveTimer(null);
+    try { localStorage.removeItem('ga-active-session-timer'); } catch {}
   };
 
   const toggleCardViewMode = () => {
@@ -917,6 +958,17 @@ export default function GameAnalyticsPage() {
       {/* Main Content */}
       <div className="flex-1 px-6 py-6">
         <div className="max-w-6xl mx-auto">
+          {/* Live Session Timer banner */}
+          {activeTimer && (
+            <LiveSessionTimer
+              gameName={activeTimer.gameName}
+              thumbnail={activeTimer.thumbnail}
+              startTime={activeTimer.startTime}
+              onStop={stopSessionTimer}
+              onAbandon={abandonSessionTimer}
+            />
+          )}
+
           {/* On This Day */}
           {games.length > 0 && <OnThisDayCard games={games} />}
 
@@ -1022,6 +1074,85 @@ export default function GameAnalyticsPage() {
                     )}
                   </div>
                 )}
+
+                {/* Track Session button + inline game picker */}
+                {games.length > 0 && (
+                  <div className="relative">
+                    {!activeTimer ? (
+                      <button
+                        onClick={() => { setShowTimerPicker(p => !p); setTimerPickerQuery(''); }}
+                        className={clsx(
+                          'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all border',
+                          showTimerPicker
+                            ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
+                            : 'bg-white/[0.02] border-white/10 text-white/40 hover:text-white/60 hover:border-white/20'
+                        )}
+                      >
+                        <Clock size={12} />
+                        Track Session
+                      </button>
+                    ) : (
+                      <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+                        <span className="relative flex h-2 w-2">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400" />
+                        </span>
+                        Tracking…
+                      </div>
+                    )}
+
+                    {/* Inline game picker dropdown */}
+                    {showTimerPicker && !activeTimer && (
+                      <>
+                        <div className="fixed inset-0 z-40" onClick={() => setShowTimerPicker(false)} />
+                        <div className="absolute left-0 top-full mt-1 z-50 w-72 bg-[#13131a] border border-white/10 rounded-xl shadow-2xl overflow-hidden">
+                          <div className="p-3 border-b border-white/5">
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-white/30 mb-2">Select game to track</p>
+                            <input
+                              type="text"
+                              value={timerPickerQuery}
+                              onChange={e => setTimerPickerQuery(e.target.value)}
+                              placeholder="Search…"
+                              autoFocus
+                              className="w-full px-2.5 py-1.5 bg-white/5 border border-white/10 text-white text-xs rounded-lg placeholder:text-white/25 focus:outline-none focus:border-emerald-500/40"
+                            />
+                          </div>
+                          <div className="max-h-56 overflow-y-auto">
+                            {(() => {
+                              const q = timerPickerQuery.trim().toLowerCase();
+                              const candidates = gamesWithMetrics
+                                .filter(g => g.status !== 'Wishlist')
+                                .filter(g => !q || g.name.toLowerCase().includes(q) || (g.genre || '').toLowerCase().includes(q))
+                                .slice(0, 12);
+                              if (candidates.length === 0) {
+                                return <p className="px-3 py-4 text-xs text-white/30 text-center">No games found</p>;
+                              }
+                              return candidates.map(g => (
+                                <button
+                                  key={g.id}
+                                  onClick={() => startSessionTimer(g)}
+                                  className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-white/5 transition-colors text-left"
+                                >
+                                  {g.thumbnail ? (
+                                    <img src={g.thumbnail} alt="" className="w-7 h-7 rounded-md object-cover shrink-0" />
+                                  ) : (
+                                    <div className="w-7 h-7 rounded-md bg-white/5 shrink-0 flex items-center justify-center text-[10px]">🎮</div>
+                                  )}
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-xs font-medium text-white/80 truncate">{g.name}</p>
+                                    <p className="text-[10px] text-white/30 truncate">{g.status}{g.genre ? ` · ${g.genre}` : ''}</p>
+                                  </div>
+                                  <Clock size={10} className="text-emerald-400/50 shrink-0" />
+                                </button>
+                              ));
+                            })()}
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+
               <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
                 <div className="flex items-center gap-1 bg-white/[0.02] rounded-lg p-1">
                   {(['all', 'owned', 'wishlist'] as ViewMode[]).map((mode) => (

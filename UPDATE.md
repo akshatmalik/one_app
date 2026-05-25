@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-05-25 12:00 — Games Tab — Live Session Timer
+
+**Files**: app/apps/game-analytics/components/LiveSessionTimer.tsx, app/apps/game-analytics/page.tsx
+**Risk**: not risky
+
+Added a real-time session tracker. A "Track Session" button in the Games tab opens a searchable game picker; selecting a game starts a live clock that counts up seconds in a prominent green banner at the top of the page. "Stop & Log" instantly saves the tracked time as a play session. Timer state persists in localStorage so a refresh won't lose your session. Works for any non-wishlist game in your library.
+
+FOLLOW-UP: Consider adding a "Start Tracking" shortcut button directly on NowPlayingCard and PosterCard so the timer is one tap from any game. Could also add a running-session indicator in the page header so it stays visible while browsing other tabs.
+
 ## 2026-05-22 18:00 — Games Tab — Game search bar
 
 **Files**: app/apps/game-analytics/page.tsx
