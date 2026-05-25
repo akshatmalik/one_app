@@ -4025,6 +4025,156 @@ export function whatIfCompletedBacklog(games: Game[]): WhatIfResult {
 }
 
 /**
+ * Extended What-If Simulator Scenarios
+ * Richer data structures for the interactive Alternate Realities panel
+ */
+export interface WhatIfScenarioData {
+  feasible: boolean;
+  gamesAffected: number;
+  gamesAffectedLabel: string;
+  before: { value: number; label: string };
+  after: { value: number; label: string };
+  delta: { value: number; label: string; isPositive: boolean };
+  insightLine: string;
+}
+
+/** Scenario: What if you'd skipped every game you played < 2 hours? */
+export function whatIfSkippedUnplayed(games: Game[]): WhatIfScenarioData {
+  const owned = games.filter(g => g.status !== 'Wishlist' && !g.acquiredFree);
+  const unplayed = owned.filter(g => getTotalHours(g) < 2);
+  const played = owned.filter(g => getTotalHours(g) >= 2);
+
+  if (unplayed.length === 0 || owned.length < 3) {
+    return { feasible: false, gamesAffected: 0, gamesAffectedLabel: '', before: { value: 0, label: '' }, after: { value: 0, label: '' }, delta: { value: 0, label: '', isPositive: false }, insightLine: '' };
+  }
+
+  const beforeSpent = owned.reduce((s, g) => s + g.price, 0);
+  const afterSpent = played.reduce((s, g) => s + g.price, 0);
+  const saved = beforeSpent - afterSpent;
+  const savedPct = beforeSpent > 0 ? (saved / beforeSpent) * 100 : 0;
+  const avgWasted = unplayed.length > 0 ? saved / unplayed.length : 0;
+
+  return {
+    feasible: true,
+    gamesAffected: unplayed.length,
+    gamesAffectedLabel: `${unplayed.length} game${unplayed.length !== 1 ? 's' : ''} barely touched`,
+    before: { value: beforeSpent, label: `$${beforeSpent.toFixed(0)} total spend` },
+    after: { value: afterSpent, label: `$${afterSpent.toFixed(0)} total spend` },
+    delta: { value: saved, label: `$${saved.toFixed(0)} saved (${savedPct.toFixed(0)}%)`, isPositive: true },
+    insightLine: `Avg $${avgWasted.toFixed(0)}/game on titles you barely touched`,
+  };
+}
+
+/** Scenario: What if you'd only bought games you'd rate minRating+? */
+export function whatIfOnlyHighRated(games: Game[], minRating: number = 7): WhatIfScenarioData {
+  const owned = games.filter(g => g.status !== 'Wishlist' && g.rating > 0 && !g.acquiredFree);
+  const lowRated = owned.filter(g => g.rating < minRating);
+
+  if (lowRated.length === 0 || owned.length < 3) {
+    return { feasible: false, gamesAffected: 0, gamesAffectedLabel: '', before: { value: 0, label: '' }, after: { value: 0, label: '' }, delta: { value: 0, label: '', isPositive: false }, insightLine: '' };
+  }
+
+  const beforeSpent = owned.reduce((s, g) => s + g.price, 0);
+  const wasted = lowRated.reduce((s, g) => s + g.price, 0);
+  const afterSpent = beforeSpent - wasted;
+  const wastedPct = beforeSpent > 0 ? (wasted / beforeSpent) * 100 : 0;
+  const avgLow = lowRated.length > 0 ? wasted / lowRated.length : 0;
+
+  return {
+    feasible: true,
+    gamesAffected: lowRated.length,
+    gamesAffectedLabel: `${lowRated.length} game${lowRated.length !== 1 ? 's' : ''} rated <${minRating}/10`,
+    before: { value: beforeSpent, label: `$${beforeSpent.toFixed(0)} total spend` },
+    after: { value: afterSpent, label: `$${afterSpent.toFixed(0)} total spend` },
+    delta: { value: wasted, label: `$${wasted.toFixed(0)} not spent (${wastedPct.toFixed(0)}%)`, isPositive: true },
+    insightLine: `Your <${minRating}/10 games cost $${avgLow.toFixed(0)} avg`,
+  };
+}
+
+/** Scenario: What if discounts didn't exist? (Shows how much you've saved) */
+export function whatIfBoughtAtFullPrice(games: Game[]): WhatIfScenarioData {
+  const owned = games.filter(g => g.status !== 'Wishlist');
+  const discounted = owned.filter(g => g.originalPrice && g.originalPrice > g.price);
+
+  if (discounted.length === 0) {
+    return { feasible: false, gamesAffected: 0, gamesAffectedLabel: '', before: { value: 0, label: '' }, after: { value: 0, label: '' }, delta: { value: 0, label: '', isPositive: false }, insightLine: '' };
+  }
+
+  const actualSpent = owned.reduce((s, g) => s + g.price, 0);
+  const totalSaved = discounted.reduce((s, g) => s + (g.originalPrice! - g.price), 0);
+  const fullPriceSpent = actualSpent + totalSaved;
+  const avgSaved = totalSaved / discounted.length;
+  const avgDiscountPct = discounted.reduce((s, g) => {
+    return s + (g.originalPrice! > 0 ? ((g.originalPrice! - g.price) / g.originalPrice!) * 100 : 0);
+  }, 0) / discounted.length;
+
+  return {
+    feasible: true,
+    gamesAffected: discounted.length,
+    gamesAffectedLabel: `${discounted.length} discounted game${discounted.length !== 1 ? 's' : ''}`,
+    before: { value: fullPriceSpent, label: `$${fullPriceSpent.toFixed(0)} at full price` },
+    after: { value: actualSpent, label: `$${actualSpent.toFixed(0)} actual spend` },
+    delta: { value: totalSaved, label: `$${totalSaved.toFixed(0)} saved (avg ${avgDiscountPct.toFixed(0)}% off)`, isPositive: true },
+    insightLine: `$${avgSaved.toFixed(0)} avg savings per discounted game`,
+  };
+}
+
+/** Scenario: What if you completed your entire backlog? (richer version) */
+export function whatIfCompletedBacklogScenario(games: Game[]): WhatIfScenarioData {
+  const owned = games.filter(g => g.status !== 'Wishlist');
+  const paid = owned.filter(g => !g.acquiredFree);
+  const totalSpent = paid.reduce((s, g) => s + g.price, 0);
+  const totalHours = owned.reduce((s, g) => s + getTotalHours(g), 0);
+  const currentCPH = totalHours > 0 ? totalSpent / totalHours : 0;
+
+  const backlog = owned.filter(g => g.status === 'Not Started' || g.status === 'In Progress');
+  if (backlog.length === 0) {
+    return { feasible: false, gamesAffected: 0, gamesAffectedLabel: '', before: { value: 0, label: '' }, after: { value: 0, label: '' }, delta: { value: 0, label: '', isPositive: false }, insightLine: '' };
+  }
+
+  const estimatedExtra = backlog.reduce((s, g) => s + Math.max(20 - getTotalHours(g), 0), 0);
+  const newTotalHours = totalHours + estimatedExtra;
+  const newCPH = newTotalHours > 0 ? totalSpent / newTotalHours : 0;
+
+  return {
+    feasible: true,
+    gamesAffected: backlog.length,
+    gamesAffectedLabel: `${backlog.length} unfinished game${backlog.length !== 1 ? 's' : ''}`,
+    before: { value: currentCPH, label: `$${currentCPH.toFixed(2)}/hr now` },
+    after: { value: newCPH, label: `$${newCPH.toFixed(2)}/hr after` },
+    delta: { value: currentCPH - newCPH, label: `-$${(currentCPH - newCPH).toFixed(2)}/hr improvement`, isPositive: true },
+    insightLine: `~${Math.round(estimatedExtra)}h of gaming sitting in your backlog`,
+  };
+}
+
+/** Scenario: What if you played X more hours per day for 30 days? */
+export function whatIfPlayedMorePerDay(games: Game[], hoursPerDay: number = 1): WhatIfScenarioData {
+  const owned = games.filter(g => g.status !== 'Wishlist');
+  const paid = owned.filter(g => !g.acquiredFree);
+  const totalSpent = paid.reduce((s, g) => s + g.price, 0);
+  const totalHours = owned.reduce((s, g) => s + getTotalHours(g), 0);
+  const currentCPH = totalHours > 0 ? totalSpent / totalHours : 0;
+
+  if (owned.length < 3 || totalHours === 0) {
+    return { feasible: false, gamesAffected: 0, gamesAffectedLabel: '', before: { value: 0, label: '' }, after: { value: 0, label: '' }, delta: { value: 0, label: '', isPositive: false }, insightLine: '' };
+  }
+
+  const extraHours = Math.round(hoursPerDay * 30);
+  const newTotalHours = totalHours + extraHours;
+  const newCPH = newTotalHours > 0 ? totalSpent / newTotalHours : 0;
+
+  return {
+    feasible: true,
+    gamesAffected: 0,
+    gamesAffectedLabel: `${extraHours}h extra in 30 days`,
+    before: { value: currentCPH, label: `$${currentCPH.toFixed(2)}/hr now` },
+    after: { value: newCPH, label: `$${newCPH.toFixed(2)}/hr after` },
+    delta: { value: currentCPH - newCPH, label: `-$${(currentCPH - newCPH).toFixed(2)}/hr improvement`, isPositive: true },
+    insightLine: `${hoursPerDay}h/day × 30 days = ${extraHours}h added to your total`,
+  };
+}
+
+/**
  * Value Over Time Chart
  * For a specific game, show how cost-per-hour drops with each play session
  */

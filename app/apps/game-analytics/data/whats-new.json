@@ -1,6 +1,12 @@
 {
   "entries": [
     {
+      "date": "2026-05-25",
+      "area": "Stats tab",
+      "title": "Alternate Realities: see what your library could look like",
+      "body": "A new 'Alternate Realities' panel in the Stats tab lets you ask 'what if?' questions about your gaming history. See how much money you'd have saved by skipping games you barely played, adjust a slider to filter by minimum rating, discover your actual discount savings, and project how playing just 1 extra hour a day changes your cost-per-hour. Five interactive scenarios, all driven by your real data."
+    },
+    {
       "date": "2026-05-22",
       "area": "Games tab",
       "title": "Search your library instantly",

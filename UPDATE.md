@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-05-25 12:00 — Stats Tab — Alternate Realities: What-If Simulator
+
+**Files**: app/apps/game-analytics/lib/calculations.ts, app/apps/game-analytics/components/WhatIfSimulator.tsx, app/apps/game-analytics/components/StatsView.tsx
+**Risk**: not risky
+
+Built a full interactive "Alternate Realities" What-If Simulator in the Stats tab. Five scenarios show how your library stats would look under different purchasing and playing decisions: (1) skipping games you barely played, (2) an adjustable rating-filter threshold showing how much low-rated games cost you, (3) what discounts have actually saved you, (4) how $/hr would improve if you cleared your backlog, and (5) a daily-habit slider projecting how playing X extra hours/day changes value. Scenarios 2 and 5 include interactive sliders. Added five new pure calculation functions (`whatIfSkippedUnplayed`, `whatIfOnlyHighRated`, `whatIfBoughtAtFullPrice`, `whatIfCompletedBacklogScenario`, `whatIfPlayedMorePerDay`) with a richer `WhatIfScenarioData` return type.
+
+FOLLOW-UP: Could add a "combine scenarios" mode that shows the cumulative impact of selecting multiple scenarios at once.
+
 ## 2026-05-22 18:00 — Games Tab — Game search bar
 
 **Files**: app/apps/game-analytics/page.tsx

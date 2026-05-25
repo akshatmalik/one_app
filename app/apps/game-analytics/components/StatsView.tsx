@@ -64,6 +64,7 @@ import { TrophyRoomV2 } from './TrophyRoomV2';
 import { TrophyProgress, TrophyScoreSummary } from '../lib/trophy-calculations';
 import { DiscoverPanel } from './DiscoverPanel';
 import { WeeklyDigest } from './WeeklyDigest';
+import { WhatIfSimulator } from './WhatIfSimulator';
 import clsx from 'clsx';
 
 interface StatsViewProps {
@@ -1010,6 +1011,9 @@ export function StatsView({ games, summary, budgets = [], onSetBudget, trophies,
 
       {/* Discover & Recommend (Phase 4) */}
       <DiscoverPanel games={games} />
+
+      {/* Alternate Realities — What-If Simulator */}
+      <WhatIfSimulator games={games} />
 
       {/* Expanded Deep Insights Panel */}
       <ExpandedStatsPanel games={games} />
