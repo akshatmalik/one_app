@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-05-25 12:00 — Games Tab — Head-to-Head Game Comparison
+
+**Files**: app/apps/game-analytics/lib/calculations.ts, app/apps/game-analytics/components/GameComparePanel.tsx, app/apps/game-analytics/page.tsx
+**Risk**: not risky
+
+Added a "Compare Games" head-to-head comparison panel, accessible from the ⋮ command palette on the Games tab. Pick any two owned games from searchable dropdowns and instantly see a full stats showdown: hours, rating, cost-per-hour, value rating, ROI, sessions, rarity tier, and price paid — each stat shows a winner trophy. A final verdict line names the winner and explains why. The new `getGameComparison()` function in calculations.ts drives the logic.
+
+FOLLOW-UP: Consider adding a "Compare" shortcut on individual game cards (long-press or a dedicated button) to pre-select game 1 when entering the panel.
+
 ## 2026-05-22 18:00 — Games Tab — Game search bar
 
 **Files**: app/apps/game-analytics/page.tsx

@@ -13115,3 +13115,194 @@ export function getStoreUrl(gameName: string, platform?: string): { label: strin
 
   return stores;
 }
+
+// ── Head-to-Head Game Comparison ─────────────────────────────────────────────
+
+export interface GameComparisonStat {
+  label: string;
+  key: string;
+  value1: string;
+  value2: string;
+  rawValue1: number;
+  rawValue2: number;
+  winner: 1 | 2 | 'tie' | 'n/a';
+  higherIsBetter: boolean;
+  emoji: string;
+}
+
+export interface GameComparisonResult {
+  stats: GameComparisonStat[];
+  game1Wins: number;
+  game2Wins: number;
+  ties: number;
+  overallWinner: 1 | 2 | 'tie';
+  verdict: string;
+}
+
+export function getGameComparison(
+  game1: Game,
+  game2: Game,
+): GameComparisonResult {
+  const m1 = calculateMetrics(game1);
+  const m2 = calculateMetrics(game2);
+  const h1 = getTotalHours(game1);
+  const h2 = getTotalHours(game2);
+  const logs1 = game1.playLogs?.length ?? 0;
+  const logs2 = game2.playLogs?.length ?? 0;
+
+  const r1 = getCardRarity(game1);
+  const r2 = getCardRarity(game2);
+  const rarityScore: Record<string, number> = { legendary: 5, epic: 4, rare: 3, uncommon: 2, common: 1 };
+
+  const valueScore: Record<string, number> = { Excellent: 4, Good: 3, Fair: 2, Poor: 1 };
+
+  function determineWinner(raw1: number, raw2: number, higherIsBetter: boolean): 1 | 2 | 'tie' | 'n/a' {
+    if (raw1 === raw2) return 'tie';
+    if (higherIsBetter) return raw1 > raw2 ? 1 : 2;
+    return raw1 < raw2 ? 1 : 2;
+  }
+
+  const CPH_UNPLAYED = 9999;
+
+  const stats: GameComparisonStat[] = [
+    {
+      label: 'Hours Played',
+      key: 'hours',
+      value1: h1 === 0 ? '—' : `${h1 % 1 === 0 ? h1 : h1.toFixed(1)}h`,
+      value2: h2 === 0 ? '—' : `${h2 % 1 === 0 ? h2 : h2.toFixed(1)}h`,
+      rawValue1: h1,
+      rawValue2: h2,
+      winner: determineWinner(h1, h2, true),
+      higherIsBetter: true,
+      emoji: '⏱',
+    },
+    {
+      label: 'Rating',
+      key: 'rating',
+      value1: game1.rating > 0 ? `${game1.rating}/10` : '—',
+      value2: game2.rating > 0 ? `${game2.rating}/10` : '—',
+      rawValue1: game1.rating,
+      rawValue2: game2.rating,
+      winner: game1.rating === 0 && game2.rating === 0
+        ? 'n/a'
+        : game1.rating === 0 ? 2
+        : game2.rating === 0 ? 1
+        : determineWinner(game1.rating, game2.rating, true),
+      higherIsBetter: true,
+      emoji: '⭐',
+    },
+    {
+      label: 'Cost / Hour',
+      key: 'cph',
+      value1: game1.price === 0 ? 'Free' : h1 === 0 ? '—' : `$${m1.costPerHour.toFixed(2)}/hr`,
+      value2: game2.price === 0 ? 'Free' : h2 === 0 ? '—' : `$${m2.costPerHour.toFixed(2)}/hr`,
+      rawValue1: game1.price === 0 ? 0 : h1 === 0 ? CPH_UNPLAYED : m1.costPerHour,
+      rawValue2: game2.price === 0 ? 0 : h2 === 0 ? CPH_UNPLAYED : m2.costPerHour,
+      winner: game1.price === 0 && game2.price === 0
+        ? 'tie'
+        : game1.price === 0 ? 1
+        : game2.price === 0 ? 2
+        : h1 === 0 && h2 === 0 ? 'n/a'
+        : h1 === 0 ? 2
+        : h2 === 0 ? 1
+        : determineWinner(m1.costPerHour, m2.costPerHour, false),
+      higherIsBetter: false,
+      emoji: '💰',
+    },
+    {
+      label: 'Value Rating',
+      key: 'value',
+      value1: h1 === 0 ? '—' : m1.valueRating,
+      value2: h2 === 0 ? '—' : m2.valueRating,
+      rawValue1: h1 === 0 ? 0 : valueScore[m1.valueRating] ?? 0,
+      rawValue2: h2 === 0 ? 0 : valueScore[m2.valueRating] ?? 0,
+      winner: h1 === 0 && h2 === 0
+        ? 'n/a'
+        : h1 === 0 ? 2
+        : h2 === 0 ? 1
+        : determineWinner(valueScore[m1.valueRating] ?? 0, valueScore[m2.valueRating] ?? 0, true),
+      higherIsBetter: true,
+      emoji: '💎',
+    },
+    {
+      label: 'ROI Score',
+      key: 'roi',
+      value1: m1.roi === 0 ? '—' : m1.roi.toFixed(1),
+      value2: m2.roi === 0 ? '—' : m2.roi.toFixed(1),
+      rawValue1: m1.roi,
+      rawValue2: m2.roi,
+      winner: m1.roi === 0 && m2.roi === 0 ? 'n/a' : determineWinner(m1.roi, m2.roi, true),
+      higherIsBetter: true,
+      emoji: '📈',
+    },
+    {
+      label: 'Sessions Logged',
+      key: 'sessions',
+      value1: logs1 === 0 ? '—' : String(logs1),
+      value2: logs2 === 0 ? '—' : String(logs2),
+      rawValue1: logs1,
+      rawValue2: logs2,
+      winner: logs1 === 0 && logs2 === 0 ? 'n/a' : determineWinner(logs1, logs2, true),
+      higherIsBetter: true,
+      emoji: '🎮',
+    },
+    {
+      label: 'Collection Rarity',
+      key: 'rarity',
+      value1: r1.label,
+      value2: r2.label,
+      rawValue1: rarityScore[r1.tier] ?? 1,
+      rawValue2: rarityScore[r2.tier] ?? 1,
+      winner: determineWinner(rarityScore[r1.tier] ?? 1, rarityScore[r2.tier] ?? 1, true),
+      higherIsBetter: true,
+      emoji: '✨',
+    },
+    {
+      label: 'Price Paid',
+      key: 'price',
+      value1: game1.price === 0 ? 'Free' : `$${game1.price.toFixed(0)}`,
+      value2: game2.price === 0 ? 'Free' : `$${game2.price.toFixed(0)}`,
+      rawValue1: game1.price,
+      rawValue2: game2.price,
+      winner: game1.price === 0 && game2.price === 0
+        ? 'tie'
+        : game1.price === 0 ? 1
+        : game2.price === 0 ? 2
+        : determineWinner(game1.price, game2.price, false),
+      higherIsBetter: false,
+      emoji: '🏷',
+    },
+  ];
+
+  const validStats = stats.filter(s => s.winner !== 'n/a');
+  const game1Wins = validStats.filter(s => s.winner === 1).length;
+  const game2Wins = validStats.filter(s => s.winner === 2).length;
+  const ties = validStats.filter(s => s.winner === 'tie').length;
+
+  const overallWinner: 1 | 2 | 'tie' =
+    game1Wins > game2Wins ? 1 :
+    game2Wins > game1Wins ? 2 :
+    'tie';
+
+  let verdict: string;
+  const total = game1Wins + game2Wins + ties;
+  if (overallWinner === 'tie') {
+    verdict = `Dead heat — these games are evenly matched across ${total} stats. Pick the one you feel like playing tonight.`;
+  } else {
+    const winnerName = overallWinner === 1 ? game1.name : game2.name;
+    const winCount = overallWinner === 1 ? game1Wins : game2Wins;
+    const loseCount = overallWinner === 1 ? game2Wins : game1Wins;
+    const winnerStats = validStats.filter(s => s.winner === overallWinner);
+    const highlightStat = winnerStats.find(s => ['cph', 'roi', 'rating'].includes(s.key)) ?? winnerStats[0];
+
+    if (winCount >= total * 0.75) {
+      verdict = `${winnerName} wins convincingly — ${winCount}/${total} stats${highlightStat ? `, especially on ${highlightStat.label.toLowerCase()}` : ''}.`;
+    } else if (winCount === loseCount + 1) {
+      verdict = `${winnerName} edges it ${winCount}-${loseCount}, with the advantage on ${highlightStat?.label.toLowerCase() ?? 'key metrics'}. A close contest.`;
+    } else {
+      verdict = `${winnerName} wins ${winCount}-${loseCount} — a clear advantage${highlightStat ? `, most notably on ${highlightStat.label.toLowerCase()}` : ''}.`;
+    }
+  }
+
+  return { stats, game1Wins, game2Wins, ties, overallWinner, verdict };
+}
