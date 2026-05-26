@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-05-26 05:30 — Games Tab — Head-to-Head Game Comparison
+
+**Files**: app/apps/game-analytics/components/GameComparisonModal.tsx, app/apps/game-analytics/page.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Added a full Head-to-Head game comparison modal triggered by the new "⚔ Compare" button in the Games tab toolbar. Users pick any two games from their library and see a side-by-side breakdown across 9+ metrics (price, hours, $/hr, rating, ROI, sessions, avg session, best session, status, value tier) with animated progress bars, per-metric winner badges, and an overall "Winner" verdict based on weighted points. Makes "which game was a better investment?" instantly answerable.
+
+FOLLOW-UP: Consider surfacing the Compare button from inside the GameBottomSheet detail panel ("Compare with…") so users can compare from within a game's detail view.
+
 ## 2026-05-22 18:00 — Games Tab — Game search bar
 
 **Files**: app/apps/game-analytics/page.tsx

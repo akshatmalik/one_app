@@ -1,6 +1,12 @@
 {
   "entries": [
     {
+      "date": "2026-05-26",
+      "area": "Game comparison",
+      "title": "Compare any two games head-to-head",
+      "body": "Hit the new ⚔ Compare button in the Games tab to pit any two games against each other. See price, hours, $/hr, rating, ROI, sessions, and more side-by-side with animated bars and a winner declared for each metric. Settle the age-old question: which game was actually worth it?"
+    },
+    {
       "date": "2026-05-22",
       "area": "Games tab",
       "title": "Search your library instantly",

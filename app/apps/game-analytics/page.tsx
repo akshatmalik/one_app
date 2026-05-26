@@ -45,6 +45,7 @@ import { TrophyToast } from './components/TrophyToast';
 import { ErrorLogPanel, ErrorLogButton } from './components/ErrorLogPanel';
 import { WhatsNewModal } from './components/WhatsNewModal';
 import { GameReviewChat } from './components/GameReviewChat';
+import { GameComparisonModal } from './components/GameComparisonModal';
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist';
@@ -212,6 +213,7 @@ export default function GameAnalyticsPage() {
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showErrorLog, setShowErrorLog] = useState(false);
   const [showWhatsNew, setShowWhatsNew] = useState(false);
+  const [showComparison, setShowComparison] = useState(false);
 
   // Week recap data for header strip
   const weekRecap = useMemo(() => {
@@ -1119,6 +1121,19 @@ export default function GameAnalyticsPage() {
                       </div>
                     )}
                   </div>
+                  {/* Compare button */}
+                  {games.filter(g => g.status !== 'Wishlist').length >= 2 && (
+                    <button
+                      onClick={() => setShowComparison(true)}
+                      className={clsx(
+                        'px-2 py-1 border text-[10px] rounded-lg',
+                        showComparison ? 'bg-amber-500/10 border-amber-500/20 text-amber-400' : 'bg-white/[0.02] border-white/10 text-white/40'
+                      )}
+                      title="Compare two games head to head"
+                    >
+                      ⚔ Compare
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -1490,6 +1505,14 @@ export default function GameAnalyticsPage() {
             }
           }}
           onClose={() => setReviewChatGame(null)}
+        />
+      )}
+
+      {/* Game Comparison Modal */}
+      {showComparison && (
+        <GameComparisonModal
+          games={gamesWithMetrics}
+          onClose={() => setShowComparison(false)}
         />
       )}
     </div>
