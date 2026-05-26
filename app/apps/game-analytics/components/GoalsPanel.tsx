@@ -1,12 +1,126 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { Target, Trophy, Plus, Trash2, Edit3, Check, Clock, ChevronDown, ChevronUp, X, Gamepad2, DollarSign, Flame, Layers, Sparkles } from 'lucide-react';
+import { Target, Trophy, Plus, Trash2, Edit3, Check, Clock, ChevronDown, ChevronUp, X, Gamepad2, DollarSign, Flame, Layers, Sparkles, Lightbulb } from 'lucide-react';
 import { Game, GamingGoal, GoalType, GoalStatus } from '../lib/types';
 import { getTotalHours, parseLocalDate } from '../lib/calculations';
 import { useGoals } from '../hooks/useGoals';
 import { useAuthContext } from '@/lib/AuthContext';
 import clsx from 'clsx';
+
+interface GoalSuggestion {
+  type: GoalType;
+  title: string;
+  targetValue: number;
+  unit: string;
+  reasoning: string;
+  startDate: string;
+  endDate: string;
+}
+
+function generateSuggestedGoals(games: Game[]): GoalSuggestion[] {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1;
+  const monthsIntoYear = month;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const eom = `${year}-${pad(month)}-${pad(daysInMonth)}`;
+  const eoy = `${year}-12-31`;
+  const today = `${year}-${pad(month)}-${pad(now.getDate())}`;
+
+  const ownedGames = games.filter(g => g.status !== 'Wishlist');
+  const suggestions: GoalSuggestion[] = [];
+
+  // 1. Completion goal based on velocity
+  const completedThisYear = ownedGames.filter(g => {
+    if (g.status !== 'Completed' || !g.endDate) return false;
+    return g.endDate.startsWith(String(year));
+  }).length;
+
+  if (completedThisYear > 0 && monthsIntoYear > 0) {
+    const pace = completedThisYear / monthsIntoYear;
+    const projected = Math.round(pace * 12);
+    const stretch = Math.max(projected + 2, completedThisYear + 3);
+    suggestions.push({
+      type: 'completion',
+      title: `Complete ${stretch} games in ${year}`,
+      targetValue: stretch,
+      unit: 'games',
+      reasoning: `At ${pace.toFixed(1)} games/month you're on track for ${projected}. Stretch goal of ${stretch} is within reach.`,
+      startDate: today,
+      endDate: eoy,
+    });
+  } else if (ownedGames.filter(g => g.status === 'In Progress').length > 0) {
+    suggestions.push({
+      type: 'completion',
+      title: 'Finish 3 games this month',
+      targetValue: 3,
+      unit: 'games',
+      reasoning: 'You have games in progress. Let\'s close some out!',
+      startDate: today,
+      endDate: eom,
+    });
+  }
+
+  // 2. Spending limit based on current-year pace
+  const spentThisYear = ownedGames
+    .filter(g => g.datePurchased?.startsWith(String(year)))
+    .reduce((s, g) => s + g.price, 0);
+  if (spentThisYear > 0 && monthsIntoYear > 0) {
+    const projected = (spentThisYear / monthsIntoYear) * 12;
+    const budget = Math.round((projected * 0.85) / 10) * 10;
+    if (budget > 0) {
+      suggestions.push({
+        type: 'spending',
+        title: `Stay under $${budget} in ${year}`,
+        targetValue: budget,
+        unit: 'dollars',
+        reasoning: `You're on pace to spend $${Math.round(projected)} this year. Trimming 15% puts you at $${budget}.`,
+        startDate: today,
+        endDate: eoy,
+      });
+    }
+  }
+
+  // 3. Monthly hours goal
+  const hoursThisMonth = games
+    .flatMap(g => g.playLogs ?? [])
+    .filter(l => l.date.startsWith(`${year}-${pad(month)}`))
+    .reduce((s, l) => s + l.hours, 0);
+  const daysGone = now.getDate();
+  const daysLeft = daysInMonth - daysGone;
+  if (hoursThisMonth > 0 && daysLeft > 3) {
+    const projectedTotal = (hoursThisMonth / daysGone) * daysInMonth;
+    const goalHours = Math.round(Math.max(projectedTotal * 1.2, hoursThisMonth + 5) / 5) * 5;
+    suggestions.push({
+      type: 'hours',
+      title: `Hit ${goalHours} hours this month`,
+      targetValue: goalHours,
+      unit: 'hours',
+      reasoning: `${hoursThisMonth.toFixed(0)}h logged so far with ${daysLeft}d left. A motivating stretch.`,
+      startDate: today,
+      endDate: eom,
+    });
+  }
+
+  // 4. Backlog clearance
+  const backlogCount = ownedGames.filter(g => g.status === 'Not Started').length;
+  if (backlogCount >= 5) {
+    const clearCount = Math.min(backlogCount, Math.max(2, Math.ceil(backlogCount * 0.2)));
+    suggestions.push({
+      type: 'backlog',
+      title: `Start ${clearCount} backlog game${clearCount > 1 ? 's' : ''} this month`,
+      targetValue: clearCount,
+      unit: 'games',
+      reasoning: `${backlogCount} unstarted games. Starting just ${clearCount} builds real momentum.`,
+      startDate: today,
+      endDate: eom,
+    });
+  }
+
+  return suggestions.slice(0, 3);
+}
 
 const GOAL_TYPE_CONFIG: Record<GoalType, { label: string; icon: React.ReactNode; defaultUnit: string; color: string }> = {
   completion: { label: 'Complete Games', icon: <Trophy size={14} />, defaultUnit: 'games', color: 'emerald' },
@@ -131,6 +245,10 @@ export function GoalsPanel({ games }: { games: Game[] }) {
 
   const activeGoals = useMemo(() => goals.filter(g => g.status === 'active'), [goals]);
   const historyGoals = useMemo(() => goals.filter(g => g.status !== 'active'), [goals]);
+  const suggestions = useMemo(
+    () => (activeGoals.length === 0 ? generateSuggestedGoals(games) : []),
+    [activeGoals.length, games]
+  );
 
   // Auto-calculate progress for active goals
   const goalsWithProgress = useMemo(() => {
@@ -219,6 +337,19 @@ export function GoalsPanel({ games }: { games: Game[] }) {
 
   const handleDeleteGoal = async (goalId: string) => {
     await deleteGoal(goalId);
+  };
+
+  const handlePickSuggestion = (s: GoalSuggestion) => {
+    setFormTitle(s.title);
+    setFormDescription('');
+    setFormType(s.type);
+    setFormTarget(String(s.targetValue));
+    setFormUnit(s.unit);
+    setFormStartDate(s.startDate);
+    setFormEndDate(s.endDate);
+    setFormCurrentValue('');
+    setEditingGoalId(null);
+    setShowAddForm(true);
   };
 
   // Update custom goal current value
@@ -562,10 +693,50 @@ export function GoalsPanel({ games }: { games: Game[] }) {
           })}
         </div>
       ) : !showAddForm ? (
-        <div className="text-center py-8">
-          <Target size={32} className="mx-auto mb-3 text-white/10" />
-          <p className="text-white/30 text-sm">No active goals</p>
-          <p className="text-white/20 text-xs mt-1">Set a goal to track your gaming progress</p>
+        <div>
+          <div className="text-center py-6">
+            <Target size={32} className="mx-auto mb-3 text-white/10" />
+            <p className="text-white/30 text-sm">No active goals</p>
+            <p className="text-white/20 text-xs mt-1">Set a goal to track your gaming progress</p>
+          </div>
+          {suggestions.length > 0 && (
+            <div className="mt-1">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="flex-1 h-px bg-white/5" />
+                <span className="text-[10px] text-white/25 flex items-center gap-1">
+                  <Lightbulb size={10} />
+                  Smart Suggestions
+                </span>
+                <div className="flex-1 h-px bg-white/5" />
+              </div>
+              <div className="space-y-2">
+                {suggestions.map((s, i) => {
+                  const cfg = GOAL_TYPE_CONFIG[s.type];
+                  return (
+                    <div
+                      key={i}
+                      className="p-3 bg-white/[0.02] border border-white/5 rounded-xl"
+                    >
+                      <div className="flex items-start gap-2 mb-2">
+                        <span className="text-white/30 mt-0.5 shrink-0">{cfg.icon}</span>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-medium text-white/60 leading-snug">{s.title}</p>
+                          <p className="text-[10px] text-white/30 mt-0.5 leading-relaxed">{s.reasoning}</p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => handlePickSuggestion(s)}
+                        className="w-full flex items-center justify-center gap-1.5 py-1.5 bg-white/5 hover:bg-white/10 text-white/50 hover:text-white/80 rounded-lg text-[11px] font-medium transition-all"
+                      >
+                        <Plus size={11} />
+                        Set this goal
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       ) : null}
 

@@ -45,6 +45,7 @@ import { TrophyToast } from './components/TrophyToast';
 import { ErrorLogPanel, ErrorLogButton } from './components/ErrorLogPanel';
 import { WhatsNewModal } from './components/WhatsNewModal';
 import { GameReviewChat } from './components/GameReviewChat';
+import { GoalsProgressBanner } from './components/GoalsProgressBanner';
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist';
@@ -1128,6 +1129,13 @@ export default function GameAnalyticsPage() {
           {/* Tab Content */}
           {tabMode === 'games' && (
             <>
+              {/* Goals Progress Banner — compact reminder of active goals */}
+              {games.length > 0 && (
+                <GoalsProgressBanner
+                  games={games}
+                  onGoToStats={() => setTabMode('stats')}
+                />
+              )}
               {games.length === 0 ? (
                 <div className="text-center py-16">
                   <Gamepad2 size={48} className="mx-auto mb-4 text-white/10" />

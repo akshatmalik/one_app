@@ -1,6 +1,12 @@
 {
   "entries": [
     {
+      "date": "2026-05-26",
+      "area": "Gaming Goals",
+      "title": "Set goals and track your progress",
+      "body": "Gaming Goals are now live! Head to the Stats tab to set goals — complete N games, stay under a spending limit, hit a monthly hours target, or clear backlog. The app tracks your progress automatically and suggests smart goals based on your actual data. Active goals also show as a compact progress bar at the top of the Games tab so you stay on track without going anywhere."
+    },
+    {
       "date": "2026-05-22",
       "area": "Games tab",
       "title": "Search your library instantly",

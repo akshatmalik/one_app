@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-05-26 00:00 — Goals System — Gaming Goals now live
+
+**Files**: app/apps/game-analytics/components/GoalsProgressBanner.tsx (new), app/apps/game-analytics/components/GoalsPanel.tsx, app/apps/game-analytics/components/StatsView.tsx, app/apps/game-analytics/page.tsx
+**Risk**: not risky
+
+Wired up the fully-built but unconnected Gaming Goals system. Goals now appear as the first section in the Stats tab. The GoalsPanel shows data-driven goal suggestions (completion velocity, spending pacing, monthly hours, backlog clearance) when you have no active goals — click to pre-fill the form. A compact GoalsProgressBanner lives at the top of the Games tab showing progress bars for your active goals; it disappears silently when you have no goals active. Users can now set goals, track progress automatically (hours/completions/spending are recalculated live), and be nudged toward their targets on every app open.
+
+FOLLOW-UP: Consider adding a goal completion celebration toast when a goal hits 100%, and surfacing past completed/failed goals in a "Goal History" hall-of-fame card.
+
 ## 2026-05-22 18:00 — Games Tab — Game search bar
 
 **Files**: app/apps/game-analytics/page.tsx
