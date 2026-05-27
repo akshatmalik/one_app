@@ -590,3 +590,22 @@ input[type="range"]::-moz-range-thumb {
     rgba(16, 185, 129, 0.08) 100%
   );
 }
+
+/* Live session timer bar animation */
+@keyframes timerBarPulse {
+  0% { background-position: 0% center; }
+  100% { background-position: 200% center; }
+}
+
+.timer-bar-pulse {
+  background-size: 200% 100%;
+  animation: timerBarPulse 2s linear infinite;
+  background-image: linear-gradient(
+    90deg,
+    #7c3aed 0%,
+    #a855f7 30%,
+    #ec4899 50%,
+    #a855f7 70%,
+    #7c3aed 100%
+  );
+}

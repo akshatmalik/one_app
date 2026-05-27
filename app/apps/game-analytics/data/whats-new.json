@@ -1,6 +1,12 @@
 {
   "entries": [
     {
+      "date": "2026-05-27",
+      "area": "Live Timer",
+      "title": "Time your sessions as you play",
+      "body": "Tap the play button on any game card to start a live timer. A floating widget tracks your session in real time — even if you close and reopen the app. When you're done, tap Log to save the session with a mood rating and a quick note. No more estimating hours after the fact."
+    },
+    {
       "date": "2026-05-22",
       "area": "Games tab",
       "title": "Search your library instantly",
