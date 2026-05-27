@@ -3,6 +3,7 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical, Download, Gift, ShoppingCart } from 'lucide-react';
 import { useGames } from './hooks/useGames';
+import { useGameFilters } from './hooks/useGameFilters';
 import { useAnalytics, GameWithMetrics } from './hooks/useAnalytics';
 import { useBudget } from './hooks/useBudget';
 import { useGameThumbnails } from './hooks/useGameThumbnails';
@@ -10,6 +11,7 @@ import { useGameQueue } from './hooks/useGameQueue';
 import { useGameColors } from './hooks/useGameColors';
 import { useGameQuips } from './hooks/useGameQuips';
 import { GameForm } from './components/GameForm';
+import { GameFilterPanel } from './components/GameFilterPanel';
 import { PlayLogModal } from './components/PlayLogModal';
 import { TimelineView } from './components/TimelineView';
 import { StatsView } from './components/StatsView';
@@ -132,6 +134,22 @@ export default function GameAnalyticsPage() {
   const { showToast } = useToast();
   const { games, loading, error, addGame, updateGame, deleteGame, refresh } = useGames(user?.uid ?? null);
   const { gamesWithMetrics, summary } = useAnalytics(games);
+  const {
+    filters: gameFilters,
+    setFilters: setGameFilters,
+    filteredGames: advancedFilteredGames,
+    activeFilterCount: filterCount,
+    isFiltering,
+    clearFilters: clearGameFilters,
+    applyQuickPreset,
+    savedPresets: filterPresets,
+    savePreset: saveFilterPreset,
+    loadPreset: loadFilterPreset,
+    deletePreset: deleteFilterPreset,
+    availableGenres,
+    availablePlatforms,
+    availablePurchaseSources,
+  } = useGameFilters(gamesWithMetrics, user?.uid ?? null);
   const { budgets, setBudget } = useBudget(user?.uid ?? null);
   const { loading: thumbnailsLoading, fetchedCount } = useGameThumbnails(games, updateGame);
   const gameColors = useGameColors(games);
@@ -440,12 +458,14 @@ export default function GameAnalyticsPage() {
     );
   }
 
-  const filteredGames = gamesWithMetrics
-    .filter(g => {
-      if (viewMode === 'owned') return g.status !== 'Wishlist';
-      if (viewMode === 'wishlist') return g.status === 'Wishlist';
-      return true;
-    })
+  // Start from advanced-filter output, then apply viewMode pre-filter and sort
+  const viewFilteredBase = advancedFilteredGames.filter(g => {
+    if (viewMode === 'owned') return g.status !== 'Wishlist';
+    if (viewMode === 'wishlist') return g.status === 'Wishlist';
+    return true;
+  });
+
+  const filteredGames = viewFilteredBase
     .sort((a, b) => {
       switch (sortBy) {
         case 'name':
@@ -962,6 +982,27 @@ export default function GameAnalyticsPage() {
                 </button>
               </div>
             </div>
+
+            {/* Advanced Search & Filter (games tab only) */}
+            {tabMode === 'games' && (
+              <GameFilterPanel
+                filters={gameFilters}
+                setFilters={setGameFilters}
+                activeFilterCount={filterCount}
+                isFiltering={isFiltering}
+                clearFilters={clearGameFilters}
+                applyQuickPreset={applyQuickPreset}
+                savedPresets={filterPresets}
+                onSavePreset={saveFilterPreset}
+                onLoadPreset={loadFilterPreset}
+                onDeletePreset={deleteFilterPreset}
+                availableGenres={availableGenres}
+                availablePlatforms={availablePlatforms}
+                availablePurchaseSources={availablePurchaseSources}
+                resultCount={filteredGames.length}
+                totalCount={gamesWithMetrics.length}
+              />
+            )}
 
             {/* View Mode Filter & Sort (only for games tab) */}
             {tabMode === 'games' && (
