@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-05-27 10:30 — Games Tab — Live Session Timer
+
+**Files**: app/apps/game-analytics/hooks/useLiveSession.ts, app/apps/game-analytics/components/LiveSessionTracker.tsx, app/apps/game-analytics/page.tsx, app/globals.css
+**Risk**: not risky
+
+Added a persistent live session timer: tap "▶ Start Live Session" on any game card (poster or compact view) to begin tracking play time in real time. A floating bar slides up from the bottom of the screen showing the game, a live HH:MM:SS clock, and a cost-per-hour that drops as you play. Pause/resume works for breaks; Stop opens an inline confirm step with adjustable hours and a 4-option mood picker (🔥/👍/😐/😤). Submitting auto-creates a PlayLog entry — no manual hour entry needed. Session state persists across page refreshes via localStorage, so closing and reopening the app mid-session keeps the timer running. When a session is active for a game, its card shows a pulsing "Session Active" badge.
+
+FOLLOW-UP: Could add a "now playing" lock-screen notification style widget, or a session goal (e.g. "play 1 hour tonight") with progress bar in the floating bar.
+
 ## 2026-05-22 18:00 — Games Tab — Game search bar
 
 **Files**: app/apps/game-analytics/page.tsx

@@ -1,6 +1,12 @@
 {
   "entries": [
     {
+      "date": "2026-05-27",
+      "area": "Live Session Timer",
+      "title": "Track play time live — watch your cost/hr drop in real time",
+      "body": "Tap '▶ Start Live Session' on any game card to start a real-time timer. A floating bar appears at the bottom of the screen showing your game, a live clock, and your cost-per-hour updating as you play. When you're done, tap Stop, optionally pick a session vibe, and your time is logged automatically. The timer even survives page refreshes, so you can close and reopen the app mid-session."
+    },
+    {
       "date": "2026-05-22",
       "area": "Games tab",
       "title": "Search your library instantly",
