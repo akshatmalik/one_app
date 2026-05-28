@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react';
 import { Target, Trophy, Plus, Trash2, Edit3, Check, Clock, ChevronDown, ChevronUp, X, Gamepad2, DollarSign, Flame, Layers, Sparkles } from 'lucide-react';
 import { Game, GamingGoal, GoalType, GoalStatus } from '../lib/types';
-import { getTotalHours, parseLocalDate } from '../lib/calculations';
+import { getTotalHours, parseLocalDate, generateGoalSuggestions, GoalSuggestion } from '../lib/calculations';
 import { useGoals } from '../hooks/useGoals';
 import { useAuthContext } from '@/lib/AuthContext';
 import clsx from 'clsx';
@@ -111,6 +111,9 @@ export function GoalsPanel({ games }: { games: Game[] }) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingGoalId, setEditingGoalId] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(true);
+
+  const suggestions = useMemo(() => generateGoalSuggestions(games), [games]);
 
   // Form state
   const [formTitle, setFormTitle] = useState('');
@@ -206,6 +209,20 @@ export function GoalsPanel({ games }: { games: Game[] }) {
     setFormEndDate(goal.endDate);
     setFormCurrentValue(goal.currentValue.toString());
     setEditingGoalId(goal.id);
+    setShowAddForm(true);
+  };
+
+  const applySuggestion = (s: GoalSuggestion) => {
+    setFormTitle(s.title);
+    setFormDescription(s.description);
+    setFormType(s.type);
+    setFormTarget(s.targetValue.toString());
+    setFormUnit(s.unit);
+    setFormEndDate(s.endDate);
+    const now = new Date();
+    setFormStartDate(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`);
+    setFormCurrentValue('');
+    setEditingGoalId(null);
     setShowAddForm(true);
   };
 
@@ -562,10 +579,62 @@ export function GoalsPanel({ games }: { games: Game[] }) {
           })}
         </div>
       ) : !showAddForm ? (
-        <div className="text-center py-8">
-          <Target size={32} className="mx-auto mb-3 text-white/10" />
-          <p className="text-white/30 text-sm">No active goals</p>
-          <p className="text-white/20 text-xs mt-1">Set a goal to track your gaming progress</p>
+        <div>
+          {/* Suggested goals */}
+          {suggestions.length > 0 && showSuggestions && (
+            <div className="mb-4">
+              <div className="flex items-center justify-between mb-2.5">
+                <p className="text-[11px] text-white/30 font-medium uppercase tracking-wider">Suggested for you</p>
+                <button
+                  onClick={() => setShowSuggestions(false)}
+                  className="text-[10px] text-white/20 hover:text-white/40 transition-colors"
+                >
+                  Hide
+                </button>
+              </div>
+              <div className="space-y-2">
+                {suggestions.map((s, i) => {
+                  const typeConfig = GOAL_TYPE_CONFIG[s.type];
+                  const colors = getGoalColorClasses(typeConfig.color);
+                  return (
+                    <button
+                      key={i}
+                      onClick={() => applySuggestion(s)}
+                      className={clsx(
+                        'w-full flex items-start gap-3 p-3 rounded-xl border text-left transition-all group',
+                        'bg-white/[0.02] border-white/5 hover:border-white/10 hover:bg-white/[0.04]',
+                      )}
+                    >
+                      <div className={clsx('w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5', colors.bg)}>
+                        <span className={colors.text}>{typeConfig.icon}</span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <span className="text-[12px] font-medium text-white/70 group-hover:text-white/90 transition-colors truncate">
+                            {s.title}
+                          </span>
+                          <span className="text-[10px]">{s.emoji}</span>
+                        </div>
+                        <p className="text-[11px] text-white/30 leading-tight">{s.reason}</p>
+                      </div>
+                      <Plus size={13} className="text-white/20 group-hover:text-white/50 transition-colors shrink-0 mt-1" />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Empty state */}
+          <div className="text-center py-6">
+            <Target size={28} className="mx-auto mb-2 text-white/10" />
+            <p className="text-white/30 text-sm">No active goals</p>
+            <p className="text-white/20 text-xs mt-1">
+              {suggestions.length > 0
+                ? 'Pick a suggestion above or create a custom goal'
+                : 'Set a goal to track your gaming progress'}
+            </p>
+          </div>
         </div>
       ) : null}
 

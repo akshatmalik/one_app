@@ -13115,3 +13115,183 @@ export function getStoreUrl(gameName: string, platform?: string): { label: strin
 
   return stores;
 }
+
+// ── Goal Suggestions ──────────────────────────────────────────────────────────
+
+export type GoalSuggestionType = 'completion' | 'spending' | 'hours' | 'genre_variety' | 'backlog' | 'custom';
+
+export interface GoalSuggestion {
+  type: GoalSuggestionType;
+  title: string;
+  description: string;
+  targetValue: number;
+  unit: string;
+  endDate: string;
+  emoji: string;
+  reason: string;
+}
+
+/**
+ * Generate personalized goal suggestions based on the user's gaming data.
+ * Returns up to 5 suggestions ordered by relevance.
+ */
+export function generateGoalSuggestions(games: Game[]): GoalSuggestion[] {
+  const owned = games.filter(g => g.status !== 'Wishlist');
+  const suggestions: GoalSuggestion[] = [];
+
+  const now = new Date();
+  const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  const nextMonthEnd = new Date(now.getFullYear(), now.getMonth() + 2, 0);
+  const quarterEnd = new Date(now.getFullYear(), Math.ceil((now.getMonth() + 1) / 3) * 3, 0);
+  const formatDate = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+  const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+  // ── Monthly hours analysis ────────────────────────────────────────────────
+  const hoursByMonth = getHoursByMonth(owned);
+  const monthKeys = Object.keys(hoursByMonth).sort();
+  const recentMonths = monthKeys.slice(-3).filter(k => k !== currentMonthKey);
+  const avgMonthlyHours =
+    recentMonths.length > 0
+      ? recentMonths.reduce((s, k) => s + hoursByMonth[k], 0) / recentMonths.length
+      : 0;
+
+  // Hours goal: stretch target from average
+  if (avgMonthlyHours >= 5) {
+    const target = Math.round(avgMonthlyHours * 1.2 / 5) * 5; // round to nearest 5
+    suggestions.push({
+      type: 'hours',
+      title: `Log ${target} hours this month`,
+      description: `You averaged ${avgMonthlyHours.toFixed(0)}h/month recently — aim a bit higher.`,
+      targetValue: target,
+      unit: 'hours',
+      endDate: formatDate(monthEnd),
+      emoji: '⏱️',
+      reason: `Based on your ${avgMonthlyHours.toFixed(0)}h monthly average`,
+    });
+  } else if (owned.length > 0) {
+    suggestions.push({
+      type: 'hours',
+      title: 'Log 10 hours this month',
+      description: "Set a baseline gaming target to track your time.",
+      targetValue: 10,
+      unit: 'hours',
+      endDate: formatDate(monthEnd),
+      emoji: '⏱️',
+      reason: 'Great starting target for tracking playtime',
+    });
+  }
+
+  // ── Completion analysis ───────────────────────────────────────────────────
+  const completedWithDate = owned.filter(g => g.status === 'Completed' && g.endDate);
+  const recentCompletions = completedWithDate.filter(g => {
+    const end = parseLocalDate(g.endDate!);
+    const ago90 = new Date(now);
+    ago90.setDate(ago90.getDate() - 90);
+    return end >= ago90;
+  });
+  const completionRate = recentCompletions.length / 3; // completions per month over last 3 months
+
+  const inProgress = owned.filter(g => g.status === 'In Progress');
+  if (inProgress.length >= 1) {
+    const targetCompletions = Math.max(1, Math.round(completionRate * 1.2) || 1);
+    const periodLabel = targetCompletions > 1 ? 'this quarter' : 'this month';
+    const periodEnd = targetCompletions > 1 ? quarterEnd : nextMonthEnd;
+    suggestions.push({
+      type: 'completion',
+      title: `Complete ${targetCompletions} game${targetCompletions > 1 ? 's' : ''} ${periodLabel}`,
+      description: `You have ${inProgress.length} game${inProgress.length > 1 ? 's' : ''} in progress — pick your favourite and finish it.`,
+      targetValue: targetCompletions,
+      unit: 'games',
+      endDate: formatDate(periodEnd),
+      emoji: '🏆',
+      reason: `${inProgress.length} games currently in progress`,
+    });
+  }
+
+  // ── Backlog analysis ──────────────────────────────────────────────────────
+  const notStarted = owned.filter(g => g.status === 'Not Started');
+  if (notStarted.length >= 3) {
+    const target = Math.min(3, Math.ceil(notStarted.length * 0.2));
+    suggestions.push({
+      type: 'backlog',
+      title: `Start ${target} backlog game${target > 1 ? 's' : ''}`,
+      description: `${notStarted.length} games are sitting unplayed — give some of them a chance.`,
+      targetValue: target,
+      unit: 'games',
+      endDate: formatDate(nextMonthEnd),
+      emoji: '📚',
+      reason: `${notStarted.length} unstarted games in your library`,
+    });
+  }
+
+  // ── Spending limit ────────────────────────────────────────────────────────
+  const spendByMonth = getSpendingByMonth(owned.filter(g => !g.acquiredFree));
+  const recentSpendMonths = monthKeys.slice(-3).filter(k => k !== currentMonthKey);
+  const avgMonthlySpend =
+    recentSpendMonths.length > 0
+      ? recentSpendMonths.reduce((s, k) => s + (spendByMonth[k] || 0), 0) / recentSpendMonths.length
+      : 0;
+
+  if (avgMonthlySpend >= 15) {
+    const limit = Math.round(avgMonthlySpend * 0.9 / 5) * 5; // 10% below average, rounded to $5
+    suggestions.push({
+      type: 'spending',
+      title: `Stay under $${limit} this month`,
+      description: `You average $${avgMonthlySpend.toFixed(0)}/month on games — this gives a small buffer.`,
+      targetValue: limit,
+      unit: 'dollars',
+      endDate: formatDate(monthEnd),
+      emoji: '💰',
+      reason: `Based on your $${avgMonthlySpend.toFixed(0)}/month average`,
+    });
+  }
+
+  // ── Genre variety ─────────────────────────────────────────────────────────
+  const allGenres = new Set(owned.filter(g => g.genre).map(g => g.genre!));
+  if (allGenres.size >= 3) {
+    const recentGenres = new Set(
+      owned
+        .filter(g => g.genre && g.playLogs && g.playLogs.length > 0)
+        .filter(g => {
+          const latest = (g.playLogs || [])[0];
+          if (!latest) return false;
+          const ago60 = new Date(now);
+          ago60.setDate(ago60.getDate() - 60);
+          return parseLocalDate(latest.date) >= ago60;
+        })
+        .map(g => g.genre!)
+    );
+    const targetGenres = Math.min(recentGenres.size + 1, 4);
+    if (targetGenres > recentGenres.size) {
+      suggestions.push({
+        type: 'genre_variety',
+        title: `Play ${targetGenres} different genres`,
+        description: `Mix up your gaming diet — you have ${allGenres.size} genres in your library.`,
+        targetValue: targetGenres,
+        unit: 'genres',
+        endDate: formatDate(nextMonthEnd),
+        emoji: '🎭',
+        reason: `${recentGenres.size} genres played recently`,
+      });
+    }
+  }
+
+  // ── Streak goal ───────────────────────────────────────────────────────────
+  const streak = getCurrentGamingStreak(games);
+  if (streak >= 2 && streak < 7) {
+    suggestions.push({
+      type: 'hours',
+      title: `Hit a 7-day gaming streak`,
+      description: `You're on a ${streak}-day streak — keep it going for 7 days straight!`,
+      targetValue: 7,
+      unit: 'days',
+      endDate: formatDate(new Date(now.getFullYear(), now.getMonth(), now.getDate() + (7 - streak) + 1)),
+      emoji: '🔥',
+      reason: `You're already ${streak} days into a streak`,
+    });
+  }
+
+  return suggestions.slice(0, 5);
+}
