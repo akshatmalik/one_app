@@ -13093,6 +13093,92 @@ export function getLibraryUniqueness(game: Game, allGames: Game[]): LibraryUniqu
 }
 
 /**
+ * What-If: Price Cap Simulator
+ * "What if you never paid more than $X per game?"
+ */
+export interface WhatIfPriceLimitResult {
+  removedGames: Game[];
+  savedAmount: number;
+  totalSpentBefore: number;
+  totalSpentAfter: number;
+  hoursLost: number;
+  cphBefore: number;
+  cphAfter: number;
+  avgRatingRemoved: number;
+}
+
+export function whatIfPriceLimit(games: Game[], maxPrice: number): WhatIfPriceLimitResult {
+  const owned = games.filter(g => g.status !== 'Wishlist' && !g.acquiredFree);
+  const removed = owned.filter(g => g.price > maxPrice);
+  const kept = owned.filter(g => g.price <= maxPrice);
+
+  const totalSpentBefore = owned.reduce((s, g) => s + g.price, 0);
+  const totalSpentAfter = kept.reduce((s, g) => s + g.price, 0);
+  const savedAmount = totalSpentBefore - totalSpentAfter;
+
+  const hoursLost = removed.reduce((s, g) => s + getTotalHours(g), 0);
+
+  const totalHoursBefore = owned.reduce((s, g) => s + getTotalHours(g), 0);
+  const totalHoursAfter = kept.reduce((s, g) => s + getTotalHours(g), 0);
+  const cphBefore = totalHoursBefore > 0 ? totalSpentBefore / totalHoursBefore : 0;
+  const cphAfter = totalHoursAfter > 0 ? totalSpentAfter / totalHoursAfter : 0;
+
+  const ratedRemoved = removed.filter(g => g.rating > 0);
+  const avgRatingRemoved = ratedRemoved.length > 0
+    ? ratedRemoved.reduce((s, g) => s + g.rating, 0) / ratedRemoved.length
+    : 0;
+
+  return { removedGames: removed, savedAmount, totalSpentBefore, totalSpentAfter, hoursLost, cphBefore, cphAfter, avgRatingRemoved };
+}
+
+/**
+ * What-If: Rating Filter Simulator
+ * "What if you only kept games you rated 7+?"
+ * Retrospective — removes games with below-threshold ratings.
+ */
+export interface WhatIfHighRatedOnlyResult {
+  removedGames: Game[];
+  savedAmount: number;
+  totalSpentBefore: number;
+  totalSpentAfter: number;
+  hoursLost: number;
+  cphBefore: number;
+  cphAfter: number;
+  avgRatingBefore: number;
+  avgRatingAfter: number;
+}
+
+export function whatIfHighRatedOnly(games: Game[], minRating: number): WhatIfHighRatedOnlyResult {
+  const owned = games.filter(g => g.status !== 'Wishlist');
+  // Only remove games that have actually been rated below the threshold
+  const removed = owned.filter(g => g.rating > 0 && g.rating < minRating);
+  const kept = owned.filter(g => !(g.rating > 0 && g.rating < minRating));
+
+  const totalSpentBefore = owned.reduce((s, g) => s + g.price, 0);
+  const totalSpentAfter = kept.reduce((s, g) => s + g.price, 0);
+  const savedAmount = totalSpentBefore - totalSpentAfter;
+
+  const hoursLost = removed.reduce((s, g) => s + getTotalHours(g), 0);
+
+  const totalHoursBefore = owned.reduce((s, g) => s + getTotalHours(g), 0);
+  const totalHoursAfter = kept.reduce((s, g) => s + getTotalHours(g), 0);
+  const cphBefore = totalHoursBefore > 0 ? totalSpentBefore / totalHoursBefore : 0;
+  const cphAfter = totalHoursAfter > 0 ? totalSpentAfter / totalHoursAfter : 0;
+
+  const ratedBefore = owned.filter(g => g.rating > 0);
+  const avgRatingBefore = ratedBefore.length > 0
+    ? ratedBefore.reduce((s, g) => s + g.rating, 0) / ratedBefore.length
+    : 0;
+
+  const ratedAfter = kept.filter(g => g.rating > 0);
+  const avgRatingAfter = ratedAfter.length > 0
+    ? ratedAfter.reduce((s, g) => s + g.rating, 0) / ratedAfter.length
+    : 0;
+
+  return { removedGames: removed, savedAmount, totalSpentBefore, totalSpentAfter, hoursLost, cphBefore, cphAfter, avgRatingBefore, avgRatingAfter };
+}
+
+/**
  * Store URL Intelligence (Feature #19)
  */
 export function getStoreUrl(gameName: string, platform?: string): { label: string; url: string }[] {

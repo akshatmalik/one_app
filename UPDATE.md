@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-05-28 00:00 — Stats — What If Simulator
+
+**Files**: app/apps/game-analytics/components/WhatIfSimulator.tsx, app/apps/game-analytics/lib/calculations.ts, app/apps/game-analytics/components/StatsView.tsx
+**Risk**: not risky
+
+Built the "What If Simulator" — a fully interactive panel in the Stats tab with 5 scenarios: (1) Play More Hours (per-game slider showing value tier milestones), (2) Skip Duds (toggle regret purchases and see cumulative savings), (3) Clear Backlog (auto-calculated impact of finishing all unplayed games), (4) Price Cap (slider to see which games would have been cut at different price limits), (5) Only Keepers (retrospective filter showing how much you'd have saved buying only games you rated 7+). Added two new calculation functions: `whatIfPriceLimit` and `whatIfHighRatedOnly`. Users can now run alternate realities on their spending history and see the real dollar impact of better purchasing discipline.
+
+---
+
 ## 2026-05-22 18:00 — Games Tab — Game search bar
 
 **Files**: app/apps/game-analytics/page.tsx

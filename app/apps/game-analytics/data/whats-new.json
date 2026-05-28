@@ -1,6 +1,12 @@
 {
   "entries": [
     {
+      "date": "2026-05-28",
+      "area": "Stats",
+      "title": "What If Simulator — run alternate realities on your spending",
+      "body": "New interactive tool in the Stats tab. Pick a scenario — play more hours on a specific game, skip the games you barely played, clear your whole backlog, set a price cap, or filter to only your top-rated games — and see the real dollar impact instantly. It's a time machine for your gaming budget."
+    },
+    {
       "date": "2026-05-22",
       "area": "Games tab",
       "title": "Search your library instantly",

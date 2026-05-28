@@ -64,6 +64,7 @@ import { TrophyRoomV2 } from './TrophyRoomV2';
 import { TrophyProgress, TrophyScoreSummary } from '../lib/trophy-calculations';
 import { DiscoverPanel } from './DiscoverPanel';
 import { WeeklyDigest } from './WeeklyDigest';
+import { WhatIfSimulator } from './WhatIfSimulator';
 import clsx from 'clsx';
 
 interface StatsViewProps {
@@ -992,6 +993,9 @@ export function StatsView({ games, summary, budgets = [], onSetBudget, trophies,
         avgCostPerHour={summary.averageCostPerHour}
         budgets={budgets}
       />
+
+      {/* What If Simulator (Phase 4) */}
+      <WhatIfSimulator games={games} />
 
       {/* Advanced Analytics Panel (Phase 2) */}
       <AnalyticsPanel games={games} />
