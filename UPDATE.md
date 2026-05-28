@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-05-28 — Goals — Goals tab with smart suggestions
+
+**Files**: app/apps/game-analytics/lib/calculations.ts, app/apps/game-analytics/components/GoalsTab.tsx, app/apps/game-analytics/page.tsx
+**Risk**: not risky
+
+Added a Goals tab (Target icon, second row of navigation) that surfaces the previously hidden GoalsPanel — a fully-built 630-line component with its own storage layer that had no entry point in the UI. The tab shows three header stats (active goals, completed this year, days until nearest deadline with urgency colour), a "Suggested for You" section powered by new `getSmartGoalSuggestions()` logic that analyses the user's real data (completion velocity, 30-day play pace, monthly spend average, genre count, backlog size) to generate up to 5 pre-filled goal cards, and the full GoalsPanel for manual goal creation and progress tracking. Each suggestion has a one-tap "Add" button that persists the goal and marks the card as added instantly.
+
+FOLLOW-UP: Add a badge/indicator dot on the Goals tab icon when a goal deadline is within 7 days; surface the nearest active goal's progress as a mini bar on the main header stats row.
+
 ## 2026-05-22 18:00 — Games Tab — Game search bar
 
 **Files**: app/apps/game-analytics/page.tsx

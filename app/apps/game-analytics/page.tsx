@@ -45,10 +45,11 @@ import { TrophyToast } from './components/TrophyToast';
 import { ErrorLogPanel, ErrorLogButton } from './components/ErrorLogPanel';
 import { WhatsNewModal } from './components/WhatsNewModal';
 import { GameReviewChat } from './components/GameReviewChat';
+import { GoalsTab } from './components/GoalsTab';
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist';
-type TabMode = 'games' | 'timeline' | 'stats' | 'ai-coach' | 'up-next' | 'discover' | 'leaderboard' | 'buy-queue';
+type TabMode = 'games' | 'timeline' | 'stats' | 'ai-coach' | 'up-next' | 'discover' | 'leaderboard' | 'buy-queue' | 'goals';
 type CardViewMode = 'poster' | 'compact';
 
 function getValueColor(rating: string): string {
@@ -951,13 +952,14 @@ export default function GameAnalyticsPage() {
                 ))}
               </div>
 
-              {/* Row 2: Up Next, Discover, Leaderboard, Buy Queue + utilities */}
+              {/* Row 2: Up Next, Discover, Leaderboard, Buy Queue, Goals + utilities */}
               <div className="flex items-center gap-1.5">
                 {([
                   { id: 'up-next',     icon: <ListOrdered size={16} />, title: 'Up Next' },
                   { id: 'discover',    icon: <Compass size={16} />,     title: 'Discover' },
                   { id: 'leaderboard', icon: <Trophy size={16} />,      title: 'Ranks' },
                   { id: 'buy-queue',   icon: <ShoppingCart size={16} />, title: 'Buy Queue' },
+                  { id: 'goals',       icon: <Target size={16} />,       title: 'Goals' },
                 ] as const).map((tab) => (
                   <button
                     key={tab.id}
@@ -1341,6 +1343,10 @@ export default function GameAnalyticsPage() {
                 }
               }}
             />
+          )}
+
+          {tabMode === 'goals' && (
+            <GoalsTab games={games} />
           )}
         </div>
       </div>

@@ -13115,3 +13115,208 @@ export function getStoreUrl(gameName: string, platform?: string): { label: strin
 
   return stores;
 }
+
+// ── Smart Goal Suggestions ─────────────────────────────────────────────────────
+
+/**
+ * A pre-filled goal suggestion based on the user's actual gaming data.
+ * Matches the shape needed to call addGoal() (excluding id/createdAt/updatedAt).
+ */
+export interface GoalSuggestion {
+  /** Stable ID for tracking "added" state in the UI (not persisted). */
+  id: string;
+  type: 'completion' | 'spending' | 'hours' | 'genre_variety' | 'backlog' | 'custom';
+  title: string;
+  description: string;
+  targetValue: number;
+  unit: string;
+  startDate: string;
+  endDate: string;
+  /** Emoji icon for display. */
+  icon: string;
+  /** Tailwind color name (e.g. 'emerald', 'blue') for theming. */
+  color: string;
+  /** One-line explanation of why this goal was suggested. */
+  rationale: string;
+}
+
+/**
+ * Generate up to 5 personalised, data-driven goal suggestions for the user.
+ * All suggestions are time-bounded and map to an existing GoalType so they can
+ * be tracked automatically by GoalsPanel without manual updates.
+ */
+export function getSmartGoalSuggestions(games: Game[]): GoalSuggestion[] {
+  const suggestions: GoalSuggestion[] = [];
+  const now = new Date();
+
+  const toYMD = (d: Date): string => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
+
+  const today = toYMD(now);
+  const currentMonth = now.getMonth();
+  const currentYear = now.getFullYear();
+  const currentQuarter = Math.floor(currentMonth / 3);
+
+  const somDate = new Date(currentYear, currentMonth, 1);
+  const eomDate = new Date(currentYear, currentMonth + 1, 0);
+  const soqDate = new Date(currentYear, currentQuarter * 3, 1);
+  const eoqDate = new Date(currentYear, currentQuarter * 3 + 3, 0);
+
+  const som = toYMD(somDate);
+  const eom = toYMD(eomDate);
+  const soq = toYMD(soqDate);
+  const eoq = toYMD(eoqDate);
+
+  const owned = games.filter(g => g.status !== 'Wishlist');
+  const completedGames = owned.filter(g => g.status === 'Completed');
+  const inProgress = owned.filter(g => g.status === 'In Progress');
+  const notStarted = owned.filter(g => g.status === 'Not Started');
+
+  // ── 1. Completion Goal (quarterly) ──
+  const completionVelocity = getCompletionVelocity(games);
+  const completedThisQuarter = completedGames.filter(g => {
+    if (!g.endDate) return false;
+    return parseLocalDate(g.endDate) >= soqDate;
+  }).length;
+
+  if (completionVelocity !== null && completionVelocity > 0) {
+    const quarterlyTarget = Math.max(1, Math.round(completionVelocity * 3));
+    if (completedThisQuarter < quarterlyTarget) {
+      const needed = quarterlyTarget - completedThisQuarter;
+      suggestions.push({
+        id: 'complete-games-quarter',
+        type: 'completion',
+        title: `Complete ${quarterlyTarget} game${quarterlyTarget === 1 ? '' : 's'} this quarter`,
+        description: `Finish ${quarterlyTarget} games before Q${currentQuarter + 1} ends`,
+        targetValue: quarterlyTarget,
+        unit: 'games',
+        startDate: soq,
+        endDate: eoq,
+        icon: '🏆',
+        color: 'emerald',
+        rationale: `~${completionVelocity.toFixed(1)}/month · ${completedThisQuarter} done, ${needed} to go`,
+      });
+    }
+  } else if (inProgress.length > 0 || notStarted.length > 0) {
+    suggestions.push({
+      id: 'first-completion',
+      type: 'completion',
+      title: 'Complete your first game this quarter',
+      description: 'Finish at least 1 game before the quarter ends',
+      targetValue: 1,
+      unit: 'games',
+      startDate: today,
+      endDate: eoq,
+      icon: '🏆',
+      color: 'emerald',
+      rationale: `${inProgress.length + notStarted.length} games in your library — time to finish one`,
+    });
+  }
+
+  // ── 2. Hours Goal (monthly stretch) ──
+  const velocity30 = getGamingVelocity(games, 30);
+  const monthlyHours = velocity30 * 30;
+  if (monthlyHours >= 5) {
+    const stretched = Math.round((monthlyHours * 1.2) / 5) * 5;
+    const finalTarget = Math.max(10, stretched);
+    suggestions.push({
+      id: 'hours-this-month',
+      type: 'hours',
+      title: `Log ${finalTarget}h this month`,
+      description: 'Push your monthly playtime above your recent average',
+      targetValue: finalTarget,
+      unit: 'hours',
+      startDate: som,
+      endDate: eom,
+      icon: '⏱️',
+      color: 'blue',
+      rationale: `Your recent 30-day average is ~${Math.round(monthlyHours)}h`,
+    });
+  } else if (owned.length > 0) {
+    suggestions.push({
+      id: 'hours-first-habit',
+      type: 'hours',
+      title: 'Log 10 hours this month',
+      description: 'Build a regular gaming habit',
+      targetValue: 10,
+      unit: 'hours',
+      startDate: som,
+      endDate: eom,
+      icon: '⏱️',
+      color: 'blue',
+      rationale: `Less than 20 minutes a day — a great place to start`,
+    });
+  }
+
+  // ── 3. Spending Limit (monthly) ──
+  const spendByMonth = getSpendingByMonth(games);
+  const monthKeys = Object.keys(spendByMonth).sort();
+  if (monthKeys.length >= 2) {
+    const recent = monthKeys.slice(-3).map(k => spendByMonth[k]);
+    const avgSpend = recent.reduce((a, b) => a + b, 0) / recent.length;
+    if (avgSpend >= 15) {
+      const budgetTarget = Math.max(10, Math.round((avgSpend * 0.8) / 5) * 5);
+      suggestions.push({
+        id: 'spending-limit-month',
+        type: 'spending',
+        title: `Stay under $${budgetTarget} this month`,
+        description: 'Be intentional about gaming purchases',
+        targetValue: budgetTarget,
+        unit: 'dollars',
+        startDate: som,
+        endDate: eom,
+        icon: '💰',
+        color: 'red',
+        rationale: `Your 3-month average spend is ~$${Math.round(avgSpend)}/month`,
+      });
+    }
+  }
+
+  // ── 4. Genre Variety (quarterly) ──
+  const playedGenres = new Set(
+    owned
+      .filter(g => g.genre && getTotalHours(g) > 0)
+      .map(g => g.genre!)
+  );
+  const genreCount = playedGenres.size;
+  if (genreCount >= 1 && genreCount < 7) {
+    const genreTarget = genreCount + 2;
+    suggestions.push({
+      id: 'genre-variety-quarter',
+      type: 'genre_variety',
+      title: `Play ${genreTarget} different genres`,
+      description: "Explore 2 genres you haven't tried yet",
+      targetValue: genreTarget,
+      unit: 'genres',
+      startDate: soq,
+      endDate: eoq,
+      icon: '🎨',
+      color: 'purple',
+      rationale: `You've logged time in ${genreCount} genre${genreCount === 1 ? '' : 's'} — try something new`,
+    });
+  }
+
+  // ── 5. Backlog Clearance (quarterly) ──
+  if (notStarted.length >= 4) {
+    const clearTarget = Math.min(5, Math.max(2, Math.ceil(notStarted.length * 0.2)));
+    suggestions.push({
+      id: 'backlog-clearance-quarter',
+      type: 'backlog',
+      title: `Start ${clearTarget} backlog games`,
+      description: 'Make a dent in your unplayed pile',
+      targetValue: clearTarget,
+      unit: 'games',
+      startDate: today,
+      endDate: eoq,
+      icon: '📚',
+      color: 'yellow',
+      rationale: `${notStarted.length} games unplayed — start at least ${clearTarget} this quarter`,
+    });
+  }
+
+  return suggestions.slice(0, 5);
+}
