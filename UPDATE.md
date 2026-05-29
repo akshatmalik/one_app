@@ -5,6 +5,17 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-05-29 12:00 — Goals — Gaming Goals fully integrated with smart suggestions
+
+**Files**: app/apps/game-analytics/lib/calculations.ts, app/apps/game-analytics/components/GoalsPanel.tsx, app/apps/game-analytics/components/StatsView.tsx, app/apps/game-analytics/page.tsx
+**Risk**: not risky
+
+The Goals system (component, hook, storage) was completely built but had zero user access anywhere in the app. This run surfaces it in three places: a compact Goals Strip above the tab bar (visible on all tabs) that shows active goal progress bars or a "Set a gaming goal" prompt when empty; the full GoalsPanel in the Stats tab with create/edit/delete functionality; and a new smart suggestions feature that generates 3 data-driven, pre-filled goal proposals based on your gaming data (completion pace, weekly hours, monthly spending, genre variety). Tapping a suggestion pre-fills the form so creating a goal takes one tap instead of typing everything from scratch.
+
+FOLLOW-UP: Could add a goal completion toast/celebration when a goal hits 100%, and goal-linked trophy badges in TrophyRoom.
+
+---
+
 ## 2026-05-22 18:00 — Games Tab — Game search bar
 
 **Files**: app/apps/game-analytics/page.tsx

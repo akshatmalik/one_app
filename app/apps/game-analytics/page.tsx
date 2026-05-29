@@ -23,7 +23,8 @@ import { rankingRepository } from './lib/ranking-storage';
 import { BASELINE_GAMES_2025 } from './data/baseline-games';
 import { useAuthContext } from '@/lib/AuthContext';
 import { useToast } from '@/components/Toast';
-import { getROIRating, getWeekStatsForOffset, getGamesPlayedInTimeRange, getCompletionProbability, getGameHealthDot, getRelativeTime, getDaysContext, getSessionMomentum, getValueTrajectory, getGameSmartOneLiner, getFranchiseInfo, getProgressPercent, getShelfLife, parseLocalDate, getCardRarity, getRelationshipStatus, getGameStreak, getHeroNumber, getCardFreshness, getGameSections, getCardBackData, getContextualWhisper, getLibraryRank, getCardMoodPulse, getProgressRingData, getStatPopoverData, getWeekRecapData, getSmartNudges, getGamingCreditScore, getRotationStats, getSpendingForecast, getSpendingByMonth, getShelfLifeExpiry, formatRating, getRatingRank } from './lib/calculations';
+import { getROIRating, getWeekStatsForOffset, getGamesPlayedInTimeRange, getCompletionProbability, getGameHealthDot, getRelativeTime, getDaysContext, getSessionMomentum, getValueTrajectory, getGameSmartOneLiner, getFranchiseInfo, getProgressPercent, getShelfLife, parseLocalDate, getCardRarity, getRelationshipStatus, getGameStreak, getHeroNumber, getCardFreshness, getGameSections, getCardBackData, getContextualWhisper, getLibraryRank, getCardMoodPulse, getProgressRingData, getStatPopoverData, getWeekRecapData, getSmartNudges, getGamingCreditScore, getRotationStats, getSpendingForecast, getSpendingByMonth, getShelfLifeExpiry, formatRating, getRatingRank, calculateGoalCurrentValue } from './lib/calculations';
+import { useGoals } from './hooks/useGoals';
 import { OnThisDayCard } from './components/OnThisDayCard';
 import { ActivityPulse } from './components/ActivityPulse';
 import { RandomPicker } from './components/RandomPicker';
@@ -141,6 +142,7 @@ export default function GameAnalyticsPage() {
   const { rankings: allTimeRankings } = useRankings(user?.uid ?? null, 'all', 'all');
   const { allTrophies, summary: trophySummary, pinnedTrophies, pinnedIds: pinnedTrophyIds, togglePin: toggleTrophyPin, toastQueue: trophyToastQueue, dismissToast: dismissTrophyToast } = useTrophies(games, user?.uid ?? null);
   const { assignments: allTimeTiers } = useTierAssignments(user?.uid ?? null, 'all');
+  const { goals: activeGoalsList } = useGoals(user?.uid ?? null);
   const eloByGameId = useMemo(() => {
     const map = new Map<string, GameRanking>();
     for (const r of allTimeRankings) map.set(r.gameId, r);
@@ -283,6 +285,18 @@ export default function GameAnalyticsPage() {
     monthAgo.setMonth(monthAgo.getMonth() - 1);
     return getGamesPlayedInTimeRange(games, monthAgo, now);
   }, [games]);
+
+  // Goals strip: active goals with real-time progress
+  const activeGoalsWithProgress = useMemo(() => {
+    const active = activeGoalsList.filter(g => g.status === 'active');
+    return active.map(goal => {
+      const current = calculateGoalCurrentValue(goal, games);
+      const percent = goal.targetValue > 0 ? Math.min(100, (current / goal.targetValue) * 100) : 0;
+      const isSpending = goal.type === 'spending';
+      const done = isSpending ? current <= goal.targetValue : current >= goal.targetValue;
+      return { ...goal, current, percent, done, isSpending };
+    }).slice(0, 3);
+  }, [activeGoalsList, games]);
 
   const handleAddGame = async (gameData: Omit<Game, 'id' | 'userId' | 'createdAt' | 'updatedAt'>) => {
     try {
@@ -922,6 +936,55 @@ export default function GameAnalyticsPage() {
 
           {/* Daily Fortune Cookie */}
           {games.length > 0 && <div className="mb-4"><FortuneCookie games={games} /></div>}
+
+          {/* Goals Strip */}
+          {games.length > 0 && (
+            <div className="mb-4">
+              {activeGoalsWithProgress.length > 0 ? (
+                <button
+                  onClick={() => setTabMode('stats')}
+                  className="w-full text-left p-3 bg-white/[0.02] border border-white/[0.05] hover:border-white/[0.10] rounded-xl transition-all group"
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <Target size={13} className="text-cyan-400 shrink-0" />
+                      <span className="text-xs text-white/40 uppercase tracking-wider">Active Goals</span>
+                    </div>
+                    <span className="text-[10px] text-white/20 group-hover:text-white/40 transition-colors">View in Stats →</span>
+                  </div>
+                  <div className="space-y-1.5">
+                    {activeGoalsWithProgress.map(goal => (
+                      <div key={goal.id} className="flex items-center gap-2">
+                        <span className="text-[10px] text-white/40 truncate min-w-0 flex-1">{goal.title}</span>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <div className="w-16 h-1.5 bg-white/5 rounded-full overflow-hidden">
+                            <div
+                              className={clsx('h-full rounded-full transition-all', goal.done ? 'bg-emerald-500' : goal.isSpending ? 'bg-orange-500' : 'bg-cyan-500')}
+                              style={{ width: `${goal.percent}%` }}
+                            />
+                          </div>
+                          <span className={clsx('text-[10px] font-medium tabular-nums', goal.done ? 'text-emerald-400' : 'text-white/30')}>
+                            {Math.round(goal.percent)}%
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </button>
+              ) : (
+                <button
+                  onClick={() => setTabMode('stats')}
+                  className="w-full flex items-center justify-between px-3 py-2.5 bg-white/[0.02] border border-white/[0.04] hover:border-cyan-500/20 hover:bg-cyan-500/[0.03] rounded-xl transition-all group"
+                >
+                  <div className="flex items-center gap-2">
+                    <Target size={13} className="text-cyan-400/60 group-hover:text-cyan-400 transition-colors" />
+                    <span className="text-xs text-white/30 group-hover:text-white/50 transition-colors">Set a gaming goal</span>
+                  </div>
+                  <span className="text-[10px] text-white/20 group-hover:text-cyan-400/60 transition-colors">→</span>
+                </button>
+              )}
+            </div>
+          )}
 
           {/* Tab Navigation */}
           <div className="space-y-4 mb-6">

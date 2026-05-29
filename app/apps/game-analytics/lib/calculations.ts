@@ -1,4 +1,4 @@
-import { Game, GameStatus, GameMetrics, AnalyticsSummary, TasteProfile, SessionMood } from './types';
+import { Game, GameStatus, GameMetrics, AnalyticsSummary, TasteProfile, SessionMood, GoalType, GamingGoal } from './types';
 
 /**
  * Parse a YYYY-MM-DD date string as local time instead of UTC.
@@ -13114,4 +13114,202 @@ export function getStoreUrl(gameName: string, platform?: string): { label: strin
   }
 
   return stores;
+}
+
+// ========================================================================
+// GAMING GOALS: Smart suggestions + progress calculation
+// ========================================================================
+
+export interface SmartGoalSuggestion {
+  type: GoalType;
+  title: string;
+  description: string;
+  targetValue: number;
+  unit: string;
+  startDate: string;
+  endDate: string;
+  rationale: string;
+  icon: string;
+}
+
+function fmtDateGoal(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/**
+ * Calculate the current real-time progress value for a goal based on game data.
+ * Exported so page-level components can show goal progress without re-implementing logic.
+ */
+export function calculateGoalCurrentValue(goal: GamingGoal, games: Game[]): number {
+  const start = parseLocalDate(goal.startDate);
+  const now = new Date();
+
+  switch (goal.type) {
+    case 'completion':
+      return games.filter(g => {
+        if (g.status !== 'Completed' || !g.endDate) return false;
+        const endDate = parseLocalDate(g.endDate);
+        return endDate >= start && endDate <= now;
+      }).length;
+
+    case 'spending':
+      return games
+        .filter(g => {
+          if (g.status === 'Wishlist' || !g.datePurchased) return false;
+          const purchaseDate = parseLocalDate(g.datePurchased);
+          return purchaseDate >= start && purchaseDate <= now;
+        })
+        .reduce((sum, g) => sum + g.price, 0);
+
+    case 'hours':
+      return games.reduce((total, g) => {
+        const logHours = (g.playLogs || [])
+          .filter(log => {
+            const logDate = parseLocalDate(log.date);
+            return logDate >= start && logDate <= now;
+          })
+          .reduce((sum, log) => sum + log.hours, 0);
+        return total + logHours;
+      }, 0);
+
+    case 'genre_variety': {
+      const genres = new Set<string>();
+      games.forEach(g => {
+        if (!g.genre) return;
+        const hasRecentActivity = (g.playLogs || []).some(log => {
+          const logDate = parseLocalDate(log.date);
+          return logDate >= start && logDate <= now;
+        });
+        if (hasRecentActivity) genres.add(g.genre);
+      });
+      return genres.size;
+    }
+
+    case 'backlog':
+      return games.filter(g => {
+        if (!g.startDate) return false;
+        const startedDate = parseLocalDate(g.startDate);
+        return startedDate >= start && startedDate <= now;
+      }).length;
+
+    case 'custom':
+    default:
+      return goal.currentValue;
+  }
+}
+
+/**
+ * Generate data-driven goal suggestions based on the user's gaming patterns.
+ * Returns up to 3 relevant, achievable goals with pre-filled values.
+ */
+export function getSmartGoalSuggestions(games: Game[]): SmartGoalSuggestion[] {
+  const now = new Date();
+  const ownedGames = games.filter(g => g.status !== 'Wishlist');
+  if (ownedGames.length === 0) return [];
+
+  const suggestions: SmartGoalSuggestion[] = [];
+
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+
+  // ── COMPLETION GOAL ──────────────────────────────────────────────────
+  const completionVelocity = getCompletionVelocity(games);
+  const inProgressCount = ownedGames.filter(g => g.status === 'In Progress').length;
+
+  if (completionVelocity !== null && completionVelocity > 0) {
+    const target = Math.max(1, Math.round(completionVelocity * 1.25));
+    suggestions.push({
+      type: 'completion',
+      title: `Complete ${target} game${target !== 1 ? 's' : ''} this month`,
+      description: `Averaging ${completionVelocity.toFixed(1)} completions/month`,
+      targetValue: target,
+      unit: 'games',
+      startDate: fmtDateGoal(startOfMonth),
+      endDate: fmtDateGoal(endOfMonth),
+      rationale: `25% stretch above your ${completionVelocity.toFixed(1)}/month pace`,
+      icon: '🏆',
+    });
+  } else if (inProgressCount > 0) {
+    suggestions.push({
+      type: 'completion',
+      title: 'Finish 1 game this month',
+      description: `${inProgressCount} game${inProgressCount !== 1 ? 's' : ''} already in progress`,
+      targetValue: 1,
+      unit: 'games',
+      startDate: fmtDateGoal(startOfMonth),
+      endDate: fmtDateGoal(endOfMonth),
+      rationale: 'Close out at least one game already in progress',
+      icon: '🏆',
+    });
+  }
+
+  // ── HOURS GOAL ───────────────────────────────────────────────────────
+  const weeklyVelocity = getGamingVelocity(games, 28) * 7;
+  if (weeklyVelocity > 0.5) {
+    const thisMonday = new Date(now);
+    const dayOfWeek = now.getDay();
+    thisMonday.setDate(now.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
+    const nextSunday = new Date(thisMonday);
+    nextSunday.setDate(thisMonday.getDate() + 6);
+
+    const target = Math.max(1, Math.round(weeklyVelocity * 1.2));
+    suggestions.push({
+      type: 'hours',
+      title: `Log ${target}h this week`,
+      description: `Averaging ${weeklyVelocity.toFixed(1)} hours/week`,
+      targetValue: target,
+      unit: 'hours',
+      startDate: fmtDateGoal(thisMonday),
+      endDate: fmtDateGoal(nextSunday),
+      rationale: `20% stretch above your ${weeklyVelocity.toFixed(1)}h/week average`,
+      icon: '⏱️',
+    });
+  }
+
+  // ── SPENDING GOAL ────────────────────────────────────────────────────
+  const monthlySpending = getSpendingByMonth(games);
+  const spendValues = Object.values(monthlySpending);
+  if (spendValues.length >= 2) {
+    const avgMonthly = spendValues.reduce((a, b) => a + b, 0) / spendValues.length;
+    if (avgMonthly > 5) {
+      const target = Math.max(10, Math.round(avgMonthly * 0.85 / 5) * 5);
+      suggestions.push({
+        type: 'spending',
+        title: `Keep spending under $${target} this month`,
+        description: `Monthly average is $${avgMonthly.toFixed(0)}`,
+        targetValue: target,
+        unit: 'dollars',
+        startDate: fmtDateGoal(startOfMonth),
+        endDate: fmtDateGoal(endOfMonth),
+        rationale: `15% below your $${avgMonthly.toFixed(0)}/month average`,
+        icon: '💰',
+      });
+    }
+  }
+
+  // ── GENRE VARIETY GOAL ───────────────────────────────────────────────
+  const playedGenres = new Set<string>();
+  ownedGames.forEach(g => {
+    if (g.genre && g.status !== 'Not Started') playedGenres.add(g.genre);
+  });
+  const uniqueGenresPlayed = playedGenres.size;
+
+  if (uniqueGenresPlayed < 4 && ownedGames.length >= 5 && suggestions.length < 3) {
+    const threeMonths = new Date(now);
+    threeMonths.setMonth(now.getMonth() + 3);
+    const genreTarget = Math.min(5, uniqueGenresPlayed + 2);
+    suggestions.push({
+      type: 'genre_variety',
+      title: `Explore ${genreTarget} genres`,
+      description: uniqueGenresPlayed === 0 ? 'Branch out your gaming taste' : `You've explored ${uniqueGenresPlayed} genre${uniqueGenresPlayed !== 1 ? 's' : ''} so far`,
+      targetValue: genreTarget,
+      unit: 'genres',
+      startDate: fmtDateGoal(now),
+      endDate: fmtDateGoal(threeMonths),
+      rationale: 'Discover new genres over the next 3 months',
+      icon: '🎭',
+    });
+  }
+
+  return suggestions.slice(0, 3);
 }

@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { Target, Trophy, Plus, Trash2, Edit3, Check, Clock, ChevronDown, ChevronUp, X, Gamepad2, DollarSign, Flame, Layers, Sparkles } from 'lucide-react';
+import { Target, Trophy, Plus, Trash2, Edit3, Check, Clock, ChevronDown, ChevronUp, X, Gamepad2, DollarSign, Flame, Layers, Sparkles, ChevronRight, Lightbulb } from 'lucide-react';
 import { Game, GamingGoal, GoalType, GoalStatus } from '../lib/types';
-import { getTotalHours, parseLocalDate } from '../lib/calculations';
+import { getTotalHours, parseLocalDate, SmartGoalSuggestion } from '../lib/calculations';
 import { useGoals } from '../hooks/useGoals';
 import { useAuthContext } from '@/lib/AuthContext';
 import clsx from 'clsx';
@@ -105,7 +105,7 @@ function getGoalColorClasses(color: string) {
   return map[color] || map.cyan;
 }
 
-export function GoalsPanel({ games }: { games: Game[] }) {
+export function GoalsPanel({ games, suggestions }: { games: Game[]; suggestions?: SmartGoalSuggestion[] }) {
   const { user } = useAuthContext();
   const { goals, loading, addGoal, updateGoal, deleteGoal } = useGoals(user?.uid ?? null);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -155,6 +155,19 @@ export function GoalsPanel({ games }: { games: Game[] }) {
     end.setMonth(end.getMonth() + 1);
     setFormEndDate(`${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, '0')}-${String(end.getDate()).padStart(2, '0')}`);
     setEditingGoalId(null);
+  };
+
+  const prefillFromSuggestion = (s: SmartGoalSuggestion) => {
+    setFormTitle(s.title);
+    setFormDescription(s.description);
+    setFormType(s.type);
+    setFormTarget(s.targetValue.toString());
+    setFormUnit(s.unit);
+    setFormStartDate(s.startDate);
+    setFormEndDate(s.endDate);
+    setFormCurrentValue('');
+    setEditingGoalId(null);
+    setShowAddForm(true);
   };
 
   const handleSubmit = async () => {
@@ -562,10 +575,49 @@ export function GoalsPanel({ games }: { games: Game[] }) {
           })}
         </div>
       ) : !showAddForm ? (
-        <div className="text-center py-8">
-          <Target size={32} className="mx-auto mb-3 text-white/10" />
-          <p className="text-white/30 text-sm">No active goals</p>
-          <p className="text-white/20 text-xs mt-1">Set a goal to track your gaming progress</p>
+        <div>
+          {/* Smart suggestions when no goals exist */}
+          {suggestions && suggestions.length > 0 ? (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Lightbulb size={14} className="text-amber-400" />
+                <span className="text-xs text-white/40 uppercase tracking-wider">Suggested goals based on your data</span>
+              </div>
+              {suggestions.map((s, i) => (
+                <button
+                  key={i}
+                  onClick={() => prefillFromSuggestion(s)}
+                  className="w-full text-left p-3.5 bg-white/[0.02] border border-white/[0.06] hover:bg-white/[0.04] hover:border-white/[0.10] rounded-xl transition-all group"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <span className="text-base shrink-0">{s.icon}</span>
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium text-white/80 group-hover:text-white transition-colors truncate">{s.title}</div>
+                        <div className="text-xs text-white/30 truncate">{s.rationale}</div>
+                      </div>
+                    </div>
+                    <ChevronRight size={14} className="text-white/20 group-hover:text-white/50 shrink-0 transition-colors" />
+                  </div>
+                </button>
+              ))}
+              <button
+                onClick={() => {
+                  resetForm();
+                  setShowAddForm(true);
+                }}
+                className="w-full text-xs text-white/30 hover:text-white/50 py-1.5 transition-colors"
+              >
+                Or create a custom goal →
+              </button>
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <Target size={32} className="mx-auto mb-3 text-white/10" />
+              <p className="text-white/30 text-sm">No active goals</p>
+              <p className="text-white/20 text-xs mt-1">Set a goal to track your gaming progress</p>
+            </div>
+          )}
         </div>
       ) : null}
 

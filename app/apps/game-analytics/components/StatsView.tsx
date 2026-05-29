@@ -50,7 +50,7 @@ import {
   Heart,
 } from 'lucide-react';
 import { Game, GameStatus, AnalyticsSummary, BudgetSettings } from '../lib/types';
-import { calculateSummary, getCumulativeSpending, getHoursByMonth, getSpendingByMonth, parseLocalDate, getLibraryHealth, getRatingTierBands, getCloseRatingGroups, getRatingDistributionFine, formatRating } from '../lib/calculations';
+import { calculateSummary, getCumulativeSpending, getHoursByMonth, getSpendingByMonth, parseLocalDate, getLibraryHealth, getRatingTierBands, getCloseRatingGroups, getRatingDistributionFine, formatRating, getSmartGoalSuggestions } from '../lib/calculations';
 import { GameWithMetrics } from '../hooks/useAnalytics';
 import { PeriodStatsPanel } from './PeriodStatsPanel';
 import { FunStatsPanel } from './FunStatsPanel';
@@ -64,6 +64,7 @@ import { TrophyRoomV2 } from './TrophyRoomV2';
 import { TrophyProgress, TrophyScoreSummary } from '../lib/trophy-calculations';
 import { DiscoverPanel } from './DiscoverPanel';
 import { WeeklyDigest } from './WeeklyDigest';
+import { GoalsPanel } from './GoalsPanel';
 import clsx from 'clsx';
 
 interface StatsViewProps {
@@ -96,6 +97,7 @@ export function StatsView({ games, summary, budgets = [], onSetBudget, trophies,
   const [showAllGamesPlayed, setShowAllGamesPlayed] = useState(false);
   const [showROIRankings, setShowROIRankings] = useState(false);
   const libraryHealth = useMemo(() => getLibraryHealth(games), [games]);
+  const goalSuggestions = useMemo(() => getSmartGoalSuggestions(games), [games]);
 
   const isAllTime = selectedPeriod === 'all';
   const selectedYear = isAllTime ? currentYear : selectedPeriod;
@@ -357,6 +359,9 @@ export function StatsView({ games, summary, budgets = [], onSetBudget, trophies,
 
   return (
     <div className="space-y-8">
+      {/* Gaming Goals */}
+      <GoalsPanel games={games} suggestions={goalSuggestions} />
+
       {/* Library Health Dashboard */}
       <div className="p-5 bg-gradient-to-br from-white/[0.03] to-white/[0.01] border border-white/10 rounded-2xl">
         <div className="flex items-center gap-2 mb-4">
