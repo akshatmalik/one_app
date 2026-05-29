@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical, Download, Gift, ShoppingCart, Search, X } from 'lucide-react';
+import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical, Download, Gift, ShoppingCart, Search, X, Play, Pause, Square } from 'lucide-react';
 import { useGames } from './hooks/useGames';
 import { useAnalytics, GameWithMetrics } from './hooks/useAnalytics';
 import { useBudget } from './hooks/useBudget';
@@ -15,7 +15,7 @@ import { TimelineView } from './components/TimelineView';
 import { StatsView } from './components/StatsView';
 import { AIChatTab } from './components/AIChatTab';
 import { UpNextTab } from './components/UpNextTab';
-import { Game, GameStatus, PlayLog, GameRanking, GameAward, AwardPeriodType, GameTier, TierAssignmentMap, ReviewMessage } from './lib/types';
+import { Game, GameStatus, PlayLog, GameRanking, GameAward, AwardPeriodType, GameTier, TierAssignmentMap, ReviewMessage, SessionMood } from './lib/types';
 import { useTierAssignments } from './hooks/useTierAssignments';
 import { gameRepository } from './lib/storage';
 import { useRankings } from './hooks/useRankings';
@@ -45,6 +45,8 @@ import { TrophyToast } from './components/TrophyToast';
 import { ErrorLogPanel, ErrorLogButton } from './components/ErrorLogPanel';
 import { WhatsNewModal } from './components/WhatsNewModal';
 import { GameReviewChat } from './components/GameReviewChat';
+import { useSessionTimer } from './hooks/useSessionTimer';
+import { SessionTimerWidget } from './components/SessionTimerWidget';
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist';
@@ -141,6 +143,7 @@ export default function GameAnalyticsPage() {
   const { rankings: allTimeRankings } = useRankings(user?.uid ?? null, 'all', 'all');
   const { allTrophies, summary: trophySummary, pinnedTrophies, pinnedIds: pinnedTrophyIds, togglePin: toggleTrophyPin, toastQueue: trophyToastQueue, dismissToast: dismissTrophyToast } = useTrophies(games, user?.uid ?? null);
   const { assignments: allTimeTiers } = useTierAssignments(user?.uid ?? null, 'all');
+  const { timerState, startTimer: timerStart, pauseTimer, resumeTimer, stopTimer, clearTimer } = useSessionTimer();
   const eloByGameId = useMemo(() => {
     const map = new Map<string, GameRanking>();
     for (const r of allTimeRankings) map.set(r.gameId, r);
@@ -378,6 +381,29 @@ export default function GameAnalyticsPage() {
     showToast(`Logged ${hours}h`, 'success');
   };
 
+  const handleTimerLog = useCallback(async (params: { gameId: string; hours: number; mood?: SessionMood }) => {
+    const game = gamesWithMetrics.find(g => g.id === params.gameId);
+    if (!game) return;
+    const now = new Date();
+    const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const newLog: PlayLog = {
+      id: `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+      date: dateStr,
+      hours: Math.max(1 / 60, params.hours),
+      mood: params.mood,
+    };
+    const existingLogs = game.playLogs || [];
+    const updates: Partial<Game> = { playLogs: [...existingLogs, newLog] };
+    if (game.status === 'Not Started' && existingLogs.length === 0) {
+      updates.status = 'In Progress';
+      updates.startDate = dateStr;
+    }
+    await updateGame(params.gameId, updates);
+    clearTimer();
+    const hoursStr = params.hours < 1 ? `${Math.round(params.hours * 60)} min` : `${params.hours.toFixed(1)}h`;
+    showToast(`Logged ${hoursStr} on ${game.name}`, 'success');
+  }, [gamesWithMetrics, updateGame, clearTimer, showToast]);
+
   const toggleCardViewMode = () => {
     const next = cardViewMode === 'poster' ? 'compact' : 'poster';
     setCardViewMode(next);
@@ -493,7 +519,7 @@ export default function GameAnalyticsPage() {
     });
 
   return (
-    <div className="min-h-[calc(100vh-60px)] flex flex-col">
+    <div className={clsx('min-h-[calc(100vh-60px)] flex flex-col', timerState.status !== 'idle' && 'pb-20')}>
       {/* Header */}
       <div className="px-6 pt-8 pb-6 border-b border-white/5">
         <div className="max-w-6xl mx-auto">
@@ -1157,6 +1183,8 @@ export default function GameAnalyticsPage() {
                   onCardClick={(game) => setDetailGame(game)}
                   onLogTime={(game) => handleOpenPlayLog(game)}
                   onQuickLog={handleQuickLog}
+                  onStartTimer={(game) => timerStart({ id: game.id, name: game.name, thumbnail: game.thumbnail })}
+                  activeTimerGameId={timerState.gameId}
                   onToggleQueue={async (game) => {
                     try {
                       if (isInQueue(game.id)) {
@@ -1344,6 +1372,16 @@ export default function GameAnalyticsPage() {
           )}
         </div>
       </div>
+
+      {/* Session Timer Widget — floating bottom bar */}
+      <SessionTimerWidget
+        timerState={timerState}
+        onPause={pauseTimer}
+        onResume={resumeTimer}
+        onStop={stopTimer}
+        onClear={clearTimer}
+        onLogSession={handleTimerLog}
+      />
 
       {/* Game Form Modal */}
       {isFormOpen && (
@@ -1568,6 +1606,8 @@ interface GameCardListProps {
   onCardClick: (game: GameWithMetrics) => void;
   onLogTime: (game: GameWithMetrics) => void;
   onQuickLog: (game: GameWithMetrics, hours: number) => void;
+  onStartTimer?: (game: GameWithMetrics) => void;
+  activeTimerGameId?: string | null;
   onToggleQueue: (game: GameWithMetrics) => void;
   onToggleSpecial: (game: GameWithMetrics) => void;
   onDelete: (game: GameWithMetrics) => void;
@@ -1588,6 +1628,8 @@ function GameCardList({
   onCardClick,
   onLogTime,
   onQuickLog,
+  onStartTimer,
+  activeTimerGameId,
   onToggleQueue,
   onToggleSpecial,
   onDelete,
@@ -1655,7 +1697,7 @@ function GameCardList({
     }
     return (
       <div key={game.id} className={animClass}>
-        <CompactCard game={game} allGames={allGames} idx={idx} onClick={() => onCardClick(game)} onLogTime={() => onLogTime(game)} onToggleQueue={() => onToggleQueue(game)} onDelete={() => onDelete(game)} isInQueue={isInQueue(game.id)} sortBy={sortBy} tintColor={gameColors.get(game.id)} aiQuip={gameQuips[game.id]?.quip} eloRanking={eloRanking} gameTier={gameTier} eloTierRank={eloTierRank} />
+        <CompactCard game={game} allGames={allGames} idx={idx} onClick={() => onCardClick(game)} onLogTime={() => onLogTime(game)} onToggleQueue={() => onToggleQueue(game)} onDelete={() => onDelete(game)} onStartTimer={onStartTimer ? () => onStartTimer(game) : undefined} isTimerActive={activeTimerGameId === game.id} isInQueue={isInQueue(game.id)} sortBy={sortBy} tintColor={gameColors.get(game.id)} aiQuip={gameQuips[game.id]?.quip} eloRanking={eloRanking} gameTier={gameTier} eloTierRank={eloTierRank} />
       </div>
     );
   };
@@ -1720,7 +1762,7 @@ function GameCardList({
           <div className="space-y-3">
             {nowPlayingGames.map(g => (
               <div key={g.id} className={`game-card-animate${enteringCards.has(g.id) ? ' game-card-enter' : ''}`}>
-                <NowPlayingCard game={g} allGames={allGames} onClick={() => onCardClick(g)} onQuickLog={(h) => onQuickLog(g, h)} eloRanking={eloByGameId.get(g.id)} gameTier={tierAssignments[g.id] as GameTier | undefined} />
+                <NowPlayingCard game={g} allGames={allGames} onClick={() => onCardClick(g)} onQuickLog={(h) => onQuickLog(g, h)} onStartTimer={onStartTimer ? () => onStartTimer(g) : undefined} isTimerActive={activeTimerGameId === g.id} eloRanking={eloByGameId.get(g.id)} gameTier={tierAssignments[g.id] as GameTier | undefined} />
               </div>
             ))}
           </div>
@@ -1750,11 +1792,13 @@ function SectionIcon({ id }: { id: string }) {
 
 // --- Now Playing Card ---
 
-function NowPlayingCard({ game, allGames, onClick, onQuickLog, sortBy = 'hours', tintColor, eloRanking, gameTier, eloTierRank }: {
+function NowPlayingCard({ game, allGames, onClick, onQuickLog, onStartTimer, isTimerActive, sortBy = 'hours', tintColor, eloRanking, gameTier, eloTierRank }: {
   game: GameWithMetrics;
   allGames: Game[];
   onClick: () => void;
   onQuickLog: (hours: number) => void;
+  onStartTimer?: () => void;
+  isTimerActive?: boolean;
   sortBy?: string;
   tintColor?: string;
   eloRanking?: GameRanking;
@@ -1984,6 +2028,20 @@ function NowPlayingCard({ game, allGames, onClick, onQuickLog, sortBy = 'hours',
             >
               {checkInDone ? <><Check size={11} /> Done!</> : <><Clock size={11} /> Check In</>}
             </button>
+            {onStartTimer && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onStartTimer(); }}
+                title={isTimerActive ? 'Timer running' : 'Start live timer'}
+                className={clsx(
+                  'w-7 h-7 flex items-center justify-center rounded-lg text-xs font-bold transition-all shrink-0',
+                  isTimerActive
+                    ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                    : 'bg-white/5 text-white/30 active:bg-white/10'
+                )}
+              >
+                {isTimerActive ? <Pause size={11} /> : <Play size={11} />}
+              </button>
+            )}
           </div>
 
           {/* Mood pulse strip */}
@@ -2379,7 +2437,7 @@ function PosterCardBack({ game, allGames, onFlip, rarity, freshness, relationshi
 
 // --- Compact Card (original layout, fixed) ---
 
-function CompactCard({ game, allGames, idx, onClick, onLogTime, onToggleQueue, onDelete, isInQueue, sortBy = 'hours', tintColor, aiQuip, eloRanking, gameTier, eloTierRank }: {
+function CompactCard({ game, allGames, idx, onClick, onLogTime, onToggleQueue, onDelete, onStartTimer, isTimerActive, isInQueue, sortBy = 'hours', tintColor, aiQuip, eloRanking, gameTier, eloTierRank }: {
   game: GameWithMetrics;
   allGames: Game[];
   idx: number;
@@ -2387,6 +2445,8 @@ function CompactCard({ game, allGames, idx, onClick, onLogTime, onToggleQueue, o
   onLogTime: () => void;
   onToggleQueue: () => void;
   onDelete: () => void;
+  onStartTimer?: () => void;
+  isTimerActive?: boolean;
   isInQueue: boolean;
   sortBy?: string;
   tintColor?: string;
@@ -2640,6 +2700,21 @@ function CompactCard({ game, allGames, idx, onClick, onLogTime, onToggleQueue, o
             >
               <Clock size={12} /> Log
             </button>
+            {onStartTimer && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onStartTimer(); }}
+                title={isTimerActive ? 'Timer running for this game' : 'Start live session timer'}
+                className={clsx(
+                  'flex items-center gap-1 px-2.5 py-1.5 rounded-lg transition-all text-xs',
+                  isTimerActive
+                    ? 'text-green-400 bg-green-500/10 border border-green-500/20'
+                    : 'text-white/30 active:text-green-400 active:bg-green-500/10'
+                )}
+              >
+                {isTimerActive ? <Square size={12} /> : <Play size={12} />}
+                {isTimerActive ? 'Live' : 'Timer'}
+              </button>
+            )}
             <button
               onClick={(e) => { e.stopPropagation(); onToggleQueue(); }}
               className={clsx(

@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-05-29 — Session Timer — Live play session tracking
+
+**Files**: app/apps/game-analytics/hooks/useSessionTimer.ts, app/apps/game-analytics/components/SessionTimerWidget.tsx, app/apps/game-analytics/page.tsx
+**Risk**: not risky
+
+Added a live session timer that lets users start tracking the moment they pick up a game. A floating bar at the bottom shows the ticking clock with pause/resume controls that persist across tab switches and page refreshes (via localStorage). When you stop, a one-tap log prompt shows the total time with a mood selector (🔥/😊/😐/😤) and pre-fills the session log — no manual hour estimation needed. Timer button appears in CompactCard action rows and NowPlayingCard check-in area.
+
+FOLLOW-UP: Add keyboard shortcut to start/stop the timer. Consider showing the active timer game in the page header when a timer is running. Could also add a "timer history" to show session durations over time.
+
 ## 2026-05-22 18:00 — Games Tab — Game search bar
 
 **Files**: app/apps/game-analytics/page.tsx
