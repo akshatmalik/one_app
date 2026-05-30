@@ -13534,3 +13534,156 @@ export function chronicleStretchBlurb(st: PlayStretch): string {
   }
   return `${hrsText} over ${st.daysActive} days — ${st.cadenceLabel}.`;
 }
+
+// ============================================================
+// RANGE GLANCE — Played & Bought summaries for a custom date range
+// ============================================================
+//
+// Two simple, independent at-a-glance summaries for a free-form date range:
+// what you played (days + hours + rating) and what you bought (price +
+// discounts), each with its own totals. No periods, no grouping.
+
+export interface PlayedRangeRow {
+  gameId: string;
+  name: string;
+  thumbnail?: string;
+  genre?: string;
+  rating: number;
+  daysPlayed: number;  // distinct calendar days with a session in range
+  hours: number;       // session hours in range
+  sessions: number;
+  lastPlayed: string;  // YYYY-MM-DD, latest session in range
+}
+
+export interface PlayedRangeSummary {
+  rows: PlayedRangeRow[];
+  totalGames: number;
+  totalDaysPlayed: number;  // distinct active days across all games
+  totalDaysInRange: number; // calendar days spanned by the range (inclusive)
+  totalHours: number;
+  totalSessions: number;
+}
+
+/** Per-game play summary (days + hours + rating) for a custom date range. */
+export function getRangePlaySummary(games: Game[], start: Date, end: Date): PlayedRangeSummary {
+  const rows: PlayedRangeRow[] = [];
+  const allActiveDays = new Set<string>();
+
+  games.forEach(game => {
+    if (!game.playLogs || game.playLogs.length === 0) return;
+    const inRange = game.playLogs.filter(l => {
+      if (!l.date) return false;
+      const d = parseLocalDate(l.date);
+      return d >= start && d <= end;
+    });
+    if (inRange.length === 0) return;
+
+    const days = new Set(inRange.map(l => l.date));
+    days.forEach(d => allActiveDays.add(d));
+    const hours = inRange.reduce((s, l) => s + l.hours, 0);
+    const lastPlayed = inRange.reduce((a, b) =>
+      parseLocalDate(a.date) >= parseLocalDate(b.date) ? a : b
+    ).date;
+
+    rows.push({
+      gameId: game.id,
+      name: game.name,
+      thumbnail: game.thumbnail,
+      genre: game.genre,
+      rating: game.rating,
+      daysPlayed: days.size,
+      hours,
+      sessions: inRange.length,
+      lastPlayed,
+    });
+  });
+
+  rows.sort((a, b) => b.hours - a.hours);
+
+  const DAY = 1000 * 60 * 60 * 24;
+  const totalDaysInRange = Math.max(
+    1,
+    Math.round((parseLocalDate(toDateKey(end)).getTime() - parseLocalDate(toDateKey(start)).getTime()) / DAY) + 1
+  );
+
+  return {
+    rows,
+    totalGames: rows.length,
+    totalDaysPlayed: allActiveDays.size,
+    totalDaysInRange,
+    totalHours: rows.reduce((s, r) => s + r.hours, 0),
+    totalSessions: rows.reduce((s, r) => s + r.sessions, 0),
+  };
+}
+
+export interface BoughtRangeRow {
+  gameId: string;
+  name: string;
+  thumbnail?: string;
+  date: string;        // datePurchased (YYYY-MM-DD)
+  price: number;
+  originalPrice?: number;
+  saved: number;       // originalPrice - price when discounted, else 0
+  isFree: boolean;
+  freeLabel?: string;  // e.g. "PS Plus", "Free"
+}
+
+export interface BoughtRangeSummary {
+  rows: BoughtRangeRow[];
+  totalCount: number;
+  totalSpent: number;
+  totalSaved: number;  // discounts gotten
+}
+
+/** Is this game free / from a subscription (excluded when the toggle is on)? */
+export function isFreeOrSubscription(g: Game): boolean {
+  return !!g.acquiredFree || (g.price ?? 0) === 0 || !!g.subscriptionSource;
+}
+
+/** Per-game purchase summary (price + discounts) for a custom date range. */
+export function getRangePurchaseSummary(
+  games: Game[],
+  start: Date,
+  end: Date,
+  excludeFree: boolean
+): BoughtRangeSummary {
+  const rows: BoughtRangeRow[] = games
+    .filter(g => g.datePurchased && g.status !== 'Wishlist')
+    .filter(g => {
+      const d = parseLocalDate(g.datePurchased!);
+      return d >= start && d <= end;
+    })
+    .filter(g => !(excludeFree && isFreeOrSubscription(g)))
+    .map(g => {
+      const free = isFreeOrSubscription(g);
+      const saved = !free && g.originalPrice && g.originalPrice > g.price ? g.originalPrice - g.price : 0;
+      const freeLabel = free ? (g.subscriptionSource || 'Free') : undefined;
+      return {
+        gameId: g.id,
+        name: g.name,
+        thumbnail: g.thumbnail,
+        date: g.datePurchased!,
+        price: g.price,
+        originalPrice: g.originalPrice,
+        saved,
+        isFree: free,
+        freeLabel,
+      };
+    })
+    .sort((a, b) => parseLocalDate(b.date).getTime() - parseLocalDate(a.date).getTime());
+
+  return {
+    rows,
+    totalCount: rows.length,
+    totalSpent: rows.reduce((s, r) => s + r.price, 0),
+    totalSaved: rows.reduce((s, r) => s + r.saved, 0),
+  };
+}
+
+/** Format a Date as a local YYYY-MM-DD key (no UTC shift). */
+export function toDateKey(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
