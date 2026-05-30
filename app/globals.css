@@ -288,6 +288,15 @@ input[type="range"]::-moz-range-thumb {
   animation: slideInRight 0.25s ease-out forwards;
 }
 
+@keyframes slideUp {
+  from { transform: translateY(100%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.animate-slide-up {
+  animation: slideUp 0.28s cubic-bezier(0.34, 1.26, 0.64, 1) forwards;
+}
+
 /* --- Card Redesign Animations --- */
 
 /* Rarity border glows */

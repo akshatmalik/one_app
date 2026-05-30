@@ -1,6 +1,12 @@
 {
   "entries": [
     {
+      "date": "2026-05-30",
+      "area": "Session Timer",
+      "title": "Track your gaming sessions live — no more guessing afterwards",
+      "body": "Hit 'Track' in the header, pick your game, and go play. A live timer ticks away while you're gaming. When you're done, one tap logs the session with the exact time, your mood, and an optional note. The timer survives page refreshes, so even if you check something in the app mid-session, it just keeps going."
+    },
+    {
       "date": "2026-05-22",
       "area": "Games tab",
       "title": "Search your library instantly",
