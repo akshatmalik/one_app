@@ -1,11 +1,11 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   Plus, ShoppingCart, Calendar, TrendingDown, Clock, PackageCheck,
-  ChevronDown, ChevronUp, Settings, Sparkles,
+  Settings, Sparkles,
   Tag, Gift, Target, BarChart2, Trophy, ArrowRight, HelpCircle,
-  ArrowUpDown, Wand2, Loader2, ListOrdered, X
+  ArrowUpDown, Wand2, Loader2, ListOrdered, X, Wallet
 } from 'lucide-react';
 import {
   DndContext, closestCenter, KeyboardSensor, PointerSensor, TouchSensor,
@@ -22,6 +22,7 @@ import { AddToBuyQueueModal } from './AddToBuyQueueModal';
 import { BuyQueueCard } from './BuyQueueCard';
 import {
   getQueueImpactSnapshot,
+  getBudgetFitScenarios,
   getSaleSeasonIndicator,
   getPurchaseHistoryInsights,
   getBuyConfidence,
@@ -86,6 +87,7 @@ export function BuyQueueTab({ userId, wishlistGames, allGames, budgets, yearSpen
     purchasedEntries,
     loading,
     plannedSpend,
+    fullPriceSpend,
     maybeSpend,
     deferredSpend,
     releasingSoon,
@@ -98,8 +100,30 @@ export function BuyQueueTab({ userId, wishlistGames, allGames, budgets, yearSpen
   } = usePurchaseQueue(userId);
 
   const [showAddModal, setShowAddModal] = useState(false);
-  const [showPurchased, setShowPurchased] = useState(false);
   const [showStats, setShowStats] = useState(false);
+  // 'deal' = assume target/sale prices (default), 'full' = assume full MSRP now.
+  const [pricingMode, setPricingMode] = useState<'deal' | 'full'>('deal');
+  // Top-level view: the live queue ('watching') or already-bought history ('bought').
+  const [mainView, setMainView] = useState<'watching' | 'bought'>('watching');
+
+  // Restore the saved pricing preference once on mount.
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('buy-queue-pricing-mode');
+      if (saved === 'full' || saved === 'deal') setPricingMode(saved);
+    } catch {
+      // ignore — non-persistent is fine
+    }
+  }, []);
+
+  const handlePricingMode = (mode: 'deal' | 'full') => {
+    setPricingMode(mode);
+    try {
+      localStorage.setItem('buy-queue-pricing-mode', mode);
+    } catch {
+      // ignore
+    }
+  };
   const [viewMode, setViewMode] = useState<'list' | 'timeline'>('list');
   const [sortMode, setSortMode] = useState<SortMode>('priority');
   const [aiAdvice, setAiAdvice] = useState<BuyQueueAdvice | null>(null);
@@ -115,9 +139,9 @@ export function BuyQueueTab({ userId, wishlistGames, allGames, budgets, yearSpen
   const currentYear = new Date().getFullYear();
   const yearBudget = budgets.find(b => b.year === currentYear)?.yearlyBudget ?? null;
 
-  // Budget ring math
+  // Budget ring math — "planned" follows the selected pricing scenario.
   const budgetUsed = yearSpent;
-  const budgetPlanned = plannedSpend;
+  const budgetPlanned = pricingMode === 'full' ? fullPriceSpend : plannedSpend;
   const budgetTotal = yearBudget ?? 0;
   const budgetRemaining = yearBudget != null ? yearBudget - budgetUsed - budgetPlanned : null;
   const isOverBudget = yearBudget != null && (budgetUsed + budgetPlanned) > yearBudget;
@@ -126,6 +150,12 @@ export function BuyQueueTab({ userId, wishlistGames, allGames, budgets, yearSpen
   // Ring percentages
   const spentPct = budgetTotal > 0 ? Math.min(100, (budgetUsed / budgetTotal) * 100) : 0;
   const plannedPct = budgetTotal > 0 ? Math.min(100 - spentPct, (budgetPlanned / budgetTotal) * 100) : 0;
+
+  // Budget fit — how many committed picks fit at full price vs deal price.
+  const budgetFit = useMemo(
+    () => getBudgetFitScenarios(activeEntries, yearBudget, yearSpent),
+    [activeEntries, yearBudget, yearSpent]
+  );
 
   // Sale season
   const saleSeason = useMemo(() => getSaleSeasonIndicator(), []);
@@ -352,7 +382,7 @@ export function BuyQueueTab({ userId, wishlistGames, allGames, budgets, yearSpen
   return (
     <div className="space-y-5">
       {/* Deal Alert Banner (Feature #11) */}
-      {dealsAtTarget.length > 0 && (
+      {mainView === 'watching' && dealsAtTarget.length > 0 && (
         <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/[0.08] p-3 buy-queue-deal-alert">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
@@ -372,7 +402,7 @@ export function BuyQueueTab({ userId, wishlistGames, allGames, budgets, yearSpen
       )}
 
       {/* Sale Season Badge (Feature #20) */}
-      {saleSeason && (
+      {mainView === 'watching' && saleSeason && (
         <div className={clsx(
           'flex items-center gap-2 px-3 py-2 rounded-lg text-xs',
           saleSeason.inSeason
@@ -393,7 +423,72 @@ export function BuyQueueTab({ userId, wishlistGames, allGames, budgets, yearSpen
         isOverBudget ? 'bg-red-500/5 border-red-500/20' : 'bg-white/[0.02] border-white/5'
       )}>
         {yearBudget != null ? (
-          renderBudgetRing()
+          <>
+            {renderBudgetRing()}
+            {activeEntries.length > 0 && (
+              <div className="mt-3 pt-3 border-t border-white/5 space-y-2.5">
+                {/* Pricing scenario toggle */}
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] text-white/30">Price assumption</span>
+                  <div className="flex items-center bg-white/5 rounded-lg overflow-hidden">
+                    <button
+                      onClick={() => handlePricingMode('deal')}
+                      className={clsx('px-2.5 py-1 text-[11px] transition-all',
+                        pricingMode === 'deal' ? 'bg-emerald-500/15 text-emerald-400 font-medium' : 'text-white/30 hover:text-white/50')}
+                    >
+                      Deal price
+                    </button>
+                    <button
+                      onClick={() => handlePricingMode('full')}
+                      className={clsx('px-2.5 py-1 text-[11px] transition-all',
+                        pricingMode === 'full' ? 'bg-white/10 text-white/70 font-medium' : 'text-white/30 hover:text-white/50')}
+                    >
+                      Full price
+                    </button>
+                  </div>
+                </div>
+                {/* "How many fit" headline */}
+                <div className="flex items-start gap-2">
+                  <Wallet size={14} className="text-emerald-400 mt-0.5 flex-shrink-0" />
+                  <p className="text-xs text-white/60 leading-relaxed">
+                    {(() => {
+                      const fit = pricingMode === 'full' ? budgetFit.fullPrice : budgetFit.deal;
+                      const allFit = fit.affordableCount >= budgetFit.total;
+                      const label = pricingMode === 'full' ? 'full price' : 'deal prices';
+                      return (
+                        <>
+                          {allFit ? (
+                            <>All <span className="font-medium text-white/90">{budgetFit.total}</span> picks fit at {label}.</>
+                          ) : (
+                            <>Budget fits your top <span className="font-medium text-emerald-400">{fit.affordableCount}</span> of {budgetFit.total} at {label}.</>
+                          )}{' '}
+                          {pricingMode === 'full' && budgetFit.extraFromDeals > 0 && (
+                            <span className="text-white/40">Wait for deals → <span className="text-amber-400 font-medium">{budgetFit.extraFromDeals} more</span> fit.</span>
+                          )}
+                          {pricingMode === 'deal' && budgetFit.potentialSavings > 0 && (
+                            <span className="text-white/40">Waiting saves ~<span className="text-emerald-400 font-medium">{formatMoney(budgetFit.potentialSavings)}</span> vs full price.</span>
+                          )}
+                        </>
+                      );
+                    })()}
+                  </p>
+                </div>
+                {/* Spillover games at the current assumption */}
+                {(() => {
+                  const fit = pricingMode === 'full' ? budgetFit.fullPrice : budgetFit.deal;
+                  if (fit.overflowItems.length === 0) return null;
+                  return (
+                    <div className="flex items-start gap-1.5 text-[10px] text-amber-400/70">
+                      <Target size={10} className="flex-shrink-0 mt-0.5" />
+                      <span>
+                        Spills over: <span className="text-white/40">{fit.overflowItems.slice(0, 3).join(', ')}{fit.overflowItems.length > 3 ? `, +${fit.overflowItems.length - 3} more` : ''}</span>
+                      </span>
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+          </>
         ) : (
           <div className="flex items-center justify-between">
             <div>
@@ -413,6 +508,34 @@ export function BuyQueueTab({ userId, wishlistGames, allGames, budgets, yearSpen
         )}
       </div>
 
+      {/* Watching | Bought switch */}
+      <div className="flex items-center bg-white/5 rounded-lg overflow-hidden w-fit">
+        <button
+          onClick={() => setMainView('watching')}
+          className={clsx('flex items-center gap-1.5 px-3 py-1.5 text-xs transition-all',
+            mainView === 'watching' ? 'bg-white/10 text-white/80 font-medium' : 'text-white/40 hover:text-white/60')}
+        >
+          <ShoppingCart size={13} />
+          Watching
+          {activeEntries.length + maybeEntries.length + deferredEntries.length > 0 && (
+            <span className="text-white/30">{activeEntries.length + maybeEntries.length + deferredEntries.length}</span>
+          )}
+        </button>
+        <button
+          onClick={() => setMainView('bought')}
+          className={clsx('flex items-center gap-1.5 px-3 py-1.5 text-xs transition-all',
+            mainView === 'bought' ? 'bg-white/10 text-white/80 font-medium' : 'text-white/40 hover:text-white/60')}
+        >
+          <PackageCheck size={13} />
+          Bought
+          {purchasedEntries.length > 0 && (
+            <span className="text-white/30">{purchasedEntries.length}</span>
+          )}
+        </button>
+      </div>
+
+      {mainView === 'watching' && (
+      <>
       {/* Header bar */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3 flex-wrap">
@@ -842,23 +965,20 @@ export function BuyQueueTab({ userId, wishlistGames, allGames, budgets, yearSpen
           })}
         </div>
       )}
+      </>
+      )}
 
-      {/* Purchased history (Feature #17 - Enhanced) */}
-      {purchasedEntries.length > 0 && (
-        <div className="space-y-2">
-          <button
-            onClick={() => setShowPurchased(!showPurchased)}
-            className="flex items-center gap-2 text-xs text-white/30 hover:text-white/50 transition-colors w-full"
-          >
-            {showPurchased ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-            <PackageCheck size={12} className="text-white/25" />
-            <span>{purchasedEntries.length} purchased</span>
-            {stats.purchaseInsights.totalSaved > 0 && (
-              <span className="text-emerald-400/50 ml-auto">Saved {formatMoney(stats.purchaseInsights.totalSaved)}</span>
-            )}
-          </button>
-          {showPurchased && (
+      {/* Bought view — purchased history */}
+      {mainView === 'bought' && (
+        purchasedEntries.length > 0 ? (
             <div className="space-y-3">
+              <div className="flex items-center gap-2 text-xs text-white/40">
+                <PackageCheck size={13} className="text-white/30" />
+                <span><span className="text-white/70 font-medium">{purchasedEntries.length}</span> purchased</span>
+                {stats.purchaseInsights.totalSaved > 0 && (
+                  <span className="text-emerald-400/60 ml-auto">Saved {formatMoney(stats.purchaseInsights.totalSaved)} vs MSRP</span>
+                )}
+              </div>
               {/* Purchase insights summary */}
               {purchasedEntries.length >= 2 && (
                 <div className="flex items-center gap-4 flex-wrap px-3 py-2 bg-white/[0.02] rounded-lg text-[11px]">
@@ -908,12 +1028,23 @@ export function BuyQueueTab({ userId, wishlistGames, allGames, budgets, yearSpen
                 ))}
               </div>
             </div>
-          )}
-        </div>
+        ) : (
+          <div className="text-center py-16 space-y-3">
+            <div className="w-16 h-16 rounded-2xl bg-white/[0.03] flex items-center justify-center mx-auto">
+              <PackageCheck size={28} className="text-white/10" />
+            </div>
+            <div>
+              <p className="text-white/40 text-sm font-medium">Nothing bought yet</p>
+              <p className="text-white/20 text-xs mt-1.5 max-w-xs mx-auto leading-relaxed">
+                When you mark a queued game as purchased, it lands here with how much you saved versus full price.
+              </p>
+            </div>
+          </div>
+        )
       )}
 
       {/* Wishlist nudge (Feature #13) */}
-      {wishlistGames.length > 0 && (activeEntries.length > 0 || maybeEntries.length > 0 || deferredEntries.length > 0) && (
+      {mainView === 'watching' && wishlistGames.length > 0 && (activeEntries.length > 0 || maybeEntries.length > 0 || deferredEntries.length > 0) && (
         (() => {
           const queuedNames = new Set([...activeEntries, ...maybeEntries, ...deferredEntries].map(e => e.gameName.toLowerCase()));
           const untracked = wishlistGames.filter(g => !queuedNames.has(g.name.toLowerCase()));

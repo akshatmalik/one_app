@@ -12683,6 +12683,83 @@ export function getSuggestedTargetPrice(
 }
 
 /**
+ * Budget Fit Scenarios
+ *
+ * Answers "how many games can I fit before I have to wait for a discount?".
+ * Walks the queue in manual priority order and fills the remaining budget
+ * twice: once at full price (MSRP) and once at deal/target price. Returns how
+ * many picks fit in each scenario plus the games that spill over, so the UI can
+ * say e.g. "fits your top 3 at full price, all 6 if you wait for deals".
+ */
+const DEFAULT_FULL_PRICE = 70;
+
+const fullPriceOf = (e: PurchaseQueueEntry): number =>
+  e.msrpEstimate ?? e.currentPrice ?? e.targetPrice ?? DEFAULT_FULL_PRICE;
+
+const dealPriceOf = (e: PurchaseQueueEntry): number =>
+  e.targetPrice ?? e.currentPrice ?? e.msrpEstimate ?? DEFAULT_FULL_PRICE;
+
+interface BudgetFitResult {
+  affordableCount: number;
+  overflowItems: string[];
+  totalCost: number;
+}
+
+function fillBudget(
+  ordered: PurchaseQueueEntry[],
+  priceOf: (e: PurchaseQueueEntry) => number,
+  yearBudget: number | null,
+  yearSpent: number
+): BudgetFitResult {
+  const totalCost = ordered.reduce((s, e) => s + priceOf(e), 0);
+  if (yearBudget == null) {
+    return { affordableCount: ordered.length, overflowItems: [], totalCost };
+  }
+  let running = yearSpent;
+  let affordableCount = 0;
+  const overflowItems: string[] = [];
+  for (const e of ordered) {
+    running += priceOf(e);
+    if (running <= yearBudget) affordableCount++;
+    else overflowItems.push(e.gameName);
+  }
+  return { affordableCount, overflowItems, totalCost };
+}
+
+export function getBudgetFitScenarios(
+  entries: PurchaseQueueEntry[],
+  yearBudget: number | null,
+  yearSpent: number
+): {
+  total: number;
+  remaining: number | null;
+  fullPrice: BudgetFitResult;
+  deal: BudgetFitResult;
+  /** Extra games unlocked by waiting for deals instead of buying at full price. */
+  extraFromDeals: number;
+  /** Estimated savings if every pick is bought at deal price vs full price. */
+  potentialSavings: number;
+} {
+  const active = entries
+    .filter(e => !e.purchased)
+    .sort((a, b) => a.priority - b.priority);
+
+  const fullPrice = fillBudget(active, fullPriceOf, yearBudget, yearSpent);
+  const deal = fillBudget(active, dealPriceOf, yearBudget, yearSpent);
+  const remaining = yearBudget != null ? yearBudget - yearSpent : null;
+  const potentialSavings = Math.max(0, fullPrice.totalCost - deal.totalCost);
+
+  return {
+    total: active.length,
+    remaining,
+    fullPrice,
+    deal,
+    extraFromDeals: Math.max(0, deal.affordableCount - fullPrice.affordableCount),
+    potentialSavings,
+  };
+}
+
+/**
  * Queue Impact Snapshot (Feature #16)
  */
 export function getQueueImpactSnapshot(
