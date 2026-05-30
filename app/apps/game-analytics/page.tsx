@@ -45,6 +45,7 @@ import { TrophyToast } from './components/TrophyToast';
 import { ErrorLogPanel, ErrorLogButton } from './components/ErrorLogPanel';
 import { WhatsNewModal } from './components/WhatsNewModal';
 import { GameReviewChat } from './components/GameReviewChat';
+import { StorySoFar } from './components/StorySoFar';
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist';
@@ -212,6 +213,10 @@ export default function GameAnalyticsPage() {
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showErrorLog, setShowErrorLog] = useState(false);
   const [showWhatsNew, setShowWhatsNew] = useState(false);
+  const [timelineMode, setTimelineMode] = useState<'events' | 'chronicle'>(() => {
+    if (typeof window === 'undefined') return 'events';
+    return (localStorage.getItem('ga-timeline-mode') as 'events' | 'chronicle') || 'events';
+  });
 
   // Week recap data for header strip
   const weekRecap = useMemo(() => {
@@ -1123,6 +1128,29 @@ export default function GameAnalyticsPage() {
               </div>
             </div>
             )}
+
+            {/* Timeline mode toggle */}
+            {tabMode === 'timeline' && (
+              <div className="flex items-center gap-1 bg-white/[0.02] rounded-lg p-1 w-fit">
+                {(['events', 'chronicle'] as const).map(mode => (
+                  <button
+                    key={mode}
+                    onClick={() => {
+                      setTimelineMode(mode);
+                      localStorage.setItem('ga-timeline-mode', mode);
+                    }}
+                    className={clsx(
+                      'px-3 py-1 rounded-md text-xs font-medium transition-all',
+                      timelineMode === mode
+                        ? 'bg-white/10 text-white'
+                        : 'text-white/40 hover:text-white/60'
+                    )}
+                  >
+                    {mode === 'events' ? 'Events' : 'Chronicle'}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Tab Content */}
@@ -1191,7 +1219,7 @@ export default function GameAnalyticsPage() {
             </>
           )}
 
-          {tabMode === 'timeline' && (
+          {tabMode === 'timeline' && timelineMode === 'events' && (
             <TimelineView
               games={games}
               gamesWithMetrics={gamesWithMetrics}
@@ -1207,7 +1235,6 @@ export default function GameAnalyticsPage() {
                 if (game) {
                   const existingLogs = game.playLogs || [];
                   const updatedLogs = [...existingLogs, playLog];
-                  // Only update playLogs - hours field remains as baseline
                   await updateGame(gameId, {
                     playLogs: updatedLogs,
                   });
@@ -1215,6 +1242,10 @@ export default function GameAnalyticsPage() {
                 }
               }}
             />
+          )}
+
+          {tabMode === 'timeline' && timelineMode === 'chronicle' && (
+            <StorySoFar games={games} />
           )}
 
           {tabMode === 'stats' && games.length > 0 && (

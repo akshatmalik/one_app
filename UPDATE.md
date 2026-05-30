@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-05-30 00:00 — Timeline — Chronicle mode ("Your Story So Far")
+
+**Files**: app/apps/game-analytics/page.tsx
+**Risk**: not risky
+
+Surfaced the fully-built `StorySoFar` component as a new "Chronicle" mode in the Timeline tab. A small toggle (Events | Chronicle) appears above the timeline; tapping Chronicle shows your gaming history as a narrative scroll — play stretches grouped by month, annotated with cadence labels (binge/steady/one-off), purchase events, and AI-generated blurbs that describe each stretch in plain English. Time range can be filtered from "this month" up to "all time". Mode preference persists in localStorage.
+
+FOLLOW-UP: Could add a "pinned" or "shareable" link per stretch so users can share their gaming story.
+
 ## 2026-05-22 18:00 — Games Tab — Game search bar
 
 **Files**: app/apps/game-analytics/page.tsx

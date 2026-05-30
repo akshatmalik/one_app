@@ -1,6 +1,12 @@
 {
   "entries": [
     {
+      "date": "2026-05-30",
+      "area": "Timeline",
+      "title": "Your gaming story, told in plain English",
+      "body": "The Timeline tab now has a Chronicle mode. Switch to it and see every game you played — grouped into stretches, labeled by how you played (binge, steady, one-off), with an AI line that describes each run. Filter from this month to all time. It turns your play history into something worth reading."
+    },
+    {
       "date": "2026-05-22",
       "area": "Games tab",
       "title": "Search your library instantly",
