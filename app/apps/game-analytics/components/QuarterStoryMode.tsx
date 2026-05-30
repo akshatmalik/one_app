@@ -25,6 +25,7 @@ import { QuarterVsLastScreen } from './story-screens/QuarterVsLastScreen';
 import { QuarterPlotTwistsScreen } from './story-screens/QuarterPlotTwistsScreen';
 import { QuarterAIBlurbScreen } from './story-screens/QuarterAIBlurbScreen';
 import { QuarterClosingScreen } from './story-screens/QuarterClosingScreen';
+import { useStorySwipe } from '../hooks/useStorySwipe';
 
 interface QuarterStoryModeProps {
   data: QuarterInReviewData;
@@ -170,6 +171,9 @@ export function QuarterStoryMode({ data, allGames, onClose, quarterTitle, update
     return () => { document.body.style.overflow = ''; };
   }, []);
 
+  // Swipe navigation (mobile) — swipe left/right to move between screens
+  const { dragProps, guardClick } = useStorySwipe(goToNext, goToPrevious);
+
   const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
     if (e.clientX - rect.left < rect.width * 0.3) goToPrevious();
@@ -205,22 +209,23 @@ export function QuarterStoryMode({ data, allGames, onClose, quarterTitle, update
 
       {/* Nav arrows */}
       {currentScreen > 0 && (
-        <button onClick={goToPrevious} className="absolute left-4 top-1/2 -translate-y-1/2 z-50 p-3 rounded-full bg-white/10 hover:bg-white/20 transition-all backdrop-blur-sm hidden md:flex items-center justify-center">
+        <button onClick={goToPrevious} className="absolute left-4 top-1/2 -translate-y-1/2 z-50 p-3 rounded-full bg-white/10 hover:bg-white/20 transition-all backdrop-blur-sm flex items-center justify-center">
           <ChevronLeft size={24} className="text-white" />
         </button>
       )}
       {currentScreen < totalScreens - 1 && (
-        <button onClick={goToNext} className="absolute right-4 top-1/2 -translate-y-1/2 z-50 p-3 rounded-full bg-white/10 hover:bg-white/20 transition-all backdrop-blur-sm hidden md:flex items-center justify-center">
+        <button onClick={goToNext} className="absolute right-4 top-1/2 -translate-y-1/2 z-50 p-3 rounded-full bg-white/10 hover:bg-white/20 transition-all backdrop-blur-sm flex items-center justify-center">
           <ChevronRight size={24} className="text-white" />
         </button>
       )}
 
       {/* Screen container */}
-      <div className="h-full w-full cursor-pointer" onClick={handleClick}>
+      <div className="h-full w-full cursor-pointer" onClick={guardClick(handleClick)}>
         <AnimatePresence initial={false} custom={direction} mode="wait">
           <motion.div
             key={currentScreen}
             custom={direction}
+            {...dragProps}
             variants={variants}
             initial="enter"
             animate="center"
