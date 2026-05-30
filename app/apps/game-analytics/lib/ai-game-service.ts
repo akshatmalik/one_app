@@ -540,6 +540,90 @@ If milestone data exists, write something specific and interesting about how fas
   }
 }
 
+// ─── Story So Far — chronicle stretch blurbs ─────────────────────────────────
+
+const CHRONICLE_BLURBS_CACHE = 'chronicle-blurbs-cache-v1';
+
+export interface ChronicleStretchInput {
+  key: string;       // stable id for this stretch
+  name: string;
+  genre?: string;
+  hours: number;
+  days: number;      // distinct days active
+  sessions: number;
+  cadenceLabel: string;
+  isReturn: boolean;
+  rating: number;
+  completed: boolean;
+  startLabel: string; // e.g. "May 3"
+}
+
+/**
+ * Generate one short, specific blurb per play stretch in a single batched AI
+ * call. Returns a map of stretch key → blurb. Cached per range key. Stretches
+ * not covered by the AI response simply won't appear in the map (caller falls
+ * back to the template blurb).
+ */
+export async function generateChronicleBlurbs(
+  rangeKey: string,
+  stretches: ChronicleStretchInput[]
+): Promise<Record<string, string>> {
+  const cacheAll = getCache<Record<string, Record<string, string>>>(CHRONICLE_BLURBS_CACHE) || {};
+  const cached = cacheAll[rangeKey];
+  if (cached && stretches.every(s => cached[s.key])) {
+    return cached;
+  }
+
+  if (stretches.length === 0) return {};
+
+  // Cap to keep the prompt sane; chronicle UI shows newest-relevant first anyway.
+  const capped = stretches.slice(0, 40);
+
+  const lines = capped.map((s, i) => {
+    const bits = [
+      `${s.hours % 1 === 0 ? s.hours : s.hours.toFixed(1)}h`,
+      `${s.days} day${s.days > 1 ? 's' : ''}`,
+      `${s.sessions} session${s.sessions > 1 ? 's' : ''}`,
+    ];
+    if (s.genre) bits.push(s.genre);
+    if (s.cadenceLabel) bits.push(s.cadenceLabel);
+    if (s.isReturn) bits.push('a comeback');
+    if (s.completed) bits.push('COMPLETED here');
+    bits.push(`rated ${s.rating}/10`);
+    return `${i + 1}. ${s.name} (started ${s.startLabel}): ${bits.join(', ')}`;
+  }).join('\n');
+
+  const prompt = `You are narrating a gamer's "story so far" — a chronological scroll of what they played and for how long. For EACH play stretch below, write ONE short blurb (max 14 words) that captures the feel of that chapter. Be specific with the numbers, warm, and a little cinematic. Don't start every line with "You". No quotes.
+
+${lines}
+
+Return exactly ${capped.length} lines, each in the format "N: blurb" (N is the number above). Nothing else.`;
+
+  try {
+    const model = getAIModel();
+    const result = await model.generateContent(prompt);
+    const text = result.response.text().trim();
+    const map: Record<string, string> = {};
+
+    text.split('\n').forEach(line => {
+      const match = line.match(/^\s*(\d+)[:.)]\s*(.+)$/);
+      if (match) {
+        const idx = parseInt(match[1], 10) - 1;
+        if (idx >= 0 && idx < capped.length) {
+          map[capped[idx].key] = match[2].trim().replace(/^["']|["']$/g, '');
+        }
+      }
+    });
+
+    cacheAll[rangeKey] = { ...(cacheAll[rangeKey] || {}), ...map };
+    setCache(CHRONICLE_BLURBS_CACHE, cacheAll);
+    return map;
+  } catch (error) {
+    console.error('AI chronicle blurbs error:', error);
+    return {};
+  }
+}
+
 /**
  * Clear all game AI caches
  */
@@ -551,6 +635,7 @@ export function clearGameAICache(): void {
   localStorage.removeItem(CHAPTER_TITLES_CACHE);
   localStorage.removeItem(MONTH_CHAPTER_TITLES_CACHE);
   localStorage.removeItem(WEEK_TITLES_CACHE);
+  localStorage.removeItem(CHRONICLE_BLURBS_CACHE);
 }
 
 // ─── Quarter blurbs ──────────────────────────────────────────────────────────

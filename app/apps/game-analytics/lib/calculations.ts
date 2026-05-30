@@ -13115,3 +13115,260 @@ export function getStoreUrl(gameName: string, platform?: string): { label: strin
 
   return stores;
 }
+
+// ============================================================
+// STORY SO FAR — Chronicle of play "stretches"
+// ============================================================
+//
+// The core idea: scroll through what you played, in order, and for how long.
+// A "stretch" is a span where a game had your attention — a run of play
+// sessions with no gap larger than `gapDays` (default 7). Stop playing for
+// more than a week and the next time you pick it up counts as a fresh stretch
+// (a "comeback").
+
+export type StoryRangeOption =
+  | 'this-month'
+  | 'this-quarter'
+  | 'last-3-months'
+  | 'year-so-far'
+  | 'last-year'
+  | 'this-year';
+
+export interface StoryRange {
+  option: StoryRangeOption;
+  label: string;       // e.g. "Year So Far"
+  start: Date;
+  end: Date;
+}
+
+/** Resolve a range option into concrete start/end dates. */
+export function resolveStoryRange(option: StoryRangeOption, now: Date = new Date()): StoryRange {
+  const y = now.getFullYear();
+  const m = now.getMonth();
+  const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
+  const endOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
+
+  switch (option) {
+    case 'this-month':
+      return { option, label: 'This Month', start: new Date(y, m, 1), end: endOfDay(now) };
+    case 'this-quarter': {
+      const qStartMonth = Math.floor(m / 3) * 3;
+      return { option, label: 'This Quarter', start: new Date(y, qStartMonth, 1), end: endOfDay(now) };
+    }
+    case 'last-3-months': {
+      const start = startOfDay(new Date(y, m, now.getDate()));
+      start.setMonth(start.getMonth() - 3);
+      return { option, label: 'Last 3 Months', start, end: endOfDay(now) };
+    }
+    case 'year-so-far':
+      return { option, label: 'Year So Far', start: new Date(y, 0, 1), end: endOfDay(now) };
+    case 'last-year':
+      return { option, label: 'Last Year', start: new Date(y - 1, 0, 1), end: new Date(y - 1, 11, 31, 23, 59, 59, 999) };
+    case 'this-year':
+      return { option, label: 'This Year', start: new Date(y, 0, 1), end: new Date(y, 11, 31, 23, 59, 59, 999) };
+  }
+}
+
+export type StretchCadence = 'binge' | 'steady' | 'one-off';
+
+export interface PlayStretch {
+  key: string;          // stable id: `${gameId}-${startDate}`
+  gameId: string;
+  gameName: string;
+  thumbnail?: string;
+  genre?: string;
+  rating: number;
+  startDate: string;    // YYYY-MM-DD, first session of the stretch
+  endDate: string;      // YYYY-MM-DD, last session of the stretch
+  monthKey: string;     // YYYY-MM of startDate (for grouping)
+  daysActive: number;   // distinct calendar days with a session
+  spanDays: number;     // inclusive days from first to last session
+  totalHours: number;
+  sessionCount: number;
+  avgGapDays: number;   // average gap (days) between sessions in this stretch
+  cadence: StretchCadence;
+  cadenceLabel: string; // human label, e.g. "every other day", "a binge", "one session"
+  isReturn: boolean;    // not the game's first stretch overall (a comeback)
+  returnOrdinal: number;// 1 = first stretch, 2 = second time around, ...
+  purchasedInRange: boolean; // game was bought during this stretch's window
+  completedInStretch: boolean; // game's completion date falls within the stretch
+}
+
+export interface GameChroniclePurchase {
+  gameId: string;
+  name: string;
+  thumbnail?: string;
+  date: string;
+  price: number;
+  played: boolean;      // did any session happen for this game in range?
+  monthKey: string;
+}
+
+export interface GameChronicle {
+  range: StoryRange;
+  stretches: PlayStretch[];          // sorted ascending by startDate
+  purchases: GameChroniclePurchase[];// purchases that fall inside the range
+  totalHours: number;
+  totalSessions: number;
+  uniqueGames: number;
+  monthKeys: string[];               // ascending list of month keys that have content
+}
+
+function describeCadence(spanDays: number, sessionCount: number, avgGapDays: number): { cadence: StretchCadence; label: string } {
+  if (sessionCount <= 1) return { cadence: 'one-off', label: 'a single session' };
+  // A "steady" drip: spread over time with a regular every-few-days rhythm.
+  if (spanDays >= 10 && sessionCount >= 4 && avgGapDays >= 2) {
+    if (avgGapDays <= 2.5) return { cadence: 'steady', label: 'almost every day' };
+    if (avgGapDays <= 4) return { cadence: 'steady', label: 'every other day' };
+    return { cadence: 'steady', label: 'a few times a week' };
+  }
+  // Concentrated play.
+  if (avgGapDays <= 1.5) return { cadence: 'binge', label: 'a daily binge' };
+  return { cadence: 'binge', label: 'a focused run' };
+}
+
+/**
+ * Split a single game's play logs into stretches (gap-split), across ALL time,
+ * so we can correctly mark comebacks. Returns stretches in chronological order.
+ */
+function buildGameStretches(game: Game, gapDays: number): PlayStretch[] {
+  const logs = (game.playLogs || [])
+    .filter(l => l.date)
+    .sort((a, b) => parseLocalDate(a.date).getTime() - parseLocalDate(b.date).getTime());
+  if (logs.length === 0) return [];
+
+  const DAY = 1000 * 60 * 60 * 24;
+  const groups: typeof logs[] = [];
+  let current: typeof logs = [logs[0]];
+
+  for (let i = 1; i < logs.length; i++) {
+    const prev = parseLocalDate(logs[i - 1].date).getTime();
+    const cur = parseLocalDate(logs[i].date).getTime();
+    const gap = (cur - prev) / DAY;
+    if (gap > gapDays) {
+      groups.push(current);
+      current = [logs[i]];
+    } else {
+      current.push(logs[i]);
+    }
+  }
+  groups.push(current);
+
+  const completionDate = game.status === 'Completed' ? game.endDate : undefined;
+
+  return groups.map((grp, idx) => {
+    const startDate = grp[0].date;
+    const endDate = grp[grp.length - 1].date;
+    const totalHours = grp.reduce((s, l) => s + l.hours, 0);
+    const distinctDays = new Set(grp.map(l => l.date)).size;
+    const spanDays = Math.round((parseLocalDate(endDate).getTime() - parseLocalDate(startDate).getTime()) / DAY) + 1;
+    const avgGapDays = grp.length > 1 ? (spanDays - 1) / (grp.length - 1) : 0;
+    const { cadence, label } = describeCadence(spanDays, grp.length, avgGapDays);
+
+    const completedInStretch = !!completionDate &&
+      parseLocalDate(completionDate) >= parseLocalDate(startDate) &&
+      parseLocalDate(completionDate) <= parseLocalDate(endDate);
+
+    return {
+      key: `${game.id}-${startDate}`,
+      gameId: game.id,
+      gameName: game.name,
+      thumbnail: game.thumbnail,
+      genre: game.genre,
+      rating: game.rating,
+      startDate,
+      endDate,
+      monthKey: startDate.substring(0, 7),
+      daysActive: distinctDays,
+      spanDays,
+      totalHours,
+      sessionCount: grp.length,
+      avgGapDays,
+      cadence,
+      cadenceLabel: label,
+      isReturn: idx > 0,
+      returnOrdinal: idx + 1,
+      purchasedInRange: false, // filled in by getGameChronicle
+      completedInStretch,
+    };
+  });
+}
+
+/**
+ * Build the "Story So Far" chronicle for a date range: an ordered list of play
+ * stretches (what you played and for how long), plus the purchases made in that
+ * window. Stretches are included when they overlap the range.
+ */
+export function getGameChronicle(games: Game[], range: StoryRange, gapDays: number = 7): GameChronicle {
+  const { start, end } = range;
+
+  const allStretches: PlayStretch[] = [];
+  games.forEach(game => {
+    const stretches = buildGameStretches(game, gapDays);
+    stretches.forEach(st => {
+      // Keep a stretch if it overlaps the range at all.
+      const sStart = parseLocalDate(st.startDate);
+      const sEnd = parseLocalDate(st.endDate);
+      if (sEnd >= start && sStart <= end) {
+        // Mark whether the game was bought during this stretch's window.
+        if (game.datePurchased) {
+          const p = parseLocalDate(game.datePurchased);
+          st.purchasedInRange = p >= sStart && p <= sEnd;
+        }
+        allStretches.push(st);
+      }
+    });
+  });
+
+  allStretches.sort((a, b) => parseLocalDate(a.startDate).getTime() - parseLocalDate(b.startDate).getTime());
+
+  // Purchases that fall inside the range.
+  const playedGameIds = new Set(allStretches.map(s => s.gameId));
+  const purchases: GameChroniclePurchase[] = games
+    .filter(g => g.datePurchased && g.status !== 'Wishlist')
+    .filter(g => {
+      const p = parseLocalDate(g.datePurchased!);
+      return p >= start && p <= end;
+    })
+    .map(g => ({
+      gameId: g.id,
+      name: g.name,
+      thumbnail: g.thumbnail,
+      date: g.datePurchased!,
+      price: g.price,
+      played: playedGameIds.has(g.id),
+      monthKey: g.datePurchased!.substring(0, 7),
+    }))
+    .sort((a, b) => parseLocalDate(a.date).getTime() - parseLocalDate(b.date).getTime());
+
+  const totalHours = allStretches.reduce((s, st) => s + st.totalHours, 0);
+  const totalSessions = allStretches.reduce((s, st) => s + st.sessionCount, 0);
+  const uniqueGames = new Set([...playedGameIds, ...purchases.map(p => p.gameId)]).size;
+
+  // Ascending list of month keys that have any stretch or purchase.
+  const monthKeySet = new Set<string>();
+  allStretches.forEach(s => monthKeySet.add(s.monthKey));
+  purchases.forEach(p => monthKeySet.add(p.monthKey));
+  const monthKeys = [...monthKeySet].sort();
+
+  return { range, stretches: allStretches, purchases, totalHours, totalSessions, uniqueGames, monthKeys };
+}
+
+/** Template (no-AI) blurb for a stretch — used as instant fallback before AI loads. */
+export function chronicleStretchBlurb(st: PlayStretch): string {
+  const h = st.totalHours;
+  const hrsText = h >= 1 ? `${h % 1 === 0 ? h : h.toFixed(1)} hours` : `${Math.round(h * 60)} min`;
+  if (st.completedInStretch) {
+    return `Saw it through to the end — ${hrsText} across ${st.daysActive} day${st.daysActive > 1 ? 's' : ''}.`;
+  }
+  if (st.cadence === 'steady') {
+    return `A steady habit — ${st.cadenceLabel} for ${hrsText}.`;
+  }
+  if (st.isReturn) {
+    return `Back for more — another ${hrsText} this time around.`;
+  }
+  if (st.sessionCount <= 1) {
+    return `A quick ${hrsText} taste, then onto the next thing.`;
+  }
+  return `${hrsText} over ${st.daysActive} days — ${st.cadenceLabel}.`;
+}
