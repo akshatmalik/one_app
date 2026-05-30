@@ -12694,6 +12694,8 @@ export function getQueueImpactSnapshot(
   overBudget: number | null;
   newLibrarySize: string;
   genreBreakdown: { genre: string; count: number }[];
+  affordableCount: number;
+  overflowItems: string[];
 } {
   const active = entries.filter(e => !e.purchased);
   const totalCost = active.reduce((s, e) => s + (e.targetPrice ?? e.currentPrice ?? e.msrpEstimate ?? 0), 0);
@@ -12703,7 +12705,21 @@ export function getQueueImpactSnapshot(
   active.forEach(e => { if (e.genre) genres[e.genre] = (genres[e.genre] || 0) + 1; });
   const genreBreakdown = Object.entries(genres).map(([genre, count]) => ({ genre, count })).sort((a, b) => b.count - a.count);
 
-  return { totalCost, overBudget, newLibrarySize: `+${active.length}`, genreBreakdown };
+  // Walk the queue in priority order and find where it busts the budget (D2)
+  let affordableCount = active.length;
+  const overflowItems: string[] = [];
+  if (yearBudget != null) {
+    const ordered = [...active].sort((a, b) => a.priority - b.priority);
+    let running = yearSpent;
+    affordableCount = 0;
+    for (const e of ordered) {
+      running += (e.targetPrice ?? e.currentPrice ?? e.msrpEstimate ?? 0);
+      if (running <= yearBudget) affordableCount++;
+      else overflowItems.push(e.gameName);
+    }
+  }
+
+  return { totalCost, overBudget, newLibrarySize: `+${active.length}`, genreBreakdown, affordableCount, overflowItems };
 }
 
 /**
@@ -12771,6 +12787,152 @@ export function getPurchaseHistoryInsights(entries: PurchaseQueueEntry[]): {
   const avgWaitDays = waits.length > 0 ? Math.round(waits.reduce((s, w) => s + w, 0) / waits.length) : 0;
 
   return { totalSaved, avgWaitDays, gamesFromQueue: purchased.length };
+}
+
+/**
+ * Price Freshness — how long since the "current price" was last touched.
+ * Manual prices go stale fast; this drives a "still $60?" nudge (B2).
+ */
+export function getPriceFreshness(entry: PurchaseQueueEntry): {
+  daysSinceCheck: number | null;
+  isStale: boolean;
+  lastChecked: string | null;
+} {
+  let lastDate: string | null = null;
+  if (entry.priceHistory && entry.priceHistory.length > 0) {
+    lastDate = entry.priceHistory[entry.priceHistory.length - 1].date;
+  } else if (entry.currentPrice != null && entry.updatedAt) {
+    lastDate = entry.updatedAt.split('T')[0];
+  }
+  if (!lastDate) return { daysSinceCheck: null, isStale: false, lastChecked: null };
+  const days = Math.floor((Date.now() - new Date(lastDate).getTime()) / 86400000);
+  return { daysSinceCheck: days, isStale: days >= 21, lastChecked: lastDate };
+}
+
+/**
+ * Impulse Cooling-Off Timer — restraint analog to the play queue's shame timer.
+ * Only nudges committed buys (maybe/deferred are already "waiting"). (C2)
+ */
+export type CoolingOffTier = 'sleep-on-it' | 'cooling' | 'considered' | 'seasoned';
+export function getCoolingOffData(entry: PurchaseQueueEntry): {
+  daysWaiting: number;
+  tier: CoolingOffTier;
+  label: string;
+  message: string;
+  color: string;
+} | null {
+  if (entry.purchased) return null;
+  const intent = entry.intent ?? (entry.isMaybe ? 'maybe' : 'committed');
+  if (intent !== 'committed') return null;
+  const start = entry.addedAt || entry.createdAt;
+  if (!start) return null;
+  const days = Math.floor((Date.now() - new Date(start).getTime()) / 86400000);
+
+  if (days <= 2) return {
+    daysWaiting: days, tier: 'sleep-on-it', label: 'Sleep on it', color: '#fbbf24',
+    message: days <= 0 ? 'Just added — give it a night before you commit.' : `${days}d in — still want it tomorrow?`,
+  };
+  if (days <= 7) return {
+    daysWaiting: days, tier: 'cooling', label: 'Cooling off', color: '#60a5fa',
+    message: `${days} days and still on your mind. The interest is real.`,
+  };
+  if (days <= 30) return {
+    daysWaiting: days, tier: 'considered', label: 'Well considered', color: '#34d399',
+    message: `${days} days of patience — this is a deliberate buy, not an impulse.`,
+  };
+  return {
+    daysWaiting: days, tier: 'seasoned', label: 'Long-considered', color: '#a78bfa',
+    message: `${days} days on your list. You clearly mean it — or it's time to let go.`,
+  };
+}
+
+/**
+ * Buy Queue AI Context — rich snapshot for the "Ask AI" gut-check (C1).
+ */
+export interface BuyQueueAIContext {
+  entries: {
+    name: string;
+    genre: string;
+    platform: string;
+    intent: string;
+    isDayOneBuy: boolean;
+    targetPrice: number | null;
+    currentPrice: number | null;
+    msrp: number | null;
+    daysWaiting: number;
+    confidence: number;
+  }[];
+  totalPlannedCost: number;
+  committedCount: number;
+  maybeCount: number;
+  deferredCount: number;
+  yearBudget: number | null;
+  yearSpent: number;
+  budgetRemaining: number | null;
+  backlogSize: number;
+  unplayedFullPriceCount: number;
+  completionRate: number;
+  topGenres: string[];
+  saleSeason: string | null;
+}
+
+export function buildBuyQueueAIContext(
+  committedEntries: PurchaseQueueEntry[],
+  maybeEntries: PurchaseQueueEntry[],
+  deferredEntries: PurchaseQueueEntry[],
+  allGames: Game[],
+  yearBudget: number | null,
+  yearSpent: number
+): BuyQueueAIContext {
+  const now = Date.now();
+  const entries = committedEntries.map(e => {
+    const start = e.addedAt || e.createdAt;
+    const daysWaiting = start ? Math.floor((now - new Date(start).getTime()) / 86400000) : 0;
+    return {
+      name: e.gameName,
+      genre: e.genre || 'Unknown',
+      platform: e.platform || 'Unknown',
+      intent: e.intent ?? 'committed',
+      isDayOneBuy: e.isDayOneBuy,
+      targetPrice: e.targetPrice ?? null,
+      currentPrice: e.currentPrice ?? null,
+      msrp: e.msrpEstimate ?? null,
+      daysWaiting,
+      confidence: getBuyConfidence(e, allGames).score,
+    };
+  });
+
+  const totalPlannedCost = committedEntries.reduce(
+    (s, e) => s + (e.targetPrice ?? e.currentPrice ?? e.msrpEstimate ?? 0), 0
+  );
+
+  const owned = allGames.filter(g => g.status !== 'Wishlist');
+  const completed = owned.filter(g => g.status === 'Completed').length;
+  const completionRate = owned.length > 0 ? Math.round((completed / owned.length) * 100) : 0;
+  const backlogSize = owned.filter(g => g.status === 'Not Started' || getTotalHours(g) < 1).length;
+  const unplayedFullPriceCount = owned.filter(g => g.price >= 50 && !g.acquiredFree && getTotalHours(g) < 2).length;
+
+  const genreCounts: Record<string, number> = {};
+  owned.forEach(g => { if (g.genre) genreCounts[g.genre] = (genreCounts[g.genre] || 0) + 1; });
+  const topGenres = Object.entries(genreCounts).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([g]) => g);
+
+  const sale = getSaleSeasonIndicator();
+
+  return {
+    entries,
+    totalPlannedCost,
+    committedCount: committedEntries.length,
+    maybeCount: maybeEntries.length,
+    deferredCount: deferredEntries.length,
+    yearBudget,
+    yearSpent,
+    budgetRemaining: yearBudget != null ? yearBudget - yearSpent - totalPlannedCost : null,
+    backlogSize,
+    unplayedFullPriceCount,
+    completionRate,
+    topGenres,
+    saleSeason: sale?.inSeason ? sale.label : null,
+  };
 }
 
 // ── Game Card Deep Insights ──────────────────────────────────────────────────
