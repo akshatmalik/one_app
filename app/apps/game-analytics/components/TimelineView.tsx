@@ -23,6 +23,7 @@ import { FilmstripTimeline } from './FilmstripTimeline';
 import { GamingCalendar } from './GamingCalendar';
 import { CumulativeHoursCounter } from './CumulativeHoursCounter';
 import { StoryArcOverlay } from './StoryArcOverlay';
+import { StorySoFar } from './StorySoFar';
 import clsx from 'clsx';
 
 interface TimelineViewProps {
@@ -579,6 +580,9 @@ export function TimelineView({ games, gamesWithMetrics, updateGame, onLogTime, o
           initialPeriodKey={awardsHubConfig.periodKey}
         />
       )}
+
+      {/* Story So Far — scrollable chronicle of what you played and for how long */}
+      <StorySoFar games={games} />
 
       <WeekInReview data={weekInReviewData} allGames={games} weekOffset={weekOffset} maxWeeksBack={maxWeeksBack} onWeekChange={handleWeekChange} updateGame={updateGame} />
 
