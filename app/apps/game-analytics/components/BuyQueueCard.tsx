@@ -4,7 +4,7 @@ import { useState } from 'react';
 import {
   ExternalLink, Check, Trash2, ChevronDown, ChevronUp, GripVertical,
   Calendar, Star, Zap, Target, TrendingDown, TrendingUp, Minus,
-  AlertCircle, Clock, Edit3, HelpCircle, ShoppingCart, Tag
+  Clock, Edit3, HelpCircle, ShoppingCart, Tag, RefreshCw, Moon, Sparkles
 } from 'lucide-react';
 import { PurchaseQueueEntry, PurchaseIntent } from '../lib/types';
 import { Game } from '../lib/types';
@@ -13,7 +13,11 @@ import {
   getPriceContext,
   getPredictedValue,
   getStoreUrl,
+  getPriceFreshness,
+  getCoolingOffData,
 } from '../lib/calculations';
+import { fetchCheapestPrice } from '../lib/price-fetch';
+import { PriceSparkline } from './PriceSparkline';
 import clsx from 'clsx';
 
 interface Props {
@@ -23,6 +27,8 @@ interface Props {
   onMarkPurchased: (id: string, price?: number) => Promise<void>;
   onDelete: (id: string) => void;
   onSetIntent?: (intent: PurchaseIntent) => void;
+  verdict?: string;
+  dragHandleProps?: React.HTMLAttributes<HTMLButtonElement>;
 }
 
 const INTENT_OPTIONS: { value: PurchaseIntent; label: string; icon: typeof ShoppingCart; active: string }[] = [
@@ -70,7 +76,7 @@ function getConfidenceColor(score: number): string {
   return 'text-red-400 bg-red-500/15';
 }
 
-export function BuyQueueCard({ entry, allGames, onUpdate, onMarkPurchased, onDelete, onSetIntent }: Props) {
+export function BuyQueueCard({ entry, allGames, onUpdate, onMarkPurchased, onDelete, onSetIntent, verdict, dragHandleProps }: Props) {
   const intent: PurchaseIntent = entry.intent ?? (entry.isMaybe ? 'maybe' : 'committed');
   const isMaybe = intent === 'maybe';
   const isDeferred = intent === 'deferred';
@@ -82,6 +88,8 @@ export function BuyQueueCard({ entry, allGames, onUpdate, onMarkPurchased, onDel
   const [releaseDateInput, setReleaseDateInput] = useState('');
   const [showPurchaseConfirm, setShowPurchaseConfirm] = useState(false);
   const [purchasePriceInput, setPurchasePriceInput] = useState('');
+  const [fetchingPrice, setFetchingPrice] = useState(false);
+  const [fetchMsg, setFetchMsg] = useState<string | null>(null);
 
   const upcoming = entry.releaseDate ? new Date(entry.releaseDate) > new Date() : false;
   const days = entry.releaseDate ? daysUntil(entry.releaseDate) : null;
@@ -127,6 +135,35 @@ export function BuyQueueCard({ entry, allGames, onUpdate, onMarkPurchased, onDel
       : null;
   const atLowest = lowestSeen != null && entry.currentPrice != null && entry.currentPrice <= lowestSeen;
 
+  // Stale-price nudge (B2) + cooling-off timer (C2)
+  const freshness = getPriceFreshness(entry);
+  const coolingOff = getCoolingOffData(entry);
+
+  // Live price lookup (B3) — best effort, manual fallback on failure
+  const handleFetchPrice = async () => {
+    setFetchingPrice(true);
+    setFetchMsg(null);
+    try {
+      const result = await fetchCheapestPrice(entry.gameName);
+      if (result) {
+        const today = new Date().toISOString().split('T')[0];
+        const history = entry.priceHistory ? [...entry.priceHistory] : [];
+        const last = history[history.length - 1];
+        if (last && last.date === today) history[history.length - 1] = { date: today, price: result.price };
+        else if (!last || last.price !== result.price) history.push({ date: today, price: result.price });
+        await onUpdate(entry.id, { currentPrice: result.price, priceHistory: history });
+        setFetchMsg(`${result.source}: $${result.price}`);
+      } else {
+        setFetchMsg('No price found — enter manually');
+      }
+    } catch {
+      setFetchMsg('Lookup failed — enter manually');
+    } finally {
+      setFetchingPrice(false);
+      setTimeout(() => setFetchMsg(null), 4000);
+    }
+  };
+
   const handleReleaseDateBlur = async () => {
     if (releaseDateInput) {
       await onUpdate(entry.id, { releaseDate: releaseDateInput });
@@ -153,8 +190,18 @@ export function BuyQueueCard({ entry, allGames, onUpdate, onMarkPurchased, onDel
   const countdown = getCountdownStyle();
 
   return (
+    <div className="flex items-stretch gap-1.5">
+      {dragHandleProps && (
+        <button
+          {...dragHandleProps}
+          className="flex-shrink-0 flex items-center justify-center w-6 rounded-lg text-white/15 hover:text-white/50 hover:bg-white/5 cursor-grab active:cursor-grabbing transition-colors touch-none"
+          aria-label="Drag to reorder"
+        >
+          <GripVertical size={14} />
+        </button>
+      )}
     <div className={clsx(
-      'rounded-xl overflow-hidden transition-all',
+      'flex-1 min-w-0 rounded-xl overflow-hidden transition-all',
       isMaybe
         ? 'border border-dashed border-amber-500/25 opacity-90'
         : isDeferred
@@ -272,6 +319,12 @@ export function BuyQueueCard({ entry, allGames, onUpdate, onMarkPurchased, onDel
               {entry.metacriticScore}
             </span>
           )}
+          {coolingOff && (
+            <span className="flex items-center gap-1" style={{ color: coolingOff.color }} title={coolingOff.message}>
+              <Moon size={9} />
+              {coolingOff.label} · {coolingOff.daysWaiting}d
+            </span>
+          )}
           {!upcoming && priceStatus && (
             <span className={clsx('flex items-center gap-1 ml-auto', priceStatus.color)}>
               <span className={clsx('w-1.5 h-1.5 rounded-full flex-shrink-0', priceStatus.dot)} />
@@ -345,6 +398,14 @@ export function BuyQueueCard({ entry, allGames, onUpdate, onMarkPurchased, onDel
                 {entry.currentPrice != null ? `$${entry.currentPrice}` : 'set'}
               </button>
             )}
+            <button
+              onClick={handleFetchPrice}
+              disabled={fetchingPrice}
+              title="Look up current PC price (CheapShark)"
+              className="text-white/20 hover:text-emerald-400 transition-colors"
+            >
+              <RefreshCw size={10} className={clsx(fetchingPrice && 'animate-spin')} />
+            </button>
           </div>
 
           {/* Target price — inline editable */}
@@ -379,18 +440,37 @@ export function BuyQueueCard({ entry, allGames, onUpdate, onMarkPurchased, onDel
           )}
         </div>
 
-        {/* Manual price history */}
+        {/* Stale-price nudge (B2) + live-fetch result */}
+        {!isMaybe && freshness.isStale && freshness.daysSinceCheck != null && entry.currentPrice != null && (
+          <button
+            onClick={handleFetchPrice}
+            disabled={fetchingPrice}
+            className="mt-1.5 flex items-center gap-1 text-[10px] text-amber-400/70 hover:text-amber-400 transition-colors"
+          >
+            <Clock size={9} />
+            Price last checked {freshness.daysSinceCheck}d ago — still ${entry.currentPrice}?
+            <RefreshCw size={9} className={clsx(fetchingPrice && 'animate-spin')} />
+          </button>
+        )}
+        {fetchMsg && (
+          <div className="mt-1 text-[10px] text-white/40">{fetchMsg}</div>
+        )}
+
+        {/* Manual price history + sparkline */}
         {lowestSeen != null && priceHistory.length >= 2 && (
-          <div className="mt-1.5 flex items-center gap-1.5 text-[10px] text-white/30">
-            {priceTrend === 'down' ? <TrendingDown size={9} className="text-emerald-400/60" /> :
-             priceTrend === 'up' ? <TrendingUp size={9} className="text-red-400/50" /> :
-             <Minus size={9} className="text-white/20" />}
-            <span>
-              Lowest seen <span className={clsx('font-medium', atLowest ? 'text-emerald-400' : 'text-white/50')}>${lowestSeen}</span>
-            </span>
-            <span className="text-white/15">·</span>
-            <span className="text-white/20">{priceHistory.length} prices tracked</span>
-            {atLowest && <span className="text-[9px] px-1 py-0.5 rounded bg-emerald-500/15 text-emerald-400">best yet</span>}
+          <div className="mt-1.5 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5 text-[10px] text-white/30 flex-wrap min-w-0">
+              {priceTrend === 'down' ? <TrendingDown size={9} className="text-emerald-400/60" /> :
+               priceTrend === 'up' ? <TrendingUp size={9} className="text-red-400/50" /> :
+               <Minus size={9} className="text-white/20" />}
+              <span>
+                Lowest <span className={clsx('font-medium', atLowest ? 'text-emerald-400' : 'text-white/50')}>${lowestSeen}</span>
+              </span>
+              <span className="text-white/15">·</span>
+              <span className="text-white/20">{priceHistory.length} tracked</span>
+              {atLowest && <span className="text-[9px] px-1 py-0.5 rounded bg-emerald-500/15 text-emerald-400">best yet</span>}
+            </div>
+            <PriceSparkline history={priceHistory} target={entry.targetPrice} />
           </div>
         )}
 
@@ -413,6 +493,14 @@ export function BuyQueueCard({ entry, allGames, onUpdate, onMarkPurchased, onDel
               predicted.predictedRating === 'Fair' ? 'text-yellow-400/50' : 'text-red-400/50'
             )} />
             <span className="italic">Predicted: {predicted.predictedRating} ({predicted.insight})</span>
+          </div>
+        )}
+
+        {/* AI verdict (C1) */}
+        {verdict && (
+          <div className="mt-1.5 flex items-start gap-1.5 text-[10px] text-purple-200/80 bg-purple-500/[0.07] border border-purple-500/10 rounded-lg px-2 py-1.5">
+            <Sparkles size={10} className="text-purple-400 flex-shrink-0 mt-0.5" />
+            <span className="italic leading-relaxed">{verdict}</span>
           </div>
         )}
 
@@ -547,6 +635,7 @@ export function BuyQueueCard({ entry, allGames, onUpdate, onMarkPurchased, onDel
           </div>
         </div>
       )}
+    </div>
     </div>
   );
 }

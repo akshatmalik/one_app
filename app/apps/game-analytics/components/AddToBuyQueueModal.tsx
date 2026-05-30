@@ -1,10 +1,11 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { X, Search, Loader2, Star, Calendar, Check, ShoppingCart, AlertTriangle, Sparkles, Zap } from 'lucide-react';
+import { X, Search, Loader2, Star, Calendar, Check, ShoppingCart, AlertTriangle, Sparkles, Zap, RefreshCw, Library } from 'lucide-react';
 import { searchRAWGGames, RAWGGameData } from '../lib/rawg-api';
 import { PurchaseQueueEntry, Game } from '../lib/types';
 import { getImpulseCheckData, getSuggestedTargetPrice } from '../lib/calculations';
+import { fetchCheapestPrice } from '../lib/price-fetch';
 import clsx from 'clsx';
 
 const PLATFORMS = ['PS5', 'PS4', 'Xbox Series', 'Xbox One', 'Switch', 'PC', 'Other'];
@@ -15,6 +16,7 @@ interface Props {
   nextPriority: number;
   wishlistGames?: { name: string; platform?: string; genre?: string; thumbnail?: string }[];
   allGames?: Game[];
+  existingEntryNames?: string[];
 }
 
 function formatRelease(date: string | undefined): string {
@@ -31,12 +33,14 @@ function isUpcoming(date: string | undefined): boolean {
   return new Date(date) > new Date();
 }
 
-export function AddToBuyQueueModal({ onAdd, onClose, nextPriority, wishlistGames = [], allGames = [] }: Props) {
+export function AddToBuyQueueModal({ onAdd, onClose, nextPriority, wishlistGames = [], allGames = [], existingEntryNames = [] }: Props) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<RAWGGameData[]>([]);
   const [searching, setSearching] = useState(false);
   const [selected, setSelected] = useState<RAWGGameData | null>(null);
   const [customName, setCustomName] = useState('');
+  const [fetchingPrice, setFetchingPrice] = useState(false);
+  const [fetchMsg, setFetchMsg] = useState<string | null>(null);
 
   // Form fields
   const [platform, setPlatform] = useState('PS5');
@@ -127,6 +131,34 @@ export function AddToBuyQueueModal({ onAdd, onClose, nextPriority, wishlistGames
   };
 
   const displayName = selected?.name || query.trim();
+
+  // Duplicate / already-owned guard (C3)
+  const checkName = (selected?.name || customName.trim() || query.trim()).toLowerCase();
+  const ownedDuplicate = checkName.length > 1
+    ? allGames.find(g => g.name.toLowerCase() === checkName && g.status !== 'Wishlist')
+    : undefined;
+  const queueDuplicate = checkName.length > 1 && existingEntryNames.some(n => n.toLowerCase() === checkName);
+
+  // Live price lookup (B3)
+  const handleFetchPrice = async () => {
+    const name = selected?.name || customName.trim() || query.trim();
+    if (!name) return;
+    setFetchingPrice(true);
+    setFetchMsg(null);
+    try {
+      const result = await fetchCheapestPrice(name);
+      if (result) {
+        setCurrentPrice(result.price.toString());
+        setFetchMsg(`${result.source}: $${result.price}`);
+      } else {
+        setFetchMsg('No price found — enter manually');
+      }
+    } catch {
+      setFetchMsg('Lookup failed — enter manually');
+    } finally {
+      setFetchingPrice(false);
+    }
+  };
 
   // Impulse check (Feature #8)
   const impulseCheck = isDayOneBuy && allGames.length > 0 ? getImpulseCheckData(allGames) : null;
@@ -361,6 +393,18 @@ export function AddToBuyQueueModal({ onAdd, onClose, nextPriority, wishlistGames
             </div>
           )}
 
+          {/* Duplicate / owned guard (C3) */}
+          {(ownedDuplicate || queueDuplicate) && (
+            <div className="flex items-center gap-2 p-3 rounded-xl border border-amber-500/20 bg-amber-500/[0.06] text-xs">
+              {ownedDuplicate ? <Library size={13} className="text-amber-400 flex-shrink-0" /> : <AlertTriangle size={13} className="text-amber-400 flex-shrink-0" />}
+              <span className="text-amber-400/90">
+                {ownedDuplicate
+                  ? `You already own "${ownedDuplicate.name}" in your library.`
+                  : 'This game is already in your buy queue.'}
+              </span>
+            </div>
+          )}
+
           {/* Prices */}
           <div className="grid grid-cols-3 gap-3">
             <div>
@@ -421,7 +465,22 @@ export function AddToBuyQueueModal({ onAdd, onClose, nextPriority, wishlistGames
             </button>
           )}
 
-          <p className="text-[11px] text-white/20 -mt-2">Prices are manual — check stores for current deals</p>
+          {/* Live price lookup (B3) */}
+          <div className="-mt-2 flex items-center gap-2">
+            <button
+              onClick={handleFetchPrice}
+              disabled={fetchingPrice || !displayName}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 disabled:opacity-40 text-[11px] text-white/50 transition-all"
+            >
+              <RefreshCw size={11} className={clsx(fetchingPrice && 'animate-spin')} />
+              Check PC price
+            </button>
+            {fetchMsg ? (
+              <span className="text-[11px] text-white/40">{fetchMsg}</span>
+            ) : (
+              <span className="text-[11px] text-white/20">or enter prices manually</span>
+            )}
+          </div>
 
           {/* Notes */}
           <div>

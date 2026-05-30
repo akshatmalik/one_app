@@ -1336,8 +1336,9 @@ export default function GameAnalyticsPage() {
                       ...(data.thumbnail && { thumbnail: data.thumbnail }),
                     });
                     showToast(`${data.name} moved from wishlist to library`, 'success');
+                    return existingWishlistGame.id;
                   } else {
-                    await addGame({
+                    const newGame = await addGame({
                       name: data.name,
                       price: data.price,
                       hours: 0,
@@ -1350,10 +1351,16 @@ export default function GameAnalyticsPage() {
                       playLogs: [],
                     });
                     showToast(`${data.name} added to library`, 'success');
+                    return newGame?.id;
                   }
                 } catch {
                   // Silent fail — the game still got marked as purchased in the queue
+                  return undefined;
                 }
+              }}
+              onAddToPlayQueue={async (gameId) => {
+                await addToQueue(gameId);
+                showToast('Added to Up Next', 'success');
               }}
             />
           )}

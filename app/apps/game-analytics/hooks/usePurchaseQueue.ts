@@ -97,6 +97,22 @@ export function usePurchaseQueue(userId: string | null) {
     await updateEntry(id, { intent, isMaybe: intent === 'maybe' });
   }, [updateEntry]);
 
+  // Reassign `priority` to match a new manual order. Optimistic with rollback.
+  const reorderEntries = useCallback(async (orderedIds: string[]): Promise<void> => {
+    const snapshot = entriesRef.current;
+    const idToPriority = new Map(orderedIds.map((id, i) => [id, i + 1]));
+    setEntries(prev => sortEntries(prev.map(e =>
+      idToPriority.has(e.id) ? { ...e, priority: idToPriority.get(e.id)! } : e
+    )));
+    try {
+      await Promise.all(orderedIds.map((id, i) => purchaseQueueRepository.update(id, { priority: i + 1 })));
+    } catch (e) {
+      console.error('Failed to reorder purchase queue', e);
+      setEntries(snapshot);
+      throw e;
+    }
+  }, []);
+
   // ── Derived buckets ──────────────────────────────────────────────
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -147,6 +163,7 @@ export function usePurchaseQueue(userId: string | null) {
     deleteEntry,
     markPurchased,
     setIntent,
+    reorderEntries,
     refresh,
   };
 }
