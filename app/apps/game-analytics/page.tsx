@@ -1323,19 +1323,34 @@ export default function GameAnalyticsPage() {
               onGoToBudget={() => setTabMode('stats')}
               onAddGameToLibrary={async (data) => {
                 try {
-                  await addGame({
-                    name: data.name,
-                    price: data.price,
-                    hours: 0,
-                    rating: 0,
-                    status: (data.status || 'Not Started') as GameStatus,
-                    platform: data.platform,
-                    genre: data.genre,
-                    thumbnail: data.thumbnail,
-                    datePurchased: data.datePurchased,
-                    playLogs: [],
-                  });
-                  showToast(`${data.name} added to library`, 'success');
+                  const existingWishlistGame = games.find(
+                    g => g.status === 'Wishlist' && g.name.toLowerCase() === data.name.toLowerCase()
+                  );
+                  if (existingWishlistGame) {
+                    await updateGame(existingWishlistGame.id, {
+                      status: (data.status || 'Not Started') as GameStatus,
+                      price: data.price,
+                      datePurchased: data.datePurchased,
+                      ...(data.platform && { platform: data.platform }),
+                      ...(data.genre && { genre: data.genre }),
+                      ...(data.thumbnail && { thumbnail: data.thumbnail }),
+                    });
+                    showToast(`${data.name} moved from wishlist to library`, 'success');
+                  } else {
+                    await addGame({
+                      name: data.name,
+                      price: data.price,
+                      hours: 0,
+                      rating: 0,
+                      status: (data.status || 'Not Started') as GameStatus,
+                      platform: data.platform,
+                      genre: data.genre,
+                      thumbnail: data.thumbnail,
+                      datePurchased: data.datePurchased,
+                      playLogs: [],
+                    });
+                    showToast(`${data.name} added to library`, 'success');
+                  }
                 } catch {
                   // Silent fail — the game still got marked as purchased in the queue
                 }
