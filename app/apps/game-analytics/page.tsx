@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical, Download, Gift, ShoppingCart, Search, X } from 'lucide-react';
+import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical, Download, Gift, ShoppingCart, Search, X, ArrowLeftRight } from 'lucide-react';
 import { useGames } from './hooks/useGames';
 import { useAnalytics, GameWithMetrics } from './hooks/useAnalytics';
 import { useBudget } from './hooks/useBudget';
@@ -45,6 +45,7 @@ import { TrophyToast } from './components/TrophyToast';
 import { ErrorLogPanel, ErrorLogButton } from './components/ErrorLogPanel';
 import { WhatsNewModal } from './components/WhatsNewModal';
 import { GameReviewChat } from './components/GameReviewChat';
+import { GameCompareModal } from './components/GameCompareModal';
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist';
@@ -212,6 +213,7 @@ export default function GameAnalyticsPage() {
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showErrorLog, setShowErrorLog] = useState(false);
   const [showWhatsNew, setShowWhatsNew] = useState(false);
+  const [showCompare, setShowCompare] = useState(false);
 
   // Week recap data for header strip
   const weekRecap = useMemo(() => {
@@ -564,6 +566,14 @@ export default function GameAnalyticsPage() {
                       >
                         <Heart size={14} /> Bulk Wishlist
                       </button>
+                      {games.length >= 2 && (
+                        <button
+                          onClick={() => { setShowCompare(true); setShowCommandPalette(false); }}
+                          className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white/70 hover:text-white hover:bg-white/5 transition-all"
+                        >
+                          <ArrowLeftRight size={14} /> Compare Games
+                        </button>
+                      )}
                       {games.length === 0 && (
                         <button
                           onClick={() => { handleSeedData(); setShowCommandPalette(false); }}
@@ -1396,6 +1406,15 @@ export default function GameAnalyticsPage() {
       {/* What's New Modal */}
       {showWhatsNew && (
         <WhatsNewModal onClose={() => setShowWhatsNew(false)} />
+      )}
+
+      {/* Game Compare Modal */}
+      {showCompare && (
+        <GameCompareModal
+          games={gamesWithMetrics}
+          allGames={games}
+          onClose={() => setShowCompare(false)}
+        />
       )}
 
       {/* Export Panel */}

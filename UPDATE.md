@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-05-30 — Games Tab — Head-to-Head game comparison modal
+
+**Files**: app/apps/game-analytics/components/GameCompareModal.tsx, app/apps/game-analytics/page.tsx
+**Risk**: not risky
+
+Added a "Head-to-Head" comparison modal, accessible via the ⋮ command palette as "Compare Games." Users pick two games from their library via searchable dropdowns; the modal then shows a side-by-side table across six metrics — Rating, Hours, $/hr, ROI, Price, and Sessions — with green checkmarks on the winner of each row, a score bar showing category wins (e.g. 4:2), and a verdict card that names the winner with contextual highlights like "$1.23/hr cheaper" or "rated 9/10 vs 7/10." A value-rating footer summarizes each game's Excellent/Good/Fair/Poor tier and ROI grade. Answers the question users have constantly: "Which of these two games was actually the better purchase?"
+
+FOLLOW-UP: Could add a "Compare from card" shortcut that pre-fills one slot from a game's bottom sheet, saving the first search step.
+
 ## 2026-05-22 18:00 — Games Tab — Game search bar
 
 **Files**: app/apps/game-analytics/page.tsx
