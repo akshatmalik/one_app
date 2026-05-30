@@ -64,6 +64,7 @@ import { TrophyRoomV2 } from './TrophyRoomV2';
 import { TrophyProgress, TrophyScoreSummary } from '../lib/trophy-calculations';
 import { DiscoverPanel } from './DiscoverPanel';
 import { WeeklyDigest } from './WeeklyDigest';
+import { PlayedSummary, BoughtSummary } from './RangeGlance';
 import clsx from 'clsx';
 
 interface StatsViewProps {
@@ -357,6 +358,12 @@ export function StatsView({ games, summary, budgets = [], onSetBudget, trophies,
 
   return (
     <div className="space-y-8">
+      {/* Played & Bought — at-a-glance summaries for a custom date range */}
+      <div className="space-y-3">
+        <PlayedSummary games={games} />
+        <BoughtSummary games={games} />
+      </div>
+
       {/* Library Health Dashboard */}
       <div className="p-5 bg-gradient-to-br from-white/[0.03] to-white/[0.01] border border-white/10 rounded-2xl">
         <div className="flex items-center gap-2 mb-4">
