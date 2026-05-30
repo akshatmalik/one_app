@@ -36,6 +36,7 @@ import { AwardsHub } from './AwardsHub';
 import { generateMultipleBlurbs, AIBlurbType, AIBlurbResult } from '../lib/ai-service';
 import { useAwards, awardWeekKey, awardWeekLabel } from '../hooks/useAwards';
 import { GameWithMetrics } from '../hooks/useAnalytics';
+import { useStorySwipe } from '../hooks/useStorySwipe';
 
 interface WeekStoryModeProps {
   data: WeekInReviewData;
@@ -259,6 +260,9 @@ const ignoredGames = useMemo(() => getIgnoredGames(data, allGames), [data, allGa
     return () => { document.body.style.overflow = ''; };
   }, []);
 
+  // Swipe navigation (mobile) — swipe left/right to move between screens
+  const { dragProps, guardClick } = useStorySwipe(goToNext, goToPrevious);
+
   // Click navigation - left/right halves
   const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -332,7 +336,7 @@ const ignoredGames = useMemo(() => getIgnoredGames(data, allGames), [data, allGa
       {currentScreen > 0 && (
         <button
           onClick={goToPrevious}
-          className="absolute left-4 top-1/2 -translate-y-1/2 z-50 p-3 rounded-full bg-white/10 hover:bg-white/20 transition-all backdrop-blur-sm hidden md:flex items-center justify-center"
+          className="absolute left-4 top-1/2 -translate-y-1/2 z-50 p-3 rounded-full bg-white/10 hover:bg-white/20 transition-all backdrop-blur-sm flex items-center justify-center"
           aria-label="Previous screen"
         >
           <ChevronLeft size={24} className="text-white" />
@@ -342,7 +346,7 @@ const ignoredGames = useMemo(() => getIgnoredGames(data, allGames), [data, allGa
       {currentScreen < totalScreens - 1 && (
         <button
           onClick={goToNext}
-          className="absolute right-4 top-1/2 -translate-y-1/2 z-50 p-3 rounded-full bg-white/10 hover:bg-white/20 transition-all backdrop-blur-sm hidden md:flex items-center justify-center"
+          className="absolute right-4 top-1/2 -translate-y-1/2 z-50 p-3 rounded-full bg-white/10 hover:bg-white/20 transition-all backdrop-blur-sm flex items-center justify-center"
           aria-label="Next screen"
         >
           <ChevronRight size={24} className="text-white" />
@@ -352,12 +356,13 @@ const ignoredGames = useMemo(() => getIgnoredGames(data, allGames), [data, allGa
       {/* Screen container with click navigation */}
       <div
         className="h-full w-full cursor-pointer"
-        onClick={handleClick}
+        onClick={guardClick(handleClick)}
       >
         <AnimatePresence initial={false} custom={direction} mode="wait">
           <motion.div
             key={currentScreen}
             custom={direction}
+            {...dragProps}
             variants={variants}
             initial="enter"
             animate="center"
