@@ -13687,3 +13687,177 @@ export function toDateKey(d: Date): string {
   const day = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${day}`;
 }
+
+// ── Game Face-Off ────────────────────────────────────────────────────
+
+export interface FaceOffStat {
+  label: string;
+  value1: string;
+  value2: string;
+  rawValue1: number;
+  rawValue2: number;
+  winner: 1 | 2 | 'tie';
+  higherIsBetter: boolean;
+  icon: string;
+}
+
+export interface FaceOffRadarPoint {
+  axis: string;
+  game1: number;
+  game2: number;
+  fullMark: number;
+}
+
+export interface FaceOffData {
+  stats: FaceOffStat[];
+  radarPoints: FaceOffRadarPoint[];
+  game1Wins: number;
+  game2Wins: number;
+  overallWinner: 1 | 2 | 'tie';
+  verdictLine: string;
+  recentSessions1: number; // sessions in last 30 days
+  recentSessions2: number;
+  recentHours1: number;
+  recentHours2: number;
+}
+
+function normalizePair(a: number, b: number, higherIsBetter: boolean): [number, number] {
+  const max = Math.max(a, b);
+  if (max === 0) return [0, 0];
+  const na = Math.round((a / max) * 100);
+  const nb = Math.round((b / max) * 100);
+  return higherIsBetter ? [na, nb] : [100 - na, 100 - nb];
+}
+
+function recentActivity(game: Game, days: number): { sessions: number; hours: number } {
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - days);
+  const logs = (game.playLogs || []).filter(l => parseLocalDate(l.date) >= cutoff);
+  return { sessions: logs.length, hours: logs.reduce((s, l) => s + l.hours, 0) };
+}
+
+export function getFaceOffData(game1: Game, game2: Game): FaceOffData {
+  const m1 = calculateMetrics(game1);
+  const m2 = calculateMetrics(game2);
+  const h1 = getTotalHours(game1);
+  const h2 = getTotalHours(game2);
+  const sessions1 = game1.playLogs?.length ?? 0;
+  const sessions2 = game2.playLogs?.length ?? 0;
+  const ra1 = recentActivity(game1, 30);
+  const ra2 = recentActivity(game2, 30);
+
+  // Days in collection
+  function daysInCollection(g: Game): number {
+    if (!g.datePurchased && !g.createdAt) return 0;
+    const from = parseLocalDate(g.datePurchased ?? g.createdAt.slice(0, 10));
+    const now = new Date();
+    return Math.max(0, Math.floor((now.getTime() - from.getTime()) / 86400000));
+  }
+
+  const days1 = daysInCollection(game1);
+  const days2 = daysInCollection(game2);
+
+  // Value score: 0-100 where Excellent=100
+  const valueScoreMap: Record<string, number> = { Excellent: 100, Good: 66, Fair: 33, Poor: 0 };
+  const vs1 = h1 === 0 ? 0 : valueScoreMap[m1.valueRating] ?? 0;
+  const vs2 = h2 === 0 ? 0 : valueScoreMap[m2.valueRating] ?? 0;
+
+  // ROI capped at 20
+  const roi1 = Math.min(m1.roi, 20);
+  const roi2 = Math.min(m2.roi, 20);
+
+  // Engagement score: sessions + recent activity bonus
+  const eng1 = sessions1 + ra1.sessions * 2;
+  const eng2 = sessions2 + ra2.sessions * 2;
+
+  // Build stats
+  const makeStat = (
+    label: string,
+    icon: string,
+    raw1: number,
+    raw2: number,
+    higherIsBetter: boolean,
+    fmt: (v: number) => string,
+    tolerance = 0,
+  ): FaceOffStat => {
+    let winner: 1 | 2 | 'tie';
+    const diff = raw1 - raw2;
+    if (Math.abs(diff) <= tolerance) winner = 'tie';
+    else winner = (higherIsBetter ? diff > 0 : diff < 0) ? 1 : 2;
+    return { label, icon, value1: fmt(raw1), value2: fmt(raw2), rawValue1: raw1, rawValue2: raw2, winner, higherIsBetter };
+  };
+
+  const stats: FaceOffStat[] = [
+    makeStat('Rating', '⭐', game1.rating, game2.rating, true, v => v > 0 ? `${v}/10` : '–', 0.5),
+    makeStat('Total Hours', '⏱', h1, h2, true, v => v >= 1 ? `${v.toFixed(1)}h` : v > 0 ? `${Math.round(v * 60)}m` : '–'),
+    makeStat('Sessions', '🎮', sessions1, sessions2, true, v => v > 0 ? `${v}` : '–'),
+    makeStat('Value', '💰', vs1, vs2, true, (_v) => {
+      // Use the game's value rating for display
+      return vs1 === vs2 ? m1.valueRating : '';
+    }),
+    makeStat('Cost / hr', '💸', h1 > 0 && game1.price > 0 ? m1.costPerHour : 999, h2 > 0 && game2.price > 0 ? m2.costPerHour : 999, false,
+      (v) => v === 999 ? (h1 === 0 && h2 === 0 ? '–' : '') : `$${v.toFixed(2)}/hr`, 0.1),
+    makeStat('ROI Score', '📈', roi1, roi2, true, v => v > 0 ? v.toFixed(1) : '–', 0.5),
+    makeStat('Price Paid', '🏷', game1.price, game2.price, false, v => v > 0 ? `$${v.toFixed(0)}` : 'Free', 0),
+    makeStat('Days Owned', '📅', days1, days2, false, v => v > 0 ? `${v}d` : '<1d', 7),
+  ];
+
+  // Fix the display values for cost/hr & value (they were built awkwardly above — patch them)
+  const costStat = stats.find(s => s.label === 'Cost / hr')!;
+  costStat.value1 = h1 > 0 && game1.price > 0 ? `$${m1.costPerHour.toFixed(2)}/hr` : h1 === 0 ? '–' : 'Free';
+  costStat.value2 = h2 > 0 && game2.price > 0 ? `$${m2.costPerHour.toFixed(2)}/hr` : h2 === 0 ? '–' : 'Free';
+  const valueStat = stats.find(s => s.label === 'Value')!;
+  valueStat.value1 = h1 > 0 ? m1.valueRating : '–';
+  valueStat.value2 = h2 > 0 ? m2.valueRating : '–';
+
+  // Count wins
+  let g1Wins = 0;
+  let g2Wins = 0;
+  for (const s of stats) {
+    if (s.winner === 1) g1Wins++;
+    else if (s.winner === 2) g2Wins++;
+  }
+
+  const overallWinner: 1 | 2 | 'tie' = g1Wins > g2Wins ? 1 : g2Wins > g1Wins ? 2 : 'tie';
+
+  // Radar chart — 5 axes normalized 0-100
+  const [rr1, rr2] = normalizePair(game1.rating, game2.rating, true);
+  const [rv1, rv2] = normalizePair(vs1, vs2, true);
+  const [rh1, rh2] = normalizePair(h1, h2, true);
+  const [rri1, rri2] = normalizePair(roi1, roi2, true);
+  const [re1, re2] = normalizePair(eng1, eng2, true);
+
+  const radarPoints: FaceOffRadarPoint[] = [
+    { axis: 'Rating', game1: rr1, game2: rr2, fullMark: 100 },
+    { axis: 'Value', game1: rv1, game2: rv2, fullMark: 100 },
+    { axis: 'Hours', game1: rh1, game2: rh2, fullMark: 100 },
+    { axis: 'ROI', game1: rri1, game2: rri2, fullMark: 100 },
+    { axis: 'Engagement', game1: re1, game2: re2, fullMark: 100 },
+  ];
+
+  // Verdict
+  let verdictLine: string;
+  if (overallWinner === 'tie') {
+    verdictLine = `Dead even — ${game1.name} and ${game2.name} are nearly identical in value.`;
+  } else {
+    const winner = overallWinner === 1 ? game1 : game2;
+    const loser = overallWinner === 1 ? game2 : game1;
+    const winCount = overallWinner === 1 ? g1Wins : g2Wins;
+    const topReason = stats.find(s => s.winner === overallWinner);
+    const reasonStr = topReason ? ` (stronger ${topReason.label.toLowerCase()})` : '';
+    verdictLine = `${winner.name} wins ${winCount}–${Math.min(g1Wins, g2Wins)} across tracked categories${reasonStr}, edging out ${loser.name}.`;
+  }
+
+  return {
+    stats,
+    radarPoints,
+    game1Wins: g1Wins,
+    game2Wins: g2Wins,
+    overallWinner,
+    verdictLine,
+    recentSessions1: ra1.sessions,
+    recentSessions2: ra2.sessions,
+    recentHours1: ra1.hours,
+    recentHours2: ra2.hours,
+  };
+}

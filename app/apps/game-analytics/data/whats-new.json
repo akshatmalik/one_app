@@ -1,6 +1,12 @@
 {
   "entries": [
     {
+      "date": "2026-05-31",
+      "area": "Game Face-Off",
+      "title": "Pit any two games against each other",
+      "body": "Tap the ⚔ icon in the toolbar to open Game Face-Off. Pick any two games from your library and instantly see them compared across rating, value, hours, ROI, and engagement — with a radar chart, stat-by-stat table, recent activity sparklines, and a computed verdict declaring the winner. Perfect for settling the 'was it worth it?' debate once and for all."
+    },
+    {
       "date": "2026-05-22",
       "area": "Games tab",
       "title": "Search your library instantly",
