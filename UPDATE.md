@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-05-31 00:00 — Stats Tab — What-If Lab interactive simulator
+
+**Files**: app/apps/game-analytics/components/WhatIfLab.tsx, app/apps/game-analytics/components/StatsView.tsx
+**Risk**: not risky
+
+Added an interactive "What-If Lab" panel to the Stats tab. Users can choose from four quick scenarios (No Regrets, 7+ Only, Skip Freebies, Clear Backlog) or custom-select individual games to remove from a simulation, then watch four key stats — Total Spent, Avg $/hr, Completion Rate, and Gaming Credit Score — update in real-time with before/after deltas. The custom picker includes search and thumbnail previews so users can explore "what if I never bought X?" for any game in their library.
+
+FOLLOW-UP: Could extend with a "Simulate future purchases" mode — add games from Buy Queue and see how they'd move your stats before buying.
+
 ## 2026-05-22 18:00 — Games Tab — Game search bar
 
 **Files**: app/apps/game-analytics/page.tsx

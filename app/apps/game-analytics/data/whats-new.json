@@ -1,6 +1,12 @@
 {
   "entries": [
     {
+      "date": "2026-05-31",
+      "area": "Stats tab",
+      "title": "What-If Lab: explore alternate universes of your library",
+      "body": "Head to the Stats tab and scroll to the new What-If Lab. Pick a scenario — like 'No Regrets' (remove your expensive duds) or 'Complete Backlog' — and watch your spending, $/hr, completion rate, and credit score shift in real time. You can also custom-select any individual game to erase from the simulation and see exactly how much it's dragging your stats down."
+    },
+    {
       "date": "2026-05-22",
       "area": "Games tab",
       "title": "Search your library instantly",
