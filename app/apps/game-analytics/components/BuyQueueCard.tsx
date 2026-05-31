@@ -3,19 +3,12 @@
 import { useState } from 'react';
 import {
   ExternalLink, Check, Trash2, ChevronDown, ChevronUp, GripVertical,
-  Calendar, Star, Zap, Target, TrendingDown, TrendingUp, Minus,
-  Clock, Edit3, HelpCircle, ShoppingCart, Tag, RefreshCw, Moon, Sparkles
+  Calendar, Zap, TrendingDown, TrendingUp, Minus,
+  Clock, HelpCircle, ShoppingCart, Tag, RefreshCw
 } from 'lucide-react';
 import { PurchaseQueueEntry, PurchaseIntent } from '../lib/types';
 import { Game } from '../lib/types';
-import {
-  getBuyConfidence,
-  getPriceContext,
-  getPredictedValue,
-  getStoreUrl,
-  getPriceFreshness,
-  getCoolingOffData,
-} from '../lib/calculations';
+import { getStoreUrl, getPriceFreshness } from '../lib/calculations';
 import { fetchCheapestPrice } from '../lib/price-fetch';
 import { PriceSparkline } from './PriceSparkline';
 import clsx from 'clsx';
@@ -69,14 +62,7 @@ function getSavings(entry: PurchaseQueueEntry): string | null {
   return `${pct}% off`;
 }
 
-function getConfidenceColor(score: number): string {
-  if (score >= 80) return 'text-emerald-400 bg-emerald-500/15';
-  if (score >= 60) return 'text-blue-400 bg-blue-500/15';
-  if (score >= 40) return 'text-yellow-400 bg-yellow-500/15';
-  return 'text-red-400 bg-red-500/15';
-}
-
-export function BuyQueueCard({ entry, allGames, onUpdate, onMarkPurchased, onDelete, onSetIntent, verdict, dragHandleProps }: Props) {
+export function BuyQueueCard({ entry, onUpdate, onMarkPurchased, onDelete, onSetIntent, dragHandleProps }: Props) {
   const intent: PurchaseIntent = entry.intent ?? (entry.isMaybe ? 'maybe' : 'committed');
   const isMaybe = intent === 'maybe';
   const isDeferred = intent === 'deferred';
@@ -97,10 +83,6 @@ export function BuyQueueCard({ entry, allGames, onUpdate, onMarkPurchased, onDel
   const savings = getSavings(entry);
   const isAtTarget = priceStatus?.glow ?? false;
 
-  // Intelligence (Features #5, #6, #7)
-  const confidence = getBuyConfidence(entry, allGames);
-  const priceContext = getPriceContext(entry, allGames);
-  const predicted = getPredictedValue(entry, allGames);
   const storeLinks = getStoreUrl(entry.gameName, entry.platform);
 
   const handlePriceBlur = async (field: 'currentPrice' | 'targetPrice') => {
@@ -125,7 +107,7 @@ export function BuyQueueCard({ entry, allGames, onUpdate, onMarkPurchased, onDel
     setPriceInput('');
   };
 
-  // Manual price history (Feature: price tracking)
+  // Manual price history
   const priceHistory = entry.priceHistory ?? [];
   const lowestSeen = priceHistory.length > 0 ? Math.min(...priceHistory.map(p => p.price)) : null;
   const firstSeen = priceHistory.length > 0 ? priceHistory[0].price : null;
@@ -135,11 +117,9 @@ export function BuyQueueCard({ entry, allGames, onUpdate, onMarkPurchased, onDel
       : null;
   const atLowest = lowestSeen != null && entry.currentPrice != null && entry.currentPrice <= lowestSeen;
 
-  // Stale-price nudge (B2) + cooling-off timer (C2)
+  // Stale-price nudge
   const freshness = getPriceFreshness(entry);
-  const coolingOff = getCoolingOffData(entry);
 
-  // Live price lookup (B3) — best effort, manual fallback on failure
   const handleFetchPrice = async () => {
     setFetchingPrice(true);
     setFetchMsg(null);
@@ -178,30 +158,53 @@ export function BuyQueueCard({ entry, allGames, onUpdate, onMarkPurchased, onDel
     setShowPurchaseConfirm(false);
   };
 
-  // Countdown urgency level (Feature #3)
+  // Countdown urgency
   const getCountdownStyle = () => {
     if (!upcoming || days === null) return null;
-    if (days <= 7) return { urgency: 'imminent', color: 'text-red-400', bg: 'bg-red-500/15', pulse: true };
-    if (days <= 30) return { urgency: 'soon', color: 'text-amber-400', bg: 'bg-amber-500/15', pulse: false };
-    if (days <= 90) return { urgency: 'approaching', color: 'text-purple-400', bg: 'bg-purple-500/15', pulse: false };
-    return { urgency: 'distant', color: 'text-white/40', bg: 'bg-white/5', pulse: false };
+    if (days <= 7) return { color: 'text-red-400', bg: 'bg-red-500/15', pulse: true };
+    if (days <= 30) return { color: 'text-amber-400', bg: 'bg-amber-500/15', pulse: false };
+    if (days <= 90) return { color: 'text-purple-400', bg: 'bg-purple-500/15', pulse: false };
+    return { color: 'text-white/40', bg: 'bg-white/5', pulse: false };
   };
-
   const countdown = getCountdownStyle();
+
+  // Day-1 / status badges (date-related identity only)
+  const renderBadges = (variant: 'overlay' | 'inline') => (
+    <>
+      {entry.isDayOneBuy && (
+        <span className={clsx('flex items-center gap-0.5 text-[9px] px-1 py-0.5 rounded flex-shrink-0',
+          variant === 'overlay' ? 'bg-amber-500/25 text-amber-300' : 'bg-amber-500/15 text-amber-400')}>
+          <Zap size={8} />Day 1
+        </span>
+      )}
+      {isMaybe && (
+        <span className={clsx('flex items-center gap-0.5 text-[9px] px-1 py-0.5 rounded flex-shrink-0',
+          variant === 'overlay' ? 'bg-amber-500/20 text-amber-300' : 'bg-amber-500/15 text-amber-400')}>
+          <HelpCircle size={8} />Maybe
+        </span>
+      )}
+      {isDeferred && (
+        <span className={clsx('flex items-center gap-0.5 text-[9px] px-1 py-0.5 rounded flex-shrink-0',
+          variant === 'overlay' ? 'bg-blue-500/20 text-blue-300' : 'bg-blue-500/15 text-blue-400')}>
+          <Tag size={8} />Deferred
+        </span>
+      )}
+    </>
+  );
 
   return (
     <div className="flex items-stretch gap-1.5">
       {dragHandleProps && (
         <button
           {...dragHandleProps}
-          className="flex-shrink-0 flex items-center justify-center w-6 rounded-lg text-white/15 hover:text-white/50 hover:bg-white/5 cursor-grab active:cursor-grabbing transition-colors touch-none"
+          className="flex-shrink-0 flex items-center justify-center w-5 rounded-lg text-white/15 hover:text-white/50 hover:bg-white/5 cursor-grab active:cursor-grabbing transition-colors touch-none"
           aria-label="Drag to reorder"
         >
-          <GripVertical size={14} />
+          <GripVertical size={13} />
         </button>
       )}
     <div className={clsx(
-      'flex-1 min-w-0 rounded-xl overflow-hidden transition-all',
+      'flex-1 min-w-0 rounded-lg overflow-hidden transition-all',
       isMaybe
         ? 'border border-dashed border-amber-500/25 opacity-90'
         : isDeferred
@@ -210,132 +213,42 @@ export function BuyQueueCard({ entry, allGames, onUpdate, onMarkPurchased, onDel
             ? 'border-2 border-emerald-500/40 buy-queue-price-glow'
             : 'border border-white/8 hover:border-white/12'
     )}>
-      {/* Poster Banner (Feature #2) */}
+      {/* Header — compact thumbnail or icon, name + date badges */}
       {entry.thumbnail ? (
-        <div className="relative h-24 overflow-hidden">
-          <img
-            src={entry.thumbnail}
-            alt={entry.gameName}
-            className="w-full h-full object-cover"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-[#12121a] via-[#12121a]/50 to-transparent" />
-
-          {/* Countdown overlay (Feature #3) */}
+        <div className="relative h-14 overflow-hidden">
+          <img src={entry.thumbnail} alt={entry.gameName} className="w-full h-full object-cover" />
+          <div className="absolute inset-0 bg-gradient-to-t from-[#12121a] via-[#12121a]/60 to-transparent" />
           {upcoming && countdown && days !== null && (
             <div className={clsx(
-              'absolute top-2 right-2 px-2 py-1 rounded-lg text-xs font-bold flex items-center gap-1',
-              countdown.bg, countdown.color,
-              countdown.pulse && 'buy-queue-countdown-pulse'
+              'absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded text-[10px] font-bold flex items-center gap-1',
+              countdown.bg, countdown.color, countdown.pulse && 'buy-queue-countdown-pulse'
             )}>
-              <Calendar size={11} />
-              {days <= 0 ? 'Today!' : days <= 7 ? `${days}d!` : `${days}d`}
+              <Calendar size={10} />
+              {days <= 0 ? 'Today!' : `${days}d`}
             </div>
           )}
-
-          {/* Confidence badge (Feature #5) */}
-          {allGames.length > 0 && (
-            <div className={clsx(
-              'absolute top-2 left-2 px-2 py-1 rounded-lg text-[11px] font-bold',
-              getConfidenceColor(confidence.score)
-            )}>
-              {confidence.score}%
-            </div>
-          )}
-
-          {/* Name + tags on image */}
-          <div className="absolute bottom-2 left-3 right-3">
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="text-sm font-semibold text-white truncate drop-shadow-lg">{entry.gameName}</span>
-              {entry.isDayOneBuy && (
-                <span className="flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded bg-amber-500/25 text-amber-300 flex-shrink-0 backdrop-blur-sm">
-                  <Zap size={9} />
-                  Day 1
-                </span>
-              )}
-              {isMaybe && (
-                <span className="flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 flex-shrink-0 backdrop-blur-sm">
-                  <HelpCircle size={9} />
-                  Maybe
-                </span>
-              )}
-              {isDeferred && (
-                <span className="flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300 flex-shrink-0 backdrop-blur-sm">
-                  <Tag size={9} />
-                  Deferred
-                </span>
-              )}
-            </div>
+          <div className="absolute bottom-1.5 left-2.5 right-2.5 flex items-center gap-1.5">
+            <span className="text-sm font-semibold text-white truncate drop-shadow-lg">{entry.gameName}</span>
+            {renderBadges('overlay')}
           </div>
         </div>
       ) : (
-        /* No thumbnail — compact header */
-        <div className="px-3 pt-3 pb-1">
-          <div className="flex items-center gap-2">
-            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-500/20 to-emerald-500/20 flex items-center justify-center flex-shrink-0">
-              <span className="text-lg">🎮</span>
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="text-sm font-medium text-white/90 truncate">{entry.gameName}</span>
-                {entry.isDayOneBuy && (
-                  <span className="flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400 flex-shrink-0">
-                    <Zap size={9} />
-                    Day 1
-                  </span>
-                )}
-                {isMaybe && (
-                  <span className="flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400 flex-shrink-0">
-                    <HelpCircle size={9} />
-                    Maybe
-                  </span>
-                )}
-                {isDeferred && (
-                  <span className="flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-400 flex-shrink-0">
-                    <Tag size={9} />
-                    Deferred
-                  </span>
-                )}
-              </div>
-            </div>
-            {/* Confidence badge inline */}
-            {allGames.length > 0 && (
-              <span className={clsx('text-[11px] font-bold px-2 py-0.5 rounded flex-shrink-0', getConfidenceColor(confidence.score))}>
-                {confidence.score}%
-              </span>
-            )}
+        <div className="px-2.5 pt-2 pb-1 flex items-center gap-2">
+          <div className="w-7 h-7 rounded-md bg-gradient-to-br from-purple-500/20 to-emerald-500/20 flex items-center justify-center flex-shrink-0">
+            <span className="text-sm">🎮</span>
+          </div>
+          <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+            <span className="text-sm font-medium text-white/90 truncate">{entry.gameName}</span>
+            {renderBadges('inline')}
           </div>
         </div>
       )}
 
-      {/* Card body */}
-      <div className="bg-white/[0.03] px-3 pb-3 pt-2">
-        {/* Meta row */}
-        <div className="flex items-center gap-2 flex-wrap text-[11px]">
-          {entry.platform && <span className="text-white/40">{entry.platform}</span>}
-          {entry.genre && <span className="text-white/25">{entry.genre}</span>}
-          {entry.metacriticScore && (
-            <span className="flex items-center gap-0.5 text-white/30">
-              <Star size={9} />
-              {entry.metacriticScore}
-            </span>
-          )}
-          {coolingOff && (
-            <span className="flex items-center gap-1" style={{ color: coolingOff.color }} title={coolingOff.message}>
-              <Moon size={9} />
-              {coolingOff.label} · {coolingOff.daysWaiting}d
-            </span>
-          )}
-          {!upcoming && priceStatus && (
-            <span className={clsx('flex items-center gap-1 ml-auto', priceStatus.color)}>
-              <span className={clsx('w-1.5 h-1.5 rounded-full flex-shrink-0', priceStatus.dot)} />
-              {priceStatus.label}
-            </span>
-          )}
-        </div>
-
-        {/* Release date — editable (Manual release date feature) */}
-        <div className="mt-1.5 flex items-center gap-1 text-[11px]">
-          <Calendar size={9} className="text-white/20" />
+      {/* Compact body — dates + prices only */}
+      <div className="bg-white/[0.03] px-2.5 pb-2 pt-1.5 space-y-1.5">
+        {/* Date + price status */}
+        <div className="flex items-center gap-2 text-[11px]">
+          <Calendar size={10} className="text-white/20 flex-shrink-0" />
           {editingReleaseDate ? (
             <input
               autoFocus
@@ -349,35 +262,28 @@ export function BuyQueueCard({ entry, allGames, onUpdate, onMarkPurchased, onDel
           ) : (
             <button
               onClick={() => { setEditingReleaseDate(true); setReleaseDateInput(entry.releaseDate || ''); }}
-              className="text-white/25 hover:text-white/60 transition-colors underline decoration-dotted"
+              className="text-white/35 hover:text-white/60 transition-colors underline decoration-dotted"
             >
               {entry.releaseDate
                 ? (upcoming ? `Coming ${formatRelease(entry.releaseDate)}` : `Released ${formatRelease(entry.releaseDate)}`)
-                : 'Set release date'
-              }
+                : 'Set date'}
             </button>
           )}
-          {entry.releaseDate && (
-            <button
-              onClick={() => { setEditingReleaseDate(true); setReleaseDateInput(entry.releaseDate || ''); }}
-              className="text-white/15 hover:text-white/40 transition-colors ml-0.5"
-            >
-              <Edit3 size={9} />
-            </button>
+          {!upcoming && priceStatus && (
+            <span className={clsx('flex items-center gap-1 ml-auto', priceStatus.color)}>
+              <span className={clsx('w-1.5 h-1.5 rounded-full flex-shrink-0', priceStatus.dot)} />
+              {priceStatus.label}
+            </span>
           )}
         </div>
 
         {/* Price row */}
-        <div className="mt-2 flex items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-2.5 flex-wrap text-[11px]">
           {entry.msrpEstimate && (
-            <div className="text-[11px] text-white/25">
-              MSRP <span className="text-white/40">${entry.msrpEstimate}</span>
-            </div>
+            <span className="text-white/25">MSRP <span className="text-white/40">${entry.msrpEstimate}</span></span>
           )}
-
-          {/* Current price — inline editable */}
           <div className="flex items-center gap-1">
-            <span className="text-[11px] text-white/30">Now:</span>
+            <span className="text-white/30">Now</span>
             {editingCurrentPrice ? (
               <input
                 autoFocus
@@ -386,14 +292,14 @@ export function BuyQueueCard({ entry, allGames, onUpdate, onMarkPurchased, onDel
                 onChange={e => setPriceInput(e.target.value)}
                 onBlur={() => handlePriceBlur('currentPrice')}
                 onKeyDown={e => { if (e.key === 'Enter') handlePriceBlur('currentPrice'); if (e.key === 'Escape') setEditingCurrentPrice(false); }}
-                className="w-16 bg-white/10 text-white text-xs px-1.5 py-0.5 rounded focus:outline-none"
+                className="w-14 bg-white/10 text-white text-xs px-1.5 py-0.5 rounded focus:outline-none"
                 placeholder="$0"
                 min="0"
               />
             ) : (
               <button
                 onClick={() => { setEditingCurrentPrice(true); setPriceInput(entry.currentPrice?.toString() || ''); }}
-                className="text-[11px] text-white/50 hover:text-white/80 transition-colors underline decoration-dotted"
+                className="text-white/50 hover:text-white/80 transition-colors underline decoration-dotted"
               >
                 {entry.currentPrice != null ? `$${entry.currentPrice}` : 'set'}
               </button>
@@ -407,10 +313,8 @@ export function BuyQueueCard({ entry, allGames, onUpdate, onMarkPurchased, onDel
               <RefreshCw size={10} className={clsx(fetchingPrice && 'animate-spin')} />
             </button>
           </div>
-
-          {/* Target price — inline editable */}
           <div className="flex items-center gap-1">
-            <span className="text-[11px] text-white/30">Buy at:</span>
+            <span className="text-white/30">Buy at</span>
             {editingTargetPrice ? (
               <input
                 autoFocus
@@ -419,220 +323,142 @@ export function BuyQueueCard({ entry, allGames, onUpdate, onMarkPurchased, onDel
                 onChange={e => setPriceInput(e.target.value)}
                 onBlur={() => handlePriceBlur('targetPrice')}
                 onKeyDown={e => { if (e.key === 'Enter') handlePriceBlur('targetPrice'); if (e.key === 'Escape') setEditingTargetPrice(false); }}
-                className="w-16 bg-white/10 text-white text-xs px-1.5 py-0.5 rounded focus:outline-none"
+                className="w-14 bg-white/10 text-white text-xs px-1.5 py-0.5 rounded focus:outline-none"
                 placeholder="$0"
                 min="0"
               />
             ) : (
               <button
                 onClick={() => { setEditingTargetPrice(true); setPriceInput(entry.targetPrice?.toString() || ''); }}
-                className="text-[11px] text-white/50 hover:text-white/80 transition-colors underline decoration-dotted"
+                className="text-white/50 hover:text-white/80 transition-colors underline decoration-dotted"
               >
                 {entry.targetPrice != null ? `$${entry.targetPrice}` : 'set'}
               </button>
             )}
           </div>
-
           {savings && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400">
-              {savings}
-            </span>
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400">{savings}</span>
           )}
         </div>
 
-        {/* Stale-price nudge (B2) + live-fetch result */}
-        {!isMaybe && freshness.isStale && freshness.daysSinceCheck != null && entry.currentPrice != null && (
+        {/* Stale-price nudge + live-fetch result */}
+        {freshness.isStale && freshness.daysSinceCheck != null && entry.currentPrice != null && (
           <button
             onClick={handleFetchPrice}
             disabled={fetchingPrice}
-            className="mt-1.5 flex items-center gap-1 text-[10px] text-amber-400/70 hover:text-amber-400 transition-colors"
+            className="flex items-center gap-1 text-[10px] text-amber-400/70 hover:text-amber-400 transition-colors"
           >
             <Clock size={9} />
-            Price last checked {freshness.daysSinceCheck}d ago — still ${entry.currentPrice}?
+            Checked {freshness.daysSinceCheck}d ago — still ${entry.currentPrice}?
             <RefreshCw size={9} className={clsx(fetchingPrice && 'animate-spin')} />
           </button>
         )}
-        {fetchMsg && (
-          <div className="mt-1 text-[10px] text-white/40">{fetchMsg}</div>
-        )}
+        {fetchMsg && <div className="text-[10px] text-white/40">{fetchMsg}</div>}
 
-        {/* Manual price history + sparkline */}
+        {/* Price history sparkline */}
         {lowestSeen != null && priceHistory.length >= 2 && (
-          <div className="mt-1.5 flex items-center justify-between gap-2">
-            <div className="flex items-center gap-1.5 text-[10px] text-white/30 flex-wrap min-w-0">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5 text-[10px] text-white/30 min-w-0">
               {priceTrend === 'down' ? <TrendingDown size={9} className="text-emerald-400/60" /> :
                priceTrend === 'up' ? <TrendingUp size={9} className="text-red-400/50" /> :
                <Minus size={9} className="text-white/20" />}
-              <span>
-                Lowest <span className={clsx('font-medium', atLowest ? 'text-emerald-400' : 'text-white/50')}>${lowestSeen}</span>
-              </span>
-              <span className="text-white/15">·</span>
-              <span className="text-white/20">{priceHistory.length} tracked</span>
-              {atLowest && <span className="text-[9px] px-1 py-0.5 rounded bg-emerald-500/15 text-emerald-400">best yet</span>}
+              <span>Low <span className={clsx('font-medium', atLowest ? 'text-emerald-400' : 'text-white/50')}>${lowestSeen}</span></span>
+              {atLowest && <span className="text-[9px] px-1 py-0.5 rounded bg-emerald-500/15 text-emerald-400">best</span>}
             </div>
             <PriceSparkline history={priceHistory} target={entry.targetPrice} />
           </div>
         )}
 
-        {/* Intelligence line — price context (Feature #6) */}
-        {allGames.length > 0 && priceContext.insight !== 'Not enough data yet' && (
-          <div className="mt-1.5 flex items-center gap-1 text-[10px] text-white/25">
-            {priceContext.comparison === 'below' ? <TrendingDown size={9} className="text-emerald-400/50" /> :
-             priceContext.comparison === 'above' ? <TrendingUp size={9} className="text-red-400/50" /> :
-             <Minus size={9} />}
-            <span className="italic">{priceContext.insight}</span>
-          </div>
-        )}
-
-        {/* Predicted value (Feature #7) */}
-        {predicted && (
-          <div className="mt-1 flex items-center gap-1 text-[10px] text-white/25">
-            <Target size={9} className={clsx(
-              predicted.predictedRating === 'Excellent' ? 'text-emerald-400/50' :
-              predicted.predictedRating === 'Good' ? 'text-blue-400/50' :
-              predicted.predictedRating === 'Fair' ? 'text-yellow-400/50' : 'text-red-400/50'
-            )} />
-            <span className="italic">Predicted: {predicted.predictedRating} ({predicted.insight})</span>
-          </div>
-        )}
-
-        {/* AI verdict (C1) */}
-        {verdict && (
-          <div className="mt-1.5 flex items-start gap-1.5 text-[10px] text-purple-200/80 bg-purple-500/[0.07] border border-purple-500/10 rounded-lg px-2 py-1.5">
-            <Sparkles size={10} className="text-purple-400 flex-shrink-0 mt-0.5" />
-            <span className="italic leading-relaxed">{verdict}</span>
-          </div>
-        )}
-
-        {/* Expand toggle */}
+        {/* Expand toggle — actions only */}
         <button
           onClick={() => setExpanded(!expanded)}
-          className="w-full flex items-center justify-center gap-1 mt-2 pt-2 border-t border-white/5 text-white/20 hover:text-white/40 transition-colors text-[11px]"
+          className="w-full flex items-center justify-center gap-1 pt-1.5 border-t border-white/5 text-white/20 hover:text-white/40 transition-colors text-[11px]"
         >
           {expanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
           {expanded ? 'Less' : 'More'}
         </button>
       </div>
 
-      {/* Expanded section */}
+      {/* Expanded section — actions only */}
       {expanded && (
-        <div className="px-3 pb-3 bg-white/[0.03] space-y-3">
-          {/* Confidence breakdown (Feature #5) */}
-          {confidence.factors.length > 0 && (
-            <div className="space-y-1.5">
-              <div className="text-[11px] text-white/30 font-medium">Buy Confidence: {confidence.score}%</div>
-              {confidence.factors.map((f, i) => (
-                <div key={i} className="flex items-center gap-2 text-[11px]">
-                  <div className="flex-1 min-w-0">
-                    <span className="text-white/40">{f.label}</span>
-                  </div>
-                  <div className="w-16 h-1.5 bg-white/5 rounded-full overflow-hidden flex-shrink-0">
-                    <div
-                      className={clsx(
-                        'h-full rounded-full transition-all',
-                        f.value >= 70 ? 'bg-emerald-500' : f.value >= 40 ? 'bg-yellow-500' : 'bg-red-500'
-                      )}
-                      style={{ width: `${Math.min(100, f.value)}%` }}
-                    />
-                  </div>
-                  <span className="text-white/25 text-[10px] w-8 text-right">{f.value.toFixed(0)}%</span>
-                </div>
-              ))}
-              {confidence.factors.length > 0 && (
-                <p className="text-[10px] text-white/20 italic">{confidence.factors[0].insight}</p>
-              )}
+        <div className="px-2.5 pb-2.5 bg-white/[0.03] flex items-center gap-2 flex-wrap">
+          {storeLinks.map((store, i) => (
+            <a
+              key={i}
+              href={store.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 text-xs transition-all"
+            >
+              <ExternalLink size={12} />
+              {store.label}
+            </a>
+          ))}
+
+          {!showPurchaseConfirm ? (
+            <button
+              onClick={() => { setShowPurchaseConfirm(true); setPurchasePriceInput(entry.currentPrice?.toString() || ''); }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 text-xs transition-all"
+            >
+              <Check size={12} />
+              Bought It
+            </button>
+          ) : (
+            <div className="flex items-center gap-2">
+              <div className="relative">
+                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-white/30 text-xs">$</span>
+                <input
+                  type="number"
+                  autoFocus
+                  value={purchasePriceInput}
+                  onChange={e => setPurchasePriceInput(e.target.value)}
+                  placeholder="paid"
+                  className="w-20 bg-white/5 border border-white/10 rounded-lg pl-5 pr-2 py-1 text-xs text-white focus:outline-none focus:border-emerald-500/40"
+                />
+              </div>
+              <button
+                onClick={handleMarkPurchased}
+                className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs hover:bg-emerald-500 transition-all"
+              >
+                Confirm
+              </button>
+              <button
+                onClick={() => setShowPurchaseConfirm(false)}
+                className="text-white/30 hover:text-white/60 text-xs transition-colors"
+              >
+                ×
+              </button>
             </div>
           )}
 
-          {/* Notes */}
-          {entry.notes && (
-            <p className="text-xs text-white/40 italic">&quot;{entry.notes}&quot;</p>
+          {onSetIntent && (
+            <div className="flex items-center rounded-lg bg-white/5 overflow-hidden">
+              {INTENT_OPTIONS.map(opt => {
+                const Icon = opt.icon;
+                const selected = intent === opt.value;
+                return (
+                  <button
+                    key={opt.value}
+                    onClick={() => onSetIntent(opt.value)}
+                    className={clsx(
+                      'flex items-center gap-1 px-2.5 py-1.5 text-[11px] transition-all',
+                      selected ? opt.active : 'text-white/30 hover:text-white/55'
+                    )}
+                  >
+                    <Icon size={11} />
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
           )}
 
-          {/* Actions row */}
-          <div className="flex items-center gap-2 flex-wrap">
-            {/* Store links (Feature #19) */}
-            {storeLinks.map((store, i) => (
-              <a
-                key={i}
-                href={store.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 text-xs transition-all"
-              >
-                <ExternalLink size={12} />
-                {store.label}
-              </a>
-            ))}
-
-            {/* Bought It */}
-            {!showPurchaseConfirm ? (
-              <button
-                onClick={() => { setShowPurchaseConfirm(true); setPurchasePriceInput(entry.currentPrice?.toString() || ''); }}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 text-xs transition-all"
-              >
-                <Check size={12} />
-                Bought It
-              </button>
-            ) : (
-              <div className="flex items-center gap-2">
-                <div className="relative">
-                  <span className="absolute left-2 top-1/2 -translate-y-1/2 text-white/30 text-xs">$</span>
-                  <input
-                    type="number"
-                    autoFocus
-                    value={purchasePriceInput}
-                    onChange={e => setPurchasePriceInput(e.target.value)}
-                    placeholder="paid"
-                    className="w-20 bg-white/5 border border-white/10 rounded-lg pl-5 pr-2 py-1 text-xs text-white focus:outline-none focus:border-emerald-500/40"
-                  />
-                </div>
-                <button
-                  onClick={handleMarkPurchased}
-                  className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs hover:bg-emerald-500 transition-all"
-                >
-                  Confirm
-                </button>
-                <button
-                  onClick={() => setShowPurchaseConfirm(false)}
-                  className="text-white/30 hover:text-white/60 text-xs transition-colors"
-                >
-                  ×
-                </button>
-              </div>
-            )}
-
-            {/* Intent control: Watching / Maybe / Deferred */}
-            {onSetIntent && (
-              <div className="flex items-center rounded-lg bg-white/5 overflow-hidden">
-                {INTENT_OPTIONS.map(opt => {
-                  const Icon = opt.icon;
-                  const selected = intent === opt.value;
-                  return (
-                    <button
-                      key={opt.value}
-                      onClick={() => onSetIntent(opt.value)}
-                      className={clsx(
-                        'flex items-center gap-1 px-2.5 py-1.5 text-[11px] transition-all',
-                        selected ? opt.active : 'text-white/30 hover:text-white/55'
-                      )}
-                    >
-                      <Icon size={11} />
-                      {opt.label}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* Delete */}
-            <button
-              onClick={() => onDelete(entry.id)}
-              className="ml-auto flex items-center gap-1 px-2 py-1.5 rounded-lg text-red-400/50 hover:text-red-400 hover:bg-red-500/10 text-xs transition-all"
-            >
-              <Trash2 size={12} />
-            </button>
-          </div>
+          <button
+            onClick={() => onDelete(entry.id)}
+            className="ml-auto flex items-center gap-1 px-2 py-1.5 rounded-lg text-red-400/50 hover:text-red-400 hover:bg-red-500/10 text-xs transition-all"
+          >
+            <Trash2 size={12} />
+          </button>
         </div>
       )}
     </div>
