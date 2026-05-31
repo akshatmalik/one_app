@@ -1,11 +1,11 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
-  Plus, ShoppingCart, Calendar, TrendingDown, Clock, PackageCheck,
-  ChevronDown, ChevronUp, Settings, Sparkles,
-  Tag, Gift, Target, BarChart2, Trophy, ArrowRight, HelpCircle,
-  ArrowUpDown, Wand2, Loader2, ListOrdered, X
+  Plus, ShoppingCart, Calendar, PackageCheck,
+  Settings, Sparkles, Percent, ChevronDown, ChevronUp,
+  Tag, Gift, Target, BarChart2, ArrowRight, HelpCircle,
+  Wand2, Loader2, ListOrdered, X, Wallet
 } from 'lucide-react';
 import {
   DndContext, closestCenter, KeyboardSensor, PointerSensor, TouchSensor,
@@ -22,29 +22,16 @@ import { AddToBuyQueueModal } from './AddToBuyQueueModal';
 import { BuyQueueCard } from './BuyQueueCard';
 import {
   getQueueImpactSnapshot,
+  getQueueRunningTally,
+  QueuePriceMode,
   getSaleSeasonIndicator,
   getPurchaseHistoryInsights,
-  getBuyConfidence,
-  getPredictedValue,
   buildBuyQueueAIContext,
 } from '../lib/calculations';
 import { generateBuyQueueAdvice, BuyQueueAdvice } from '../lib/ai-buyqueue-service';
 import clsx from 'clsx';
 
-type SortMode = 'priority' | 'confidence' | 'price' | 'release' | 'value';
-
-const SORT_OPTIONS: { value: SortMode; label: string }[] = [
-  { value: 'priority', label: 'Manual' },
-  { value: 'confidence', label: 'Confidence' },
-  { value: 'price', label: 'Price' },
-  { value: 'release', label: 'Release' },
-  { value: 'value', label: 'Value' },
-];
-
-const priceOf = (e: PurchaseQueueEntry): number =>
-  e.targetPrice ?? e.currentPrice ?? e.msrpEstimate ?? 0;
-
-const VALUE_RANK: Record<string, number> = { Excellent: 4, Good: 3, Fair: 2, Poor: 1 };
+type PriceMode = 'full' | 'deal' | 'model';
 
 interface Props {
   userId: string | null;
@@ -57,7 +44,7 @@ interface Props {
   onAddToPlayQueue?: (gameId: string) => Promise<void>;
 }
 
-/** Sortable wrapper so committed cards can be drag-reordered in Manual mode. */
+/** Sortable wrapper so no-date committed cards can be drag-reordered. */
 function SortableBuyCard({ entry, children }: { entry: PurchaseQueueEntry; children: (handleProps: React.HTMLAttributes<HTMLButtonElement>) => React.ReactNode }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: entry.id });
   const style = {
@@ -87,7 +74,6 @@ export function BuyQueueTab({ userId, wishlistGames, allGames, budgets, yearSpen
     loading,
     plannedSpend,
     maybeSpend,
-    deferredSpend,
     releasingSoon,
     addEntry,
     updateEntry,
@@ -98,13 +84,39 @@ export function BuyQueueTab({ userId, wishlistGames, allGames, budgets, yearSpen
   } = usePurchaseQueue(userId);
 
   const [showAddModal, setShowAddModal] = useState(false);
-  const [showPurchased, setShowPurchased] = useState(false);
   const [showStats, setShowStats] = useState(false);
-  const [viewMode, setViewMode] = useState<'list' | 'timeline'>('list');
-  const [sortMode, setSortMode] = useState<SortMode>('priority');
+  const [showLater, setShowLater] = useState(false);
+  const [showBought, setShowBought] = useState(false);
   const [aiAdvice, setAiAdvice] = useState<BuyQueueAdvice | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [justPurchased, setJustPurchased] = useState<{ name: string; gameId: string } | null>(null);
+
+  // Pricing scenario: your target deals (default), full MSRP, or a modeled % off.
+  const [priceMode, setPriceMode] = useState<PriceMode>('deal');
+  const [modelDiscount, setModelDiscount] = useState(0.33);
+
+  useEffect(() => {
+    try {
+      const m = localStorage.getItem('buy-queue-price-mode');
+      if (m === 'full' || m === 'deal' || m === 'model') setPriceMode(m);
+      const d = localStorage.getItem('buy-queue-model-discount');
+      if (d) { const n = parseFloat(d); if (!isNaN(n)) setModelDiscount(Math.min(0.8, Math.max(0, n))); }
+    } catch { /* non-persistent is fine */ }
+  }, []);
+
+  const handlePriceMode = (m: PriceMode) => {
+    setPriceMode(m);
+    try { localStorage.setItem('buy-queue-price-mode', m); } catch { /* ignore */ }
+  };
+  const handleModelDiscount = (d: number) => {
+    setModelDiscount(d);
+    try { localStorage.setItem('buy-queue-model-discount', String(d)); } catch { /* ignore */ }
+  };
+
+  const mode = useMemo<QueuePriceMode>(
+    () => priceMode === 'model' ? { kind: 'model', discount: modelDiscount } : { kind: priceMode },
+    [priceMode, modelDiscount]
+  );
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -115,17 +127,63 @@ export function BuyQueueTab({ userId, wishlistGames, allGames, budgets, yearSpen
   const currentYear = new Date().getFullYear();
   const yearBudget = budgets.find(b => b.year === currentYear)?.yearlyBudget ?? null;
 
-  // Budget ring math
+  const entryById = useMemo(() => {
+    const m = new Map<string, PurchaseQueueEntry>();
+    entries.forEach(e => m.set(e.id, e));
+    return m;
+  }, [entries]);
+
+  // ── Timeline grouping: Dated (available now → upcoming) · No date · Later ──
+  const { datedCommitted, undatedCommitted, orderedCommitted, laterEntries } = useMemo(() => {
+    const todayMid = new Date(); todayMid.setHours(0, 0, 0, 0);
+    const dated = activeEntries.filter(e => e.releaseDate);
+    const available = dated
+      .filter(e => new Date(e.releaseDate!) <= todayMid)
+      .sort((a, b) => a.priority - b.priority);
+    const upcoming = dated
+      .filter(e => new Date(e.releaseDate!) > todayMid)
+      .sort((a, b) => new Date(a.releaseDate!).getTime() - new Date(b.releaseDate!).getTime());
+    const datedCommitted = [...available, ...upcoming];
+    const undatedCommitted = activeEntries.filter(e => !e.releaseDate).sort((a, b) => a.priority - b.priority);
+    return {
+      datedCommitted,
+      undatedCommitted,
+      orderedCommitted: [...datedCommitted, ...undatedCommitted],
+      laterEntries: [...maybeEntries, ...deferredEntries],
+    };
+  }, [activeEntries, maybeEntries, deferredEntries]);
+
+  // ── Running budget tally (current mode) + full/deal for comparison ──
+  const tally = useMemo(() => getQueueRunningTally(orderedCommitted, yearBudget, yearSpent, mode), [orderedCommitted, yearBudget, yearSpent, mode]);
+  const committedTotal = tally.rows.length ? tally.rows[tally.rows.length - 1].cumulative : 0;
+  const ghost = useMemo(() => getQueueRunningTally(laterEntries, yearBudget, yearSpent, mode, committedTotal), [laterEntries, yearBudget, yearSpent, mode, committedTotal]);
+  const fullTally = useMemo(() => getQueueRunningTally(orderedCommitted, yearBudget, yearSpent, { kind: 'full' }), [orderedCommitted, yearBudget, yearSpent]);
+  const dealTally = useMemo(() => getQueueRunningTally(orderedCommitted, yearBudget, yearSpent, { kind: 'deal' }), [orderedCommitted, yearBudget, yearSpent]);
+
+  const tallyMap = useMemo(() => new Map(tally.rows.map(r => [r.id, r])), [tally]);
+  const ghostMap = useMemo(() => new Map(ghost.rows.map(r => [r.id, r])), [ghost]);
+
+  const total = orderedCommitted.length;
+  const fitNow = tally.rows.filter(r => !r.isOver).length;
+  const fitFull = fullTally.rows.filter(r => !r.isOver).length;
+  const fitDeal = dealTally.rows.filter(r => !r.isOver).length;
+  const fullSum = fullTally.rows.length ? fullTally.rows[fullTally.rows.length - 1].cumulative : 0;
+  const dealSum = dealTally.rows.length ? dealTally.rows[dealTally.rows.length - 1].cumulative : 0;
+  const potentialSavings = Math.max(0, fullSum - dealSum);
+  const overflowNames = tally.rows.filter(r => r.isOver).map(r => entryById.get(r.id)?.gameName).filter(Boolean) as string[];
+
+  // Budget ring math — "planned" is the committed total under the current mode.
   const budgetUsed = yearSpent;
-  const budgetPlanned = plannedSpend;
+  const budgetPlanned = committedTotal;
   const budgetTotal = yearBudget ?? 0;
   const budgetRemaining = yearBudget != null ? yearBudget - budgetUsed - budgetPlanned : null;
   const isOverBudget = yearBudget != null && (budgetUsed + budgetPlanned) > yearBudget;
   const overBy = yearBudget != null ? Math.max(0, budgetUsed + budgetPlanned - yearBudget) : 0;
-
-  // Ring percentages
   const spentPct = budgetTotal > 0 ? Math.min(100, (budgetUsed / budgetTotal) * 100) : 0;
   const plannedPct = budgetTotal > 0 ? Math.min(100 - spentPct, (budgetPlanned / budgetTotal) * 100) : 0;
+
+  // Bought / spent summary (free games never have a purchase price)
+  const boughtSpent = useMemo(() => purchasedEntries.reduce((s, e) => s + (e.purchasePrice ?? 0), 0), [purchasedEntries]);
 
   // Sale season
   const saleSeason = useMemo(() => getSaleSeasonIndicator(), []);
@@ -147,35 +205,10 @@ export function BuyQueueTab({ userId, wishlistGames, allGames, budgets, yearSpen
       if (e.platform) acc[e.platform] = (acc[e.platform] || 0) + 1;
       return acc;
     }, {});
-    const genreBreakdown = activeEntries.reduce<Record<string, number>>((acc, e) => {
-      if (e.genre) acc[e.genre] = (acc[e.genre] || 0) + 1;
-      return acc;
-    }, {});
     const purchaseInsights = getPurchaseHistoryInsights(entries);
     const impact = getQueueImpactSnapshot(activeEntries, yearBudget, yearSpent);
-    return { dayOneBuys, totalSavingsPotential, platformBreakdown, genreBreakdown, purchaseInsights, impact };
+    return { dayOneBuys, totalSavingsPotential, platformBreakdown, purchaseInsights, impact };
   }, [activeEntries, entries, yearBudget, yearSpent]);
-
-  // Monthly timeline view data
-  const monthlyPlan = useMemo(() => {
-    if (viewMode !== 'timeline') return [];
-    const months: { month: string; entries: PurchaseQueueEntry[]; totalCost: number }[] = [];
-    const now = new Date();
-    for (let i = 0; i < 6; i++) {
-      const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
-      const monthStr = d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
-      const monthEntries = activeEntries.filter(e => {
-        if (!e.releaseDate) return i === 0; // no release date → show in current month
-        const rel = new Date(e.releaseDate);
-        return rel.getMonth() === d.getMonth() && rel.getFullYear() === d.getFullYear();
-      });
-      if (monthEntries.length > 0 || i === 0) {
-        const totalCost = monthEntries.reduce((s, e) => s + (e.targetPrice ?? e.currentPrice ?? e.msrpEstimate ?? 0), 0);
-        months.push({ month: monthStr, entries: monthEntries, totalCost });
-      }
-    }
-    return months;
-  }, [activeEntries, viewMode]);
 
   const wishlistForModal = wishlistGames.map(g => ({
     name: g.name,
@@ -184,37 +217,10 @@ export function BuyQueueTab({ userId, wishlistGames, allGames, budgets, yearSpen
     thumbnail: g.thumbnail,
   }));
 
-  // Display order respects the active sort; drag only rewires Manual priority.
-  const sortComparator = useMemo(() => {
-    return (a: PurchaseQueueEntry, b: PurchaseQueueEntry): number => {
-      switch (sortMode) {
-        case 'confidence': return getBuyConfidence(b, allGames).score - getBuyConfidence(a, allGames).score;
-        case 'price': return priceOf(a) - priceOf(b);
-        case 'release': {
-          const ra = a.releaseDate ? new Date(a.releaseDate).getTime() : Infinity;
-          const rb = b.releaseDate ? new Date(b.releaseDate).getTime() : Infinity;
-          return ra - rb;
-        }
-        case 'value': {
-          const va = VALUE_RANK[getPredictedValue(a, allGames)?.predictedRating ?? ''] ?? 0;
-          const vb = VALUE_RANK[getPredictedValue(b, allGames)?.predictedRating ?? ''] ?? 0;
-          return vb - va;
-        }
-        default: return a.priority - b.priority;
-      }
-    };
-  }, [sortMode, allGames]);
-
-  const sortedCommitted = useMemo(() => [...activeEntries].sort(sortComparator), [activeEntries, sortComparator]);
-  const sortedMaybe = useMemo(() => [...maybeEntries].sort(sortComparator), [maybeEntries, sortComparator]);
-  const sortedDeferred = useMemo(() => [...deferredEntries].sort(sortComparator), [deferredEntries, sortComparator]);
-
-  const dragEnabled = sortMode === 'priority';
-
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
-    const ids = sortedCommitted.map(e => e.id);
+    const ids = undatedCommitted.map(e => e.id);
     const oldIndex = ids.indexOf(active.id as string);
     const newIndex = ids.indexOf(over.id as string);
     if (oldIndex < 0 || newIndex < 0) return;
@@ -241,8 +247,6 @@ export function BuyQueueTab({ userId, wishlistGames, allGames, budgets, yearSpen
   const handleMarkPurchased = async (id: string, price?: number) => {
     const entry = entries.find(e => e.id === id);
     await markPurchased(id, price);
-
-    // Auto-create in library (Feature #12), then offer the buy → play handoff (A3)
     if (entry && onAddGameToLibrary) {
       const newGameId = await onAddGameToLibrary({
         name: entry.gameName,
@@ -264,6 +268,32 @@ export function BuyQueueTab({ userId, wishlistGames, allGames, budgets, yearSpen
     [activeEntries, maybeEntries, deferredEntries, purchasedEntries]
   );
 
+  // Renders a committed card with its budget-left chip + the cutoff divider.
+  const renderCommittedCard = (entry: PurchaseQueueEntry, dragHandleProps?: React.HTMLAttributes<HTMLButtonElement>) => {
+    const row = tallyMap.get(entry.id);
+    return (
+      <div key={entry.id} className="space-y-2">
+        {yearBudget != null && tally.cutoffId === entry.id && (
+          <div className="flex items-center gap-2 py-0.5">
+            <div className="flex-1 h-px bg-red-500/20" />
+            <span className="text-[10px] text-red-400/70 uppercase tracking-wider">Budget runs out</span>
+            <div className="flex-1 h-px bg-red-500/20" />
+          </div>
+        )}
+        <BuyQueueCard
+          entry={entry}
+          allGames={allGames}
+          onUpdate={updateEntry}
+          onMarkPurchased={handleMarkPurchased}
+          onDelete={handleDelete}
+          onSetIntent={(intent) => setIntent(entry.id, intent)}
+          budgetLeft={row ? { remaining: row.remaining, isOver: row.isOver } : null}
+          dragHandleProps={dragHandleProps}
+        />
+      </div>
+    );
+  };
+
   // SVG budget ring helper
   const renderBudgetRing = () => {
     if (yearBudget == null) return null;
@@ -273,23 +303,18 @@ export function BuyQueueTab({ userId, wishlistGames, allGames, budgets, yearSpen
     const circumference = 2 * Math.PI * radius;
     const spentDash = (spentPct / 100) * circumference;
     const plannedDash = (plannedPct / 100) * circumference;
-    const spentOffset = 0;
-    const plannedOffset = circumference - spentDash;
 
     return (
       <div className="flex items-center gap-5">
         <div className="relative flex-shrink-0" style={{ width: size, height: size }}>
           <svg width={size} height={size} className="transform -rotate-90">
-            {/* Background track */}
             <circle cx={size/2} cy={size/2} r={radius} fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth={strokeWidth} />
-            {/* Spent arc */}
             <circle cx={size/2} cy={size/2} r={radius} fill="none"
               stroke="#10b981" strokeWidth={strokeWidth} strokeLinecap="round"
               strokeDasharray={`${spentDash} ${circumference - spentDash}`}
-              strokeDashoffset={spentOffset}
+              strokeDashoffset={0}
               className="transition-all duration-700"
             />
-            {/* Planned arc */}
             {plannedPct > 0 && (
               <circle cx={size/2} cy={size/2} r={radius} fill="none"
                 stroke={isOverBudget ? '#ef4444' : '#f59e0b'} strokeWidth={strokeWidth} strokeLinecap="round"
@@ -299,7 +324,6 @@ export function BuyQueueTab({ userId, wishlistGames, allGames, budgets, yearSpen
               />
             )}
           </svg>
-          {/* Center text */}
           <div className="absolute inset-0 flex flex-col items-center justify-center">
             {isOverBudget ? (
               <>
@@ -349,9 +373,12 @@ export function BuyQueueTab({ userId, wishlistGames, allGames, budgets, yearSpen
     );
   }
 
+  const modeLabel = priceMode === 'full' ? 'full price' : priceMode === 'model' ? `${Math.round(modelDiscount * 100)}% off` : 'your deal prices';
+  const isEmpty = orderedCommitted.length === 0 && laterEntries.length === 0;
+
   return (
     <div className="space-y-5">
-      {/* Deal Alert Banner (Feature #11) */}
+      {/* Deal Alert Banner */}
       {dealsAtTarget.length > 0 && (
         <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/[0.08] p-3 buy-queue-deal-alert">
           <div className="flex items-center gap-2">
@@ -371,7 +398,7 @@ export function BuyQueueTab({ userId, wishlistGames, allGames, budgets, yearSpen
         </div>
       )}
 
-      {/* Sale Season Badge (Feature #20) */}
+      {/* Sale Season Badge */}
       {saleSeason && (
         <div className={clsx(
           'flex items-center gap-2 px-3 py-2 rounded-lg text-xs',
@@ -387,20 +414,85 @@ export function BuyQueueTab({ userId, wishlistGames, allGames, budgets, yearSpen
         </div>
       )}
 
-      {/* Budget Ring (Feature #1) */}
+      {/* Budget card — ring + pricing model + how-many-fit headline */}
       <div className={clsx(
         'rounded-xl border p-4',
         isOverBudget ? 'bg-red-500/5 border-red-500/20' : 'bg-white/[0.02] border-white/5'
       )}>
         {yearBudget != null ? (
-          renderBudgetRing()
+          <>
+            {renderBudgetRing()}
+            {total > 0 && (
+              <div className="mt-3 pt-3 border-t border-white/5 space-y-2.5">
+                {/* Pricing scenario control */}
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] text-white/30">Price assumption</span>
+                  <div className="flex items-center bg-white/5 rounded-lg overflow-hidden">
+                    {(['deal', 'full', 'model'] as PriceMode[]).map(m => (
+                      <button
+                        key={m}
+                        onClick={() => handlePriceMode(m)}
+                        className={clsx('px-2.5 py-1 text-[11px] transition-all',
+                          priceMode === m
+                            ? (m === 'deal' ? 'bg-emerald-500/15 text-emerald-400 font-medium' : 'bg-white/10 text-white/70 font-medium')
+                            : 'text-white/30 hover:text-white/50')}
+                      >
+                        {m === 'deal' ? 'My deals' : m === 'full' ? 'Full price' : 'Model %'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Discount slider (model mode) */}
+                {priceMode === 'model' && (
+                  <div className="flex items-center gap-2">
+                    <Percent size={12} className="text-emerald-400/70 flex-shrink-0" />
+                    <input
+                      type="range" min={0} max={80} step={5}
+                      value={Math.round(modelDiscount * 100)}
+                      onChange={e => handleModelDiscount(parseInt(e.target.value) / 100)}
+                      className="flex-1 accent-emerald-500"
+                    />
+                    <span className="text-xs text-white/60 font-medium w-12 text-right">{Math.round(modelDiscount * 100)}% off</span>
+                  </div>
+                )}
+
+                {/* "How many fit" headline */}
+                <div className="flex items-start gap-2">
+                  <Wallet size={14} className="text-emerald-400 mt-0.5 flex-shrink-0" />
+                  <p className="text-xs text-white/60 leading-relaxed">
+                    {fitNow >= total ? (
+                      <>All <span className="font-medium text-white/90">{total}</span> picks fit at {modeLabel}.</>
+                    ) : (
+                      <>Budget fits your top <span className="font-medium text-emerald-400">{fitNow}</span> of {total} at {modeLabel}.</>
+                    )}{' '}
+                    {priceMode === 'full' && fitDeal > fitFull && (
+                      <span className="text-white/40">Wait for deals → <span className="text-amber-400 font-medium">{fitDeal - fitFull} more</span> fit.</span>
+                    )}
+                    {priceMode === 'deal' && potentialSavings > 0 && (
+                      <span className="text-white/40">Waiting saves ~<span className="text-emerald-400 font-medium">{formatMoney(potentialSavings)}</span> vs full price.</span>
+                    )}
+                    {priceMode === 'model' && (
+                      <span className="text-white/40">That&apos;s <span className="text-emerald-400 font-medium">{fitNow}</span> games for <span className="text-white/60 font-medium">{formatMoney(committedTotal)}</span>.</span>
+                    )}
+                  </p>
+                </div>
+
+                {/* Spillover */}
+                {overflowNames.length > 0 && (
+                  <div className="flex items-start gap-1.5 text-[10px] text-amber-400/70">
+                    <Target size={10} className="flex-shrink-0 mt-0.5" />
+                    <span>Spills over: <span className="text-white/40">{overflowNames.slice(0, 3).join(', ')}{overflowNames.length > 3 ? `, +${overflowNames.length - 3} more` : ''}</span></span>
+                  </div>
+                )}
+              </div>
+            )}
+          </>
         ) : (
           <div className="flex items-center justify-between">
             <div>
               <span className="text-xs font-medium text-white/50 uppercase tracking-wider">{currentYear} Budget</span>
-              <p className="text-[11px] text-white/25 mt-1">
-                Set a budget in Stats to track spend vs plan here
-              </p>
+              <p className="text-[11px] text-white/25 mt-1">Set a budget in Stats to track spend vs plan here</p>
             </div>
             <button
               onClick={onGoToBudget}
@@ -419,19 +511,13 @@ export function BuyQueueTab({ userId, wishlistGames, allGames, budgets, yearSpen
           <div className="flex items-center gap-2">
             <ShoppingCart size={16} className="text-emerald-400" />
             <span className="text-white/70 text-sm">
-              <span className="text-white font-medium">{activeEntries.length}</span> watching
+              <span className="text-white font-medium">{activeEntries.length}</span> to buy
             </span>
           </div>
-          {maybeEntries.length > 0 && (
+          {laterEntries.length > 0 && (
             <div className="flex items-center gap-1.5 text-xs text-amber-400/70">
               <HelpCircle size={12} />
-              <span>{maybeEntries.length} maybe</span>
-            </div>
-          )}
-          {deferredEntries.length > 0 && (
-            <div className="flex items-center gap-1.5 text-xs text-blue-400/70">
-              <Tag size={12} />
-              <span>{deferredEntries.length} deferred</span>
+              <span>{laterEntries.length} later</span>
             </div>
           )}
           {releasingSoon > 0 && (
@@ -443,59 +529,21 @@ export function BuyQueueTab({ userId, wishlistGames, allGames, budgets, yearSpen
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Sort control (A2) — list view only */}
-          {viewMode === 'list' && activeEntries.length > 1 && (
-            <div className="flex items-center gap-1.5 bg-white/5 rounded-lg pl-2 pr-1">
-              <ArrowUpDown size={12} className="text-white/30" />
-              <select
-                value={sortMode}
-                onChange={e => setSortMode(e.target.value as SortMode)}
-                className="bg-transparent text-xs text-white/60 py-1.5 pr-1 focus:outline-none cursor-pointer"
-              >
-                {SORT_OPTIONS.map(o => (
-                  <option key={o.value} value={o.value} className="bg-[#1a1a2e]">{o.label}</option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          {/* AI gut-check (C1) */}
           {activeEntries.length > 0 && (
             <button
               onClick={handleAskAI}
               disabled={aiLoading}
-              className={clsx(
-                'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-all',
-                aiAdvice ? 'bg-purple-500/15 text-purple-400' : 'bg-white/5 text-white/40 hover:text-white/60'
-              )}
+              className={clsx('flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-all',
+                aiAdvice ? 'bg-purple-500/15 text-purple-400' : 'bg-white/5 text-white/40 hover:text-white/60')}
               title="Ask AI: should I buy these?"
             >
               {aiLoading ? <Loader2 size={13} className="animate-spin" /> : <Wand2 size={13} />}
             </button>
           )}
-
-          {/* View toggle (Feature #14) */}
-          <div className="flex items-center bg-white/5 rounded-lg overflow-hidden">
-            <button
-              onClick={() => setViewMode('list')}
-              className={clsx('px-2.5 py-1.5 text-xs transition-all', viewMode === 'list' ? 'bg-white/10 text-white/80' : 'text-white/30')}
-            >
-              List
-            </button>
-            <button
-              onClick={() => setViewMode('timeline')}
-              className={clsx('px-2.5 py-1.5 text-xs transition-all', viewMode === 'timeline' ? 'bg-white/10 text-white/80' : 'text-white/30')}
-            >
-              Plan
-            </button>
-          </div>
-
           <button
             onClick={() => setShowStats(!showStats)}
-            className={clsx(
-              'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-all',
-              showStats ? 'bg-emerald-500/15 text-emerald-400' : 'bg-white/5 text-white/40 hover:text-white/60'
-            )}
+            className={clsx('flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-all',
+              showStats ? 'bg-emerald-500/15 text-emerald-400' : 'bg-white/5 text-white/40 hover:text-white/60')}
           >
             <BarChart2 size={13} />
           </button>
@@ -509,7 +557,7 @@ export function BuyQueueTab({ userId, wishlistGames, allGames, budgets, yearSpen
         </div>
       </div>
 
-      {/* AI gut-check banner (C1) */}
+      {/* AI gut-check banner */}
       {aiAdvice && (
         <div className="rounded-xl border border-purple-500/20 bg-purple-500/[0.06] p-3">
           <div className="flex items-start gap-2">
@@ -527,7 +575,7 @@ export function BuyQueueTab({ userId, wishlistGames, allGames, budgets, yearSpen
         </div>
       )}
 
-      {/* Buy → Play handoff (A3) */}
+      {/* Buy → Play handoff */}
       {justPurchased && (
         <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/[0.07] p-3 flex items-center gap-2">
           <PackageCheck size={15} className="text-emerald-400 flex-shrink-0" />
@@ -550,16 +598,14 @@ export function BuyQueueTab({ userId, wishlistGames, allGames, budgets, yearSpen
         </div>
       )}
 
-      {/* Stats Dashboard (Feature #15) */}
+      {/* Stats Dashboard */}
       {showStats && activeEntries.length > 0 && (
         <div className="bg-white/[0.02] border border-white/5 rounded-xl p-4 space-y-4">
           <h3 className="text-xs font-medium text-white/50 uppercase tracking-wider">Queue Intelligence</h3>
-
-          {/* Quick stats row */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div className="p-3 rounded-lg bg-white/[0.02]">
               <div className="text-lg font-semibold text-white/90">{activeEntries.length}</div>
-              <div className="text-[11px] text-white/30">Watching</div>
+              <div className="text-[11px] text-white/30">To buy</div>
             </div>
             <div className="p-3 rounded-lg bg-white/[0.02]">
               <div className="text-lg font-semibold text-amber-400">{stats.dayOneBuys}</div>
@@ -569,78 +615,31 @@ export function BuyQueueTab({ userId, wishlistGames, allGames, budgets, yearSpen
               <div className="text-lg font-semibold text-white/90">{formatMoney(plannedSpend)}</div>
               <div className="text-[11px] text-white/30">Planned</div>
             </div>
-            {maybeEntries.length > 0 ? (
-              <div className="p-3 rounded-lg bg-amber-500/[0.05] border border-amber-500/10">
-                <div className="text-lg font-semibold text-amber-400/80">{maybeEntries.length}</div>
-                <div className="text-[11px] text-white/30">
-                  Maybe{maybeSpend > 0 ? ` · ${formatMoney(maybeSpend)}` : ''}
-                </div>
-              </div>
-            ) : stats.totalSavingsPotential > 0 ? (
+            {stats.totalSavingsPotential > 0 && (
               <div className="p-3 rounded-lg bg-white/[0.02]">
                 <div className="text-lg font-semibold text-emerald-400">{formatMoney(stats.totalSavingsPotential)}</div>
                 <div className="text-[11px] text-white/30">Potential Savings</div>
               </div>
-            ) : null}
+            )}
           </div>
-
-          {/* "If You Bought Everything" Snapshot (Feature #16) */}
-          {stats.impact.totalCost > 0 && (
-            <div className="p-3 rounded-lg bg-white/[0.03] border border-white/5">
-              <div className="flex items-center gap-2 mb-2">
-                <Sparkles size={12} className="text-purple-400" />
-                <span className="text-xs font-medium text-white/50">If You Bought Everything</span>
-              </div>
-              <div className="flex items-center gap-4 flex-wrap text-[11px]">
-                <span className="text-white/70 font-medium">{formatMoney(stats.impact.totalCost)} total</span>
-                {stats.impact.overBudget != null && stats.impact.overBudget > 0 && (
-                  <span className="text-red-400">{formatMoney(stats.impact.overBudget)} over budget</span>
-                )}
-                <span className="text-white/40">{stats.impact.newLibrarySize} games</span>
-              </div>
-              {/* Budget reaches only so far (D2) */}
-              {yearBudget != null && stats.impact.overflowItems.length > 0 && (
-                <div className="mt-2 flex items-start gap-1.5 text-[10px] text-amber-400/70">
-                  <Target size={10} className="flex-shrink-0 mt-0.5" />
-                  <span>
-                    Budget covers your top <span className="font-medium text-amber-400">{stats.impact.affordableCount}</span> pick{stats.impact.affordableCount !== 1 ? 's' : ''}.
-                    {' '}<span className="text-white/40">{stats.impact.overflowItems.slice(0, 3).join(', ')}{stats.impact.overflowItems.length > 3 ? '…' : ''}</span> spill over.
-                  </span>
-                </div>
-              )}
-              {stats.impact.genreBreakdown.length > 0 && (
-                <div className="flex items-center gap-1.5 mt-2 flex-wrap">
-                  {stats.impact.genreBreakdown.slice(0, 4).map(g => (
-                    <span key={g.genre} className="text-[10px] px-1.5 py-0.5 rounded bg-white/5 text-white/40">
-                      {g.genre} ({g.count})
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Platform breakdown */}
           {Object.keys(stats.platformBreakdown).length > 0 && (
             <div>
               <div className="text-[11px] text-white/30 mb-2">By Platform</div>
               <div className="flex items-center gap-2 flex-wrap">
-                {Object.entries(stats.platformBreakdown)
-                  .sort((a, b) => b[1] - a[1])
-                  .map(([plat, count]) => (
-                    <div key={plat} className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/5 text-xs">
-                      <span className="text-white/60">{plat}</span>
-                      <span className="text-white/30">{count}</span>
-                    </div>
-                  ))}
+                {Object.entries(stats.platformBreakdown).sort((a, b) => b[1] - a[1]).map(([plat, count]) => (
+                  <div key={plat} className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/5 text-xs">
+                    <span className="text-white/60">{plat}</span>
+                    <span className="text-white/30">{count}</span>
+                  </div>
+                ))}
               </div>
             </div>
           )}
         </div>
       )}
 
-      {/* Empty state (Feature #18) */}
-      {activeEntries.length === 0 && maybeEntries.length === 0 && deferredEntries.length === 0 && (
+      {/* Empty state */}
+      {isEmpty && (
         <div className="text-center py-16 space-y-4">
           <div className="w-16 h-16 rounded-2xl bg-white/[0.03] flex items-center justify-center mx-auto">
             <ShoppingCart size={28} className="text-white/10" />
@@ -672,248 +671,127 @@ export function BuyQueueTab({ userId, wishlistGames, allGames, budgets, yearSpen
         </div>
       )}
 
-      {/* List View */}
-      {viewMode === 'list' && (
-        <>
-          {/* Watching section — committed, drag-to-prioritize in Manual mode (A1/A2) */}
-          {sortedCommitted.length > 0 && (
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <Clock size={13} className="text-emerald-400" />
-                <h3 className="text-xs font-medium text-white/50 uppercase tracking-wider">Watching</h3>
-                <span className="text-[11px] text-white/25">{sortedCommitted.length}</span>
-                {dragEnabled && sortedCommitted.length > 1 && (
-                  <span className="text-[10px] text-white/20 ml-auto">Drag to prioritize</span>
-                )}
-              </div>
-              {dragEnabled ? (
-                <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-                  <SortableContext items={sortedCommitted.map(e => e.id)} strategy={verticalListSortingStrategy}>
-                    <div className="space-y-2">
-                      {sortedCommitted.map(entry => (
-                        <SortableBuyCard key={entry.id} entry={entry}>
-                          {(handleProps) => (
-                            <BuyQueueCard
-                              entry={entry}
-                              allGames={allGames}
-                              onUpdate={updateEntry}
-                              onMarkPurchased={handleMarkPurchased}
-                              onDelete={handleDelete}
-                              onSetIntent={(intent) => setIntent(entry.id, intent)}
-                              verdict={aiAdvice?.verdicts[entry.gameName]}
-                              dragHandleProps={handleProps}
-                            />
-                          )}
-                        </SortableBuyCard>
-                      ))}
-                    </div>
-                  </SortableContext>
-                </DndContext>
-              ) : (
-                <div className="space-y-2">
-                  {sortedCommitted.map(entry => (
-                    <BuyQueueCard
-                      key={entry.id}
-                      entry={entry}
-                      allGames={allGames}
-                      onUpdate={updateEntry}
-                      onMarkPurchased={handleMarkPurchased}
-                      onDelete={handleDelete}
-                      onSetIntent={(intent) => setIntent(entry.id, intent)}
-                      verdict={aiAdvice?.verdicts[entry.gameName]}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Maybe section */}
-          {maybeEntries.length > 0 && (
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <HelpCircle size={13} className="text-amber-400/70" />
-                <h3 className="text-xs font-medium text-white/50 uppercase tracking-wider">Maybe</h3>
-                <span className="text-[11px] text-white/25">{maybeEntries.length}</span>
-                {maybeSpend > 0 && (
-                  <span className="text-[11px] text-amber-400/40 ml-auto">{formatMoney(maybeSpend)} possible</span>
-                )}
-              </div>
-              <div className="space-y-2">
-                {sortedMaybe.map(entry => (
-                  <BuyQueueCard
-                    key={entry.id}
-                    entry={entry}
-                    allGames={allGames}
-                    onUpdate={updateEntry}
-                    onMarkPurchased={handleMarkPurchased}
-                    onDelete={handleDelete}
-                    onSetIntent={(intent) => setIntent(entry.id, intent)}
-                    verdict={aiAdvice?.verdicts[entry.gameName]}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Deferred section — waiting for a deal */}
-          {deferredEntries.length > 0 && (
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <Tag size={13} className="text-blue-400/70" />
-                <h3 className="text-xs font-medium text-white/50 uppercase tracking-wider">Deferred — Waiting for a Deal</h3>
-                <span className="text-[11px] text-white/25">{deferredEntries.length}</span>
-                {deferredSpend > 0 && (
-                  <span className="text-[11px] text-blue-400/40 ml-auto">{formatMoney(deferredSpend)} at full price</span>
-                )}
-              </div>
-              <div className="space-y-2">
-                {sortedDeferred.map(entry => (
-                  <BuyQueueCard
-                    key={entry.id}
-                    entry={entry}
-                    allGames={allGames}
-                    onUpdate={updateEntry}
-                    onMarkPurchased={handleMarkPurchased}
-                    onDelete={handleDelete}
-                    onSetIntent={(intent) => setIntent(entry.id, intent)}
-                    verdict={aiAdvice?.verdicts[entry.gameName]}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-        </>
-      )}
-
-      {/* Timeline/Plan View (Feature #14) */}
-      {viewMode === 'timeline' && (
-        <div className="space-y-4">
-          {monthlyPlan.length === 0 && activeEntries.length === 0 && (
-            <p className="text-center text-white/25 text-sm py-8">No games to show in the timeline</p>
-          )}
-          {monthlyPlan.map(month => {
-            const monthlyBudget = yearBudget != null ? yearBudget / 12 : null;
-            const overMonth = monthlyBudget != null && month.totalCost > monthlyBudget;
-            const pacePct = monthlyBudget != null && monthlyBudget > 0
-              ? Math.min(100, (month.totalCost / monthlyBudget) * 100) : 0;
-            return (
-            <div key={month.month} className="space-y-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Calendar size={13} className="text-purple-400" />
-                  <h3 className="text-xs font-medium text-white/50 uppercase tracking-wider">{month.month}</h3>
-                  <span className="text-[11px] text-white/25">{month.entries.length} game{month.entries.length !== 1 ? 's' : ''}</span>
-                </div>
-                {month.totalCost > 0 && (
-                  <span className={clsx('text-xs', overMonth ? 'text-red-400' : 'text-white/30')}>
-                    {formatMoney(month.totalCost)}
-                    {monthlyBudget != null && <span className="text-white/20"> / {formatMoney(monthlyBudget)}</span>}
-                  </span>
-                )}
-              </div>
-              {monthlyBudget != null && month.totalCost > 0 && (
-                <div className="h-1 rounded-full bg-white/5 overflow-hidden">
-                  <div
-                    className={clsx('h-full rounded-full transition-all', overMonth ? 'bg-red-500/70' : 'bg-emerald-500/60')}
-                    style={{ width: `${pacePct}%` }}
-                  />
-                </div>
-              )}
-              {month.entries.length > 0 ? (
-                <div className="space-y-2">
-                  {month.entries.map(entry => (
-                    <BuyQueueCard
-                      key={entry.id}
-                      entry={entry}
-                      allGames={allGames}
-                      onUpdate={updateEntry}
-                      onMarkPurchased={handleMarkPurchased}
-                      onDelete={handleDelete}
-                      onSetIntent={(intent) => setIntent(entry.id, intent)}
-                    />
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-4 text-[11px] text-white/15">No planned purchases</div>
-              )}
-            </div>
-            );
-          })}
+      {/* Dated group — release date order (available now → upcoming) */}
+      {datedCommitted.length > 0 && (
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <Calendar size={13} className="text-emerald-400" />
+            <h3 className="text-xs font-medium text-white/50 uppercase tracking-wider">Dated</h3>
+            <span className="text-[11px] text-white/25">{datedCommitted.length}</span>
+          </div>
+          <div className="space-y-2">
+            {datedCommitted.map(entry => renderCommittedCard(entry))}
+          </div>
         </div>
       )}
 
-      {/* Purchased history (Feature #17 - Enhanced) */}
-      {purchasedEntries.length > 0 && (
+      {/* No-date group — priority order, drag to reorder */}
+      {undatedCommitted.length > 0 && (
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <HelpCircle size={13} className="text-white/40" />
+            <h3 className="text-xs font-medium text-white/50 uppercase tracking-wider">No date</h3>
+            <span className="text-[11px] text-white/25">{undatedCommitted.length}</span>
+            {undatedCommitted.length > 1 && (
+              <span className="text-[10px] text-white/20 ml-auto">Drag to prioritize</span>
+            )}
+          </div>
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <SortableContext items={undatedCommitted.map(e => e.id)} strategy={verticalListSortingStrategy}>
+              <div className="space-y-2">
+                {undatedCommitted.map(entry => (
+                  <SortableBuyCard key={entry.id} entry={entry}>
+                    {(handleProps) => renderCommittedCard(entry, handleProps)}
+                  </SortableBuyCard>
+                ))}
+              </div>
+            </SortableContext>
+          </DndContext>
+        </div>
+      )}
+
+      {/* Later / Maybe group — ghosted projection, collapsible */}
+      {laterEntries.length > 0 && (
         <div className="space-y-2">
           <button
-            onClick={() => setShowPurchased(!showPurchased)}
-            className="flex items-center gap-2 text-xs text-white/30 hover:text-white/50 transition-colors w-full"
+            onClick={() => setShowLater(!showLater)}
+            className="flex items-center gap-2 w-full text-left"
           >
-            {showPurchased ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-            <PackageCheck size={12} className="text-white/25" />
-            <span>{purchasedEntries.length} purchased</span>
-            {stats.purchaseInsights.totalSaved > 0 && (
-              <span className="text-emerald-400/50 ml-auto">Saved {formatMoney(stats.purchaseInsights.totalSaved)}</span>
+            {showLater ? <ChevronUp size={13} className="text-white/30" /> : <ChevronDown size={13} className="text-white/30" />}
+            <Tag size={13} className="text-amber-400/70" />
+            <h3 className="text-xs font-medium text-white/50 uppercase tracking-wider">Later / Maybe</h3>
+            <span className="text-[11px] text-white/25">{laterEntries.length}</span>
+            {maybeSpend > 0 && (
+              <span className="text-[11px] text-amber-400/40 ml-auto">{formatMoney(laterEntries.reduce((s, e) => s + (e.targetPrice ?? e.currentPrice ?? e.msrpEstimate ?? 0), 0))} if added</span>
             )}
           </button>
-          {showPurchased && (
-            <div className="space-y-3">
-              {/* Purchase insights summary */}
-              {purchasedEntries.length >= 2 && (
-                <div className="flex items-center gap-4 flex-wrap px-3 py-2 bg-white/[0.02] rounded-lg text-[11px]">
-                  <div className="flex items-center gap-1.5">
-                    <Trophy size={10} className="text-amber-400" />
-                    <span className="text-white/40">Queue purchases:</span>
-                    <span className="text-white/60 font-medium">{stats.purchaseInsights.gamesFromQueue}</span>
-                  </div>
-                  {stats.purchaseInsights.totalSaved > 0 && (
-                    <div className="flex items-center gap-1.5">
-                      <TrendingDown size={10} className="text-emerald-400" />
-                      <span className="text-white/40">Saved vs MSRP:</span>
-                      <span className="text-emerald-400 font-medium">{formatMoney(stats.purchaseInsights.totalSaved)}</span>
-                    </div>
-                  )}
-                  {stats.purchaseInsights.avgWaitDays > 0 && (
-                    <div className="flex items-center gap-1.5">
-                      <Clock size={10} className="text-white/30" />
-                      <span className="text-white/40">Avg wait:</span>
-                      <span className="text-white/60 font-medium">{stats.purchaseInsights.avgWaitDays}d</span>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              <div className="space-y-2 opacity-60">
-                {purchasedEntries.map(entry => (
-                  <div key={entry.id} className="flex items-center gap-3 p-3 bg-white/[0.02] border border-white/5 rounded-xl">
-                    {entry.thumbnail ? (
-                      <img src={entry.thumbnail} alt="" className="w-10 h-7 rounded object-cover flex-shrink-0 grayscale" />
-                    ) : (
-                      <div className="w-10 h-7 rounded bg-white/5 flex-shrink-0" />
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm text-white/50 truncate">{entry.gameName}</div>
-                      <div className="flex items-center gap-2 text-[11px] text-white/25">
-                        {entry.purchasePrice != null && <span>Paid ${entry.purchasePrice}</span>}
-                        {entry.msrpEstimate && entry.purchasePrice != null && entry.msrpEstimate > entry.purchasePrice && (
-                          <span className="text-emerald-400/60">Saved ${(entry.msrpEstimate - entry.purchasePrice).toFixed(0)}</span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1 text-emerald-400/60 text-[11px]">
-                      <PackageCheck size={11} />
-                    </div>
-                  </div>
-                ))}
-              </div>
+          {showLater && (
+            <div className="space-y-2">
+              {laterEntries.map(entry => {
+                const g = ghostMap.get(entry.id);
+                return (
+                  <BuyQueueCard
+                    key={entry.id}
+                    entry={entry}
+                    allGames={allGames}
+                    onUpdate={updateEntry}
+                    onMarkPurchased={handleMarkPurchased}
+                    onDelete={handleDelete}
+                    onSetIntent={(intent) => setIntent(entry.id, intent)}
+                    budgetLeft={g ? { remaining: g.remaining, isOver: g.isOver, ghost: true } : null}
+                  />
+                );
+              })}
             </div>
           )}
         </div>
       )}
 
-      {/* Wishlist nudge (Feature #13) */}
-      {wishlistGames.length > 0 && (activeEntries.length > 0 || maybeEntries.length > 0 || deferredEntries.length > 0) && (
+      {/* Bought / spent — collapsible, bottom of the view */}
+      {purchasedEntries.length > 0 && (
+        <div className="space-y-2 pt-1">
+          <button
+            onClick={() => setShowBought(!showBought)}
+            className="flex items-center gap-2 w-full text-left"
+          >
+            {showBought ? <ChevronUp size={13} className="text-white/30" /> : <ChevronDown size={13} className="text-white/30" />}
+            <PackageCheck size={13} className="text-white/30" />
+            <h3 className="text-xs font-medium text-white/50 uppercase tracking-wider">Bought</h3>
+            <span className="text-[11px] text-white/25">{purchasedEntries.length}</span>
+            <span className="text-[11px] text-white/40 ml-auto">
+              Spent <span className="text-white/70 font-medium">{formatMoney(boughtSpent)}</span>
+              {yearBudget != null && <span className="text-white/25"> of {formatMoney(yearBudget)}</span>}
+              {stats.purchaseInsights.totalSaved > 0 && <span className="text-emerald-400/60"> · saved {formatMoney(stats.purchaseInsights.totalSaved)}</span>}
+            </span>
+          </button>
+          {showBought && (
+            <div className="space-y-2 opacity-70">
+              {purchasedEntries.map(entry => (
+                <div key={entry.id} className="flex items-center gap-3 p-3 bg-white/[0.02] border border-white/5 rounded-xl">
+                  {entry.thumbnail ? (
+                    <img src={entry.thumbnail} alt="" className="w-10 h-7 rounded object-cover flex-shrink-0 grayscale" />
+                  ) : (
+                    <div className="w-10 h-7 rounded bg-white/5 flex-shrink-0" />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm text-white/50 truncate">{entry.gameName}</div>
+                    <div className="flex items-center gap-2 text-[11px] text-white/25">
+                      {entry.purchasePrice != null && <span>Paid ${entry.purchasePrice}</span>}
+                      {entry.msrpEstimate && entry.purchasePrice != null && entry.msrpEstimate > entry.purchasePrice && (
+                        <span className="text-emerald-400/60">Saved ${(entry.msrpEstimate - entry.purchasePrice).toFixed(0)}</span>
+                      )}
+                    </div>
+                  </div>
+                  <PackageCheck size={11} className="text-emerald-400/60 flex-shrink-0" />
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Wishlist nudge */}
+      {wishlistGames.length > 0 && !isEmpty && (
         (() => {
           const queuedNames = new Set([...activeEntries, ...maybeEntries, ...deferredEntries].map(e => e.gameName.toLowerCase()));
           const untracked = wishlistGames.filter(g => !queuedNames.has(g.name.toLowerCase()));

@@ -21,6 +21,8 @@ import { gameRepository } from './lib/storage';
 import { useRankings } from './hooks/useRankings';
 import { rankingRepository } from './lib/ranking-storage';
 import { BASELINE_GAMES_2025 } from './data/baseline-games';
+import { BASELINE_BUY_QUEUE } from './data/baseline-buy-queue';
+import { purchaseQueueRepository } from './lib/purchase-queue-storage';
 import { useAuthContext } from '@/lib/AuthContext';
 import { useToast } from '@/components/Toast';
 import { getROIRating, getWeekStatsForOffset, getGamesPlayedInTimeRange, getCompletionProbability, getGameHealthDot, getRelativeTime, getDaysContext, getSessionMomentum, getValueTrajectory, getGameSmartOneLiner, getFranchiseInfo, getProgressPercent, getShelfLife, parseLocalDate, getCardRarity, getRelationshipStatus, getGameStreak, getHeroNumber, getCardFreshness, getGameSections, getCardBackData, getContextualWhisper, getLibraryRank, getCardMoodPulse, getProgressRingData, getStatPopoverData, getWeekRecapData, getSmartNudges, getGamingCreditScore, getRotationStats, getSpendingForecast, getSpendingByMonth, getShelfLifeExpiry, formatRating, getRatingRank } from './lib/calculations';
@@ -254,7 +256,8 @@ export default function GameAnalyticsPage() {
   // This year's spending (for buy queue budget bar)
   const currentYearSpent = useMemo(() => {
     const year = new Date().getFullYear();
-    const byMonth = getSpendingByMonth(games);
+    // Free / subscription games don't cost money — exclude them from spend.
+    const byMonth = getSpendingByMonth(games.filter(g => !g.acquiredFree));
     return Object.entries(byMonth)
       .filter(([key]) => key.startsWith(String(year)))
       .reduce((sum, [, val]) => sum + val, 0);
@@ -396,7 +399,21 @@ export default function GameAnalyticsPage() {
       for (const gameData of BASELINE_GAMES_2025) {
         await gameRepository.create(gameData);
       }
-      showToast('Sample games loaded', 'success');
+
+      // Seed sample Buy Queue entries so the budget tools have data to test against.
+      purchaseQueueRepository.setUserId(user?.uid || 'local-user');
+      for (const entry of BASELINE_BUY_QUEUE) {
+        await purchaseQueueRepository.create(entry);
+      }
+
+      // Give the current year a budget if one isn't set, so the "how many fit"
+      // headline and budget ring are populated out of the box.
+      const seedYear = new Date().getFullYear();
+      if (!budgets.some(b => b.year === seedYear)) {
+        await setBudget(seedYear, 300);
+      }
+
+      showToast('Sample games + buy queue loaded', 'success');
       await refresh();
     } catch (e) {
       showToast(`Failed to seed data: ${(e as Error).message}`, 'error');

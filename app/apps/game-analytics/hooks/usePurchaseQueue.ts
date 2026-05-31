@@ -138,6 +138,12 @@ export function usePurchaseQueue(userId: string | null) {
   const maybeSpend = maybeEntries.reduce((sum, e) => sum + priceOf(e), 0);
   const deferredSpend = deferredEntries.reduce((sum, e) => sum + priceOf(e), 0);
 
+  // Full-price (MSRP) total for committed games — the "buy now, no waiting" scenario.
+  const fullPriceSpend = activeEntries.reduce(
+    (sum, e) => sum + (e.msrpEstimate ?? e.currentPrice ?? e.targetPrice ?? 70),
+    0
+  );
+
   // releasingSoon is informational — includes every non-purchased intent.
   const releasingSoon = notPurchased.filter(e => {
     if (!e.releaseDate) return false;
@@ -155,6 +161,7 @@ export function usePurchaseQueue(userId: string | null) {
     purchasedEntries,
     loading,
     plannedSpend,
+    fullPriceSpend,
     maybeSpend,
     deferredSpend,
     releasingSoon,
