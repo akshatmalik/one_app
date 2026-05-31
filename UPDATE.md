@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-05-31 — Games Tab — Game Showdown head-to-head comparison
+
+**Files**: app/apps/game-analytics/components/GameCompareModal.tsx, app/apps/game-analytics/page.tsx
+**Risk**: not risky
+
+Added a "⚔️ Compare" button to the Games tab toolbar that opens a new Game Showdown modal. Users pick any two owned games from a searchable list, then see a full head-to-head stat breakdown: rating, total hours, cost/hour, ROI, sessions, avg session, price paid, completion status, and current streak — each stat labeled with its winner. A weighted scoring system tallies the results and generates a contextual verdict narrative (e.g., "Elden Ring wins on both enjoyment and value — a clear champion"). The overall winner is highlighted with an amber trophy style at the bottom.
+
+FOLLOW-UP: Consider adding the ability to share or screenshot a comparison card, or surface "Compare" as a card-level action on each game.
+
 ## 2026-05-22 18:00 — Games Tab — Game search bar
 
 **Files**: app/apps/game-analytics/page.tsx

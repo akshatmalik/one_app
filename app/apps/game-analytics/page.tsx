@@ -44,6 +44,7 @@ import { TrophyShowcase } from './components/TrophyShowcase';
 import { TrophyToast } from './components/TrophyToast';
 import { ErrorLogPanel, ErrorLogButton } from './components/ErrorLogPanel';
 import { WhatsNewModal } from './components/WhatsNewModal';
+import { GameCompareModal } from './components/GameCompareModal';
 import { GameReviewChat } from './components/GameReviewChat';
 import clsx from 'clsx';
 
@@ -190,6 +191,7 @@ export default function GameAnalyticsPage() {
   const [showExport, setShowExport] = useState(false);
   const [wrappedYear, setWrappedYear] = useState<number | null>(null);
   const [showAwardsHub, setShowAwardsHub] = useState(false);
+  const [showCompare, setShowCompare] = useState(false);
   const [detailGame, setDetailGame] = useState<GameWithMetrics | null>(null);
   const [reviewChatGame, setReviewChatGame] = useState<GameWithMetrics | null>(null);
   const [statsCollapsed, setStatsCollapsed] = useState(() => {
@@ -1062,6 +1064,16 @@ export default function GameAnalyticsPage() {
                   >
                     {cardViewMode === 'poster' ? 'Compact' : 'Poster'}
                   </button>
+                  {/* Compare button */}
+                  {gamesWithMetrics.filter(g => g.status !== 'Wishlist').length >= 2 && (
+                    <button
+                      onClick={() => setShowCompare(true)}
+                      className="px-2 py-1 bg-purple-500/[0.08] border border-purple-500/20 text-purple-400/70 hover:text-purple-400 hover:bg-purple-500/[0.12] text-[10px] rounded-lg transition-colors flex items-center gap-1"
+                      title="Compare two games head to head"
+                    >
+                      ⚔️ Compare
+                    </button>
+                  )}
                   {/* Group toggle */}
                   <button
                     onClick={toggleGroupBySection}
@@ -1404,6 +1416,13 @@ export default function GameAnalyticsPage() {
       {showWhatsNew && (
         <WhatsNewModal onClose={() => setShowWhatsNew(false)} />
       )}
+
+      {/* Game Compare Modal */}
+      <GameCompareModal
+        games={gamesWithMetrics}
+        isOpen={showCompare}
+        onClose={() => setShowCompare(false)}
+      />
 
       {/* Export Panel */}
       {showExport && (
