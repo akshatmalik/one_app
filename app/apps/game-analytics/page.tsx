@@ -256,7 +256,8 @@ export default function GameAnalyticsPage() {
   // This year's spending (for buy queue budget bar)
   const currentYearSpent = useMemo(() => {
     const year = new Date().getFullYear();
-    const byMonth = getSpendingByMonth(games);
+    // Free / subscription games don't cost money — exclude them from spend.
+    const byMonth = getSpendingByMonth(games.filter(g => !g.acquiredFree));
     return Object.entries(byMonth)
       .filter(([key]) => key.startsWith(String(year)))
       .reduce((sum, [, val]) => sum + val, 0);

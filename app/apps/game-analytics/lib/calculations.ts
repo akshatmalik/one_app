@@ -12699,6 +12699,22 @@ const fullPriceOf = (e: PurchaseQueueEntry): number =>
 const dealPriceOf = (e: PurchaseQueueEntry): number =>
   e.targetPrice ?? e.currentPrice ?? e.msrpEstimate ?? DEFAULT_FULL_PRICE;
 
+/** Pricing scenario for budget projections: full MSRP, your target deals, or a modeled % off. */
+export type QueuePriceMode =
+  | { kind: 'full' }
+  | { kind: 'deal' }
+  | { kind: 'model'; discount: number }; // discount in 0..1 off MSRP
+
+/** Resolve the price for a single queue entry under a pricing scenario. */
+export function resolveQueuePrice(e: PurchaseQueueEntry, mode: QueuePriceMode): number {
+  if (mode.kind === 'full') return fullPriceOf(e);
+  if (mode.kind === 'model') {
+    const d = Math.min(0.95, Math.max(0, mode.discount));
+    return Math.round(fullPriceOf(e) * (1 - d));
+  }
+  return dealPriceOf(e);
+}
+
 interface BudgetFitResult {
   affordableCount: number;
   overflowItems: string[];
@@ -12757,6 +12773,43 @@ export function getBudgetFitScenarios(
     extraFromDeals: Math.max(0, deal.affordableCount - fullPrice.affordableCount),
     potentialSavings,
   };
+}
+
+/** A single row in the running budget tally. */
+export interface QueueTallyRow {
+  id: string;
+  price: number;
+  cumulative: number;        // running committed spend including this entry
+  remaining: number | null;  // budget − yearSpent − cumulative (null if no budget)
+  isOver: boolean;
+}
+
+/**
+ * Walk a list of entries in display order, accruing spend against the budget.
+ * Returns the per-entry remaining budget plus the id of the first entry that
+ * busts the budget (so the UI can draw a "runs out here" divider before it).
+ *
+ * `startCumulative` lets a second pass (e.g. the ghost tally for maybes)
+ * continue from where the committed total left off.
+ */
+export function getQueueRunningTally(
+  ordered: PurchaseQueueEntry[],
+  yearBudget: number | null,
+  yearSpent: number,
+  mode: QueuePriceMode,
+  startCumulative = 0
+): { rows: QueueTallyRow[]; cutoffId: string | null } {
+  let cumulative = startCumulative;
+  let cutoffId: string | null = null;
+  const rows = ordered.map((e): QueueTallyRow => {
+    const price = resolveQueuePrice(e, mode);
+    cumulative += price;
+    const remaining = yearBudget != null ? yearBudget - yearSpent - cumulative : null;
+    const isOver = remaining != null && remaining < 0;
+    if (isOver && cutoffId === null) cutoffId = e.id;
+    return { id: e.id, price, cumulative, remaining, isOver };
+  });
+  return { rows, cutoffId };
 }
 
 /**

@@ -21,6 +21,8 @@ interface Props {
   onDelete: (id: string) => void;
   onSetIntent?: (intent: PurchaseIntent) => void;
   verdict?: string;
+  /** Running budget remaining after this card; `ghost` projects a maybe without counting it. */
+  budgetLeft?: { remaining: number | null; isOver: boolean; ghost?: boolean } | null;
   dragHandleProps?: React.HTMLAttributes<HTMLButtonElement>;
 }
 
@@ -62,7 +64,7 @@ function getSavings(entry: PurchaseQueueEntry): string | null {
   return `${pct}% off`;
 }
 
-export function BuyQueueCard({ entry, onUpdate, onMarkPurchased, onDelete, onSetIntent, dragHandleProps }: Props) {
+export function BuyQueueCard({ entry, onUpdate, onMarkPurchased, onDelete, onSetIntent, budgetLeft, dragHandleProps }: Props) {
   const intent: PurchaseIntent = entry.intent ?? (entry.isMaybe ? 'maybe' : 'committed');
   const isMaybe = intent === 'maybe';
   const isDeferred = intent === 'deferred';
@@ -269,12 +271,26 @@ export function BuyQueueCard({ entry, onUpdate, onMarkPurchased, onDelete, onSet
                 : 'Set date'}
             </button>
           )}
-          {!upcoming && priceStatus && (
-            <span className={clsx('flex items-center gap-1 ml-auto', priceStatus.color)}>
-              <span className={clsx('w-1.5 h-1.5 rounded-full flex-shrink-0', priceStatus.dot)} />
-              {priceStatus.label}
-            </span>
-          )}
+          <div className="ml-auto flex items-center gap-2 flex-shrink-0">
+            {!upcoming && priceStatus && (
+              <span className={clsx('flex items-center gap-1', priceStatus.color)}>
+                <span className={clsx('w-1.5 h-1.5 rounded-full flex-shrink-0', priceStatus.dot)} />
+                {priceStatus.label}
+              </span>
+            )}
+            {budgetLeft && budgetLeft.remaining != null && (
+              <span className={clsx('px-1.5 py-0.5 rounded text-[10px] font-medium',
+                budgetLeft.ghost ? 'border border-dashed border-white/15 text-white/35'
+                  : budgetLeft.isOver ? 'bg-red-500/15 text-red-400'
+                    : 'bg-white/5 text-white/55')}>
+                {budgetLeft.ghost
+                  ? `would leave $${Math.round(budgetLeft.remaining)}`
+                  : budgetLeft.isOver
+                    ? `over $${Math.abs(Math.round(budgetLeft.remaining))}`
+                    : `$${Math.round(budgetLeft.remaining)} left`}
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Price row */}
