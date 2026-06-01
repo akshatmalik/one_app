@@ -64,6 +64,7 @@ import { TrophyRoomV2 } from './TrophyRoomV2';
 import { TrophyProgress, TrophyScoreSummary } from '../lib/trophy-calculations';
 import { DiscoverPanel } from './DiscoverPanel';
 import { WeeklyDigest } from './WeeklyDigest';
+import { WhatIfSimulator } from './WhatIfSimulator';
 import { PlayedSummary, BoughtSummary } from './RangeGlance';
 import clsx from 'clsx';
 
@@ -1002,6 +1003,9 @@ export function StatsView({ games, summary, budgets = [], onSetBudget, trophies,
 
       {/* Advanced Analytics Panel (Phase 2) */}
       <AnalyticsPanel games={games} />
+
+      {/* Alternate Reality / What-If Simulator */}
+      <WhatIfSimulator games={games} />
 
       {/* Trophy Room V2 — 100 Trophies */}
       {trophies && trophySummary && onToggleTrophyPin ? (
