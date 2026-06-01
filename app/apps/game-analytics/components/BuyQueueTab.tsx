@@ -182,8 +182,30 @@ export function BuyQueueTab({ userId, wishlistGames, allGames, budgets, yearSpen
   const spentPct = budgetTotal > 0 ? Math.min(100, (budgetUsed / budgetTotal) * 100) : 0;
   const plannedPct = budgetTotal > 0 ? Math.min(100 - spentPct, (budgetPlanned / budgetTotal) * 100) : 0;
 
+  // Library games bought this year that were never tracked through the queue — auto-added to BOUGHT.
+  const autoAddedLibraryGames = useMemo(() => {
+    const year = String(currentYear);
+    const trackedNames = new Set(purchasedEntries.map(e => e.gameName.toLowerCase()));
+    return allGames.filter(g =>
+      g.datePurchased?.startsWith(year) &&
+      !g.acquiredFree &&
+      g.status !== 'Wishlist' &&
+      !trackedNames.has(g.name.toLowerCase())
+    );
+  }, [allGames, purchasedEntries, currentYear]);
+
   // Bought / spent summary (free games never have a purchase price)
-  const boughtSpent = useMemo(() => purchasedEntries.reduce((s, e) => s + (e.purchasePrice ?? 0), 0), [purchasedEntries]);
+  const boughtSpent = useMemo(
+    () =>
+      purchasedEntries.reduce((s, e) => s + (e.purchasePrice ?? 0), 0) +
+      autoAddedLibraryGames.reduce((s, g) => s + g.price, 0),
+    [purchasedEntries, autoAddedLibraryGames]
+  );
+
+  const autoAddedSaved = useMemo(
+    () => autoAddedLibraryGames.reduce((s, g) => s + (g.originalPrice != null ? Math.max(0, g.originalPrice - g.price) : 0), 0),
+    [autoAddedLibraryGames]
+  );
 
   // Sale season
   const saleSeason = useMemo(() => getSaleSeasonIndicator(), []);
@@ -748,7 +770,7 @@ export function BuyQueueTab({ userId, wishlistGames, allGames, budgets, yearSpen
       )}
 
       {/* Bought / spent — collapsible, bottom of the view */}
-      {purchasedEntries.length > 0 && (
+      {(purchasedEntries.length > 0 || autoAddedLibraryGames.length > 0) && (
         <div className="space-y-2 pt-1">
           <button
             onClick={() => setShowBought(!showBought)}
@@ -757,11 +779,13 @@ export function BuyQueueTab({ userId, wishlistGames, allGames, budgets, yearSpen
             {showBought ? <ChevronUp size={13} className="text-white/30" /> : <ChevronDown size={13} className="text-white/30" />}
             <PackageCheck size={13} className="text-white/30" />
             <h3 className="text-xs font-medium text-white/50 uppercase tracking-wider">Bought</h3>
-            <span className="text-[11px] text-white/25">{purchasedEntries.length}</span>
+            <span className="text-[11px] text-white/25">{purchasedEntries.length + autoAddedLibraryGames.length}</span>
             <span className="text-[11px] text-white/40 ml-auto">
               Spent <span className="text-white/70 font-medium">{formatMoney(boughtSpent)}</span>
               {yearBudget != null && <span className="text-white/25"> of {formatMoney(yearBudget)}</span>}
-              {stats.purchaseInsights.totalSaved > 0 && <span className="text-emerald-400/60"> · saved {formatMoney(stats.purchaseInsights.totalSaved)}</span>}
+              {(stats.purchaseInsights.totalSaved + autoAddedSaved) > 0 && (
+                <span className="text-emerald-400/60"> · saved {formatMoney(stats.purchaseInsights.totalSaved + autoAddedSaved)}</span>
+              )}
             </span>
           </button>
           {showBought && (
@@ -779,6 +803,25 @@ export function BuyQueueTab({ userId, wishlistGames, allGames, budgets, yearSpen
                       {entry.purchasePrice != null && <span>Paid ${entry.purchasePrice}</span>}
                       {entry.msrpEstimate && entry.purchasePrice != null && entry.msrpEstimate > entry.purchasePrice && (
                         <span className="text-emerald-400/60">Saved ${(entry.msrpEstimate - entry.purchasePrice).toFixed(0)}</span>
+                      )}
+                    </div>
+                  </div>
+                  <PackageCheck size={11} className="text-emerald-400/60 flex-shrink-0" />
+                </div>
+              ))}
+              {autoAddedLibraryGames.map(game => (
+                <div key={game.id} className="flex items-center gap-3 p-3 bg-white/[0.02] border border-white/5 rounded-xl">
+                  {game.thumbnail ? (
+                    <img src={game.thumbnail} alt="" className="w-10 h-7 rounded object-cover flex-shrink-0 grayscale" />
+                  ) : (
+                    <div className="w-10 h-7 rounded bg-white/5 flex-shrink-0" />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm text-white/50 truncate">{game.name}</div>
+                    <div className="flex items-center gap-2 text-[11px] text-white/25">
+                      <span>Paid ${game.price}</span>
+                      {game.originalPrice != null && game.originalPrice > game.price && (
+                        <span className="text-emerald-400/60">Saved ${(game.originalPrice - game.price).toFixed(0)}</span>
                       )}
                     </div>
                   </div>
