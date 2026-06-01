@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useRef, useEffect } from 'react';
-import { Clock, ChevronDown, ChevronUp, ListPlus, Check, Heart, Edit3, Trash2, Trophy, Sparkles, Zap, MessageCircle } from 'lucide-react';
+import { Clock, ChevronDown, ChevronUp, ListPlus, Check, Heart, Edit3, Trash2, Trophy, Sparkles, Zap, MessageCircle, Swords } from 'lucide-react';
 import { Game } from '../lib/types';
 import { GameWithMetrics } from '../hooks/useAnalytics';
 import {
@@ -37,6 +37,7 @@ interface GameBottomSheetProps {
   onToggleQueue: () => void;
   onToggleSpecial: () => void;
   onOpenReviewChat: () => void;
+  onCompare?: () => void;
   isInQueue: boolean;
 }
 
@@ -61,6 +62,7 @@ export function GameBottomSheet({
   onToggleQueue,
   onToggleSpecial,
   onOpenReviewChat,
+  onCompare,
   isInQueue,
 }: GameBottomSheetProps) {
   const [showAwards, setShowAwards] = useState(false);
@@ -726,6 +728,14 @@ export function GameBottomSheet({
           >
             <Heart size={14} className={game.isSpecial ? 'fill-amber-400' : ''} />
           </button>
+          {onCompare && (
+            <button
+              onClick={onCompare}
+              className="px-3 py-2.5 bg-white/5 active:bg-white/10 text-white/50 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5"
+            >
+              <Swords size={14} /> Compare
+            </button>
+          )}
           <button
             onClick={onEdit}
             className="px-3 py-2.5 bg-white/5 active:bg-white/10 text-white/50 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5"

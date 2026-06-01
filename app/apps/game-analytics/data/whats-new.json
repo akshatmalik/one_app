@@ -1,6 +1,12 @@
 {
   "entries": [
     {
+      "date": "2026-06-01",
+      "area": "Game Comparison",
+      "title": "Compare any two games head-to-head",
+      "body": "Open any game's detail sheet and tap Compare to pick a second game from your library. You'll see a radar chart, category-by-category stat bars with trophy icons, and a final verdict showing who wins and by how much. Great for deciding what to play next or finally figuring out why one game hit differently."
+    },
+    {
       "date": "2026-05-22",
       "area": "Games tab",
       "title": "Search your library instantly",

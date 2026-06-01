@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-01 12:00 — Game Cards — Side-by-side game comparison
+
+**Files**: app/apps/game-analytics/components/GameCompareModal.tsx, app/apps/game-analytics/components/GameBottomSheet.tsx, app/apps/game-analytics/page.tsx
+**Risk**: not risky
+
+Added a full "Compare" feature accessible from any game's detail sheet. Tap "Compare" in the bottom action bar, pick any other game from a searchable list, and see a head-to-head breakdown: a radar chart across 5 dimensions (Rating, Value, Hours, ROI, Sessions), dual progress bars for each metric with trophy icons marking the winner, value rating badges side by side, and a final verdict showing which game wins and by how many categories. Games can be swapped mid-comparison. Ideal for deciding what to play next or understanding why one game felt better than another.
+
+FOLLOW-UP: Could extend by letting users share comparison results as an image, or surface the "best match for your next play" automatically using chemistry score.
+
 ## 2026-05-22 18:00 — Games Tab — Game search bar
 
 **Files**: app/apps/game-analytics/page.tsx

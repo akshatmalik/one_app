@@ -31,6 +31,7 @@ import { ActivityPulse } from './components/ActivityPulse';
 import { RandomPicker } from './components/RandomPicker';
 import { BulkWishlistModal } from './components/BulkWishlistModal';
 import { GameBottomSheet } from './components/GameBottomSheet';
+import { GameCompareModal } from './components/GameCompareModal';
 import { DiscoverTab } from './components/DiscoverTab';
 import { LeaderboardTab } from './components/LeaderboardTab';
 import { BuyQueueTab } from './components/BuyQueueTab';
@@ -193,6 +194,7 @@ export default function GameAnalyticsPage() {
   const [wrappedYear, setWrappedYear] = useState<number | null>(null);
   const [showAwardsHub, setShowAwardsHub] = useState(false);
   const [detailGame, setDetailGame] = useState<GameWithMetrics | null>(null);
+  const [compareGame, setCompareGame] = useState<GameWithMetrics | null>(null);
   const [reviewChatGame, setReviewChatGame] = useState<GameWithMetrics | null>(null);
   const [statsCollapsed, setStatsCollapsed] = useState(() => {
     if (typeof window === 'undefined') return false;
@@ -1512,7 +1514,20 @@ export default function GameAnalyticsPage() {
             setReviewChatGame(detailGame);
             setDetailGame(null);
           }}
+          onCompare={() => {
+            setCompareGame(detailGame);
+            setDetailGame(null);
+          }}
           isInQueue={isInQueue(detailGame.id)}
+        />
+      )}
+
+      {/* Game Comparison Modal */}
+      {compareGame && (
+        <GameCompareModal
+          gameA={compareGame}
+          allGames={gamesWithMetrics}
+          onClose={() => setCompareGame(null)}
         />
       )}
 
