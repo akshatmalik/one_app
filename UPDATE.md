@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-01 12:00 — Games Tab — Live Session Timer
+
+**Files**: app/apps/game-analytics/components/ActiveSessionBar.tsx (new), app/apps/game-analytics/components/PlayLogModal.tsx, app/apps/game-analytics/components/GameBottomSheet.tsx, app/apps/game-analytics/page.tsx, app/globals.css
+**Risk**: not risky
+
+Added a real-time live session timer that tracks active gaming time. Tap "Start" on any game card (or the timer icon in the bottom sheet) to begin a session — a persistent floating bar appears at the bottom of the screen showing the elapsed time updating every second, an animated green shimmer bar, and a live pulse indicator. While the session is running, you can set your mood (🔥 Great / 👍 Good / 😐 Meh / 😤 Grind). Tap "Stop & Log" and PlayLogModal opens pre-filled with the exact elapsed time (rounded to 0.1h, minimum 0.1h) and your chosen mood. Tap the X to abandon without logging. Session state is persisted in localStorage so it survives tab switches and page refreshes within the same browser session.
+
+FOLLOW-UP: Could auto-detect inactivity (no new sessions started on a stalled timer) and prompt "Still playing?" after a configurable threshold.
+
 ## 2026-06-01 00:00 — Stats Tab — What-If Simulator
 
 **Files**: app/apps/game-analytics/lib/calculations.ts, app/apps/game-analytics/components/WhatIfSimulator.tsx, app/apps/game-analytics/components/StatsView.tsx

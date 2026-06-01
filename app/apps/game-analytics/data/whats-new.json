@@ -2,6 +2,12 @@
   "entries": [
     {
       "date": "2026-06-01",
+      "area": "Games tab",
+      "title": "Live session timer — track time while you play",
+      "body": "Hit \"Start\" on any game card to start a live stopwatch. A floating bar at the bottom shows your elapsed time ticking up in real time. Set your mood while you play, then tap \"Stop & Log\" — the play log opens pre-filled with your exact session length and mood. Tap the X to discard if you want. The timer survives tab switches, so you can check your stats mid-session without losing your time."
+    },
+    {
+      "date": "2026-06-01",
       "area": "Stats tab",
       "title": "What would your library look like with better choices?",
       "body": "The new Alternate Reality Simulator in the Stats tab lets you explore four \"what if\" scenarios: what if you'd skipped impulse buys, never bought games you later abandoned, cleared your backlog, or always bought on sale? Each scenario shows the exact games affected, a before/after stat comparison, and a frank insight about your spending habits."

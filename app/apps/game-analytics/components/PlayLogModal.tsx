@@ -11,6 +11,8 @@ interface PlayLogModalProps {
   game: Game;
   onSave: (playLogs: PlayLog[]) => Promise<void>;
   onClose: () => void;
+  initialHours?: number;
+  initialMood?: SessionMood;
 }
 
 // Get local date in YYYY-MM-DD format (not UTC)
@@ -32,7 +34,7 @@ const NOTE_PROMPTS = [
   'Making good progress?',
 ];
 
-export function PlayLogModal({ game, onSave, onClose }: PlayLogModalProps) {
+export function PlayLogModal({ game, onSave, onClose, initialHours, initialMood }: PlayLogModalProps) {
   const [logs, setLogs] = useState<PlayLog[]>(game.playLogs || []);
   const [loading, setLoading] = useState(false);
   const [notesExpanded, setNotesExpanded] = useState(false);
@@ -45,8 +47,9 @@ export function PlayLogModal({ game, onSave, onClose }: PlayLogModalProps) {
     vibe?: SessionVibe;
   }>({
     date: getLocalDateString(),
-    hours: '1',
+    hours: initialHours != null ? initialHours.toFixed(1) : '1',
     notes: '',
+    mood: initialMood,
   });
 
   const addLog = () => {

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useRef, useEffect } from 'react';
-import { Clock, ChevronDown, ChevronUp, ListPlus, Check, Heart, Edit3, Trash2, Trophy, Sparkles, Zap, MessageCircle } from 'lucide-react';
+import { Clock, ChevronDown, ChevronUp, ListPlus, Check, Heart, Edit3, Trash2, Trophy, Sparkles, Zap, MessageCircle, Timer } from 'lucide-react';
 import { Game } from '../lib/types';
 import { GameWithMetrics } from '../hooks/useAnalytics';
 import {
@@ -37,6 +37,8 @@ interface GameBottomSheetProps {
   onToggleQueue: () => void;
   onToggleSpecial: () => void;
   onOpenReviewChat: () => void;
+  onStartSession?: () => void;
+  isActiveSession?: boolean;
   isInQueue: boolean;
 }
 
@@ -61,6 +63,8 @@ export function GameBottomSheet({
   onToggleQueue,
   onToggleSpecial,
   onOpenReviewChat,
+  onStartSession,
+  isActiveSession,
   isInQueue,
 }: GameBottomSheetProps) {
   const [showAwards, setShowAwards] = useState(false);
@@ -686,6 +690,24 @@ export function GameBottomSheet({
 
         {/* Sticky Actions Bar */}
         <div className="absolute bottom-0 left-0 right-0 bg-[#0e0e16]/95 backdrop-blur-md border-t border-white/5 p-3 flex items-center gap-2">
+          {onStartSession && game.status !== 'Wishlist' && (
+            <button
+              onClick={onStartSession}
+              className={clsx(
+                'flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg text-xs font-medium transition-all',
+                isActiveSession
+                  ? 'bg-green-500/20 text-green-400 active:bg-green-500/30'
+                  : 'bg-white/5 text-white/50 active:bg-white/10'
+              )}
+              title={isActiveSession ? 'Session running' : 'Start session timer'}
+            >
+              {isActiveSession ? (
+                <><span className="w-2 h-2 rounded-full bg-green-400 health-pulse-fast flex-shrink-0" /> Live</>
+              ) : (
+                <><Timer size={14} /> Timer</>
+              )}
+            </button>
+          )}
           <button
             onClick={() => onLogTime()}
             className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 bg-blue-600/20 active:bg-blue-600/30 text-blue-400 rounded-lg text-xs font-medium transition-all"

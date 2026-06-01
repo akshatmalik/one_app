@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical, Download, Gift, ShoppingCart, Search, X } from 'lucide-react';
+import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical, Download, Gift, ShoppingCart, Search, X, Timer, Play } from 'lucide-react';
 import { useGames } from './hooks/useGames';
 import { useAnalytics, GameWithMetrics } from './hooks/useAnalytics';
 import { useBudget } from './hooks/useBudget';
@@ -15,7 +15,7 @@ import { TimelineView } from './components/TimelineView';
 import { StatsView } from './components/StatsView';
 import { AIChatTab } from './components/AIChatTab';
 import { UpNextTab } from './components/UpNextTab';
-import { Game, GameStatus, PlayLog, GameRanking, GameAward, AwardPeriodType, GameTier, TierAssignmentMap, ReviewMessage } from './lib/types';
+import { Game, GameStatus, PlayLog, GameRanking, GameAward, AwardPeriodType, GameTier, TierAssignmentMap, ReviewMessage, SessionMood } from './lib/types';
 import { useTierAssignments } from './hooks/useTierAssignments';
 import { gameRepository } from './lib/storage';
 import { useRankings } from './hooks/useRankings';
@@ -47,6 +47,7 @@ import { TrophyToast } from './components/TrophyToast';
 import { ErrorLogPanel, ErrorLogButton } from './components/ErrorLogPanel';
 import { WhatsNewModal } from './components/WhatsNewModal';
 import { GameReviewChat } from './components/GameReviewChat';
+import { ActiveSessionBar, ActiveSession, ACTIVE_SESSION_KEY } from './components/ActiveSessionBar';
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist';
@@ -215,6 +216,16 @@ export default function GameAnalyticsPage() {
   const [showErrorLog, setShowErrorLog] = useState(false);
   const [showWhatsNew, setShowWhatsNew] = useState(false);
 
+  // Active session timer state
+  const [activeSession, setActiveSession] = useState<ActiveSession | null>(() => {
+    if (typeof window === 'undefined') return null;
+    try {
+      const raw = localStorage.getItem(ACTIVE_SESSION_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch { return null; }
+  });
+  const [pendingSessionLog, setPendingSessionLog] = useState<{ hours: number; mood?: SessionMood } | null>(null);
+
   // Week recap data for header strip
   const weekRecap = useMemo(() => {
     if (games.length === 0) return null;
@@ -358,6 +369,7 @@ export default function GameAnalyticsPage() {
 
     await updateGame(playLogGame.id, updates);
     setPlayLogGame(null);
+    setPendingSessionLog(null);
     showToast(isFirstSession ? 'Game started! Sessions saved' : 'Play sessions saved', 'success');
   };
 
@@ -380,6 +392,46 @@ export default function GameAnalyticsPage() {
     await updateGame(game.id, updates);
     showToast(`Logged ${hours}h`, 'success');
   };
+
+  // ── Active Session Timer ─────────────────────────────────────────
+
+  const handleStartSession = useCallback((game: GameWithMetrics) => {
+    const session: ActiveSession = {
+      gameId: game.id,
+      gameName: game.name,
+      thumbnailUrl: game.thumbnail,
+      startTime: new Date().toISOString(),
+    };
+    localStorage.setItem(ACTIVE_SESSION_KEY, JSON.stringify(session));
+    setActiveSession(session);
+    showToast(`⏱ Timer started for ${game.name}`, 'success');
+  }, [showToast]);
+
+  const handleSessionMoodChange = useCallback((mood: SessionMood) => {
+    if (!activeSession) return;
+    const updated: ActiveSession = { ...activeSession, mood };
+    localStorage.setItem(ACTIVE_SESSION_KEY, JSON.stringify(updated));
+    setActiveSession(updated);
+  }, [activeSession]);
+
+  const handleStopSession = useCallback((elapsedHours: number, mood?: SessionMood) => {
+    if (!activeSession) return;
+    const game = gamesWithMetrics.find(g => g.id === activeSession.gameId);
+    localStorage.removeItem(ACTIVE_SESSION_KEY);
+    setActiveSession(null);
+    if (game) {
+      setPendingSessionLog({ hours: elapsedHours, mood });
+      setPlayLogGame(game);
+    } else {
+      showToast('Session ended', 'info');
+    }
+  }, [activeSession, gamesWithMetrics, showToast]);
+
+  const handleAbandonSession = useCallback(() => {
+    localStorage.removeItem(ACTIVE_SESSION_KEY);
+    setActiveSession(null);
+    showToast('Session discarded', 'info');
+  }, [showToast]);
 
   const toggleCardViewMode = () => {
     const next = cardViewMode === 'poster' ? 'compact' : 'poster';
@@ -1203,6 +1255,8 @@ export default function GameAnalyticsPage() {
                   eloByGameId={eloByGameId}
                   tierAssignments={allTimeTiers}
                   eloTierRanks={eloTierRanks}
+                  activeSessionGameId={activeSession?.gameId}
+                  onStartSession={handleStartSession}
                 />
               )}
             </>
@@ -1400,7 +1454,9 @@ export default function GameAnalyticsPage() {
         <PlayLogModal
           game={playLogGame}
           onSave={handleSavePlayLogs}
-          onClose={() => setPlayLogGame(null)}
+          onClose={() => { setPlayLogGame(null); setPendingSessionLog(null); }}
+          initialHours={pendingSessionLog?.hours}
+          initialMood={pendingSessionLog?.mood}
         />
       )}
 
@@ -1512,6 +1568,11 @@ export default function GameAnalyticsPage() {
             setReviewChatGame(detailGame);
             setDetailGame(null);
           }}
+          onStartSession={() => {
+            handleStartSession(detailGame);
+            setDetailGame(null);
+          }}
+          isActiveSession={activeSession?.gameId === detailGame.id}
           isInQueue={isInQueue(detailGame.id)}
         />
       )}
@@ -1529,6 +1590,16 @@ export default function GameAnalyticsPage() {
             }
           }}
           onClose={() => setReviewChatGame(null)}
+        />
+      )}
+
+      {/* Active Session Timer Bar */}
+      {activeSession && (
+        <ActiveSessionBar
+          session={activeSession}
+          onStop={handleStopSession}
+          onAbandon={handleAbandonSession}
+          onMoodChange={handleSessionMoodChange}
         />
       )}
     </div>
@@ -1617,6 +1688,8 @@ interface GameCardListProps {
   eloByGameId?: Map<string, GameRanking>;
   tierAssignments?: TierAssignmentMap;
   eloTierRanks?: Map<string, { tier: GameTier; rank: number }>;
+  activeSessionGameId?: string;
+  onStartSession?: (game: GameWithMetrics) => void;
 }
 
 function GameCardList({
@@ -1637,6 +1710,8 @@ function GameCardList({
   eloByGameId = new Map(),
   tierAssignments = {},
   eloTierRanks = new Map(),
+  activeSessionGameId,
+  onStartSession,
 }: GameCardListProps) {
   const sections = useMemo(() => groupBySection ? getGameSections(allGames) : [], [allGames, groupBySection]);
 
@@ -1694,7 +1769,7 @@ function GameCardList({
     }
     return (
       <div key={game.id} className={animClass}>
-        <CompactCard game={game} allGames={allGames} idx={idx} onClick={() => onCardClick(game)} onLogTime={() => onLogTime(game)} onToggleQueue={() => onToggleQueue(game)} onDelete={() => onDelete(game)} isInQueue={isInQueue(game.id)} sortBy={sortBy} tintColor={gameColors.get(game.id)} aiQuip={gameQuips[game.id]?.quip} eloRanking={eloRanking} gameTier={gameTier} eloTierRank={eloTierRank} />
+        <CompactCard game={game} allGames={allGames} idx={idx} onClick={() => onCardClick(game)} onLogTime={() => onLogTime(game)} onToggleQueue={() => onToggleQueue(game)} onDelete={() => onDelete(game)} isInQueue={isInQueue(game.id)} sortBy={sortBy} tintColor={gameColors.get(game.id)} aiQuip={gameQuips[game.id]?.quip} eloRanking={eloRanking} gameTier={gameTier} eloTierRank={eloTierRank} isActiveSession={activeSessionGameId === game.id} onStartSession={onStartSession ? () => onStartSession(game) : undefined} />
       </div>
     );
   };
@@ -1716,7 +1791,7 @@ function GameCardList({
             <div className="space-y-3">
               {nowPlayingGames.map(g => (
                 <div key={g.id} className={`game-card-animate${enteringCards.has(g.id) ? ' game-card-enter' : ''}`}>
-                  <NowPlayingCard game={g} allGames={allGames} onClick={() => onCardClick(g)} onQuickLog={(h) => onQuickLog(g, h)} sortBy={sortBy} tintColor={gameColors.get(g.id)} eloRanking={eloByGameId.get(g.id)} gameTier={tierAssignments[g.id] as GameTier | undefined} eloTierRank={eloTierRanks.get(g.id)} />
+                  <NowPlayingCard game={g} allGames={allGames} onClick={() => onCardClick(g)} onQuickLog={(h) => onQuickLog(g, h)} sortBy={sortBy} tintColor={gameColors.get(g.id)} eloRanking={eloByGameId.get(g.id)} gameTier={tierAssignments[g.id] as GameTier | undefined} eloTierRank={eloTierRanks.get(g.id)} isActiveSession={activeSessionGameId === g.id} onStartSession={onStartSession ? () => onStartSession(g) : undefined} />
                 </div>
               ))}
             </div>
@@ -1759,7 +1834,7 @@ function GameCardList({
           <div className="space-y-3">
             {nowPlayingGames.map(g => (
               <div key={g.id} className={`game-card-animate${enteringCards.has(g.id) ? ' game-card-enter' : ''}`}>
-                <NowPlayingCard game={g} allGames={allGames} onClick={() => onCardClick(g)} onQuickLog={(h) => onQuickLog(g, h)} eloRanking={eloByGameId.get(g.id)} gameTier={tierAssignments[g.id] as GameTier | undefined} />
+                <NowPlayingCard game={g} allGames={allGames} onClick={() => onCardClick(g)} onQuickLog={(h) => onQuickLog(g, h)} eloRanking={eloByGameId.get(g.id)} gameTier={tierAssignments[g.id] as GameTier | undefined} isActiveSession={activeSessionGameId === g.id} onStartSession={onStartSession ? () => onStartSession(g) : undefined} />
               </div>
             ))}
           </div>
@@ -1789,7 +1864,7 @@ function SectionIcon({ id }: { id: string }) {
 
 // --- Now Playing Card ---
 
-function NowPlayingCard({ game, allGames, onClick, onQuickLog, sortBy = 'hours', tintColor, eloRanking, gameTier, eloTierRank }: {
+function NowPlayingCard({ game, allGames, onClick, onQuickLog, sortBy = 'hours', tintColor, eloRanking, gameTier, eloTierRank, isActiveSession, onStartSession }: {
   game: GameWithMetrics;
   allGames: Game[];
   onClick: () => void;
@@ -1799,6 +1874,8 @@ function NowPlayingCard({ game, allGames, onClick, onQuickLog, sortBy = 'hours',
   eloRanking?: GameRanking;
   gameTier?: GameTier;
   eloTierRank?: { tier: GameTier; rank: number };
+  isActiveSession?: boolean;
+  onStartSession?: () => void;
 }) {
   const [isFlipped, setIsFlipped] = useState(false);
   const [checkInHours, setCheckInHours] = useState(1);
@@ -2023,6 +2100,21 @@ function NowPlayingCard({ game, allGames, onClick, onQuickLog, sortBy = 'hours',
             >
               {checkInDone ? <><Check size={11} /> Done!</> : <><Clock size={11} /> Check In</>}
             </button>
+            {/* Session timer button */}
+            {onStartSession && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onStartSession(); }}
+                title={isActiveSession ? 'Session running' : 'Start session timer'}
+                className={clsx(
+                  'w-7 h-7 flex items-center justify-center rounded-lg text-xs transition-all shrink-0',
+                  isActiveSession
+                    ? 'bg-green-500/20 text-green-400 health-pulse-fast'
+                    : 'bg-white/5 text-white/30 active:bg-green-500/15 active:text-green-400'
+                )}
+              >
+                {isActiveSession ? <span className="w-2 h-2 rounded-full bg-green-400" /> : <Timer size={12} />}
+              </button>
+            )}
           </div>
 
           {/* Mood pulse strip */}
@@ -2418,7 +2510,7 @@ function PosterCardBack({ game, allGames, onFlip, rarity, freshness, relationshi
 
 // --- Compact Card (original layout, fixed) ---
 
-function CompactCard({ game, allGames, idx, onClick, onLogTime, onToggleQueue, onDelete, isInQueue, sortBy = 'hours', tintColor, aiQuip, eloRanking, gameTier, eloTierRank }: {
+function CompactCard({ game, allGames, idx, onClick, onLogTime, onToggleQueue, onDelete, isInQueue, sortBy = 'hours', tintColor, aiQuip, eloRanking, gameTier, eloTierRank, isActiveSession, onStartSession }: {
   game: GameWithMetrics;
   allGames: Game[];
   idx: number;
@@ -2433,6 +2525,8 @@ function CompactCard({ game, allGames, idx, onClick, onLogTime, onToggleQueue, o
   eloRanking?: GameRanking;
   gameTier?: GameTier;
   eloTierRank?: { tier: GameTier; rank: number };
+  isActiveSession?: boolean;
+  onStartSession?: () => void;
 }) {
   const [isFlipped, setIsFlipped] = useState(false);
   const rarity = getCardRarity(game);
@@ -2679,6 +2773,23 @@ function CompactCard({ game, allGames, idx, onClick, onLogTime, onToggleQueue, o
             >
               <Clock size={12} /> Log
             </button>
+            {onStartSession && game.status !== 'Wishlist' && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onStartSession(); }}
+                title={isActiveSession ? 'Session running' : 'Start session timer'}
+                className={clsx(
+                  'flex items-center gap-1 px-2.5 py-1.5 rounded-lg transition-all text-xs',
+                  isActiveSession
+                    ? 'text-green-400 bg-green-500/10'
+                    : 'text-white/30 active:text-green-400 active:bg-green-500/10'
+                )}
+              >
+                {isActiveSession
+                  ? <><span className="w-1.5 h-1.5 rounded-full bg-green-400 health-pulse-fast" /> Live</>
+                  : <><Timer size={12} /> Start</>
+                }
+              </button>
+            )}
             <button
               onClick={(e) => { e.stopPropagation(); onToggleQueue(); }}
               className={clsx(
