@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-01 06:00 — Goals System — Surface hidden Gaming Goals feature
+
+**Files**: app/apps/game-analytics/components/GoalsProgressStrip.tsx, app/apps/game-analytics/components/StatsView.tsx, app/apps/game-analytics/page.tsx
+**Risk**: not risky
+
+The `GoalsPanel` component and `useGoals` hook were fully built (complete CRUD, HybridRepository with Firestore + localStorage, six goal types) but never integrated — no user could access them. This run wires up the full Goals system: (1) a new compact `GoalsProgressStrip` component appears below the Fortune Cookie on every page load, showing a progress bar for each active goal and a gentle "Add Goal" CTA when none exist, (2) the complete `GoalsPanel` (create, track, archive goals) is now embedded in the Stats tab right after the Weekly Digest. Users can now set goals like "Complete 5 games this year", "Stay under $300 spending", or "Play 100 hours", and see live progress every time they open the app.
+
+FOLLOW-UP: Add toast notifications when a game completion or play session advances a goal — "🎯 Completion goal: 3/5 games!"
+
 ## 2026-06-01 00:00 — Stats Tab — What-If Simulator
 
 **Files**: app/apps/game-analytics/lib/calculations.ts, app/apps/game-analytics/components/WhatIfSimulator.tsx, app/apps/game-analytics/components/StatsView.tsx

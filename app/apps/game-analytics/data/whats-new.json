@@ -2,6 +2,12 @@
   "entries": [
     {
       "date": "2026-06-01",
+      "area": "Gaming Goals",
+      "title": "Set goals and track your progress as you play",
+      "body": "You can now set gaming goals — complete 5 games this year, keep spending under $300, log 100 hours, explore 5 genres — and watch your progress update automatically as you play. Active goals appear as a compact strip above the tabs so you always know where you stand. Manage all your goals in the Stats tab."
+    },
+    {
+      "date": "2026-06-01",
       "area": "Stats tab",
       "title": "What would your library look like with better choices?",
       "body": "The new Alternate Reality Simulator in the Stats tab lets you explore four \"what if\" scenarios: what if you'd skipped impulse buys, never bought games you later abandoned, cleared your backlog, or always bought on sale? Each scenario shows the exact games affected, a before/after stat comparison, and a frank insight about your spending habits."

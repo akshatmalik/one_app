@@ -53,6 +53,7 @@ import { Game, GameStatus, AnalyticsSummary, BudgetSettings } from '../lib/types
 import { calculateSummary, getCumulativeSpending, getHoursByMonth, getSpendingByMonth, parseLocalDate, getLibraryHealth, getRatingTierBands, getCloseRatingGroups, getRatingDistributionFine, formatRating } from '../lib/calculations';
 import { GameWithMetrics } from '../hooks/useAnalytics';
 import { PeriodStatsPanel } from './PeriodStatsPanel';
+import { GoalsPanel } from './GoalsPanel';
 import { FunStatsPanel } from './FunStatsPanel';
 import { AdvancedCharts } from './AdvancedCharts';
 import { GamingHeatmap } from './GamingHeatmap';
@@ -986,6 +987,9 @@ export function StatsView({ games, summary, budgets = [], onSetBudget, trophies,
 
       {/* Weekly Digest / Gaming Journal */}
       <WeeklyDigest games={games} />
+
+      {/* Gaming Goals */}
+      <GoalsPanel games={games} />
 
       {/* Gaming Activity Heatmap */}
       <GamingHeatmap games={games} />

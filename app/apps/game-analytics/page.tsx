@@ -27,6 +27,8 @@ import { useAuthContext } from '@/lib/AuthContext';
 import { useToast } from '@/components/Toast';
 import { getROIRating, getWeekStatsForOffset, getGamesPlayedInTimeRange, getCompletionProbability, getGameHealthDot, getRelativeTime, getDaysContext, getSessionMomentum, getValueTrajectory, getGameSmartOneLiner, getFranchiseInfo, getProgressPercent, getShelfLife, parseLocalDate, getCardRarity, getRelationshipStatus, getGameStreak, getHeroNumber, getCardFreshness, getGameSections, getCardBackData, getContextualWhisper, getLibraryRank, getCardMoodPulse, getProgressRingData, getStatPopoverData, getWeekRecapData, getSmartNudges, getGamingCreditScore, getRotationStats, getSpendingForecast, getSpendingByMonth, getShelfLifeExpiry, formatRating, getRatingRank } from './lib/calculations';
 import { OnThisDayCard } from './components/OnThisDayCard';
+import { GoalsProgressStrip } from './components/GoalsProgressStrip';
+import { useGoals } from './hooks/useGoals';
 import { ActivityPulse } from './components/ActivityPulse';
 import { RandomPicker } from './components/RandomPicker';
 import { BulkWishlistModal } from './components/BulkWishlistModal';
@@ -143,6 +145,8 @@ export default function GameAnalyticsPage() {
   const { rankings: allTimeRankings } = useRankings(user?.uid ?? null, 'all', 'all');
   const { allTrophies, summary: trophySummary, pinnedTrophies, pinnedIds: pinnedTrophyIds, togglePin: toggleTrophyPin, toastQueue: trophyToastQueue, dismissToast: dismissTrophyToast } = useTrophies(games, user?.uid ?? null);
   const { assignments: allTimeTiers } = useTierAssignments(user?.uid ?? null, 'all');
+  const { goals } = useGoals(user?.uid ?? null);
+  const activeGoals = useMemo(() => goals.filter(g => g.status === 'active'), [goals]);
   const eloByGameId = useMemo(() => {
     const map = new Map<string, GameRanking>();
     for (const r of allTimeRankings) map.set(r.gameId, r);
@@ -939,6 +943,15 @@ export default function GameAnalyticsPage() {
 
           {/* Daily Fortune Cookie */}
           {games.length > 0 && <div className="mb-4"><FortuneCookie games={games} /></div>}
+
+          {/* Goals Progress Strip */}
+          {games.length > 0 && (
+            <GoalsProgressStrip
+              games={games}
+              activeGoals={activeGoals}
+              onGoToGoals={() => setTabMode('stats')}
+            />
+          )}
 
           {/* Tab Navigation */}
           <div className="space-y-4 mb-6">
