@@ -47,6 +47,7 @@ import { TrophyToast } from './components/TrophyToast';
 import { ErrorLogPanel, ErrorLogButton } from './components/ErrorLogPanel';
 import { WhatsNewModal } from './components/WhatsNewModal';
 import { GameReviewChat } from './components/GameReviewChat';
+import { GameCompareModal } from './components/GameCompareModal';
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist';
@@ -194,6 +195,7 @@ export default function GameAnalyticsPage() {
   const [showAwardsHub, setShowAwardsHub] = useState(false);
   const [detailGame, setDetailGame] = useState<GameWithMetrics | null>(null);
   const [reviewChatGame, setReviewChatGame] = useState<GameWithMetrics | null>(null);
+  const [compareGame, setCompareGame] = useState<GameWithMetrics | null>(null);
   const [statsCollapsed, setStatsCollapsed] = useState(() => {
     if (typeof window === 'undefined') return false;
     return localStorage.getItem('ga-stats-collapsed') === 'true';
@@ -1512,7 +1514,20 @@ export default function GameAnalyticsPage() {
             setReviewChatGame(detailGame);
             setDetailGame(null);
           }}
+          onCompare={() => {
+            setCompareGame(detailGame);
+            setDetailGame(null);
+          }}
           isInQueue={isInQueue(detailGame.id)}
+        />
+      )}
+
+      {/* Game Comparison Modal */}
+      {compareGame && (
+        <GameCompareModal
+          game1={compareGame}
+          allGames={gamesWithMetrics}
+          onClose={() => setCompareGame(null)}
         />
       )}
 
