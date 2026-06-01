@@ -13817,3 +13817,273 @@ export function toDateKey(d: Date): string {
   const day = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${day}`;
 }
+
+// ============================================================
+// WHAT-IF SIMULATOR
+// ============================================================
+
+export interface WhatIfSimulatorGameEntry {
+  game: Game;
+  note: string;
+  money: number;
+}
+
+export interface WhatIfSimulatorStat {
+  label: string;
+  before: string;
+  after: string;
+  betterAfter: boolean;
+}
+
+export interface WhatIfSimulatorScenario {
+  id: string;
+  emoji: string;
+  title: string;
+  subtitle: string;
+  primaryValue: string;
+  primaryLabel: string;
+  primaryPositive: boolean;
+  stats: WhatIfSimulatorStat[];
+  affectedGames: WhatIfSimulatorGameEntry[];
+  takeaway: string;
+  severity: 'low' | 'medium' | 'high';
+  hasImpact: boolean;
+}
+
+export function getWhatIfSimulatorData(games: Game[]): WhatIfSimulatorScenario[] {
+  const owned = games.filter(g => g.status !== 'Wishlist');
+  const paidOwned = owned.filter(g => !g.acquiredFree);
+  const totalSpent = paidOwned.reduce((s, g) => s + g.price, 0);
+  const totalHours = paidOwned.reduce((s, g) => s + getTotalHours(g), 0);
+  const avgCPH = totalHours > 0 ? totalSpent / totalHours : 0;
+
+  // ── Scenario 1: Skip impulse buys ──────────────────────────────
+  const impulseGames = paidOwned.filter(g => g.price >= 10 && getTotalHours(g) < 2);
+  const impulseSpent = impulseGames.reduce((s, g) => s + g.price, 0);
+  const impulseHours = impulseGames.reduce((s, g) => s + getTotalHours(g), 0);
+  const afterImpulseSpent = totalSpent - impulseSpent;
+  const afterImpulseHours = totalHours - impulseHours;
+  const afterImpulseCPH = afterImpulseHours > 0 ? afterImpulseSpent / afterImpulseHours : 0;
+
+  // ── Scenario 2: Never bought abandoned games ───────────────────
+  const abandonedGames = paidOwned.filter(g => g.status === 'Abandoned');
+  const abandonedSpent = abandonedGames.reduce((s, g) => s + g.price, 0);
+  const abandonedHours = abandonedGames.reduce((s, g) => s + getTotalHours(g), 0);
+  const afterAbandSpent = totalSpent - abandonedSpent;
+  const afterAbandHours = totalHours - abandonedHours;
+  const afterAbandCPH = afterAbandHours > 0 ? afterAbandSpent / afterAbandHours : 0;
+  const abandonedRated = abandonedGames.filter(g => g.rating > 0);
+  const abandonedAvgRating = abandonedRated.length > 0
+    ? abandonedRated.reduce((s, g) => s + g.rating, 0) / abandonedRated.length
+    : null;
+  const overallRated = paidOwned.filter(g => g.rating > 0);
+  const overallAvgRating = overallRated.length > 0
+    ? overallRated.reduce((s, g) => s + g.rating, 0) / overallRated.length
+    : null;
+  const afterRated = paidOwned.filter(g => g.status !== 'Abandoned' && g.rating > 0);
+  const afterAvgRating = afterRated.length > 0
+    ? afterRated.reduce((s, g) => s + g.rating, 0) / afterRated.length
+    : null;
+
+  // ── Scenario 3: Complete your backlog ─────────────────────────
+  const backlogResult = whatIfCompletedBacklog(games);
+  const backlogGames = owned.filter(g =>
+    g.status === 'Not Started' || (g.status === 'In Progress' && getTotalHours(g) < 10)
+  );
+  const estimatedAdditionalHours = backlogGames.reduce(
+    (s, g) => s + Math.max(20 - getTotalHours(g), 0), 0
+  );
+  const cphDelta = avgCPH - backlogResult.after.value;
+
+  // ── Scenario 4: Sale hunting success ──────────────────────────
+  const discountedGames = paidOwned.filter(g => g.originalPrice && g.originalPrice > g.price);
+  const savedByDiscounts = discountedGames.reduce(
+    (s, g) => s + (g.originalPrice! - g.price), 0
+  );
+  const fullPriceSpent = totalSpent + savedByDiscounts;
+  const fullPriceCPH = totalHours > 0 ? fullPriceSpent / totalHours : 0;
+
+  return [
+    {
+      id: 'impulse',
+      emoji: '⚡',
+      title: 'Skip Impulse Buys',
+      subtitle: 'Never bought games you barely touched',
+      primaryValue: `$${impulseSpent.toFixed(0)}`,
+      primaryLabel: impulseSpent > 0 ? 'spent on games played < 2h' : 'zero impulse buys — impressive',
+      primaryPositive: impulseSpent === 0,
+      stats: [
+        {
+          label: 'Total spent',
+          before: `$${totalSpent.toFixed(0)}`,
+          after: `$${afterImpulseSpent.toFixed(0)}`,
+          betterAfter: true,
+        },
+        {
+          label: 'Avg $/hr',
+          before: `$${avgCPH.toFixed(2)}/hr`,
+          after: afterImpulseHours > 0 ? `$${afterImpulseCPH.toFixed(2)}/hr` : '—',
+          betterAfter: afterImpulseCPH <= avgCPH,
+        },
+        {
+          label: 'Games removed',
+          before: `${paidOwned.length} owned`,
+          after: `${paidOwned.length - impulseGames.length} owned`,
+          betterAfter: false,
+        },
+      ],
+      affectedGames: [...impulseGames]
+        .sort((a, b) => b.price - a.price)
+        .slice(0, 6)
+        .map(g => ({
+          game: g,
+          note: `${getTotalHours(g).toFixed(1)}h played · $${g.price.toFixed(0)} paid`,
+          money: g.price,
+        })),
+      takeaway: impulseGames.length === 0
+        ? 'Every game you paid for got at least 2 hours of play. Rare discipline.'
+        : impulseSpent >= 100
+        ? `$${impulseSpent.toFixed(0)} on ${impulseGames.length} games you never committed to. The next shelf-warmer is already in your cart.`
+        : `$${impulseSpent.toFixed(0)} across ${impulseGames.length} game${impulseGames.length !== 1 ? 's' : ''} that never got off the ground.`,
+      severity: impulseSpent >= 100 ? 'high' : impulseSpent >= 30 ? 'medium' : 'low',
+      hasImpact: impulseGames.length > 0,
+    },
+
+    {
+      id: 'abandoned',
+      emoji: '🪦',
+      title: 'No Abandonments',
+      subtitle: 'What if hindsight guided every purchase?',
+      primaryValue: `$${abandonedSpent.toFixed(0)}`,
+      primaryLabel: abandonedSpent > 0 ? 'spent on abandoned games' : 'nothing abandoned',
+      primaryPositive: abandonedSpent === 0,
+      stats: [
+        {
+          label: 'Total spent',
+          before: `$${totalSpent.toFixed(0)}`,
+          after: `$${afterAbandSpent.toFixed(0)}`,
+          betterAfter: true,
+        },
+        {
+          label: 'Avg $/hr',
+          before: `$${avgCPH.toFixed(2)}/hr`,
+          after: afterAbandHours > 0 ? `$${afterAbandCPH.toFixed(2)}/hr` : '—',
+          betterAfter: afterAbandCPH <= avgCPH,
+        },
+        ...(overallAvgRating && afterAvgRating
+          ? [{
+              label: 'Avg rating',
+              before: `${overallAvgRating.toFixed(1)}/10`,
+              after: `${afterAvgRating.toFixed(1)}/10`,
+              betterAfter: afterAvgRating >= overallAvgRating,
+            }]
+          : []),
+      ],
+      affectedGames: [...abandonedGames]
+        .sort((a, b) => b.price - a.price)
+        .slice(0, 6)
+        .map(g => ({
+          game: g,
+          note: `${getTotalHours(g).toFixed(1)}h played · $${g.price.toFixed(0)} paid${g.rating > 0 ? ` · ${g.rating}/10` : ''}`,
+          money: g.price,
+        })),
+      takeaway: abandonedGames.length === 0
+        ? 'You finish (or at least keep going with) everything you start. That\'s a great completion mentality.'
+        : `${abandonedGames.length} abandoned game${abandonedGames.length !== 1 ? 's' : ''} cost $${abandonedSpent.toFixed(0)}.${abandonedAvgRating ? ` Average rating: ${abandonedAvgRating.toFixed(1)}/10 — the data agrees they weren\'t worth it.` : ''}`,
+      severity: abandonedSpent >= 80 ? 'high' : abandonedSpent >= 25 ? 'medium' : 'low',
+      hasImpact: abandonedGames.length > 0,
+    },
+
+    {
+      id: 'backlog',
+      emoji: '🏁',
+      title: 'Clear the Backlog',
+      subtitle: `${backlogGames.length} game${backlogGames.length !== 1 ? 's' : ''} already paid for, unplayed`,
+      primaryValue: `${estimatedAdditionalHours}h`,
+      primaryLabel: 'of gaming already sitting on your shelf',
+      primaryPositive: false,
+      stats: [
+        {
+          label: 'Avg $/hr',
+          before: backlogResult.before.label,
+          after: backlogResult.after.label,
+          betterAfter: true,
+        },
+        {
+          label: 'Unplayed games',
+          before: `${backlogGames.length}`,
+          after: '0',
+          betterAfter: true,
+        },
+        {
+          label: 'Total hours',
+          before: `${totalHours.toFixed(0)}h`,
+          after: `${(totalHours + estimatedAdditionalHours).toFixed(0)}h`,
+          betterAfter: true,
+        },
+      ],
+      affectedGames: [...backlogGames]
+        .sort((a, b) => b.price - a.price)
+        .slice(0, 6)
+        .map(g => ({
+          game: g,
+          note: `~${Math.max(20 - getTotalHours(g), 0).toFixed(0)}h est. remaining · $${g.price.toFixed(0)} paid`,
+          money: g.price,
+        })),
+      takeaway: backlogGames.length === 0
+        ? 'Your backlog is clear — every owned game has been played. Seriously impressive.'
+        : cphDelta > 0.5
+        ? `Finishing your backlog would drop your cost/hr from ${backlogResult.before.label} to ${backlogResult.after.label}. You\'re sitting on gold.`
+        : `${estimatedAdditionalHours} hours of gaming already paid for and waiting.`,
+      severity: backlogGames.length >= 10 ? 'high' : backlogGames.length >= 4 ? 'medium' : 'low',
+      hasImpact: backlogGames.length > 0,
+    },
+
+    {
+      id: 'fullprice',
+      emoji: '💸',
+      title: 'Full Price, No Patience',
+      subtitle: 'What if you\'d never bought a single sale?',
+      primaryValue: savedByDiscounts > 0 ? `$${savedByDiscounts.toFixed(0)}` : '$0',
+      primaryLabel: savedByDiscounts > 0 ? 'saved by buying on sale' : 'no discount data tracked',
+      primaryPositive: true,
+      stats: [
+        {
+          label: 'You paid',
+          before: `$${totalSpent.toFixed(0)} (actual)`,
+          after: `$${fullPriceSpent.toFixed(0)} (full price)`,
+          betterAfter: false,
+        },
+        {
+          label: 'Avg $/hr',
+          before: `$${avgCPH.toFixed(2)}/hr (actual)`,
+          after: `$${fullPriceCPH.toFixed(2)}/hr (full price)`,
+          betterAfter: false,
+        },
+        {
+          label: 'Best deal',
+          before: `${discountedGames.length} discounted`,
+          after: discountedGames.length > 0
+            ? `avg $${(savedByDiscounts / discountedGames.length).toFixed(0)} saved/game`
+            : 'none tracked',
+          betterAfter: true,
+        },
+      ],
+      affectedGames: [...discountedGames]
+        .sort((a, b) => ((b.originalPrice || 0) - b.price) - ((a.originalPrice || 0) - a.price))
+        .slice(0, 6)
+        .map(g => ({
+          game: g,
+          note: `Paid $${g.price.toFixed(0)} · saved $${((g.originalPrice || 0) - g.price).toFixed(0)} (${(((g.originalPrice || 0) - g.price) / (g.originalPrice || 1) * 100).toFixed(0)}% off)`,
+          money: (g.originalPrice || 0) - g.price,
+        })),
+      takeaway: discountedGames.length === 0
+        ? 'Add original prices to your games to track how much you\'re saving by buying on sale.'
+        : savedByDiscounts >= 50
+        ? `Your patience saved $${savedByDiscounts.toFixed(0)}. That\'s nearly ${Math.round(savedByDiscounts / 25)} more games at a $25 sale price.`
+        : `$${savedByDiscounts.toFixed(0)} saved by not paying full price. Every bit counts.`,
+      severity: savedByDiscounts >= 50 ? 'high' : savedByDiscounts >= 15 ? 'medium' : 'low',
+      hasImpact: discountedGames.length > 0,
+    },
+  ];
+}
