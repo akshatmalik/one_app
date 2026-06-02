@@ -2,6 +2,12 @@
   "entries": [
     {
       "date": "2026-06-01",
+      "area": "Game detail",
+      "title": "Compare any two games head to head",
+      "body": "Open any game's detail sheet, tap the new ⇄ Compare button, and pick a second game from your library. You'll see a full side-by-side breakdown — price, hours, rating, cost-per-hour, ROI, sessions — with a winner highlighted for each category, a radar chart visualising both profiles at once, and an overall verdict showing which game came out on top."
+    },
+    {
+      "date": "2026-06-01",
       "area": "Stats tab",
       "title": "What would your library look like with better choices?",
       "body": "The new Alternate Reality Simulator in the Stats tab lets you explore four \"what if\" scenarios: what if you'd skipped impulse buys, never bought games you later abandoned, cleared your backlog, or always bought on sale? Each scenario shows the exact games affected, a before/after stat comparison, and a frank insight about your spending habits."

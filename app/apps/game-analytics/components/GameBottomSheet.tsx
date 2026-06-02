@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useRef, useEffect } from 'react';
-import { Clock, ChevronDown, ChevronUp, ListPlus, Check, Heart, Edit3, Trash2, Trophy, Sparkles, Zap, MessageCircle } from 'lucide-react';
+import { Clock, ChevronDown, ChevronUp, ListPlus, Check, Heart, Edit3, Trash2, Trophy, Sparkles, Zap, MessageCircle, ArrowLeftRight } from 'lucide-react';
 import { Game } from '../lib/types';
 import { GameWithMetrics } from '../hooks/useAnalytics';
 import {
@@ -37,6 +37,7 @@ interface GameBottomSheetProps {
   onToggleQueue: () => void;
   onToggleSpecial: () => void;
   onOpenReviewChat: () => void;
+  onCompare: () => void;
   isInQueue: boolean;
 }
 
@@ -61,6 +62,7 @@ export function GameBottomSheet({
   onToggleQueue,
   onToggleSpecial,
   onOpenReviewChat,
+  onCompare,
   isInQueue,
 }: GameBottomSheetProps) {
   const [showAwards, setShowAwards] = useState(false);
@@ -725,6 +727,13 @@ export function GameBottomSheet({
             )}
           >
             <Heart size={14} className={game.isSpecial ? 'fill-amber-400' : ''} />
+          </button>
+          <button
+            onClick={onCompare}
+            className="p-2.5 bg-white/5 active:bg-purple-500/10 text-white/50 active:text-purple-400 rounded-lg transition-all"
+            title="Compare with another game"
+          >
+            <ArrowLeftRight size={14} />
           </button>
           <button
             onClick={onEdit}
