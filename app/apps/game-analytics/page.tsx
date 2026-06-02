@@ -47,6 +47,7 @@ import { TrophyToast } from './components/TrophyToast';
 import { ErrorLogPanel, ErrorLogButton } from './components/ErrorLogPanel';
 import { WhatsNewModal } from './components/WhatsNewModal';
 import { GameReviewChat } from './components/GameReviewChat';
+import { GameCompareModal } from './components/GameCompareModal';
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist';
@@ -214,6 +215,8 @@ export default function GameAnalyticsPage() {
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showErrorLog, setShowErrorLog] = useState(false);
   const [showWhatsNew, setShowWhatsNew] = useState(false);
+  const [showCompare, setShowCompare] = useState(false);
+  const [compareInitialGame, setCompareInitialGame] = useState<GameWithMetrics | null>(null);
 
   // Week recap data for header strip
   const weekRecap = useMemo(() => {
@@ -573,6 +576,14 @@ export default function GameAnalyticsPage() {
                           className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white/70 hover:text-white hover:bg-white/5 transition-all"
                         >
                           <Sparkles size={14} /> Random Pick
+                        </button>
+                      )}
+                      {games.length >= 2 && (
+                        <button
+                          onClick={() => { setCompareInitialGame(null); setShowCompare(true); setShowCommandPalette(false); }}
+                          className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white/70 hover:text-white hover:bg-white/5 transition-all"
+                        >
+                          <Zap size={14} /> Compare Games
                         </button>
                       )}
                       <button
@@ -1529,6 +1540,15 @@ export default function GameAnalyticsPage() {
             }
           }}
           onClose={() => setReviewChatGame(null)}
+        />
+      )}
+
+      {/* Game Showdown — Compare Modal */}
+      {showCompare && (
+        <GameCompareModal
+          games={games}
+          initialGameA={compareInitialGame}
+          onClose={() => { setShowCompare(false); setCompareInitialGame(null); }}
         />
       )}
     </div>

@@ -14087,3 +14087,220 @@ export function getWhatIfSimulatorData(games: Game[]): WhatIfSimulatorScenario[]
     },
   ];
 }
+
+// ── Game Showdown: Head-to-Head Comparison ──────────────────────
+
+export interface ComparisonMetric {
+  id: string;
+  label: string;
+  displayA: string;
+  displayB: string;
+  rawA: number;
+  rawB: number;
+  winner: 'A' | 'B' | 'tie' | 'na';
+  higherIsBetter: boolean;
+  barPctA: number;
+  barPctB: number;
+  icon: string;
+  note: string;
+}
+
+export interface GameComparisonResult {
+  metrics: ComparisonMetric[];
+  winsA: number;
+  winsB: number;
+  ties: number;
+  overallWinner: 'A' | 'B' | 'tie';
+  score: string;
+  narrative: string;
+  verdicts: Array<{ label: string; winner: 'A' | 'B' | 'tie'; icon: string }>;
+}
+
+export function getGameComparison(gameA: Game, gameB: Game): GameComparisonResult {
+  const metricsA = calculateMetrics(gameA);
+  const metricsB = calculateMetrics(gameB);
+  const hoursA = getTotalHours(gameA);
+  const hoursB = getTotalHours(gameB);
+  const sessionsA = (gameA.playLogs || []).length;
+  const sessionsB = (gameB.playLogs || []).length;
+
+  function toBars(a: number, b: number, higherIsBetter: boolean): { pctA: number; pctB: number } {
+    if (a === 0 && b === 0) return { pctA: 0, pctB: 0 };
+    const max = Math.max(a, b);
+    if (higherIsBetter) {
+      return { pctA: (a / max) * 100, pctB: (b / max) * 100 };
+    }
+    // Lower is better: the smaller value gets the longer bar
+    const range = max - Math.min(a, b);
+    if (range === 0) return { pctA: 100, pctB: 100 };
+    return {
+      pctA: Math.max(10, ((max - a) / range) * 80 + 20),
+      pctB: Math.max(10, ((max - b) / range) * 80 + 20),
+    };
+  }
+
+  function pickWinner(a: number, b: number, higherIsBetter: boolean, validA = true, validB = true): 'A' | 'B' | 'tie' | 'na' {
+    if (!validA && !validB) return 'na';
+    if (!validA) return 'B';
+    if (!validB) return 'A';
+    if (higherIsBetter) return a > b ? 'A' : b > a ? 'B' : 'tie';
+    return a < b ? 'A' : b < a ? 'B' : 'tie';
+  }
+
+  const comparison: ComparisonMetric[] = [];
+
+  // Hours Played
+  {
+    const bars = toBars(hoursA, hoursB, true);
+    const fmt = (h: number) => h === 0 ? '0h' : h < 10 ? `${h.toFixed(1)}h` : `${h.toFixed(0)}h`;
+    comparison.push({
+      id: 'hours', label: 'Total Hours', icon: '⏰',
+      displayA: fmt(hoursA), displayB: fmt(hoursB),
+      rawA: hoursA, rawB: hoursB,
+      winner: pickWinner(hoursA, hoursB, true),
+      higherIsBetter: true,
+      barPctA: bars.pctA, barPctB: bars.pctB,
+      note: 'More time = deeper connection',
+    });
+  }
+
+  // Rating
+  {
+    const rA = gameA.rating || 0;
+    const rB = gameB.rating || 0;
+    const bars = toBars(rA, rB, true);
+    comparison.push({
+      id: 'rating', label: 'Your Rating', icon: '⭐',
+      displayA: rA > 0 ? `${formatRating(rA)}/10` : 'Unrated',
+      displayB: rB > 0 ? `${formatRating(rB)}/10` : 'Unrated',
+      rawA: rA, rawB: rB,
+      winner: pickWinner(rA, rB, true, rA > 0, rB > 0),
+      higherIsBetter: true,
+      barPctA: bars.pctA, barPctB: bars.pctB,
+      note: 'Personal enjoyment score',
+    });
+  }
+
+  // Cost / Hour (only when at least one game has hours)
+  if (hoursA > 0 || hoursB > 0) {
+    const cphA = hoursA > 0 ? metricsA.costPerHour : null;
+    const cphB = hoursB > 0 ? metricsB.costPerHour : null;
+    const maxCph = Math.max(cphA ?? 0, cphB ?? 0);
+    comparison.push({
+      id: 'costPerHour', label: 'Cost / Hour', icon: '💰',
+      displayA: cphA != null ? `$${cphA.toFixed(2)}/hr` : 'N/A',
+      displayB: cphB != null ? `$${cphB.toFixed(2)}/hr` : 'N/A',
+      rawA: cphA ?? Infinity, rawB: cphB ?? Infinity,
+      winner: pickWinner(cphA ?? Infinity, cphB ?? Infinity, false, cphA != null, cphB != null),
+      higherIsBetter: false,
+      barPctA: cphA != null && maxCph > 0 ? Math.max(10, 100 - (cphA / maxCph) * 80) : 10,
+      barPctB: cphB != null && maxCph > 0 ? Math.max(10, 100 - (cphB / maxCph) * 80) : 10,
+      note: 'Lower = better value for money',
+    });
+  }
+
+  // Sessions Logged
+  {
+    const bars = toBars(sessionsA, sessionsB, true);
+    comparison.push({
+      id: 'sessions', label: 'Play Sessions', icon: '🎮',
+      displayA: `${sessionsA}`,
+      displayB: `${sessionsB}`,
+      rawA: sessionsA, rawB: sessionsB,
+      winner: pickWinner(sessionsA, sessionsB, true),
+      higherIsBetter: true,
+      barPctA: bars.pctA, barPctB: bars.pctB,
+      note: 'How often you return to it',
+    });
+  }
+
+  // ROI Score
+  {
+    const roiA = metricsA.roi;
+    const roiB = metricsB.roi;
+    const bars = toBars(roiA, roiB, true);
+    comparison.push({
+      id: 'roi', label: 'ROI Score', icon: '📈',
+      displayA: roiA > 0 ? roiA.toFixed(1) : '—',
+      displayB: roiB > 0 ? roiB.toFixed(1) : '—',
+      rawA: roiA, rawB: roiB,
+      winner: pickWinner(roiA, roiB, true, roiA > 0, roiB > 0),
+      higherIsBetter: true,
+      barPctA: bars.pctA, barPctB: bars.pctB,
+      note: 'Quality × hours ÷ price',
+    });
+  }
+
+  // Price Paid (lower is better)
+  {
+    const prA = gameA.acquiredFree ? 0 : gameA.price;
+    const prB = gameB.acquiredFree ? 0 : gameB.price;
+    const bars = toBars(prA, prB, false);
+    comparison.push({
+      id: 'price', label: 'Price Paid', icon: '🏷️',
+      displayA: gameA.acquiredFree ? 'Free' : `$${prA.toFixed(0)}`,
+      displayB: gameB.acquiredFree ? 'Free' : `$${prB.toFixed(0)}`,
+      rawA: prA, rawB: prB,
+      winner: pickWinner(prA, prB, false),
+      higherIsBetter: false,
+      barPctA: bars.pctA, barPctB: bars.pctB,
+      note: 'Amount spent (lower = better deal)',
+    });
+  }
+
+  const winsA = comparison.filter(m => m.winner === 'A').length;
+  const winsB = comparison.filter(m => m.winner === 'B').length;
+  const ties = comparison.filter(m => m.winner === 'tie').length;
+  const overallWinner: 'A' | 'B' | 'tie' = winsA > winsB ? 'A' : winsB > winsA ? 'B' : 'tie';
+
+  const nameA = gameA.name;
+  const nameB = gameB.name;
+  const winsALabels = comparison.filter(m => m.winner === 'A').map(m => m.label.toLowerCase());
+  const winsBLabels = comparison.filter(m => m.winner === 'B').map(m => m.label.toLowerCase());
+
+  let narrative = '';
+  if (overallWinner === 'A') {
+    narrative = `${nameA} wins ${winsA}–${winsB}`;
+    if (winsALabels.length > 0) narrative += `, dominating on ${winsALabels.slice(0, 2).join(' and ')}`;
+    if (winsBLabels.length > 0) narrative += `. ${nameB} holds its ground on ${winsBLabels[0]}`;
+    narrative += '. Verdict: ' + nameA + ' delivered the better experience overall.';
+  } else if (overallWinner === 'B') {
+    narrative = `${nameB} takes it ${winsB}–${winsA}`;
+    if (winsBLabels.length > 0) narrative += `, stronger on ${winsBLabels.slice(0, 2).join(' and ')}`;
+    if (winsALabels.length > 0) narrative += `. ${nameA} pushes back on ${winsALabels[0]}`;
+    narrative += '.';
+  } else {
+    narrative = `${nameA} vs ${nameB}: a dead heat at ${winsA}–${winsB}${ties > 0 ? ` with ${ties} tie${ties > 1 ? 's' : ''}` : ''}. Both games deliver. The winner depends on what you value most.`;
+  }
+
+  const cphA = hoursA > 0 ? metricsA.costPerHour : null;
+  const cphB = hoursB > 0 ? metricsB.costPerHour : null;
+
+  const verdicts: GameComparisonResult['verdicts'] = [
+    { label: 'Overall Winner', winner: overallWinner, icon: '🏆' },
+    {
+      label: 'More Time Given',
+      winner: hoursA > hoursB ? 'A' : hoursB > hoursA ? 'B' : 'tie',
+      icon: '⏱️',
+    },
+    {
+      label: 'Higher Quality',
+      winner: (gameA.rating || 0) > (gameB.rating || 0) ? 'A' : (gameB.rating || 0) > (gameA.rating || 0) ? 'B' : 'tie',
+      icon: '⭐',
+    },
+    ...(cphA != null || cphB != null ? [{
+      label: 'Best $/Hour',
+      winner: (cphA != null && cphB != null)
+        ? (cphA < cphB ? 'A' as const : cphB < cphA ? 'B' as const : 'tie' as const)
+        : (cphA != null ? 'A' as const : 'B' as const),
+      icon: '💰',
+    }] : []),
+    {
+      label: 'Most Replayed',
+      winner: sessionsA > sessionsB ? 'A' : sessionsB > sessionsA ? 'B' : 'tie',
+      icon: '🎮',
+    },
+  ];
+
+  return { metrics: comparison, winsA, winsB, ties, overallWinner, score: `${winsA}–${winsB}`, narrative, verdicts };
+}

@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-02 00:00 — Games Tab — Game Showdown (head-to-head comparison)
+
+**Files**: app/apps/game-analytics/lib/calculations.ts, app/apps/game-analytics/components/GameCompareModal.tsx, app/apps/game-analytics/page.tsx
+**Risk**: not risky
+
+Added a "Game Showdown" head-to-head comparison modal, accessible via the ⋮ menu → "Compare Games". Pick any two games from your library and see them battle across 6 stats (hours, rating, cost/hour, sessions, ROI, price paid) with animated dual-bar visualisations, a per-metric winner indicator, an overall score, 5 verdict badges, and a plain-English narrative summary. The winner's panel is highlighted in color (blue vs purple), with a trophy icon. A swap button lets you flip the matchup.
+
+FOLLOW-UP: Could add a "Share" screenshot export of the comparison card, or surface a "Compare" shortcut directly on individual game cards.
+
 ## 2026-06-01 00:00 — Stats Tab — What-If Simulator
 
 **Files**: app/apps/game-analytics/lib/calculations.ts, app/apps/game-analytics/components/WhatIfSimulator.tsx, app/apps/game-analytics/components/StatsView.tsx
