@@ -19,6 +19,7 @@ import {
   getLibraryRankBars,
   getNextMilestone,
   getLibraryUniqueness,
+  hasReview,
 } from '../lib/calculations';
 import { generateGameInsightPack, GameInsightPack } from '../lib/ai-game-service';
 import { RatingStars } from './RatingStars';
@@ -620,6 +621,20 @@ export function GameBottomSheet({
                     </div>
                   );
                 })}
+              </div>
+            </div>
+          )}
+
+          {/* Gentle review nudge — only for finished games with nothing written yet */}
+          {!hasReview(game) && (game.status === 'Completed' || game.status === 'Abandoned') && (
+            <div className="mx-5 mb-3">
+              <div className="flex items-center gap-2 rounded-xl border border-emerald-500/20 bg-gradient-to-r from-emerald-500/10 to-teal-500/10 px-3 py-2.5">
+                <Sparkles size={14} className="shrink-0 text-emerald-300" />
+                <p className="text-xs leading-snug text-emerald-100/80">
+                  {game.status === 'Completed'
+                    ? `You finished ${game.name} — capture a few thoughts while they're fresh.`
+                    : `${Math.round(getTotalHours(game))}h in ${game.name}. Worth a quick note on why you stepped away.`}
+                </p>
               </div>
             </div>
           )}
