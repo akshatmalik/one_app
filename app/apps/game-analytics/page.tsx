@@ -15,7 +15,7 @@ import { TimelineView } from './components/TimelineView';
 import { StatsView } from './components/StatsView';
 import { AIChatTab } from './components/AIChatTab';
 import { UpNextTab } from './components/UpNextTab';
-import { Game, GameStatus, PlayLog, GameRanking, GameAward, AwardPeriodType, GameTier, TierAssignmentMap, ReviewMessage } from './lib/types';
+import { Game, GameStatus, PlayLog, GameRanking, GameAward, AwardPeriodType, GameTier, TierAssignmentMap, ReviewMessage, SessionMood } from './lib/types';
 import { useTierAssignments } from './hooks/useTierAssignments';
 import { gameRepository } from './lib/storage';
 import { useRankings } from './hooks/useRankings';
@@ -47,6 +47,7 @@ import { TrophyToast } from './components/TrophyToast';
 import { ErrorLogPanel, ErrorLogButton } from './components/ErrorLogPanel';
 import { WhatsNewModal } from './components/WhatsNewModal';
 import { GameReviewChat } from './components/GameReviewChat';
+import { SessionTimer } from './components/SessionTimer';
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist';
@@ -380,6 +381,29 @@ export default function GameAnalyticsPage() {
     await updateGame(game.id, updates);
     showToast(`Logged ${hours}h`, 'success');
   };
+
+  // Session timer log handler
+  const handleSessionLog = useCallback(async (gameId: string, hours: number, notes: string, mood?: SessionMood) => {
+    const game = gamesWithMetrics.find(g => g.id === gameId);
+    if (!game) return;
+    const now = new Date();
+    const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const newLog: PlayLog = {
+      id: `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+      date: dateStr,
+      hours,
+      notes: notes.trim() || undefined,
+      mood: mood,
+    };
+    const existingLogs = game.playLogs || [];
+    const updates: Partial<Game> = { playLogs: [...existingLogs, newLog] };
+    if (game.status === 'Not Started' && existingLogs.length === 0) {
+      updates.status = 'In Progress';
+      updates.startDate = dateStr;
+    }
+    await updateGame(game.id, updates);
+    showToast(`+${hours}h logged for ${game.name}`, 'success');
+  }, [gamesWithMetrics, updateGame, showToast]);
 
   const toggleCardViewMode = () => {
     const next = cardViewMode === 'poster' ? 'compact' : 'poster';
@@ -1530,6 +1554,11 @@ export default function GameAnalyticsPage() {
           }}
           onClose={() => setReviewChatGame(null)}
         />
+      )}
+
+      {/* Live Session Timer — visible across all tabs */}
+      {games.length > 0 && (
+        <SessionTimer games={games} onLog={handleSessionLog} />
       )}
     </div>
   );

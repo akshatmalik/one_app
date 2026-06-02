@@ -1,6 +1,12 @@
 {
   "entries": [
     {
+      "date": "2026-06-02",
+      "area": "Session Tracker",
+      "title": "Track your gaming sessions in real time",
+      "body": "Tap the new \"Track session\" button (bottom-right of the screen) to start a live timer when you sit down to play. When you're done, hit Stop — the app logs your hours automatically. You can also add a mood (Great, Good, Meh, or Grind) and a quick note before saving. Your timer even survives if you navigate away or reload the page."
+    },
+    {
       "date": "2026-06-01",
       "area": "Stats tab",
       "title": "What would your library look like with better choices?",

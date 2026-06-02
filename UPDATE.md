@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-02 00:00 — Games / All Tabs — Live Session Timer
+
+**Files**: app/apps/game-analytics/hooks/useSessionTimer.ts, app/apps/game-analytics/components/SessionTimer.tsx, app/apps/game-analytics/page.tsx
+**Risk**: not risky
+
+Added a real-time session tracking system: a floating "Track session" button (bottom-right, visible across all tabs) opens a game picker where you select what you're playing. Once started, a live timer bar replaces the FAB at the bottom of the screen, showing the game thumbnail, name, and a ticking clock. When you press Stop, a confirmation sheet lets you adjust the hours, pick a mood (Great / Good / Meh / Grind), add session notes, and hit "Log Session" — which auto-creates a play log entry (and auto-starts the game if it was Never Started). The session survives page refreshes via localStorage so you don't lose your timer if you navigate away.
+
+FOLLOW-UP: Could add a "quick resume last session" button for when you put down the controller and pick it up again. Could also show a mini badge on the game card for whichever game has an active session.
+
 ## 2026-06-01 00:00 — Stats Tab — What-If Simulator
 
 **Files**: app/apps/game-analytics/lib/calculations.ts, app/apps/game-analytics/components/WhatIfSimulator.tsx, app/apps/game-analytics/components/StatsView.tsx
