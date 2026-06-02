@@ -48,6 +48,9 @@ import { ErrorLogPanel, ErrorLogButton } from './components/ErrorLogPanel';
 import { WhatsNewModal } from './components/WhatsNewModal';
 import { GameReviewChat } from './components/GameReviewChat';
 import { GameCompareModal } from './components/GameCompareModal';
+import { GoalsPanel } from './components/GoalsPanel';
+import { GoalsSuggestions } from './components/GoalsSuggestions';
+import { useGoals } from './hooks/useGoals';
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist';
@@ -144,6 +147,7 @@ export default function GameAnalyticsPage() {
   const { rankings: allTimeRankings } = useRankings(user?.uid ?? null, 'all', 'all');
   const { allTrophies, summary: trophySummary, pinnedTrophies, pinnedIds: pinnedTrophyIds, togglePin: toggleTrophyPin, toastQueue: trophyToastQueue, dismissToast: dismissTrophyToast } = useTrophies(games, user?.uid ?? null);
   const { assignments: allTimeTiers } = useTierAssignments(user?.uid ?? null, 'all');
+  const { goals } = useGoals(user?.uid ?? null);
   const eloByGameId = useMemo(() => {
     const map = new Map<string, GameRanking>();
     for (const r of allTimeRankings) map.set(r.gameId, r);
@@ -216,6 +220,7 @@ export default function GameAnalyticsPage() {
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showErrorLog, setShowErrorLog] = useState(false);
   const [showWhatsNew, setShowWhatsNew] = useState(false);
+  const [showGoalsModal, setShowGoalsModal] = useState(false);
 
   // Week recap data for header strip
   const weekRecap = useMemo(() => {
@@ -596,6 +601,23 @@ export default function GameAnalyticsPage() {
                 )}
               </div>
               <ErrorLogButton onClick={() => setShowErrorLog(true)} />
+              {/* Goals Button — shows active goal count badge */}
+              {games.length > 0 && (
+                <button
+                  onClick={() => setShowGoalsModal(true)}
+                  className="relative flex items-center gap-1.5 px-2.5 py-2 bg-white/5 text-white/60 hover:text-cyan-400 rounded-lg transition-all text-sm"
+                  title="Gaming Goals"
+                  aria-label="Gaming Goals"
+                >
+                  <Target size={14} />
+                  <span className="hidden sm:inline text-[12px]">Goals</span>
+                  {goals.filter(g => g.status === 'active').length > 0 && (
+                    <span className="absolute -top-1 -right-1 w-4 h-4 flex items-center justify-center bg-cyan-500 text-white text-[9px] font-bold rounded-full">
+                      {goals.filter(g => g.status === 'active').length}
+                    </span>
+                  )}
+                </button>
+              )}
               <button
                 onClick={() => setShowWhatsNew(true)}
                 className="flex items-center gap-1.5 px-2.5 py-2 bg-white/5 text-white/60 hover:text-white/80 rounded-lg transition-all text-sm"
@@ -1422,6 +1444,45 @@ export default function GameAnalyticsPage() {
       {/* What's New Modal */}
       {showWhatsNew && (
         <WhatsNewModal onClose={() => setShowWhatsNew(false)} />
+      )}
+
+      {/* Gaming Goals Modal */}
+      {showGoalsModal && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center">
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={() => setShowGoalsModal(false)}
+          />
+          <div className="relative w-full max-w-2xl bg-[#0f0f1a] rounded-t-2xl border-t border-white/10 shadow-2xl max-h-[88vh] flex flex-col">
+            {/* Sticky header */}
+            <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-white/5 shrink-0">
+              <div className="flex items-center gap-2">
+                <Target size={18} className="text-cyan-400" />
+                <h2 className="text-base font-semibold text-white">Gaming Goals</h2>
+                {goals.filter(g => g.status === 'active').length > 0 && (
+                  <span className="text-xs text-white/30 bg-white/5 px-2 py-0.5 rounded-full">
+                    {goals.filter(g => g.status === 'active').length} active
+                  </span>
+                )}
+              </div>
+              <button
+                onClick={() => setShowGoalsModal(false)}
+                className="p-2 text-white/40 hover:text-white/70 rounded-lg transition-colors"
+                aria-label="Close goals"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            {/* Scrollable body */}
+            <div className="overflow-y-auto flex-1 p-5 space-y-6">
+              <GoalsSuggestions
+                games={games}
+                activeGoalCount={goals.filter(g => g.status === 'active').length}
+              />
+              <GoalsPanel games={games} />
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Export Panel */}

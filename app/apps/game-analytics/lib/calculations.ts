@@ -14087,3 +14087,123 @@ export function getWhatIfSimulatorData(games: Game[]): WhatIfSimulatorScenario[]
     },
   ];
 }
+
+// ============================================================
+// Smart Goal Suggestions — data-driven goal ideas
+// ============================================================
+
+export interface SmartGoalSuggestion {
+  id: string;
+  type: 'completion' | 'spending' | 'hours' | 'genre_variety' | 'backlog' | 'custom';
+  title: string;
+  description: string;
+  targetValue: number;
+  unit: string;
+  emoji: string;
+}
+
+export function getSmartGoalSuggestions(games: Game[]): SmartGoalSuggestion[] {
+  const suggestions: SmartGoalSuggestion[] = [];
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const monthsPassed = now.getMonth() + 1;
+
+  const ownedGames = games.filter(g => g.status !== 'Wishlist');
+  const completedGames = games.filter(g => g.status === 'Completed');
+  const notStartedGames = ownedGames.filter(g => g.status === 'Not Started');
+
+  // 1. Completion milestone: within 15 of next round milestone
+  const completedCount = completedGames.length;
+  const completionMilestones = [5, 10, 15, 20, 25, 30, 40, 50, 75, 100];
+  const nextCompMilestone = completionMilestones.find(m => m > completedCount);
+  if (nextCompMilestone !== undefined) {
+    const remaining = nextCompMilestone - completedCount;
+    if (remaining <= 15) {
+      suggestions.push({
+        id: 'completion-milestone',
+        type: 'completion',
+        title: `Complete ${remaining} more game${remaining !== 1 ? 's' : ''}`,
+        description: `You've finished ${completedCount} games — just ${remaining} away from hitting ${nextCompMilestone}.`,
+        targetValue: remaining,
+        unit: 'games',
+        emoji: '🏆',
+      });
+    }
+  }
+
+  // 2. Hours milestone: within 80h of next round milestone
+  const totalHours = ownedGames.reduce((sum, g) => {
+    const logHours = (g.playLogs || []).reduce((s, l) => s + l.hours, 0);
+    return sum + Math.max(g.hours, logHours);
+  }, 0);
+  const hoursMilestones = [50, 100, 200, 300, 500, 750, 1000, 1500, 2000];
+  const nextHoursMilestone = hoursMilestones.find(m => m > totalHours);
+  if (nextHoursMilestone !== undefined) {
+    const remaining = Math.round(nextHoursMilestone - totalHours);
+    if (remaining <= 80) {
+      suggestions.push({
+        id: 'hours-milestone',
+        type: 'hours',
+        title: `Log ${remaining} more hours`,
+        description: `${Math.round(totalHours)}h played of ${nextHoursMilestone}h — a milestone within reach.`,
+        targetValue: remaining,
+        unit: 'hours',
+        emoji: '⏰',
+      });
+    }
+  }
+
+  // 3. Backlog attack: if 5+ unstarted games, suggest clearing some
+  if (notStartedGames.length >= 5) {
+    const target = Math.min(notStartedGames.length, Math.max(3, Math.ceil(notStartedGames.length * 0.3)));
+    suggestions.push({
+      id: 'backlog-attack',
+      type: 'backlog',
+      title: `Start ${target} backlog game${target !== 1 ? 's' : ''}`,
+      description: `${notStartedGames.length} games unstarted. Pick ${target} and begin — the hardest part is the first session.`,
+      targetValue: target,
+      unit: 'games',
+      emoji: '📦',
+    });
+  }
+
+  // 4. Genre variety: if fewer than 3 distinct genres played
+  const playedGenres = [...new Set(
+    ownedGames
+      .filter(g => g.hours > 0 || (g.playLogs?.length || 0) > 0)
+      .map(g => g.genre)
+      .filter(Boolean) as string[]
+  )];
+  if (playedGenres.length < 3 && ownedGames.length >= 4) {
+    suggestions.push({
+      id: 'genre-variety',
+      type: 'genre_variety',
+      title: `Play games from 3 genres`,
+      description: `You've played ${playedGenres.length} genre${playedGenres.length !== 1 ? 's' : ''}. Branching out often uncovers hidden gems.`,
+      targetValue: 3,
+      unit: 'genres',
+      emoji: '🌐',
+    });
+  }
+
+  // 5. Spending discipline: if current-year spend is notable, suggest a cap
+  const currentYearGames = ownedGames.filter(g => g.datePurchased?.startsWith(currentYear.toString()));
+  const currentYearSpent = currentYearGames.reduce((sum, g) => sum + g.price, 0);
+  if (currentYearSpent >= 60 && monthsPassed >= 2) {
+    const projectedSpend = (currentYearSpent / monthsPassed) * 12;
+    const suggestedCap = Math.round(projectedSpend * 0.75 / 50) * 50;
+    if (suggestedCap >= 100) {
+      suggestions.push({
+        id: 'spending-cap',
+        type: 'spending',
+        title: `Cap ${currentYear} spending at $${suggestedCap}`,
+        description: `On pace for ~$${Math.round(projectedSpend)} this year. A 25% cut saves ~$${Math.round(projectedSpend - suggestedCap)}.`,
+        targetValue: suggestedCap,
+        unit: 'dollars',
+        emoji: '💰',
+      });
+    }
+  }
+
+  return suggestions.slice(0, 4);
+}

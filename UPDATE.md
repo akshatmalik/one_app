@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-02 06:00 — Gaming Goals — Goals Hub with Smart Suggestions
+
+**Files**: app/apps/game-analytics/lib/calculations.ts, app/apps/game-analytics/components/GoalsSuggestions.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Surfaced the fully-built but invisible GoalsPanel behind a new "Goals" button in the app header. Tapping it opens a slide-up modal with two sections: (1) Smart Suggestions — up to four data-driven goal ideas derived from the user's actual library state (completion milestones within 15 games, hours milestones within 80h, backlog size, genre diversity, and year-to-date spending trajectory), each addable with one tap; (2) the full GoalsPanel for creating, tracking, and managing arbitrary goals. An active-goal count badge on the button ensures users always know how many goals are in flight. The header button is only shown when there are games in the library.
+
+FOLLOW-UP: Could add mood analysis (getMoodAnalysis exists in calculations but is unused) to the Goals modal as a "Session Wellbeing" section, or surface goal progress in the weekly recap strip.
+
 ## 2026-06-01 06:00 — Game Detail — Head-to-Head Game Comparison
 
 **Files**: app/apps/game-analytics/components/GameCompareModal.tsx, app/apps/game-analytics/components/GameBottomSheet.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json
