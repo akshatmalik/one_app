@@ -14087,3 +14087,167 @@ export function getWhatIfSimulatorData(games: Game[]): WhatIfSimulatorScenario[]
     },
   ];
 }
+
+// ── Review Nudges ──────────────────────────────────────────────────
+// A gentle system that surfaces finished games worth writing up — not
+// just rating, but reviewing. Powers the Games-tab nudge banner and the
+// per-card "Review?" affordance. Pure, data-driven, never random.
+
+export type ReviewNudgeReason =
+  | 'just-finished'        // Completed within the last ~2 weeks
+  | 'special-unreviewed'   // Marked special/loved but no words yet
+  | 'completed-unreviewed' // Completed a while ago, still no review
+  | 'farewell'             // Abandoned with real hours — worth a goodbye
+  | 'rated-no-words'       // Rated highly but never explained why
+  | 'invested-no-words';   // Sank serious hours, no review
+
+export interface ReviewNudge {
+  game: Game;
+  reason: ReviewNudgeReason;
+  headline: string;       // Warm, curious one-liner referencing the game
+  ctaLabel: string;       // Button copy
+  priority: number;       // Higher = surface sooner
+  daysSinceEnd: number | null;
+}
+
+export interface ReviewNudgeSummary {
+  topNudge: ReviewNudge | null;
+  candidates: ReviewNudge[];   // All reviewable games lacking a review, sorted
+  reviewedCount: number;       // Reviewable games that DO have a review
+  reviewableCount: number;     // Total reviewable games (reviewed + not)
+  recentlyCompletedCount: number; // Completed in last 14 days, unreviewed
+}
+
+/** A game has a "review" if there's review text or any user message in the chat. */
+export function hasReview(game: Game): boolean {
+  if (game.review && game.review.trim().length > 0) return true;
+  return !!game.reviewMessages?.some(m => m.role === 'user' && m.text.trim().length > 0);
+}
+
+/** Whole-day difference between a date and today (>=0 in the past). */
+function daysSinceDate(dateStr?: string): number | null {
+  if (!dateStr) return null;
+  const then = parseLocalDate(dateStr.slice(0, 10)).getTime();
+  if (Number.isNaN(then)) return null;
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  return Math.max(0, Math.round((today - then) / 86_400_000));
+}
+
+/** Is this game something you could meaningfully review? */
+function isReviewable(game: Game): boolean {
+  if (game.status === 'Wishlist' || game.status === 'Not Started') return false;
+  if (game.status === 'Completed') return true;
+  if (game.status === 'Abandoned') return getTotalHours(game) >= 3;
+  // In Progress: only if you've invested real time or already rated it
+  return getTotalHours(game) >= 5 || game.rating > 0;
+}
+
+function buildNudge(game: Game): ReviewNudge | null {
+  const days = daysSinceDate(game.endDate || game.updatedAt);
+  const hours = Math.round(getTotalHours(game));
+  const name = game.name;
+
+  // Just finished — the highest-intent, gentlest moment to ask
+  if (game.status === 'Completed' && days !== null && days <= 14) {
+    const when =
+      days <= 1 ? 'just now' : days <= 3 ? `${days} days ago` : days <= 7 ? 'this week' : 'recently';
+    return {
+      game, reason: 'just-finished',
+      headline:
+        days <= 1
+          ? `You just wrapped ${name} — how was it?`
+          : `You finished ${name} ${when}. Worth a few words while it's fresh?`,
+      ctaLabel: 'Write a quick review',
+      priority: 100 - days * 2,
+      daysSinceEnd: days,
+    };
+  }
+
+  // Special / loved game with no review — capture why it mattered
+  if (game.isSpecial) {
+    return {
+      game, reason: 'special-unreviewed',
+      headline: `${name} is one of your specials — but you never said why. Tell its story?`,
+      ctaLabel: 'Capture what made it special',
+      priority: 90,
+      daysSinceEnd: days,
+    };
+  }
+
+  // Completed a while ago, still unreviewed
+  if (game.status === 'Completed') {
+    return {
+      game, reason: 'completed-unreviewed',
+      headline:
+        days !== null && days > 0
+          ? `You completed ${name}${days > 60 ? ' a while back' : ''} — ${hours}h in and still no review.`
+          : `You completed ${name} but never wrote it up. A few thoughts?`,
+      ctaLabel: 'Look back on it',
+      priority: 62 - Math.min(days ?? 0, 40) * 0.3,
+      daysSinceEnd: days,
+    };
+  }
+
+  // Rated highly but never explained — high signal, low words
+  if (game.rating >= 8) {
+    return {
+      game, reason: 'rated-no-words',
+      headline: `You rated ${name} ${game.rating}/10 — high praise with no words behind it. Why so good?`,
+      ctaLabel: 'Add a few words',
+      priority: 50,
+      daysSinceEnd: days,
+    };
+  }
+
+  // Abandoned with real hours — a goodbye is a review too
+  if (game.status === 'Abandoned') {
+    return {
+      game, reason: 'farewell',
+      headline: `${hours}h into ${name} before you walked away. What went wrong — or right?`,
+      ctaLabel: 'Say a proper goodbye',
+      priority: 40,
+      daysSinceEnd: days,
+    };
+  }
+
+  // Serious time invested, still no words
+  if (hours >= 5) {
+    return {
+      game, reason: 'invested-no-words',
+      headline: `${hours} hours in ${name} and not a word written. Worth reflecting on?`,
+      ctaLabel: 'Jot down your take',
+      priority: 30,
+      daysSinceEnd: days,
+    };
+  }
+
+  return null;
+}
+
+/**
+ * Build the prioritized list of games that deserve a review and a few
+ * progress counters so the UI can frame it as a gentle, finishable task.
+ */
+export function getReviewNudges(games: Game[]): ReviewNudgeSummary {
+  const reviewable = games.filter(isReviewable);
+  const reviewedCount = reviewable.filter(hasReview).length;
+
+  const candidates = reviewable
+    .filter(g => !hasReview(g))
+    .map(buildNudge)
+    .filter((n): n is ReviewNudge => n !== null)
+    .sort((a, b) => b.priority - a.priority);
+
+  const recentlyCompletedCount = candidates.filter(
+    n => n.reason === 'just-finished'
+  ).length;
+
+  return {
+    topNudge: candidates[0] ?? null,
+    candidates,
+    reviewedCount,
+    reviewableCount: reviewable.length,
+    recentlyCompletedCount,
+  };
+}

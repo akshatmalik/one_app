@@ -40,6 +40,7 @@ import { ProgressRing } from './components/ProgressRing';
 import { ExportPanel } from './components/ExportPanel';
 import { YearlyWrapped } from './components/YearlyWrapped';
 import { FortuneCookie } from './components/FortuneCookie';
+import { ReviewNudgeBanner } from './components/ReviewNudgeBanner';
 import { AwardsHub } from './components/AwardsHub';
 import { useTrophies } from './hooks/useTrophies';
 import { TrophyShowcase } from './components/TrophyShowcase';
@@ -941,6 +942,20 @@ export default function GameAnalyticsPage() {
 
           {/* Daily Fortune Cookie */}
           {games.length > 0 && <div className="mb-4"><FortuneCookie games={games} /></div>}
+
+          {/* Gentle nudge to review finished games — leads into the review chat */}
+          {games.length > 0 && (
+            <ReviewNudgeBanner
+              games={games}
+              onReview={(game) => {
+                const gwm = gamesWithMetrics.find(g => g.id === game.id);
+                if (gwm) {
+                  setReviewChatGame(gwm);
+                  setTabMode('games');
+                }
+              }}
+            />
+          )}
 
           {/* Tab Navigation */}
           <div className="space-y-4 mb-6">
