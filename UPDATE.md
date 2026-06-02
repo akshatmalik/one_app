@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-02 12:00 — Games Tab — Tonight's Pick smart daily recommendations
+
+**Files**: app/apps/game-analytics/lib/calculations.ts, app/apps/game-analytics/components/TonightsPick.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Added a collapsible "Tonight's Pick" card that appears above the tab bar each time you open the app, showing the top 3 personalized game suggestions based on your actual behavior patterns. The scoring algorithm weighs six factors: recent momentum (sessions in the last 7 days), completion proximity (hours played vs genre-average completion), day-of-week affinity (which games and genres you actually play on this day), streak risk (a live streak that would break tonight), comeback opportunities (games not touched in 14+ days), and Up Next queue position. Each suggestion gets a color-coded reason chip (On a roll / Could finish tonight / Your Saturday game / Keeps streak alive / etc.) with a secondary context line and an estimated session length. A streak-at-risk banner appears prominently when a live streak would break if the user skips tonight. Tapping "Log Time" on any suggestion opens the play-log modal directly for that game.
+
+FOLLOW-UP: Could filter suggestions by available time (Quick ≤1h / Medium 1-3h / Deep 3h+) so users can specify how much time they have tonight.
+
 ## 2026-06-01 06:00 — Game Detail — Head-to-Head Game Comparison
 
 **Files**: app/apps/game-analytics/components/GameCompareModal.tsx, app/apps/game-analytics/components/GameBottomSheet.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json

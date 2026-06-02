@@ -14087,3 +14087,309 @@ export function getWhatIfSimulatorData(games: Game[]): WhatIfSimulatorScenario[]
     },
   ];
 }
+
+// ── Tonight's Pick ────────────────────────────────────────────────────────────
+
+export type TonightsPickReason =
+  | 'streak_risk'       // Playing keeps a live streak alive
+  | 'completion_close'  // Estimated to be near genre-average completion
+  | 'your_day'          // Genre/game you frequently play on this day of week
+  | 'momentum'          // Multiple sessions in the last week
+  | 'comeback'          // Gap > 14 days, good time to return
+  | 'new_start';        // Owned but never played yet
+
+export interface TonightsPickSuggestion {
+  game: Game;
+  score: number;
+  reasonTag: TonightsPickReason;
+  reasonText: string;
+  subText: string;
+  estimatedSessionHours: number;
+}
+
+export interface TonightsPickData {
+  suggestions: TonightsPickSuggestion[];
+  todayDayName: string;
+  todayAvgHours: number;
+  todayTopGenre: string | null;
+  streakAtRisk: boolean;
+  currentStreak: number;
+  hasPlayedToday: boolean;
+}
+
+// Rough genre completion hour benchmarks for proximity calculation
+const GENRE_COMPLETION_HOURS: Record<string, number> = {
+  rpg: 60,
+  'action rpg': 50,
+  'action-rpg': 50,
+  adventure: 20,
+  'action-adventure': 20,
+  action: 12,
+  shooter: 10,
+  'first-person shooter': 10,
+  fps: 10,
+  platformer: 12,
+  puzzle: 8,
+  strategy: 35,
+  simulation: 40,
+  sports: 60,
+  racing: 15,
+  horror: 12,
+  'visual novel': 15,
+  indie: 10,
+  fighting: 10,
+  stealth: 15,
+  survival: 30,
+  'open world': 50,
+  metroidvania: 15,
+};
+
+function getGenreCompletionHours(genre?: string): number {
+  if (!genre) return 20;
+  const key = genre.toLowerCase();
+  return GENRE_COMPLETION_HOURS[key] ?? 20;
+}
+
+export function getTonightsPick(games: Game[]): TonightsPickData {
+  const now = new Date();
+  const todayDayIndex = now.getDay(); // 0=Sun … 6=Sat
+  const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const todayDayName = DAY_NAMES[todayDayIndex];
+
+  // Build a YYYY-MM-DD string for "today"
+  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
+  // --- Streak state ---
+  const currentStreak = getCurrentGamingStreak(games);
+  const allLogs = getAllPlayLogs(games);
+  const hasPlayedToday = allLogs.some(l => l.log.date === todayStr);
+  // Streak is "at risk" when you have a live streak of 2+ and haven't played today
+  const streakAtRisk = currentStreak >= 2 && !hasPlayedToday;
+
+  // --- Day-of-week patterns ---
+  // Accumulate hours and genre counts for today's day index
+  const dayHoursAccum: number[] = Array(7).fill(0);
+  const todayGenreCount: Record<string, number> = {};
+  // Per-game, track which days they've been played for "your day" detection
+  const gamePlayDays: Record<string, Record<number, number>> = {}; // gameId → dayIndex → count
+
+  games.forEach(game => {
+    (game.playLogs || []).forEach(log => {
+      const logDate = parseLocalDate(log.date);
+      const dow = logDate.getDay();
+      dayHoursAccum[dow] += log.hours;
+
+      // Genre count for today
+      if (dow === todayDayIndex && game.genre) {
+        todayGenreCount[game.genre] = (todayGenreCount[game.genre] || 0) + 1;
+      }
+
+      // Per-game day tracking
+      if (!gamePlayDays[game.id]) gamePlayDays[game.id] = {};
+      gamePlayDays[game.id][dow] = (gamePlayDays[game.id][dow] || 0) + 1;
+    });
+  });
+
+  // How many times each day appears in the data (to get an average)
+  const dayCountMap: Record<number, number> = {};
+  allLogs.forEach(l => {
+    const dow = parseLocalDate(l.log.date).getDay();
+    dayCountMap[dow] = (dayCountMap[dow] || 0) + 1;
+  });
+
+  // Average hours per occurrence of today's day
+  const todayOccurrences = Object.values(dayCountMap)[todayDayIndex] || 0;
+  const todayAvgHours = todayOccurrences > 0
+    ? Math.round((dayHoursAccum[todayDayIndex] / todayOccurrences) * 10) / 10
+    : 0;
+
+  // Top genre today
+  let todayTopGenre: string | null = null;
+  if (Object.keys(todayGenreCount).length > 0) {
+    todayTopGenre = Object.entries(todayGenreCount).sort((a, b) => b[1] - a[1])[0][0];
+  }
+
+  // --- Eligible games ---
+  const eligible = games.filter(g =>
+    g.status === 'In Progress' ||
+    (g.status === 'Not Started' && g.price > 0) // Owned, unstarted
+  );
+
+  if (eligible.length === 0) {
+    return {
+      suggestions: [],
+      todayDayName,
+      todayAvgHours,
+      todayTopGenre,
+      streakAtRisk,
+      currentStreak,
+      hasPlayedToday,
+    };
+  }
+
+  // --- Score each game ---
+  const scored = eligible.map(game => {
+    let score = 50;
+    let reasonTag: TonightsPickReason = 'comeback';
+    let reasonText = 'Good time to play';
+    let subText = '';
+
+    const totalHours = getTotalHours(game);
+    const sortedLogs = [...(game.playLogs || [])].sort(
+      (a, b) => parseLocalDate(b.date).getTime() - parseLocalDate(a.date).getTime()
+    );
+    const lastLog = sortedLogs[0];
+    const daysSinceLastSession = lastLog
+      ? Math.floor((now.getTime() - parseLocalDate(lastLog.date).getTime()) / (24 * 60 * 60 * 1000))
+      : Infinity;
+
+    // Average session length for this game
+    const avgSession =
+      sortedLogs.length > 0
+        ? sortedLogs.slice(0, 5).reduce((s, l) => s + l.hours, 0) / Math.min(sortedLogs.length, 5)
+        : 1.5;
+    const estimatedSessionHours = Math.round(avgSession * 2) / 2; // nearest 0.5h
+
+    // --- Scoring factors ---
+
+    // 1. Momentum: sessions in the last 7 days
+    const recentSessions = sortedLogs.filter(l => {
+      const d = parseLocalDate(l.date);
+      return (now.getTime() - d.getTime()) < 7 * 24 * 60 * 60 * 1000;
+    });
+    if (recentSessions.length >= 3) {
+      score += 30;
+      reasonTag = 'momentum';
+      reasonText = `On a roll — ${recentSessions.length} sessions this week`;
+      subText = `${totalHours.toFixed(1)}h total · avg ${estimatedSessionHours.toFixed(1)}h/session`;
+    } else if (recentSessions.length >= 1) {
+      score += 20;
+      reasonTag = 'momentum';
+      reasonText = `Active — played ${recentSessions.length === 1 ? 'once' : `${recentSessions.length}×`} this week`;
+      subText = `Last session ${daysSinceLastSession === 0 ? 'today' : `${daysSinceLastSession}d ago`}`;
+    }
+
+    // 2. Close to completion
+    if (game.status === 'In Progress' && totalHours > 0) {
+      const genreAvg = getGenreCompletionHours(game.genre);
+      const proximityPct = totalHours / genreAvg;
+      if (proximityPct >= 0.7 && proximityPct < 1.0) {
+        const sessionsLeft = Math.ceil((genreAvg - totalHours) / Math.max(avgSession, 0.5));
+        const bonus = proximityPct >= 0.85 ? 35 : 25;
+        score += bonus;
+        reasonTag = 'completion_close';
+        reasonText = sessionsLeft <= 1
+          ? 'Could finish tonight at your pace'
+          : `~${sessionsLeft} session${sessionsLeft === 1 ? '' : 's'} from completion`;
+        subText = `${totalHours.toFixed(1)}h played · genre avg ~${genreAvg}h`;
+      } else if (proximityPct >= 0.5 && score < 70) {
+        score += 10;
+      }
+    }
+
+    // 3. Your day: you play this game / this genre on this day of week
+    const gameDayMap = gamePlayDays[game.id] || {};
+    const totalGameSessions = Object.values(gameDayMap).reduce((s, v) => s + v, 0);
+    const sessionsTodayDow = gameDayMap[todayDayIndex] || 0;
+    const dayRatio = totalGameSessions > 0 ? sessionsTodayDow / totalGameSessions : 0;
+
+    if (dayRatio >= 0.3 && sessionsTodayDow >= 2) {
+      score += 20;
+      if (reasonTag === 'comeback') {
+        reasonTag = 'your_day';
+        reasonText = `Your ${todayDayName} game`;
+        subText = `${sessionsTodayDow} of your ${totalGameSessions} sessions were on ${todayDayName}s`;
+      }
+    } else if (game.genre && game.genre === todayTopGenre) {
+      score += 12;
+      if (reasonTag === 'comeback') {
+        reasonTag = 'your_day';
+        reasonText = `${todayDayName} is your ${game.genre} day`;
+        subText = `You often play ${game.genre} games on ${todayDayName}s`;
+      }
+    }
+
+    // 4. Streak risk — any eligible game gets a small boost; best candidate for streak pick
+    if (streakAtRisk) {
+      score += 8;
+      if (reasonTag === 'comeback' || (reasonTag === 'your_day' && score < 70)) {
+        reasonTag = 'streak_risk';
+        reasonText = `Keeps your ${currentStreak}-day streak alive`;
+        subText = 'Any session tonight counts';
+      }
+    }
+
+    // 5. Gap / comeback
+    if (daysSinceLastSession > 14 && daysSinceLastSession !== Infinity && game.status === 'In Progress') {
+      score += 5; // slight nudge — user might have forgotten this game
+      if (reasonTag === 'comeback') {
+        reasonText = 'Time to pick it back up';
+        subText = `Last played ${daysSinceLastSession} days ago`;
+      }
+    }
+
+    // 6. Brand new / unstarted owned game
+    if (game.status === 'Not Started') {
+      score -= 5; // slight preference for in-progress
+      if (reasonTag === 'comeback') {
+        reasonTag = 'new_start';
+        reasonText = 'Ready to be started';
+        const daysSincePurchase = game.datePurchased
+          ? Math.floor((now.getTime() - parseLocalDate(game.datePurchased).getTime()) / (24 * 60 * 60 * 1000))
+          : null;
+        subText = daysSincePurchase != null
+          ? `Purchased ${daysSincePurchase} day${daysSincePurchase === 1 ? '' : 's'} ago`
+          : 'In your library';
+      }
+    }
+
+    // 7. Queue position bonus
+    if (game.queuePosition != null && game.queuePosition <= 3) {
+      score += 10;
+      if (game.queuePosition === 1) subText = subText || '#1 in your Up Next queue';
+    }
+
+    // 8. Rating boost
+    if (game.rating >= 8) score += 8;
+    else if (game.rating > 0 && game.rating < 5) score -= 10;
+
+    // 9. Stale games (haven't played in 30+ days and still In Progress) — minor penalty
+    if (daysSinceLastSession > 30 && game.status === 'In Progress') score -= 5;
+
+    return { game, score, reasonTag, reasonText, subText, estimatedSessionHours };
+  });
+
+  // Sort by score desc, deduplicate on reasonTag to show variety
+  const sorted = scored.sort((a, b) => b.score - a.score);
+
+  // Take top 3, preferring variety in reason tags
+  const suggestions: TonightsPickSuggestion[] = [];
+  const usedTags = new Set<TonightsPickReason>();
+
+  for (const candidate of sorted) {
+    if (suggestions.length >= 3) break;
+    // Allow at most one of each reason tag, unless we're running low
+    if (!usedTags.has(candidate.reasonTag) || suggestions.length + (sorted.length - sorted.indexOf(candidate)) <= 3) {
+      suggestions.push(candidate);
+      usedTags.add(candidate.reasonTag);
+    }
+  }
+
+  // Fallback: fill to 3 if needed
+  if (suggestions.length < 3) {
+    for (const candidate of sorted) {
+      if (suggestions.length >= 3) break;
+      if (!suggestions.includes(candidate)) suggestions.push(candidate);
+    }
+  }
+
+  return {
+    suggestions: suggestions.slice(0, 3),
+    todayDayName,
+    todayAvgHours,
+    todayTopGenre,
+    streakAtRisk,
+    currentStreak,
+    hasPlayedToday,
+  };
+}

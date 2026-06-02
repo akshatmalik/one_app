@@ -48,6 +48,7 @@ import { ErrorLogPanel, ErrorLogButton } from './components/ErrorLogPanel';
 import { WhatsNewModal } from './components/WhatsNewModal';
 import { GameReviewChat } from './components/GameReviewChat';
 import { GameCompareModal } from './components/GameCompareModal';
+import { TonightsPick } from './components/TonightsPick';
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist';
@@ -941,6 +942,17 @@ export default function GameAnalyticsPage() {
 
           {/* Daily Fortune Cookie */}
           {games.length > 0 && <div className="mb-4"><FortuneCookie games={games} /></div>}
+
+          {/* Tonight's Pick — smart daily suggestion */}
+          {games.length > 0 && (
+            <TonightsPick
+              games={games}
+              onLogTime={(game) => {
+                const gwm = gamesWithMetrics.find(g => g.id === game.id);
+                if (gwm) setPlayLogGame(gwm);
+              }}
+            />
+          )}
 
           {/* Tab Navigation */}
           <div className="space-y-4 mb-6">

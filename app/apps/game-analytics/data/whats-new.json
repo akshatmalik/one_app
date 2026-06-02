@@ -1,6 +1,12 @@
 {
   "entries": [
     {
+      "date": "2026-06-02",
+      "area": "Games tab",
+      "title": "Tonight's Pick — your daily game recommendation",
+      "body": "A new smart card now appears above the tabs each day, suggesting the top 3 games to play tonight. It looks at your real patterns — which games you're on a roll with, which ones are close to completion, which genres you gravitate toward on this day of the week, and whether a live streak is at risk. Each suggestion includes a reason (\"Could finish tonight\" / \"Your Tuesday game\" / \"5-day streak on the line\") and a one-tap Log Time button so you can start your session immediately."
+    },
+    {
       "date": "2026-06-01",
       "area": "Game detail",
       "title": "Compare any two games head to head",
