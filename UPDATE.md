@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-03 — Awards — Oscar Night Auto-Awards Ceremony
+
+**Files**: app/apps/game-analytics/components/OscarNightModal.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Built a full-screen "Oscar Night" auto-awards ceremony that surfaces `getOscarAwards()` — a fully-implemented calculation that was sitting unused with zero UI. Tap the 🎬 film icon in the tab bar to open a cinematic ceremony screen with a period selector (This Week / This Month / This Quarter / All Time). Awards show as sealed envelopes — tap each to reveal the auto-calculated winner with thumbnail, stat, and funny tagline, or hit "Reveal All" to unseal everything at once. Up to 8 categories per period: Best Picture, Best Supporting Game, Best Short Film, Iron Man Award, Worst Bang for Buck, Most Likely to Be Abandoned, Lifetime Achievement, and more.
+
+FOLLOW-UP: Could add this as a screen in the Monthly Story Mode recap.
+
 ## 2026-06-01 06:00 — Game Detail — Head-to-Head Game Comparison
 
 **Files**: app/apps/game-analytics/components/GameCompareModal.tsx, app/apps/game-analytics/components/GameBottomSheet.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json

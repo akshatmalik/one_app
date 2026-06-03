@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical, Download, Gift, ShoppingCart, Search, X } from 'lucide-react';
+import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical, Download, Gift, ShoppingCart, Search, X, Film } from 'lucide-react';
 import { useGames } from './hooks/useGames';
 import { useAnalytics, GameWithMetrics } from './hooks/useAnalytics';
 import { useBudget } from './hooks/useBudget';
@@ -49,6 +49,7 @@ import { ErrorLogPanel, ErrorLogButton } from './components/ErrorLogPanel';
 import { WhatsNewModal } from './components/WhatsNewModal';
 import { GameReviewChat } from './components/GameReviewChat';
 import { GameCompareModal } from './components/GameCompareModal';
+import { OscarNightModal } from './components/OscarNightModal';
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist';
@@ -194,6 +195,7 @@ export default function GameAnalyticsPage() {
   const [showExport, setShowExport] = useState(false);
   const [wrappedYear, setWrappedYear] = useState<number | null>(null);
   const [showAwardsHub, setShowAwardsHub] = useState(false);
+  const [showOscarNight, setShowOscarNight] = useState(false);
   const [detailGame, setDetailGame] = useState<GameWithMetrics | null>(null);
   const [reviewChatGame, setReviewChatGame] = useState<GameWithMetrics | null>(null);
   const [compareGame, setCompareGame] = useState<GameWithMetrics | null>(null);
@@ -1019,6 +1021,12 @@ export default function GameAnalyticsPage() {
                   className="flex-1 flex items-center justify-center py-2.5 rounded-lg bg-white/[0.02] text-amber-400/50 hover:text-amber-400 transition-all">
                   <Star size={16} />
                 </button>
+                {games.length > 0 && (
+                  <button onClick={() => setShowOscarNight(true)} title="Auto Awards — data-driven ceremony"
+                    className="flex-1 flex items-center justify-center py-2.5 rounded-lg bg-white/[0.02] text-amber-400/40 hover:text-amber-300 transition-all">
+                    <Film size={16} />
+                  </button>
+                )}
               </div>
             </div>
 
@@ -1464,6 +1472,14 @@ export default function GameAnalyticsPage() {
           updateGame={updateGame}
           onAwardGiven={handleAwardGiven}
           onClose={() => setShowAwardsHub(false)}
+        />
+      )}
+
+      {/* Oscar Night — Auto Awards Ceremony */}
+      {showOscarNight && (
+        <OscarNightModal
+          games={games}
+          onClose={() => setShowOscarNight(false)}
         />
       )}
 
