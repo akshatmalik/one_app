@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-03 12:00 — Home Dashboard — Daily Gaming Companion Tab
+
+**Files**: app/apps/game-analytics/components/HomeTab.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Added a "Home" tab as the new default landing screen — a daily gaming companion dashboard that gives users a reason to open the app every day. Sections: greeting with global streak count, this-week stats (hours/sessions/games) with vs-last-week deltas, a Quick Log panel showing the 4 most recently played games each with inline hour preset buttons (tap game → tap hours → done in 2 taps), a Tonight's Pick card using chemistry scoring across in-progress games boosted by active streaks, a Streak Watch section highlighting at-risk streaks with pulse animation, a Milestone Radar showing the 3 nearest achievement unlocks with progress rings, fortune cookie, and On This Day anniversaries. The HomeTab is wired to `setDetailGame` to open the full bottom sheet on game tap, and to `handleQuickLog` for zero-friction session logging. The tab navigation row was expanded to 5 tabs in row 1 (adding the Home icon without removing any existing tab).
+
+FOLLOW-UP: Could persist the last-active tab to localStorage so power users who prefer the Games tab aren't bounced back to Home on every reload.
+
 ## 2026-06-01 06:00 — Game Detail — Head-to-Head Game Comparison
 
 **Files**: app/apps/game-analytics/components/GameCompareModal.tsx, app/apps/game-analytics/components/GameBottomSheet.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json

@@ -49,10 +49,11 @@ import { ErrorLogPanel, ErrorLogButton } from './components/ErrorLogPanel';
 import { WhatsNewModal } from './components/WhatsNewModal';
 import { GameReviewChat } from './components/GameReviewChat';
 import { GameCompareModal } from './components/GameCompareModal';
+import { HomeTab } from './components/HomeTab';
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist';
-type TabMode = 'games' | 'timeline' | 'stats' | 'ai-coach' | 'up-next' | 'discover' | 'leaderboard' | 'buy-queue';
+type TabMode = 'home' | 'games' | 'timeline' | 'stats' | 'ai-coach' | 'up-next' | 'discover' | 'leaderboard' | 'buy-queue';
 type CardViewMode = 'poster' | 'compact';
 
 function getValueColor(rating: string): string {
@@ -187,7 +188,7 @@ export default function GameAnalyticsPage() {
   const [editingGame, setEditingGame] = useState<GameWithMetrics | null>(null);
   const [playLogGame, setPlayLogGame] = useState<GameWithMetrics | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('all');
-  const [tabMode, setTabMode] = useState<TabMode>('games');
+  const [tabMode, setTabMode] = useState<TabMode>('home');
   const [sortBy, setSortBy] = useState<'name' | 'price' | 'hours' | 'rating' | 'costPerHour' | 'dateAdded' | 'recentlyPlayed'>('recentlyPlayed');
   const [showRandomPicker, setShowRandomPicker] = useState(false);
   const [showBulkWishlist, setShowBulkWishlist] = useState(false);
@@ -961,9 +962,10 @@ export default function GameAnalyticsPage() {
           <div className="space-y-4 mb-6">
             {/* Tabs - Two icon-only rows */}
             <div className="space-y-1.5">
-              {/* Row 1: Games, Timeline, Stats, AI Coach */}
+              {/* Row 1: Home, Games, Timeline, Stats, AI Coach */}
               <div className="flex items-center gap-1.5">
                 {([
+                  { id: 'home',     icon: <Gamepad2 size={16} />,      title: 'Home' },
                   { id: 'games',    icon: <List size={16} />,          title: 'Games' },
                   { id: 'timeline', icon: <Calendar size={16} />,      title: 'Timeline' },
                   { id: 'stats',    icon: <BarChart3 size={16} />,     title: 'Stats' },
@@ -1160,6 +1162,21 @@ export default function GameAnalyticsPage() {
           </div>
 
           {/* Tab Content */}
+          {tabMode === 'home' && (
+            <HomeTab
+              games={games}
+              gamesWithMetrics={gamesWithMetrics}
+              onOpenGame={(game) => {
+                setDetailGame(game);
+              }}
+              onQuickLog={async (gameId, hours) => {
+                const gwm = gamesWithMetrics.find(g => g.id === gameId);
+                if (gwm) await handleQuickLog(gwm, hours);
+              }}
+              onSwitchTab={(tab) => setTabMode(tab as TabMode)}
+            />
+          )}
+
           {tabMode === 'games' && (
             <>
               {games.length === 0 ? (

@@ -1,6 +1,12 @@
 {
   "entries": [
     {
+      "date": "2026-06-03",
+      "area": "Home dashboard",
+      "title": "Your daily gaming companion is here",
+      "body": "A new Home tab is now your default landing screen. It shows this week's stats at a glance, your four most recently played games with one-tap session logging, tonight's best pick based on your play patterns, active streak alerts, upcoming milestone progress rings, your daily fortune, and any gaming anniversaries from today in history. Open the app daily and it gives you something actionable every time."
+    },
+    {
       "date": "2026-06-01",
       "area": "Game detail",
       "title": "Compare any two games head to head",
