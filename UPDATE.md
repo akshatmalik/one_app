@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-03 12:00 — Stats Tab — Goals & Smart Weekly Challenges
+
+**Files**: app/apps/game-analytics/lib/calculations.ts, app/apps/game-analytics/components/SmartChallengesPanel.tsx, app/apps/game-analytics/components/StatsView.tsx, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Surfaced the long-dormant GoalsPanel (complete with its own storage and hooks) by integrating it into the Stats tab alongside a brand-new Smart Weekly Challenges system. The challenges are auto-generated every Monday from the user's actual library data — ghosted In Progress games trigger a "Ghost No More" comeback challenge, genre-rut patterns trigger a "Genre Explorer" challenge, expensive low-value games trigger "Get Your Money's Worth", and so on across 7 challenge types (consistency, comeback, genre explorer, value seeker, backlog attack, deep dive, personal best). Each challenge shows live progress, a difficulty badge, a personal insight line explaining why it was picked for them, and auto-marks complete when the criteria are met. The user can also set their own goals (spending limits, completion targets, hours goals, etc.) in the GoalsPanel directly below.
+
+FOLLOW-UP: Could add a notification dot on the Stats tab button when incomplete challenges exist, or surface a compact challenge strip on the Games tab header.
+
 ## 2026-06-01 06:00 — Game Detail — Head-to-Head Game Comparison
 
 **Files**: app/apps/game-analytics/components/GameCompareModal.tsx, app/apps/game-analytics/components/GameBottomSheet.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json

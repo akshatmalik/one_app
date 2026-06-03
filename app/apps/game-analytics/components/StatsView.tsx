@@ -66,6 +66,8 @@ import { DiscoverPanel } from './DiscoverPanel';
 import { WeeklyDigest } from './WeeklyDigest';
 import { WhatIfSimulator } from './WhatIfSimulator';
 import { PlayedSummary, BoughtSummary } from './RangeGlance';
+import { SmartChallengesPanel } from './SmartChallengesPanel';
+import { GoalsPanel } from './GoalsPanel';
 import clsx from 'clsx';
 
 interface StatsViewProps {
@@ -980,6 +982,12 @@ export function StatsView({ games, summary, budgets = [], onSetBudget, trophies,
           )}
         </div>
       )}
+
+      {/* Weekly Challenges — auto-generated from gaming patterns */}
+      <SmartChallengesPanel games={games} />
+
+      {/* Personal Goals — user-defined goals with progress tracking */}
+      <GoalsPanel games={games} />
 
       {/* Period Stats Panel (This Week / This Month) */}
       <PeriodStatsPanel games={games} />

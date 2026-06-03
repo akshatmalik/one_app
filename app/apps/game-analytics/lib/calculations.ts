@@ -14251,3 +14251,297 @@ export function getReviewNudges(games: Game[]): ReviewNudgeSummary {
     recentlyCompletedCount,
   };
 }
+
+// === Smart Weekly Challenges ===
+
+export type SmartChallengeType =
+  | 'consistency'
+  | 'comeback_game'
+  | 'genre_explorer'
+  | 'value_seeker'
+  | 'backlog_attack'
+  | 'completion_push'
+  | 'personal_best'
+  | 'deep_dive';
+
+export interface SmartWeeklyChallenge {
+  id: string;
+  type: SmartChallengeType;
+  icon: string;
+  title: string;
+  description: string;
+  insight: string;
+  targetValue: number;
+  currentValue: number;
+  unit: string;
+  isComplete: boolean;
+  difficulty: 'easy' | 'medium' | 'hard';
+  expiresAt: string;
+  weekKey: string;
+  relatedGameName?: string;
+  relatedGameId?: string;
+  relatedGenre?: string;
+}
+
+/** Generate 3 personalised weekly challenges driven entirely by the user's data. */
+export function getSmartWeeklyChallenges(games: Game[]): SmartWeeklyChallenge[] {
+  const now = new Date();
+  const dow = now.getDay(); // 0=Sun
+  const daysFromMonday = dow === 0 ? 6 : dow - 1;
+  const weekStart = new Date(now);
+  weekStart.setDate(now.getDate() - daysFromMonday);
+  weekStart.setHours(0, 0, 0, 0);
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekStart.getDate() + 6);
+  weekEnd.setHours(23, 59, 59, 999);
+  const weekKey = `${weekStart.getFullYear()}-${String(weekStart.getMonth() + 1).padStart(2, '0')}-${String(weekStart.getDate()).padStart(2, '0')}`;
+
+  const ownedGames = games.filter(g => g.status !== 'Wishlist');
+
+  // Collect this week's sessions
+  const thisWeekSessions: { gameId: string; date: string; hours: number }[] = [];
+  for (const game of ownedGames) {
+    for (const log of (game.playLogs || [])) {
+      const d = parseLocalDate(log.date);
+      if (d >= weekStart && d <= weekEnd) {
+        thisWeekSessions.push({ gameId: game.id, date: log.date, hours: log.hours });
+      }
+    }
+  }
+
+  const daysPlayedThisWeek = new Set(thisWeekSessions.map(s => s.date.substring(0, 10))).size;
+  const hoursThisWeek = thisWeekSessions.reduce((s, l) => s + l.hours, 0);
+  const gamesPlayedThisWeek = new Set(thisWeekSessions.map(s => s.gameId));
+
+  const candidates: SmartWeeklyChallenge[] = [];
+
+  // ── 1. Consistency ──────────────────────────────────────────────────────
+  const consistencyTarget = daysPlayedThisWeek >= 4 ? 5 : daysPlayedThisWeek >= 2 ? 4 : 3;
+  candidates.push({
+    id: `${weekKey}-consistency`,
+    type: 'consistency',
+    icon: '🔥',
+    title: 'Stay Consistent',
+    description: `Play on ${consistencyTarget} different days this week`,
+    insight: daysPlayedThisWeek > 0
+      ? `You've already logged sessions on ${daysPlayedThisWeek} day${daysPlayedThisWeek !== 1 ? 's' : ''} — keep it going`
+      : 'Small daily habits beat weekend marathons. Start the chain.',
+    targetValue: consistencyTarget,
+    currentValue: daysPlayedThisWeek,
+    unit: 'days',
+    isComplete: daysPlayedThisWeek >= consistencyTarget,
+    difficulty: consistencyTarget <= 3 ? 'easy' : consistencyTarget <= 4 ? 'medium' : 'hard',
+    expiresAt: weekEnd.toISOString(),
+    weekKey,
+  });
+
+  // ── 2. Ghost-Buster (return to neglected In Progress game) ─────────────
+  const ghosted = ownedGames
+    .filter(g => g.status === 'In Progress' && !gamesPlayedThisWeek.has(g.id))
+    .map(g => {
+      const last = (g.playLogs || []).reduce<string | null>((latest, l) =>
+        !latest || l.date > latest ? l.date : latest, null);
+      const daysSince = last
+        ? Math.floor((now.getTime() - parseLocalDate(last).getTime()) / 86400000)
+        : 9999;
+      return { game: g, daysSince };
+    })
+    .filter(x => x.daysSince >= 14)
+    .sort((a, b) => b.daysSince - a.daysSince);
+
+  if (ghosted.length > 0) {
+    const target = ghosted[0];
+    const playedTargetThisWeek = thisWeekSessions.some(s => s.gameId === target.game.id);
+    candidates.push({
+      id: `${weekKey}-comeback`,
+      type: 'comeback_game',
+      icon: '👻',
+      title: 'Ghost No More',
+      description: `Return to ${target.game.name} this week`,
+      insight: `You haven't played it in ${target.daysSince} days. It's waiting for you.`,
+      targetValue: 1,
+      currentValue: playedTargetThisWeek ? 1 : 0,
+      unit: 'session',
+      isComplete: playedTargetThisWeek,
+      difficulty: 'easy',
+      expiresAt: weekEnd.toISOString(),
+      weekKey,
+      relatedGameName: target.game.name,
+      relatedGameId: target.game.id,
+    });
+  }
+
+  // ── 3. Genre Explorer ───────────────────────────────────────────────────
+  const thirtyAgo = new Date(now);
+  thirtyAgo.setDate(thirtyAgo.getDate() - 30);
+  const recentGenres = new Set<string>();
+  for (const game of ownedGames) {
+    for (const log of (game.playLogs || [])) {
+      if (parseLocalDate(log.date) >= thirtyAgo && game.genre) recentGenres.add(game.genre);
+    }
+  }
+  const allGenres = new Set(ownedGames.filter(g => g.genre).map(g => g.genre as string));
+  const unexplored = [...allGenres].filter(g => !recentGenres.has(g));
+
+  if (unexplored.length > 0) {
+    const genre = unexplored[0];
+    const genreGames = ownedGames.filter(g => g.genre === genre && g.status !== 'Abandoned');
+    const playedGenreThisWeek = thisWeekSessions.some(s => genreGames.some(g => g.id === s.gameId));
+    candidates.push({
+      id: `${weekKey}-genre`,
+      type: 'genre_explorer',
+      icon: '🗺️',
+      title: 'Genre Explorer',
+      description: `Play a ${genre} game this week`,
+      insight: `You haven't touched ${genre} in over a month — ${genreGames.length} game${genreGames.length !== 1 ? 's' : ''} in that genre await`,
+      targetValue: 1,
+      currentValue: playedGenreThisWeek ? 1 : 0,
+      unit: 'session',
+      isComplete: playedGenreThisWeek,
+      difficulty: 'easy',
+      expiresAt: weekEnd.toISOString(),
+      weekKey,
+      relatedGenre: genre,
+    });
+  }
+
+  // ── 4. Get Your Money's Worth (expensive poor-value game) ───────────────
+  const poorValue = ownedGames
+    .filter(g => {
+      const h = getTotalHours(g);
+      return g.price >= 40 && (h === 0 || g.price / h > 5) && g.status !== 'Abandoned';
+    })
+    .sort((a, b) => {
+      const ha = getTotalHours(a); const hb = getTotalHours(b);
+      return (ha === 0 ? 999 : a.price / ha) - (hb === 0 ? 999 : b.price / hb);
+    });
+
+  if (poorValue.length > 0) {
+    const t = poorValue[poorValue.length - 1]; // worst value first
+    const hoursOnTarget = thisWeekSessions.filter(s => s.gameId === t.id).reduce((s, l) => s + l.hours, 0);
+    const cph = getTotalHours(t) > 0 ? (t.price / getTotalHours(t)).toFixed(2) : t.price.toFixed(2);
+    candidates.push({
+      id: `${weekKey}-value`,
+      type: 'value_seeker',
+      icon: '💰',
+      title: "Get Your Money's Worth",
+      description: `Log 2+ hours in ${t.name} this week`,
+      insight: `At $${cph}/hr, ${t.name} is underperforming. Two more hours makes a real dent.`,
+      targetValue: 2,
+      currentValue: Math.min(hoursOnTarget, 2),
+      unit: 'hours',
+      isComplete: hoursOnTarget >= 2,
+      difficulty: 'medium',
+      expiresAt: weekEnd.toISOString(),
+      weekKey,
+      relatedGameName: t.name,
+      relatedGameId: t.id,
+    });
+  }
+
+  // ── 5. Backlog Attack ───────────────────────────────────────────────────
+  const unplayedCount = ownedGames.filter(g => g.status === 'Not Started').length;
+  if (unplayedCount >= 4) {
+    const startedThisWeek = ownedGames.filter(g => {
+      if (!g.startDate) return false;
+      return parseLocalDate(g.startDate) >= weekStart;
+    }).length;
+    candidates.push({
+      id: `${weekKey}-backlog`,
+      type: 'backlog_attack',
+      icon: '📦',
+      title: 'Backlog Attack',
+      description: `Start one of your ${unplayedCount} unplayed games`,
+      insight: `Your backlog has ${unplayedCount} games collecting dust. Just start one.`,
+      targetValue: 1,
+      currentValue: Math.min(startedThisWeek, 1),
+      unit: 'game started',
+      isComplete: startedThisWeek >= 1,
+      difficulty: 'easy',
+      expiresAt: weekEnd.toISOString(),
+      weekKey,
+    });
+  }
+
+  // ── 6. Deep Dive (long single session) ─────────────────────────────────
+  const maxSingleSession = thisWeekSessions.reduce((m, s) => Math.max(m, s.hours), 0);
+  const allLogs = ownedGames.flatMap(g => g.playLogs || []);
+  const avgSession = allLogs.length > 0
+    ? allLogs.reduce((s, l) => s + l.hours, 0) / allLogs.length
+    : 0;
+  if (avgSession < 2.5) {
+    candidates.push({
+      id: `${weekKey}-deep-dive`,
+      type: 'deep_dive',
+      icon: '🎯',
+      title: 'Deep Dive',
+      description: 'Log a 3+ hour session this week',
+      insight: `Your sessions average ${avgSession.toFixed(1)}h. A longer block unlocks a different kind of immersion.`,
+      targetValue: 3,
+      currentValue: Math.min(maxSingleSession, 3),
+      unit: 'hour session',
+      isComplete: maxSingleSession >= 3,
+      difficulty: 'medium',
+      expiresAt: weekEnd.toISOString(),
+      weekKey,
+    });
+  }
+
+  // ── 7. Personal Best ────────────────────────────────────────────────────
+  const pastWeeklyHours: Record<string, number> = {};
+  for (const game of ownedGames) {
+    for (const log of (game.playLogs || [])) {
+      const d = parseLocalDate(log.date);
+      const wd = d.getDay();
+      const dfm = wd === 0 ? 6 : wd - 1;
+      const mon = new Date(d);
+      mon.setDate(d.getDate() - dfm);
+      const wk = `${mon.getFullYear()}-${String(mon.getMonth() + 1).padStart(2, '0')}-${String(mon.getDate()).padStart(2, '0')}`;
+      if (wk !== weekKey) pastWeeklyHours[wk] = (pastWeeklyHours[wk] || 0) + log.hours;
+    }
+  }
+  const bestWeek = Math.max(0, ...Object.values(pastWeeklyHours));
+  if (bestWeek >= 6) {
+    const pbTarget = parseFloat((bestWeek + 1).toFixed(1));
+    candidates.push({
+      id: `${weekKey}-pb`,
+      type: 'personal_best',
+      icon: '⚡',
+      title: 'Personal Best',
+      description: `Beat your weekly record of ${bestWeek.toFixed(1)}h`,
+      insight: `Your best week ever was ${bestWeek.toFixed(1)} hours. Can you top it?`,
+      targetValue: pbTarget,
+      currentValue: Math.min(hoursThisWeek, pbTarget),
+      unit: 'hours this week',
+      isComplete: hoursThisWeek >= pbTarget,
+      difficulty: 'hard',
+      expiresAt: weekEnd.toISOString(),
+      weekKey,
+    });
+  }
+
+  // ── Selection: pick exactly 3 with good variety ──────────────────────
+  const scored = candidates.map(c => {
+    let score = 0;
+    if (c.currentValue > 0 && !c.isComplete) score += 25; // in progress
+    if (c.type === 'comeback_game') score += 15;
+    if (c.type === 'genre_explorer') score += 10;
+    if (c.type === 'value_seeker') score += 8;
+    if (c.difficulty === 'medium') score += 5;
+    if (c.difficulty === 'easy') score += 3;
+    if (c.isComplete) score -= 20; // deprioritise already done
+    return { c, score };
+  }).sort((a, b) => b.score - a.score);
+
+  // Always include consistency; then pick 2 more from the rest
+  const result: SmartWeeklyChallenge[] = [];
+  const consistency = candidates.find(c => c.type === 'consistency');
+  if (consistency) result.push(consistency);
+
+  for (const { c } of scored) {
+    if (result.length >= 3) break;
+    if (!result.some(r => r.id === c.id)) result.push(c);
+  }
+
+  return result.slice(0, 3);
+}
