@@ -49,6 +49,7 @@ import { ErrorLogPanel, ErrorLogButton } from './components/ErrorLogPanel';
 import { WhatsNewModal } from './components/WhatsNewModal';
 import { GameReviewChat } from './components/GameReviewChat';
 import { GameCompareModal } from './components/GameCompareModal';
+import { SessionImpactCard } from './components/SessionImpactCard';
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist';
@@ -217,6 +218,7 @@ export default function GameAnalyticsPage() {
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showErrorLog, setShowErrorLog] = useState(false);
   const [showWhatsNew, setShowWhatsNew] = useState(false);
+  const [sessionImpact, setSessionImpact] = useState<{ game: Game; hoursLogged: number } | null>(null);
 
   // Week recap data for header strip
   const weekRecap = useMemo(() => {
@@ -380,8 +382,11 @@ export default function GameAnalyticsPage() {
       updates.startDate = dateStr;
     }
 
+    // Capture snapshot of game BEFORE updating so SessionImpactCard can compute before/after
+    const gameBefore: Game = { ...game, playLogs: [...existingLogs] };
+
     await updateGame(game.id, updates);
-    showToast(`Logged ${hours}h`, 'success');
+    setSessionImpact({ game: gameBefore, hoursLogged: hours });
   };
 
   const toggleCardViewMode = () => {
@@ -1559,6 +1564,15 @@ export default function GameAnalyticsPage() {
             }
           }}
           onClose={() => setReviewChatGame(null)}
+        />
+      )}
+
+      {/* Session Impact Card — appears after quick-logging a session */}
+      {sessionImpact && (
+        <SessionImpactCard
+          gameBefore={sessionImpact.game}
+          hoursLogged={sessionImpact.hoursLogged}
+          onDismiss={() => setSessionImpact(null)}
         />
       )}
     </div>

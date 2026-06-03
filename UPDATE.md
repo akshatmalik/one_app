@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-03 12:00 — Games Tab — Session Impact Card
+
+**Files**: app/apps/game-analytics/components/SessionImpactCard.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+After quick-logging a session, a spring-animated modal now pops up showing exactly what changed: before→after cost-per-hour (crossed out old number, large new one), percentage improvement, a highlighted "tier improved!" badge when the game crosses from Poor→Fair→Good→Excellent value, the per-game day streak count (with flame icon), and an animated progress bar toward the next value threshold. Auto-dismisses after 6 seconds with a visible countdown; tap backdrop or the dismiss button to close instantly.
+
+FOLLOW-UP: Could extend to the full PlayLogModal flow (not just quick-log), or add a "milestones unlocked" section that surfaces newly earned trophies triggered by the session.
+
 ## 2026-06-01 06:00 — Game Detail — Head-to-Head Game Comparison
 
 **Files**: app/apps/game-analytics/components/GameCompareModal.tsx, app/apps/game-analytics/components/GameBottomSheet.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json

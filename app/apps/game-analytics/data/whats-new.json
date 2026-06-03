@@ -1,6 +1,12 @@
 {
   "entries": [
     {
+      "date": "2026-06-03",
+      "area": "Session logging",
+      "title": "See exactly what your session did for your value",
+      "body": "Log a session with the quick +1h/+2h tap on any game card and a celebration card pops up instantly. It shows your new cost-per-hour (with the old one crossed out), a highlighted badge if you crossed into a better value tier (Poor → Fair → Good → Excellent), your current day streak for that game, and a progress bar showing how close you are to the next tier. Dismisses automatically in 6 seconds."
+    },
+    {
       "date": "2026-06-01",
       "area": "Game detail",
       "title": "Compare any two games head to head",
