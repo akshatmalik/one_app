@@ -49,6 +49,7 @@ import { ErrorLogPanel, ErrorLogButton } from './components/ErrorLogPanel';
 import { WhatsNewModal } from './components/WhatsNewModal';
 import { GameReviewChat } from './components/GameReviewChat';
 import { GameCompareModal } from './components/GameCompareModal';
+import { DailyChallengesPanel } from './components/DailyChallengesPanel';
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist';
@@ -1162,6 +1163,9 @@ export default function GameAnalyticsPage() {
           {/* Tab Content */}
           {tabMode === 'games' && (
             <>
+              {/* Daily Challenges — engagement loop for returning users */}
+              {games.length > 0 && <DailyChallengesPanel games={games} />}
+
               {games.length === 0 ? (
                 <div className="text-center py-16">
                   <Gamepad2 size={48} className="mx-auto mb-4 text-white/10" />

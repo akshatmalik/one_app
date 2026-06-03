@@ -5,6 +5,17 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-03 12:00 — Games Tab + Stats Tab — Daily Challenges & Goals
+
+**Files**: app/apps/game-analytics/components/DailyChallengesPanel.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/components/StatsView.tsx, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Added a Daily Challenges panel at the top of the Games tab that generates 3 data-driven challenges each day (Easy/Medium/Hard) — seeded by date for consistency and auto-detected from real game data without any manual tapping. Challenges include: logging a session, returning to a stalled game, starting an unplayed game, hitting a value milestone, or completing a weekly session streak. Each challenge auto-checks itself when the user takes the action in the app. Also wired up the existing GoalsPanel (which was fully built but never rendered anywhere) into the Stats tab after WeeklyDigest — users can now set and track gaming goals (complete X games, spend under $Y, hit Z hours, try N genres) with auto-calculated progress bars.
+
+FOLLOW-UP: Could add a challenge streak counter (consecutive days completing all 3) stored in localStorage, and surface a "🔥 N-day challenge streak" badge next to the panel header.
+
+---
+
 ## 2026-06-01 06:00 — Game Detail — Head-to-Head Game Comparison
 
 **Files**: app/apps/game-analytics/components/GameCompareModal.tsx, app/apps/game-analytics/components/GameBottomSheet.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json

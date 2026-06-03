@@ -1,6 +1,12 @@
 {
   "entries": [
     {
+      "date": "2026-06-03",
+      "area": "Games tab",
+      "title": "Daily Challenges — a new reason to open the app every day",
+      "body": "Three fresh challenges appear each morning at the top of your Games tab — Easy, Medium, and Hard — built from your actual library data. Things like 'log a session today', 'return to that stalled game', 'play 2 hours in one sitting', or 'get a game to Good value'. They check themselves off automatically when you do the action, and new ones arrive every 24 hours. The Stats tab now also shows your Gaming Goals panel, so you can set targets — complete 5 games, spend under $150, hit 100 hours — and track real progress."
+    },
+    {
       "date": "2026-06-01",
       "area": "Game detail",
       "title": "Compare any two games head to head",
