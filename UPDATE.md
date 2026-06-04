@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-04 12:00 — Games Tab — Smart Session Advisor
+
+**Files**: app/apps/game-analytics/lib/calculations.ts, app/apps/game-analytics/components/SessionAdvisorModal.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Added a mood-and-time-aware Smart Session Advisor accessible from the command palette (⋮ menu → Smart Pick). The 3-step flow asks how long you have (30min / 1h / 2h / 3h+) and what your vibe is (Chill / Story Mode / Sweaty / Explore / Surprise Me), then returns the top 3 game recommendations scored by time fit, genre-mood affinity, live chemistry grade, streak bonus, and recency penalty. Each pick card shows a banner image, chemistry badge, expected session length from your personal history, and a tailored one-line reason — tap "Let's Go" to immediately open the play-log flow for that game.
+
+FOLLOW-UP: Could surface the Smart Pick button more prominently (e.g. as a floating action button on the Games tab, or a persistent chip next to the Add Game button).
+
 ## 2026-06-01 06:00 — Game Detail — Head-to-Head Game Comparison
 
 **Files**: app/apps/game-analytics/components/GameCompareModal.tsx, app/apps/game-analytics/components/GameBottomSheet.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json

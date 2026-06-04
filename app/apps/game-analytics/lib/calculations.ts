@@ -14251,3 +14251,168 @@ export function getReviewNudges(games: Game[]): ReviewNudgeSummary {
     recentlyCompletedCount,
   };
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SMART SESSION ADVISOR
+// Mood-and-time-aware game picker: scores every eligible game against the
+// user's requested session length and current vibe, then returns the top 3.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type SessionTimeSlot = '30m' | '1h' | '2h' | '3h+';
+export type SessionMoodType = 'chill' | 'story' | 'competitive' | 'explore' | 'anything';
+
+export interface SessionAdvisorPick {
+  game: Game;
+  score: number;
+  reasoning: string;
+  keyFact: string;
+  expectedHours: number;
+  chemistryGrade: 'S' | 'A' | 'B' | 'C' | 'D';
+}
+
+const GENRE_MOOD_AFFINITY: Record<SessionMoodType, string[]> = {
+  chill:       ['casual', 'puzzle', 'simulation', 'farming', 'sport', 'cozy', 'platformer', 'rhythm', 'indie', 'card', 'board', 'strategy', 'management'],
+  story:       ['rpg', 'adventure', 'visual novel', 'narrative', 'jrpg', 'walking simulator', 'point-and-click', 'mystery', 'horror'],
+  competitive: ['action', 'fps', 'racing', 'sports', 'fighting', 'shooter', 'battle', 'moba', 'rts', 'battle royale'],
+  explore:     ['open world', 'rpg', 'adventure', 'metroidvania', 'sandbox', 'survival', 'exploration', 'action-adventure', 'sci-fi'],
+  anything:    [],
+};
+
+function getGenreMoodScore(genre: string | undefined, mood: SessionMoodType): number {
+  if (mood === 'anything') return 70;
+  if (!genre) return 55;
+  const g = genre.toLowerCase();
+  const good = GENRE_MOOD_AFFINITY[mood];
+  if (good.some(m => g.includes(m))) return 92;
+  const opposites: Partial<Record<SessionMoodType, SessionMoodType[]>> = {
+    chill:       ['competitive'],
+    story:       ['competitive'],
+    competitive: ['chill', 'story'],
+    explore:     ['competitive'],
+  };
+  const bad = (opposites[mood] || []).flatMap(bm => GENRE_MOOD_AFFINITY[bm]);
+  if (bad.some(m => g.includes(m))) return 18;
+  return 55;
+}
+
+function getAvgSessionHours(game: Game): number | null {
+  const logs = game.playLogs ?? [];
+  if (logs.length === 0) return null;
+  return logs.reduce((s, l) => s + l.hours, 0) / logs.length;
+}
+
+function estimateGenreSessionHours(game: Game): number {
+  const g = (game.genre || '').toLowerCase();
+  if (g.includes('rpg') || g.includes('adventure') || g.includes('open world')) return 2.5;
+  if (g.includes('action') || g.includes('shooter') || g.includes('sport') || g.includes('racing')) return 1.0;
+  if (g.includes('puzzle') || g.includes('casual') || g.includes('indie') || g.includes('simulation')) return 0.75;
+  return 1.5;
+}
+
+function getTimeScore(game: Game, slot: SessionTimeSlot): number {
+  const ranges: Record<SessionTimeSlot, [number, number]> = {
+    '30m': [0.2, 0.9],
+    '1h':  [0.7, 1.6],
+    '2h':  [1.4, 2.8],
+    '3h+': [2.4, 99],
+  };
+  const [lo, hi] = ranges[slot];
+  const avg = getAvgSessionHours(game) ?? estimateGenreSessionHours(game);
+  if (avg >= lo && avg <= hi) return 100;
+  const dist = avg < lo ? lo - avg : avg - hi;
+  return Math.max(5, 100 - dist * 45);
+}
+
+function buildAdvisorReasoning(game: Game, time: SessionTimeSlot, mood: SessionMoodType, grade: string): string {
+  const timeLabel: Record<SessionTimeSlot, string> = {
+    '30m': 'a quick burst', '1h': 'an hour', '2h': 'a two-hour block', '3h+': 'a long sit-down',
+  };
+  const moodVerb: Record<SessionMoodType, string> = {
+    chill: 'kick back', story: 'get lost in a story', competitive: 'go full sweat mode',
+    explore: 'wander somewhere new', anything: 'play',
+  };
+
+  const avgH = getAvgSessionHours(game);
+  const parts: string[] = [];
+
+  if (mood !== 'anything' && game.genre) {
+    parts.push(`${game.genre} is ideal when you want to ${moodVerb[mood]}`);
+  }
+  if (avgH !== null) {
+    parts.push(`your sessions here run ~${avgH.toFixed(1)}h — right for ${timeLabel[time]}`);
+  } else if (game.status === 'Not Started') {
+    parts.push(`no history, clean start — zero commitment needed for ${timeLabel[time]}`);
+  }
+  if (grade === 'S') parts.push('chemistry is literally perfect right now');
+  else if (grade === 'A') parts.push('chemistry is strong right now');
+
+  const line = parts[0] ?? `solid pick for ${timeLabel[time]}`;
+  return line[0].toUpperCase() + line.slice(1) + '.';
+}
+
+function buildAdvisorKeyFact(game: Game): string {
+  const hours = getTotalHours(game);
+  if (game.status === 'Not Started') {
+    if (game.datePurchased) {
+      const days = Math.floor((Date.now() - parseLocalDate(game.datePurchased).getTime()) / 86400000);
+      if (days > 60) return `Owned ${days} days, never started`;
+      if (days > 7)  return `Bought ${days} days ago — still untouched`;
+    }
+    return 'Brand new start waiting for you';
+  }
+  if (hours > 0 && game.price > 0 && !game.acquiredFree) {
+    const cph = game.price / hours;
+    return `${hours.toFixed(0)}h played · $${cph.toFixed(2)}/hr`;
+  }
+  if (hours > 0) return `${hours.toFixed(0)}h played so far`;
+  return '';
+}
+
+export function getSessionAdvisorPicks(
+  games: Game[],
+  time: SessionTimeSlot,
+  mood: SessionMoodType,
+): SessionAdvisorPick[] {
+  const eligible = games.filter(
+    g => g.status !== 'Wishlist' && g.status !== 'Completed' && g.status !== 'Abandoned',
+  );
+  if (eligible.length === 0) return [];
+
+  const today = new Date().toDateString();
+
+  const scored: SessionAdvisorPick[] = eligible.map(game => {
+    const timeScore  = getTimeScore(game, time);
+    const moodScore  = getGenreMoodScore(game.genre, mood);
+    const chem       = getGameChemistry(game, games);
+    const chemScore  = chem.score;
+
+    // Penalty for games already played today
+    const logs = (game.playLogs ?? []).sort((a, b) => b.date.localeCompare(a.date));
+    const playedToday = logs.length > 0 && parseLocalDate(logs[0].date).toDateString() === today;
+    const todayPenalty = playedToday ? -25 : 0;
+
+    // Bonus for active streak
+    const streakBonus = (() => {
+      if (logs.length < 2) return 0;
+      const yday = new Date(); yday.setDate(yday.getDate() - 1);
+      return logs.some(l => parseLocalDate(l.date).toDateString() === yday.toDateString()) ? 12 : 0;
+    })();
+
+    // Bonus for queued games
+    const queueBonus = game.queuePosition != null ? 6 : 0;
+
+    const raw = timeScore * 0.35 + moodScore * 0.30 + chemScore * 0.25 + todayPenalty + streakBonus + queueBonus;
+    const score = Math.round(Math.max(0, Math.min(100, raw)));
+
+    return {
+      game,
+      score,
+      reasoning:       buildAdvisorReasoning(game, time, mood, chem.grade),
+      keyFact:         buildAdvisorKeyFact(game),
+      expectedHours:   getAvgSessionHours(game) ?? estimateGenreSessionHours(game),
+      chemistryGrade:  chem.grade,
+    };
+  });
+
+  return scored.sort((a, b) => b.score - a.score).slice(0, 3);
+}

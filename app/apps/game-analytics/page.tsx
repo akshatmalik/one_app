@@ -49,6 +49,7 @@ import { ErrorLogPanel, ErrorLogButton } from './components/ErrorLogPanel';
 import { WhatsNewModal } from './components/WhatsNewModal';
 import { GameReviewChat } from './components/GameReviewChat';
 import { GameCompareModal } from './components/GameCompareModal';
+import { SessionAdvisorModal } from './components/SessionAdvisorModal';
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist';
@@ -191,6 +192,7 @@ export default function GameAnalyticsPage() {
   const [sortBy, setSortBy] = useState<'name' | 'price' | 'hours' | 'rating' | 'costPerHour' | 'dateAdded' | 'recentlyPlayed'>('recentlyPlayed');
   const [showRandomPicker, setShowRandomPicker] = useState(false);
   const [showBulkWishlist, setShowBulkWishlist] = useState(false);
+  const [showSessionAdvisor, setShowSessionAdvisor] = useState(false);
   const [showExport, setShowExport] = useState(false);
   const [wrappedYear, setWrappedYear] = useState<number | null>(null);
   const [showAwardsHub, setShowAwardsHub] = useState(false);
@@ -571,12 +573,20 @@ export default function GameAnalyticsPage() {
                     <div className="fixed inset-0 z-40" onClick={() => setShowCommandPalette(false)} />
                     <div className="absolute right-0 top-full mt-1 z-50 bg-[#1a1a2e] border border-white/10 rounded-xl shadow-2xl py-1 min-w-[180px]">
                       {games.filter(g => g.status !== 'Wishlist' && g.status !== 'Completed' && g.status !== 'Abandoned').length > 0 && (
-                        <button
-                          onClick={() => { setShowRandomPicker(true); setShowCommandPalette(false); }}
-                          className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white/70 hover:text-white hover:bg-white/5 transition-all"
-                        >
-                          <Sparkles size={14} /> Random Pick
-                        </button>
+                        <>
+                          <button
+                            onClick={() => { setShowSessionAdvisor(true); setShowCommandPalette(false); }}
+                            className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white/70 hover:text-white hover:bg-white/5 transition-all"
+                          >
+                            <Zap size={14} className="text-purple-400" /> Smart Pick
+                          </button>
+                          <button
+                            onClick={() => { setShowRandomPicker(true); setShowCommandPalette(false); }}
+                            className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white/70 hover:text-white hover:bg-white/5 transition-all"
+                          >
+                            <Sparkles size={14} /> Random Pick
+                          </button>
+                        </>
                       )}
                       <button
                         onClick={() => { setShowBulkWishlist(true); setShowCommandPalette(false); }}
@@ -1426,6 +1436,18 @@ export default function GameAnalyticsPage() {
         <RandomPicker
           games={games}
           onClose={() => setShowRandomPicker(false)}
+        />
+      )}
+
+      {/* Smart Session Advisor */}
+      {showSessionAdvisor && (
+        <SessionAdvisorModal
+          games={games}
+          onClose={() => setShowSessionAdvisor(false)}
+          onStartSession={(game) => {
+            const gwm = gamesWithMetrics.find(g => g.id === game.id);
+            if (gwm) handleOpenPlayLog(gwm);
+          }}
         />
       )}
 
