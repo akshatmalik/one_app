@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-04 12:00 — Games Tab — Live Session Timer
+
+**Files**: app/apps/game-analytics/hooks/useActiveSession.ts, app/apps/game-analytics/components/SessionTimerBanner.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Added a live session timer so you never have to guess how long you played. Tap the ▶ button on any In Progress game card to start a real-time timer; a floating banner at the bottom of the screen shows the live HH:MM countdown with pause/resume support. Hit "Stop & Log" and the exact session length is instantly written to your play history — no math, no estimating. Sessions survive page refreshes and are stored per-user in localStorage.
+
+FOLLOW-UP: Could show a "session impact" summary when stopping ($/hr change, milestones hit). Could also add a global "Start session" shortcut accessible from any tab.
+
 ## 2026-06-01 06:00 — Game Detail — Head-to-Head Game Comparison
 
 **Files**: app/apps/game-analytics/components/GameCompareModal.tsx, app/apps/game-analytics/components/GameBottomSheet.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json

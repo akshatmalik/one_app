@@ -1,6 +1,12 @@
 {
   "entries": [
     {
+      "date": "2026-06-04",
+      "area": "Games tab",
+      "title": "Live session timer — stop guessing how long you played",
+      "body": "Tap the ▶ button on any In Progress game card to start a real-time timer. A floating banner at the bottom counts up your session live. When you're done, hit Stop & Log and the exact duration is automatically saved to your play history — no math, no estimating, no forgetting."
+    },
+    {
       "date": "2026-06-01",
       "area": "Game detail",
       "title": "Compare any two games head to head",

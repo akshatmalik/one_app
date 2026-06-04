@@ -49,6 +49,8 @@ import { ErrorLogPanel, ErrorLogButton } from './components/ErrorLogPanel';
 import { WhatsNewModal } from './components/WhatsNewModal';
 import { GameReviewChat } from './components/GameReviewChat';
 import { GameCompareModal } from './components/GameCompareModal';
+import { SessionTimerBanner } from './components/SessionTimerBanner';
+import { useActiveSession } from './hooks/useActiveSession';
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist';
@@ -183,6 +185,21 @@ export default function GameAnalyticsPage() {
     reorderQueue,
     isInQueue,
   } = useGameQueue(games, updateGame);
+
+  // Live session timer
+  const {
+    activeSession,
+    elapsedSeconds,
+    elapsedHours,
+    isActive: sessionActive,
+    isPaused: sessionPaused,
+    startSession,
+    pauseSession,
+    resumeSession,
+    stopSession,
+    discardSession,
+  } = useActiveSession(user?.uid ?? null);
+
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingGame, setEditingGame] = useState<GameWithMetrics | null>(null);
   const [playLogGame, setPlayLogGame] = useState<GameWithMetrics | null>(null);
@@ -384,6 +401,25 @@ export default function GameAnalyticsPage() {
     showToast(`Logged ${hours}h`, 'success');
   };
 
+  const handleStartSession = useCallback((game: GameWithMetrics) => {
+    if (sessionActive && activeSession && activeSession.gameId !== game.id) {
+      showToast(`"${activeSession.gameName}" session already running — stop it first`, 'error');
+      return;
+    }
+    if (sessionActive && activeSession?.gameId === game.id) return; // already running
+    startSession(game.id, game.name, game.thumbnail);
+    showToast(`Timer started for ${game.name}`, 'success');
+  }, [sessionActive, activeSession, startSession, showToast]);
+
+  const handleStopSession = useCallback(async () => {
+    if (!activeSession) return;
+    const hours = stopSession();
+    const game = gamesWithMetrics.find(g => g.id === activeSession.gameId);
+    if (game) {
+      await handleQuickLog(game, hours);
+    }
+  }, [activeSession, stopSession, gamesWithMetrics, handleQuickLog]);
+
   const toggleCardViewMode = () => {
     const next = cardViewMode === 'poster' ? 'compact' : 'poster';
     setCardViewMode(next);
@@ -513,7 +549,7 @@ export default function GameAnalyticsPage() {
     });
 
   return (
-    <div className="min-h-[calc(100vh-60px)] flex flex-col">
+    <div className={clsx('min-h-[calc(100vh-60px)] flex flex-col', sessionActive && 'pb-20')}>
       {/* Header */}
       <div className="px-6 pt-8 pb-6 border-b border-white/5">
         <div className="max-w-6xl mx-auto">
@@ -1220,6 +1256,8 @@ export default function GameAnalyticsPage() {
                   eloByGameId={eloByGameId}
                   tierAssignments={allTimeTiers}
                   eloTierRanks={eloTierRanks}
+                  onStartSession={handleStartSession}
+                  activeSessionGameId={activeSession?.gameId}
                 />
               )}
             </>
@@ -1561,6 +1599,20 @@ export default function GameAnalyticsPage() {
           onClose={() => setReviewChatGame(null)}
         />
       )}
+
+      {/* Live Session Timer Banner — fixed bottom */}
+      {sessionActive && activeSession && (
+        <SessionTimerBanner
+          session={activeSession}
+          elapsedSeconds={elapsedSeconds}
+          elapsedHours={elapsedHours}
+          isPaused={sessionPaused}
+          onPause={pauseSession}
+          onResume={resumeSession}
+          onStop={handleStopSession}
+          onDiscard={discardSession}
+        />
+      )}
     </div>
   );
 }
@@ -1647,6 +1699,8 @@ interface GameCardListProps {
   eloByGameId?: Map<string, GameRanking>;
   tierAssignments?: TierAssignmentMap;
   eloTierRanks?: Map<string, { tier: GameTier; rank: number }>;
+  onStartSession?: (game: GameWithMetrics) => void;
+  activeSessionGameId?: string;
 }
 
 function GameCardList({
@@ -1667,6 +1721,8 @@ function GameCardList({
   eloByGameId = new Map(),
   tierAssignments = {},
   eloTierRanks = new Map(),
+  onStartSession,
+  activeSessionGameId,
 }: GameCardListProps) {
   const sections = useMemo(() => groupBySection ? getGameSections(allGames) : [], [allGames, groupBySection]);
 
@@ -1746,7 +1802,7 @@ function GameCardList({
             <div className="space-y-3">
               {nowPlayingGames.map(g => (
                 <div key={g.id} className={`game-card-animate${enteringCards.has(g.id) ? ' game-card-enter' : ''}`}>
-                  <NowPlayingCard game={g} allGames={allGames} onClick={() => onCardClick(g)} onQuickLog={(h) => onQuickLog(g, h)} sortBy={sortBy} tintColor={gameColors.get(g.id)} eloRanking={eloByGameId.get(g.id)} gameTier={tierAssignments[g.id] as GameTier | undefined} eloTierRank={eloTierRanks.get(g.id)} />
+                  <NowPlayingCard game={g} allGames={allGames} onClick={() => onCardClick(g)} onQuickLog={(h) => onQuickLog(g, h)} sortBy={sortBy} tintColor={gameColors.get(g.id)} eloRanking={eloByGameId.get(g.id)} gameTier={tierAssignments[g.id] as GameTier | undefined} eloTierRank={eloTierRanks.get(g.id)} onStartSession={onStartSession} activeSessionGameId={activeSessionGameId} />
                 </div>
               ))}
             </div>
@@ -1789,7 +1845,7 @@ function GameCardList({
           <div className="space-y-3">
             {nowPlayingGames.map(g => (
               <div key={g.id} className={`game-card-animate${enteringCards.has(g.id) ? ' game-card-enter' : ''}`}>
-                <NowPlayingCard game={g} allGames={allGames} onClick={() => onCardClick(g)} onQuickLog={(h) => onQuickLog(g, h)} eloRanking={eloByGameId.get(g.id)} gameTier={tierAssignments[g.id] as GameTier | undefined} />
+                <NowPlayingCard game={g} allGames={allGames} onClick={() => onCardClick(g)} onQuickLog={(h) => onQuickLog(g, h)} eloRanking={eloByGameId.get(g.id)} gameTier={tierAssignments[g.id] as GameTier | undefined} onStartSession={onStartSession} activeSessionGameId={activeSessionGameId} />
               </div>
             ))}
           </div>
@@ -1819,7 +1875,7 @@ function SectionIcon({ id }: { id: string }) {
 
 // --- Now Playing Card ---
 
-function NowPlayingCard({ game, allGames, onClick, onQuickLog, sortBy = 'hours', tintColor, eloRanking, gameTier, eloTierRank }: {
+function NowPlayingCard({ game, allGames, onClick, onQuickLog, sortBy = 'hours', tintColor, eloRanking, gameTier, eloTierRank, onStartSession, activeSessionGameId }: {
   game: GameWithMetrics;
   allGames: Game[];
   onClick: () => void;
@@ -1829,6 +1885,8 @@ function NowPlayingCard({ game, allGames, onClick, onQuickLog, sortBy = 'hours',
   eloRanking?: GameRanking;
   gameTier?: GameTier;
   eloTierRank?: { tier: GameTier; rank: number };
+  onStartSession?: (game: GameWithMetrics) => void;
+  activeSessionGameId?: string;
 }) {
   const [isFlipped, setIsFlipped] = useState(false);
   const [checkInHours, setCheckInHours] = useState(1);
@@ -2028,6 +2086,21 @@ function NowPlayingCard({ game, allGames, onClick, onQuickLog, sortBy = 'hours',
 
           {/* Check-in stepper */}
           <div className="px-3 pb-2.5 pt-1 flex items-center gap-1.5">
+            {/* Live timer start button */}
+            {onStartSession && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onStartSession(game); }}
+                className={clsx(
+                  'h-7 px-2 flex items-center gap-1 rounded-lg text-[10px] font-bold transition-all shrink-0 border',
+                  activeSessionGameId === game.id
+                    ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/20 animate-pulse'
+                    : 'bg-white/5 text-white/40 border-white/5 active:bg-white/10 hover:text-white/60'
+                )}
+                title={activeSessionGameId === game.id ? 'Timer running' : 'Start live timer'}
+              >
+                {activeSessionGameId === game.id ? '●' : '▶'}
+              </button>
+            )}
             <button
               onClick={(e) => { e.stopPropagation(); setCheckInHours(h => Math.max(0.5, Math.round((h - 0.5) * 10) / 10)); }}
               className="w-7 h-7 flex items-center justify-center rounded-lg bg-white/5 text-white/40 text-sm font-bold active:bg-white/10 transition-all shrink-0"
@@ -2051,7 +2124,7 @@ function NowPlayingCard({ game, allGames, onClick, onQuickLog, sortBy = 'hours',
                   : 'bg-blue-600/20 text-blue-300 active:bg-blue-600/40 border border-blue-500/10'
               )}
             >
-              {checkInDone ? <><Check size={11} /> Done!</> : <><Clock size={11} /> Check In</>}
+              {checkInDone ? <><Check size={11} /> Done!</> : <><Clock size={11} /> Log</>}
             </button>
           </div>
 
