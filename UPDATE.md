@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-04 12:00 — Games Tab — Daily Play Picks
+
+**Files**: app/apps/game-analytics/lib/calculations.ts, app/apps/game-analytics/components/DailyPlayPicks.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Added a "Today's Picks" section at the top of the Games tab — a date-seeded, collapsible row of up to 4 context-aware recommendations from the user's own library. Categories: Quick Win (in-progress games near the finish line, or cheap/short unstarted games), Deep Dive (the game you've invested the most hours in), Revisit (dormant in-progress games not touched in 14-90 days), and Weekend Special (big-genre epics surfaced only on Fri/Sat/Sun). Picks stay consistent throughout the day and rotate the next day — creating a daily check-in habit. Each card shows the thumbnail, reason text, and a one-tap Log Time button.
+
+FOLLOW-UP: Could add a "Not tonight" dismissal per-card (stored per date so it doesn't reappear), or show a mini confetti burst when the user logs time from a picks card.
+
 ## 2026-06-01 06:00 — Game Detail — Head-to-Head Game Comparison
 
 **Files**: app/apps/game-analytics/components/GameCompareModal.tsx, app/apps/game-analytics/components/GameBottomSheet.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json

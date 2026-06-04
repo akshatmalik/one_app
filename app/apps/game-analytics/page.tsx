@@ -49,6 +49,7 @@ import { ErrorLogPanel, ErrorLogButton } from './components/ErrorLogPanel';
 import { WhatsNewModal } from './components/WhatsNewModal';
 import { GameReviewChat } from './components/GameReviewChat';
 import { GameCompareModal } from './components/GameCompareModal';
+import { DailyPlayPicks } from './components/DailyPlayPicks';
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist';
@@ -1162,6 +1163,15 @@ export default function GameAnalyticsPage() {
           {/* Tab Content */}
           {tabMode === 'games' && (
             <>
+              {/* Daily Play Picks — context-aware recommendations from your library */}
+              {games.length > 0 && viewMode !== 'wishlist' && (
+                <DailyPlayPicks
+                  games={gamesWithMetrics}
+                  onLogTime={handleOpenPlayLog}
+                  onOpenGame={setDetailGame}
+                />
+              )}
+
               {games.length === 0 ? (
                 <div className="text-center py-16">
                   <Gamepad2 size={48} className="mx-auto mb-4 text-white/10" />

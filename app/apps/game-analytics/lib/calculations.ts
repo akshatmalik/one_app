@@ -14251,3 +14251,209 @@ export function getReviewNudges(games: Game[]): ReviewNudgeSummary {
     recentlyCompletedCount,
   };
 }
+
+// ========================================================================
+// DAILY PLAY PICKS: Context-aware daily recommendations from your own library
+// ========================================================================
+
+export type DailyPickCategory = 'quick-win' | 'deep-dive' | 'revisit' | 'weekend-special';
+
+export interface DailyPick {
+  game: Game;
+  category: DailyPickCategory;
+  categoryLabel: string;
+  categoryEmoji: string;
+  reason: string;
+  subtext: string;
+  accentColor: string;
+}
+
+export interface DailyPlayPicksData {
+  picks: DailyPick[];
+  dateKey: string;
+  isWeekend: boolean;
+}
+
+function _seededRng(seed: number): () => number {
+  let s = seed;
+  return () => {
+    s = Math.imul(s ^ (s >>> 16), 0x45d9f3b);
+    s = Math.imul(s ^ (s >>> 16), 0x45d9f3b);
+    s ^= s >>> 16;
+    return (s >>> 0) / 0x100000000;
+  };
+}
+
+function _seedFromDate(dateStr: string): number {
+  return dateStr.split('').reduce((acc, c, i) => ((acc * 31 + c.charCodeAt(0) + i) & 0x7fffffff) >>> 0, 7);
+}
+
+function _seededShuffle<T>(arr: T[], rng: () => number): T[] {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+const SHORT_GENRES = new Set(['Puzzle', 'Platformer', 'Indie', 'Visual Novel', 'Point-and-Click', 'Arcade']);
+const EPIC_GENRES = new Set(['RPG', 'JRPG', 'Souls-like', 'Strategy', 'Open World', 'Survival', 'MMO']);
+
+export function getDailyPlayPicks(games: Game[]): DailyPlayPicksData {
+  const today = new Date();
+  const dateKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  const dow = today.getDay(); // 0=Sun, 6=Sat
+  const isWeekend = dow === 0 || dow === 5 || dow === 6; // Fri/Sat/Sun
+  const rng = _seededRng(_seedFromDate(dateKey));
+
+  const owned = games.filter(g => g.status !== 'Wishlist' && g.status !== 'Abandoned');
+  if (owned.length === 0) return { picks: [], dateKey, isWeekend };
+
+  const now = Date.now();
+  const usedIds = new Set<string>();
+  const picks: DailyPick[] = [];
+
+  function daysSincePlayed(game: Game): number | null {
+    if (!game.playLogs || game.playLogs.length === 0) return null;
+    const last = parseLocalDate(game.playLogs[0].date);
+    return Math.floor((now - last.getTime()) / 86400000);
+  }
+
+  // ── QUICK WIN ────────────────────────────────────────────────────────────
+  // Prioritise: in-progress games close to done, then cheap / short not-started games
+  const qwPool = _seededShuffle(
+    owned.filter(g => {
+      if (g.status === 'In Progress') return getProgressPercent(g) >= 55;
+      if (g.status === 'Not Started') {
+        return g.price <= 20 || (g.genre ? SHORT_GENRES.has(g.genre) : false);
+      }
+      return false;
+    }).sort((a, b) => {
+      // In-progress closer to 100% goes first
+      const pa = a.status === 'In Progress' ? getProgressPercent(a) : 0;
+      const pb = b.status === 'In Progress' ? getProgressPercent(b) : 0;
+      return pb - pa;
+    }),
+    rng
+  );
+
+  const qw = qwPool[0];
+  if (qw) {
+    usedIds.add(qw.id);
+    const progress = getProgressPercent(qw);
+    const h = getTotalHours(qw).toFixed(0);
+    picks.push({
+      game: qw,
+      category: 'quick-win',
+      categoryLabel: 'Quick Win',
+      categoryEmoji: '⚡',
+      reason: qw.status === 'In Progress'
+        ? progress >= 80 ? `${progress}% done — the finish line is right there`
+          : `Halfway through — push past the midpoint`
+        : qw.price <= 5 ? 'Short game, easy to finish in one go'
+          : `Perfect for clearing off the backlog`,
+      subtext: qw.status === 'In Progress' ? `${h}h logged · ${progress}% complete` : qw.price > 0 ? `$${qw.price} · not started` : 'Free · not started',
+      accentColor: '#10b981',
+    });
+  }
+
+  // ── DEEP DIVE ────────────────────────────────────────────────────────────
+  // Most invested in-progress game (most hours sunk)
+  const ddPool = _seededShuffle(
+    owned.filter(g =>
+      g.status === 'In Progress' &&
+      getTotalHours(g) >= 3 &&
+      !usedIds.has(g.id)
+    ).sort((a, b) => getTotalHours(b) - getTotalHours(a)),
+    rng
+  );
+
+  const dd = ddPool[0];
+  if (dd) {
+    usedIds.add(dd.id);
+    const h = getTotalHours(dd);
+    const days = daysSincePlayed(dd);
+    const prob = getCompletionProbability(dd, games);
+
+    let reason: string;
+    if (days !== null && days === 0) {
+      reason = `You already played this today — keep the momentum`;
+    } else if (days !== null && days <= 2) {
+      reason = `Your current obsession — ${h.toFixed(0)}h invested`;
+    } else if (days !== null && days > 14) {
+      reason = `${h.toFixed(0)}h invested and ${days} days away — time to return`;
+    } else {
+      reason = `${h.toFixed(0)}h in with a ${prob.probability}% completion chance`;
+    }
+
+    picks.push({
+      game: dd,
+      category: 'deep-dive',
+      categoryLabel: 'Deep Dive',
+      categoryEmoji: '🎯',
+      reason,
+      subtext: `${h.toFixed(0)}h logged${days !== null ? ` · ${days === 0 ? 'played today' : `${days}d ago`}` : ''}`,
+      accentColor: '#6366f1',
+    });
+  }
+
+  // ── REVISIT ──────────────────────────────────────────────────────────────
+  // In-progress game dormant for 14-90 days
+  const rvPool = _seededShuffle(
+    owned.filter(g => {
+      if (usedIds.has(g.id) || g.status !== 'In Progress') return false;
+      const days = daysSincePlayed(g);
+      return days !== null && days >= 14 && days <= 90;
+    }).sort((a, b) => getTotalHours(b) - getTotalHours(a)),
+    rng
+  );
+
+  const rv = rvPool[0];
+  if (rv) {
+    usedIds.add(rv.id);
+    const days = daysSincePlayed(rv)!;
+    const h = getTotalHours(rv);
+    picks.push({
+      game: rv,
+      category: 'revisit',
+      categoryLabel: 'Revisit',
+      categoryEmoji: '🔄',
+      reason: days > 30
+        ? `It's been ${days} days — don't let this one collect dust`
+        : `${days} days away — perfect time to pick it back up`,
+      subtext: `${h.toFixed(0)}h logged${rv.genre ? ` · ${rv.genre}` : ''}`,
+      accentColor: '#f59e0b',
+    });
+  }
+
+  // ── WEEKEND SPECIAL (Fri / Sat / Sun) ────────────────────────────────────
+  // A big epic game to sink into over the weekend
+  if (isWeekend && picks.length < 3) {
+    const wsPool = _seededShuffle(
+      owned.filter(g => {
+        if (usedIds.has(g.id)) return false;
+        if (g.status === 'Completed') return false;
+        const isEpicGenre = g.genre ? EPIC_GENRES.has(g.genre) : false;
+        const isExpensive = g.price >= 40;
+        return (isEpicGenre || isExpensive) && (g.status === 'Not Started' || getTotalHours(g) < 10);
+      }),
+      rng
+    );
+
+    const ws = wsPool[0];
+    if (ws) {
+      picks.push({
+        game: ws,
+        category: 'weekend-special',
+        categoryLabel: 'Weekend Special',
+        categoryEmoji: '🌟',
+        reason: `A big game for a long session — perfect for the weekend`,
+        subtext: ws.genre || 'Epic game',
+        accentColor: '#ec4899',
+      });
+    }
+  }
+
+  return { picks, dateKey, isWeekend };
+}

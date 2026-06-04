@@ -1,6 +1,12 @@
 {
   "entries": [
     {
+      "date": "2026-06-04",
+      "area": "Games tab",
+      "title": "Today's Picks — smart recommendations from your own library",
+      "body": "A new 'Today's Picks' row now appears at the top of your Games tab every day. It surfaces up to four context-aware suggestions: a Quick Win (a game you're close to finishing, or a short easy one), a Deep Dive (your most-invested in-progress game), a Revisit (something you haven't touched in a few weeks), and a Weekend Special on Fridays and weekends. Picks refresh daily so there's always a fresh nudge when you open the app."
+    },
+    {
       "date": "2026-06-01",
       "area": "Game detail",
       "title": "Compare any two games head to head",
