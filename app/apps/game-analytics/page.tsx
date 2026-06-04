@@ -49,6 +49,8 @@ import { ErrorLogPanel, ErrorLogButton } from './components/ErrorLogPanel';
 import { WhatsNewModal } from './components/WhatsNewModal';
 import { GameReviewChat } from './components/GameReviewChat';
 import { GameCompareModal } from './components/GameCompareModal';
+import { useActiveSession } from './hooks/useActiveSession';
+import { ActiveSessionWidget } from './components/ActiveSessionWidget';
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist';
@@ -218,6 +220,9 @@ export default function GameAnalyticsPage() {
   const [showErrorLog, setShowErrorLog] = useState(false);
   const [showWhatsNew, setShowWhatsNew] = useState(false);
 
+  // Live session timer
+  const { activeSession, elapsedSeconds, startSession, stopSession, abandonSession } = useActiveSession();
+
   // Week recap data for header strip
   const weekRecap = useMemo(() => {
     if (games.length === 0) return null;
@@ -382,6 +387,45 @@ export default function GameAnalyticsPage() {
 
     await updateGame(game.id, updates);
     showToast(`Logged ${hours}h`, 'success');
+  };
+
+  const handleStartSession = (game: GameWithMetrics) => {
+    if (activeSession && activeSession.gameId !== game.id) {
+      // Another game is active — abandon it silently and start the new one
+      abandonSession();
+    }
+    startSession(game);
+    setDetailGame(null); // close bottom sheet so user can switch to their game
+    showToast(`Session started — timer is running`, 'success');
+  };
+
+  const handleStopSession = async (notes: string) => {
+    const hours = stopSession();
+    if (hours === null || !activeSession) return;
+    const game = games.find((g) => g.id === activeSession.gameId);
+    if (!game) return;
+
+    const now = new Date();
+    const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const roundedHours = Math.round(hours * 10) / 10;
+
+    const newLog: PlayLog = {
+      id: `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+      date: dateStr,
+      hours: roundedHours,
+      notes: notes || undefined,
+    };
+
+    const existingLogs = game.playLogs || [];
+    const updates: Partial<Game> = { playLogs: [...existingLogs, newLog] };
+
+    if (game.status === 'Not Started' && existingLogs.length === 0) {
+      updates.status = 'In Progress';
+      updates.startDate = dateStr;
+    }
+
+    await updateGame(game.id, updates);
+    showToast(`Logged ${roundedHours}h for ${game.name}`, 'success');
   };
 
   const toggleCardViewMode = () => {
@@ -935,7 +979,7 @@ export default function GameAnalyticsPage() {
       )}
 
       {/* Main Content */}
-      <div className="flex-1 px-6 py-6">
+      <div className={clsx('flex-1 px-6 py-6', activeSession && 'pb-24')}>
         <div className="max-w-6xl mx-auto">
           {/* On This Day */}
           {games.length > 0 && <OnThisDayCard games={games} />}
@@ -1533,6 +1577,8 @@ export default function GameAnalyticsPage() {
             setCompareGame(detailGame);
             setDetailGame(null);
           }}
+          onStartSession={() => handleStartSession(detailGame)}
+          isActiveSession={activeSession?.gameId === detailGame.id}
           isInQueue={isInQueue(detailGame.id)}
         />
       )}
@@ -1559,6 +1605,16 @@ export default function GameAnalyticsPage() {
             }
           }}
           onClose={() => setReviewChatGame(null)}
+        />
+      )}
+
+      {/* Live Session Widget — always-on bottom bar when a session is running */}
+      {activeSession && (
+        <ActiveSessionWidget
+          session={activeSession}
+          elapsedSeconds={elapsedSeconds}
+          onStop={handleStopSession}
+          onAbandon={abandonSession}
         />
       )}
     </div>

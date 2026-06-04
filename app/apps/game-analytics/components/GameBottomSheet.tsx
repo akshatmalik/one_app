@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useRef, useEffect } from 'react';
-import { Clock, ChevronDown, ChevronUp, ListPlus, Check, Heart, Edit3, Trash2, Trophy, Sparkles, Zap, MessageCircle, ArrowLeftRight } from 'lucide-react';
+import { Clock, ChevronDown, ChevronUp, ListPlus, Check, Heart, Edit3, Trash2, Trophy, Sparkles, Zap, MessageCircle, ArrowLeftRight, Play } from 'lucide-react';
 import { Game } from '../lib/types';
 import { GameWithMetrics } from '../hooks/useAnalytics';
 import {
@@ -39,6 +39,8 @@ interface GameBottomSheetProps {
   onToggleSpecial: () => void;
   onOpenReviewChat: () => void;
   onCompare: () => void;
+  onStartSession?: () => void;
+  isActiveSession?: boolean;
   isInQueue: boolean;
 }
 
@@ -64,6 +66,8 @@ export function GameBottomSheet({
   onToggleSpecial,
   onOpenReviewChat,
   onCompare,
+  onStartSession,
+  isActiveSession,
   isInQueue,
 }: GameBottomSheetProps) {
   const [showAwards, setShowAwards] = useState(false);
@@ -489,6 +493,30 @@ export function GameBottomSheet({
                     );
                   })}
               </div>
+              )}
+            </div>
+          )}
+
+          {/* Live Session Tracker */}
+          {onStartSession && game.status !== 'Completed' && game.status !== 'Wishlist' && game.status !== 'Abandoned' && (
+            <div className="px-5 pb-3">
+              {isActiveSession ? (
+                <div className="flex items-center gap-2.5 px-4 py-3 bg-emerald-900/20 border border-emerald-500/20 rounded-xl">
+                  <span className="relative flex h-2.5 w-2.5 shrink-0">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
+                    <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-400" />
+                  </span>
+                  <span className="text-sm font-semibold text-emerald-400">Session in progress</span>
+                  <span className="ml-auto text-xs text-emerald-400/50">see widget ↓</span>
+                </div>
+              ) : (
+                <button
+                  onClick={onStartSession}
+                  className="w-full flex items-center justify-center gap-2 py-3 bg-emerald-600/12 hover:bg-emerald-600/22 active:bg-emerald-600/30 border border-emerald-500/18 text-emerald-400 rounded-xl text-sm font-semibold transition-all"
+                >
+                  <Play size={14} fill="currentColor" />
+                  Start Live Session
+                </button>
               )}
             </div>
           )}

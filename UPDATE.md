@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-04 12:00 — Games Tab — Live Session Timer
+
+**Files**: app/apps/game-analytics/hooks/useActiveSession.ts, app/apps/game-analytics/components/ActiveSessionWidget.tsx, app/apps/game-analytics/components/GameBottomSheet.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Added a real-time session timer that starts when you tap "Start Live Session" from any game's detail sheet. A persistent floating widget appears at the bottom of the screen with a pulsing green live indicator, a HH:MM:SS counter that persists across page refreshes (stored in localStorage), and a quick-stop flow where you can add an optional note before the session is auto-logged. Switching to another game's sheet mid-session abandons the previous one and starts fresh. This makes the app useful while gaming, not just after.
+
+FOLLOW-UP: Could add "Start Session" shortcut button directly on the NowPlayingCard and PosterCard so users don't have to open the detail sheet first.
+
 ## 2026-06-01 06:00 — Game Detail — Head-to-Head Game Comparison
 
 **Files**: app/apps/game-analytics/components/GameCompareModal.tsx, app/apps/game-analytics/components/GameBottomSheet.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json

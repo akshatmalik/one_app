@@ -1,6 +1,12 @@
 {
   "entries": [
     {
+      "date": "2026-06-04",
+      "area": "Games tab",
+      "title": "Start a live timer the moment you sit down to play",
+      "body": "Open any game's detail sheet and tap \"Start Live Session\" — a glowing widget appears at the bottom of the screen with a real-time HH:MM:SS counter. When you're done, tap Stop, add an optional note, and your exact playtime is logged automatically. The timer even survives page refreshes, so you never lose your session."
+    },
+    {
       "date": "2026-06-01",
       "area": "Game detail",
       "title": "Compare any two games head to head",
