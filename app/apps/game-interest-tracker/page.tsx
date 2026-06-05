@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { RefreshCw, Settings, Wifi, WifiOff, TrendingUp, AlertCircle } from 'lucide-react';
+import { RefreshCw, Settings, Wifi, WifiOff, TrendingUp } from 'lucide-react';
 import { useTracker } from './hooks/useTracker';
 import { TRACKED_GAMES } from './lib/games';
 import { ScoreChart } from './components/ScoreChart';
@@ -17,7 +17,6 @@ export default function GameInterestTrackerPage() {
     scores,
     fetchState,
     fetchError,
-    hasYouTubeKey,
     mounted,
     refreshAutoSignals,
     updateManualSignal,
@@ -69,18 +68,6 @@ export default function GameInterestTrackerPage() {
             </button>
           </div>
         </div>
-
-        {/* No YouTube key warning */}
-        {!hasYouTubeKey && (
-          <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl px-4 py-3 flex items-start gap-3">
-            <AlertCircle className="w-4 h-4 text-amber-400 mt-0.5 flex-shrink-0" />
-            <p className="text-amber-300 text-sm">
-              <span className="font-medium">NEXT_PUBLIC_YOUTUBE_API_KEY</span> is not set.
-              Add it in your Vercel dashboard → Settings → Environment Variables, then redeploy.
-              Wikipedia views still auto-fetch.
-            </p>
-          </div>
-        )}
 
         {/* Fetch error */}
         {fetchState === 'error' && fetchError && (

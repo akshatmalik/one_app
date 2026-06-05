@@ -11,7 +11,7 @@ import { computeScores, CompositeScore } from '../lib/calculations';
 export type FetchState = 'idle' | 'fetching' | 'done' | 'error';
 
 declare const process: { env: Record<string, string | undefined> };
-const YT_API_KEY = process.env.NEXT_PUBLIC_YOUTUBE_API_KEY ?? '';
+const YT_API_KEY = process.env.NEXT_PUBLIC_YOUTUBE_API_KEY ?? 'AIzaSyCvt89TDykckrfALEej2q0Npc_YhWPpvN8';
 
 export function useTracker() {
   const [signals, setSignals] = useState<GameSignals[]>([]);
