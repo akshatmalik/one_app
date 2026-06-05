@@ -1,6 +1,12 @@
 {
   "entries": [
     {
+      "date": "2026-06-05",
+      "area": "Buy Queue",
+      "title": "Deal Radar: automatic price alerts for your watch list",
+      "body": "The Buy Queue now silently monitors current PC/Steam prices for every game you're tracking. When a game drops to your target price, the banner turns green and a pulsing dot appears on the tab icon so you never miss a sale. Prices update automatically at launch (cached for 6 hours) and you can refresh on demand. Each game card also shows the live PC price alongside your manually tracked price."
+    },
+    {
       "date": "2026-06-01",
       "area": "Game detail",
       "title": "Compare any two games head to head",

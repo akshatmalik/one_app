@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   Plus, ShoppingCart, Calendar, PackageCheck,
   Settings, Sparkles, Percent, ChevronDown, ChevronUp,
@@ -18,8 +18,10 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { Game, BudgetSettings, PurchaseQueueEntry } from '../lib/types';
 import { usePurchaseQueue } from '../hooks/usePurchaseQueue';
+import { useDealWatch } from '../hooks/useDealWatch';
 import { AddToBuyQueueModal } from './AddToBuyQueueModal';
 import { BuyQueueCard } from './BuyQueueCard';
+import { DealRadar } from './DealRadar';
 import {
   getQueueImpactSnapshot,
   getQueueRunningTally,
@@ -42,6 +44,8 @@ interface Props {
   onGoToBudget: () => void;
   onAddGameToLibrary?: (data: { name: string; price: number; platform?: string; genre?: string; thumbnail?: string; datePurchased?: string; status: string }) => Promise<string | undefined>;
   onAddToPlayQueue?: (gameId: string) => Promise<void>;
+  /** Called whenever live deal detection status changes — used to show a notification dot on the tab */
+  onDealsDetected?: (hasDeals: boolean) => void;
 }
 
 /** Sortable wrapper so no-date committed cards can be drag-reordered. */
@@ -64,7 +68,7 @@ function formatMoney(n: number): string {
   return `$${n.toFixed(0)}`;
 }
 
-export function BuyQueueTab({ userId, wishlistGames, allGames, budgets, yearSpent, onGoToBudget, onAddGameToLibrary, onAddToPlayQueue }: Props) {
+export function BuyQueueTab({ userId, wishlistGames, allGames, budgets, yearSpent, onGoToBudget, onAddGameToLibrary, onAddToPlayQueue, onDealsDetected }: Props) {
   const {
     entries,
     activeEntries,
@@ -82,6 +86,14 @@ export function BuyQueueTab({ userId, wishlistGames, allGames, budgets, yearSpen
     setIntent,
     reorderEntries,
   } = usePurchaseQueue(userId);
+
+  // Live deal radar — auto-fetches CheapShark prices for tracked entries
+  const { deals: liveDeals, loading: dealsLoading, lastChecked: dealsLastChecked, hasActiveDeals, activeDealsCount, refresh: refreshDeals } = useDealWatch(entries, userId);
+
+  // Notify parent when deal status changes (for tab notification dot)
+  useEffect(() => {
+    onDealsDetected?.(hasActiveDeals);
+  }, [hasActiveDeals, onDealsDetected]);
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [showStats, setShowStats] = useState(false);
@@ -293,6 +305,7 @@ export function BuyQueueTab({ userId, wishlistGames, allGames, budgets, yearSpen
   // Renders a committed card with its budget-left chip + the cutoff divider.
   const renderCommittedCard = (entry: PurchaseQueueEntry, dragHandleProps?: React.HTMLAttributes<HTMLButtonElement>) => {
     const row = tallyMap.get(entry.id);
+    const liveDeal = liveDeals[entry.gameName] ?? null;
     return (
       <div key={entry.id} className="space-y-2">
         {yearBudget != null && tally.cutoffId === entry.id && (
@@ -311,6 +324,7 @@ export function BuyQueueTab({ userId, wishlistGames, allGames, budgets, yearSpen
           onSetIntent={(intent) => setIntent(entry.id, intent)}
           budgetLeft={row ? { remaining: row.remaining, isOver: row.isOver } : null}
           dragHandleProps={dragHandleProps}
+          liveDeal={liveDeal}
         />
       </div>
     );
@@ -400,7 +414,20 @@ export function BuyQueueTab({ userId, wishlistGames, allGames, budgets, yearSpen
 
   return (
     <div className="space-y-5">
-      {/* Deal Alert Banner */}
+      {/* Live Deal Radar — auto-checks CheapShark prices */}
+      {entries.filter(e => !e.purchased).length > 0 && (
+        <DealRadar
+          entries={entries.filter(e => !e.purchased)}
+          deals={liveDeals}
+          loading={dealsLoading}
+          lastChecked={dealsLastChecked}
+          hasActiveDeals={hasActiveDeals}
+          activeDealsCount={activeDealsCount}
+          onRefresh={refreshDeals}
+        />
+      )}
+
+      {/* Deal Alert Banner (manually-tracked prices) */}
       {dealsAtTarget.length > 0 && (
         <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/[0.08] p-3 buy-queue-deal-alert">
           <div className="flex items-center gap-2">

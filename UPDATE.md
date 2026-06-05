@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-05 — Buy Queue — Live Deal Radar with CheapShark price alerts
+
+**Files**: app/apps/game-analytics/hooks/useDealWatch.ts, app/apps/game-analytics/components/DealRadar.tsx, app/apps/game-analytics/components/BuyQueueTab.tsx, app/apps/game-analytics/components/BuyQueueCard.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Added an automatic Deal Radar to the Buy Queue tab. A new `useDealWatch` hook silently fetches current PC/Steam prices from CheapShark for all tracked (committed + maybe, not-yet-purchased) games at app load, with a 6-hour localStorage cache and a 320ms rate-limit between requests to be polite to the free API. The `DealRadar` banner renders at the top of the Buy Queue tab: when one or more games are at or below their target price it turns emerald green with a pulsing Zap icon and lists each deal (name, thumbnail, savings %, current price vs target, savings amount). Non-deal prices appear in a collapsible "Current PC prices" section. A live "PC $X.XX" chip was added to each `BuyQueueCard` price row, highlighted emerald when the game is at target. When deals are found while the user is on another tab, an emerald pulsing dot appears on the Buy Queue tab icon so they notice without having to check manually.
+
+FOLLOW-UP: Could send a browser Notification API alert for active deals (needs permission grant). Could also track deal expiry — CheapShark sometimes returns sale data with end dates.
+
 ## 2026-06-01 06:00 — Game Detail — Head-to-Head Game Comparison
 
 **Files**: app/apps/game-analytics/components/GameCompareModal.tsx, app/apps/game-analytics/components/GameBottomSheet.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json

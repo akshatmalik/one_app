@@ -10,6 +10,7 @@ import { PurchaseQueueEntry, PurchaseIntent } from '../lib/types';
 import { Game } from '../lib/types';
 import { getStoreUrl, getPriceFreshness } from '../lib/calculations';
 import { fetchCheapestPrice } from '../lib/price-fetch';
+import { LiveDealInfo } from '../hooks/useDealWatch';
 import { PriceSparkline } from './PriceSparkline';
 import clsx from 'clsx';
 
@@ -24,6 +25,7 @@ interface Props {
   /** Running budget remaining after this card; `ghost` projects a maybe without counting it. */
   budgetLeft?: { remaining: number | null; isOver: boolean; ghost?: boolean } | null;
   dragHandleProps?: React.HTMLAttributes<HTMLButtonElement>;
+  liveDeal?: LiveDealInfo | null;
 }
 
 const INTENT_OPTIONS: { value: PurchaseIntent; label: string; icon: typeof ShoppingCart; active: string }[] = [
@@ -64,7 +66,7 @@ function getSavings(entry: PurchaseQueueEntry): string | null {
   return `${pct}% off`;
 }
 
-export function BuyQueueCard({ entry, onUpdate, onMarkPurchased, onDelete, onSetIntent, budgetLeft, dragHandleProps }: Props) {
+export function BuyQueueCard({ entry, onUpdate, onMarkPurchased, onDelete, onSetIntent, budgetLeft, dragHandleProps, liveDeal }: Props) {
   const intent: PurchaseIntent = entry.intent ?? (entry.isMaybe ? 'maybe' : 'committed');
   const isMaybe = intent === 'maybe';
   const isDeferred = intent === 'deferred';
@@ -83,7 +85,7 @@ export function BuyQueueCard({ entry, onUpdate, onMarkPurchased, onDelete, onSet
   const days = entry.releaseDate ? daysUntil(entry.releaseDate) : null;
   const priceStatus = getPriceStatus(entry);
   const savings = getSavings(entry);
-  const isAtTarget = priceStatus?.glow ?? false;
+  const isAtTarget = (priceStatus?.glow ?? false) || (liveDeal?.isAtTarget ?? false);
 
   const storeLinks = getStoreUrl(entry.gameName, entry.platform);
 
@@ -354,6 +356,17 @@ export function BuyQueueCard({ entry, onUpdate, onMarkPurchased, onDelete, onSet
           </div>
           {savings && (
             <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400">{savings}</span>
+          )}
+          {liveDeal && (
+            <span className={clsx(
+              'flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded',
+              liveDeal.isAtTarget
+                ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20'
+                : 'bg-white/5 text-white/35',
+            )}>
+              <span className={clsx('w-1 h-1 rounded-full flex-shrink-0', liveDeal.isAtTarget ? 'bg-emerald-400' : 'bg-white/20')} />
+              PC ${liveDeal.price}
+            </span>
           )}
         </div>
 

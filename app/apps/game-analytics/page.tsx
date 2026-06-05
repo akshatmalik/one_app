@@ -217,6 +217,7 @@ export default function GameAnalyticsPage() {
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showErrorLog, setShowErrorLog] = useState(false);
   const [showWhatsNew, setShowWhatsNew] = useState(false);
+  const [buyQueueHasDeals, setBuyQueueHasDeals] = useState(false);
 
   // Week recap data for header strip
   const weekRecap = useMemo(() => {
@@ -998,13 +999,16 @@ export default function GameAnalyticsPage() {
                     onClick={() => setTabMode(tab.id)}
                     title={tab.title}
                     className={clsx(
-                      'flex-1 flex items-center justify-center py-2.5 rounded-lg transition-all',
+                      'flex-1 relative flex items-center justify-center py-2.5 rounded-lg transition-all',
                       tabMode === tab.id
                         ? 'bg-white/10 text-white'
                         : 'bg-white/[0.02] text-white/40 hover:text-white/60'
                     )}
                   >
                     {tab.icon}
+                    {tab.id === 'buy-queue' && buyQueueHasDeals && tabMode !== 'buy-queue' && (
+                      <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                    )}
                   </button>
                 ))}
                 <button onClick={() => setShowExport(true)} title="Export data"
@@ -1355,6 +1359,7 @@ export default function GameAnalyticsPage() {
               budgets={budgets}
               yearSpent={currentYearSpent}
               onGoToBudget={() => setTabMode('stats')}
+              onDealsDetected={setBuyQueueHasDeals}
               onAddGameToLibrary={async (data) => {
                 try {
                   const existingWishlistGame = games.find(
