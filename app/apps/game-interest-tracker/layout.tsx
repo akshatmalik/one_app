@@ -1,4 +1,5 @@
-import { Metadata, ReactNode } from 'next';
+import { Metadata } from 'next';
+import { ReactNode } from 'react';
 
 export const metadata: Metadata = {
   title: 'Game Interest Tracker',
