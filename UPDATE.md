@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-05 — Chronicle Tab — Gaming Journal with Story, Goals, Activity & Genres
+
+**Files**: app/apps/game-analytics/components/ChronicleTab.tsx (new), app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Added a new primary Chronicle tab (📖 icon, 5th in Row 1) that brings together four previously-orphaned but fully-built components into one cohesive gaming journal experience: "Story So Far" (AI-narrated play chronicle with time-range picker), "Goals" (set completion/spending/hours/genre objectives and track live progress), "Activity" (chronological news-feed of every session, purchase, completion, and milestone), and "Genres" (stacked area chart showing how your taste has evolved month by month). All four components were already complete in the codebase but had no entry point in the UI.
+
+FOLLOW-UP: Could add a notification dot to the Chronicle tab when a goal nears its deadline, or persist the last-visited Chronicle section in localStorage.
+
 ## 2026-06-01 06:00 — Game Detail — Head-to-Head Game Comparison
 
 **Files**: app/apps/game-analytics/components/GameCompareModal.tsx, app/apps/game-analytics/components/GameBottomSheet.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json

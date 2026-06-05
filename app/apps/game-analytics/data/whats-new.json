@@ -1,6 +1,12 @@
 {
   "entries": [
     {
+      "date": "2026-06-05",
+      "area": "Chronicle tab",
+      "title": "Your gaming journal is now a tab",
+      "body": "A new Chronicle tab (📖) lives in the main navigation. Flip between four views: Story So Far — your gaming life told chronologically with AI-written blurbs for each play stretch; Goals — set targets like \"complete 10 games this year\" or \"spend under $200\" and watch them fill in automatically as you play; Activity — every session, purchase, and completion in a news-feed; and Genres — a stacked chart showing how your taste has drifted month by month."
+    },
+    {
       "date": "2026-06-01",
       "area": "Game detail",
       "title": "Compare any two games head to head",

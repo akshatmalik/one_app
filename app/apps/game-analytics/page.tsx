@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical, Download, Gift, ShoppingCart, Search, X } from 'lucide-react';
+import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical, Download, Gift, ShoppingCart, Search, X, BookOpen } from 'lucide-react';
 import { useGames } from './hooks/useGames';
 import { useAnalytics, GameWithMetrics } from './hooks/useAnalytics';
 import { useBudget } from './hooks/useBudget';
@@ -34,6 +34,7 @@ import { GameBottomSheet } from './components/GameBottomSheet';
 import { DiscoverTab } from './components/DiscoverTab';
 import { LeaderboardTab } from './components/LeaderboardTab';
 import { BuyQueueTab } from './components/BuyQueueTab';
+import { ChronicleTab } from './components/ChronicleTab';
 import { RatingStars } from './components/RatingStars';
 import { MomentumDots } from './components/MomentumDots';
 import { ProgressRing } from './components/ProgressRing';
@@ -52,7 +53,7 @@ import { GameCompareModal } from './components/GameCompareModal';
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist';
-type TabMode = 'games' | 'timeline' | 'stats' | 'ai-coach' | 'up-next' | 'discover' | 'leaderboard' | 'buy-queue';
+type TabMode = 'games' | 'timeline' | 'stats' | 'ai-coach' | 'up-next' | 'discover' | 'leaderboard' | 'buy-queue' | 'chronicle';
 type CardViewMode = 'poster' | 'compact';
 
 function getValueColor(rating: string): string {
@@ -961,13 +962,14 @@ export default function GameAnalyticsPage() {
           <div className="space-y-4 mb-6">
             {/* Tabs - Two icon-only rows */}
             <div className="space-y-1.5">
-              {/* Row 1: Games, Timeline, Stats, AI Coach */}
+              {/* Row 1: Games, Timeline, Stats, AI Coach, Chronicle */}
               <div className="flex items-center gap-1.5">
                 {([
-                  { id: 'games',    icon: <List size={16} />,          title: 'Games' },
-                  { id: 'timeline', icon: <Calendar size={16} />,      title: 'Timeline' },
-                  { id: 'stats',    icon: <BarChart3 size={16} />,     title: 'Stats' },
-                  { id: 'ai-coach', icon: <MessageCircle size={16} />, title: 'AI Coach' },
+                  { id: 'games',     icon: <List size={16} />,          title: 'Games' },
+                  { id: 'timeline',  icon: <Calendar size={16} />,      title: 'Timeline' },
+                  { id: 'stats',     icon: <BarChart3 size={16} />,     title: 'Stats' },
+                  { id: 'ai-coach',  icon: <MessageCircle size={16} />, title: 'AI Coach' },
+                  { id: 'chronicle', icon: <BookOpen size={16} />,      title: 'Chronicle' },
                 ] as const).map((tab) => (
                   <button
                     key={tab.id}
@@ -1345,6 +1347,18 @@ export default function GameAnalyticsPage() {
 
           {tabMode === 'leaderboard' && (
             <LeaderboardTab gamesWithMetrics={gamesWithMetrics} userId={user?.uid ?? null} eloTierConfig={eloTierConfig} />
+          )}
+
+          {tabMode === 'chronicle' && games.length > 0 && (
+            <ChronicleTab games={games} />
+          )}
+
+          {tabMode === 'chronicle' && games.length === 0 && (
+            <div className="text-center py-16">
+              <BookOpen size={48} className="mx-auto mb-4 text-white/10" />
+              <p className="text-white/30 text-sm">Your chronicle awaits</p>
+              <p className="text-white/20 text-xs mt-1">Add games and log sessions to start your story</p>
+            </div>
           )}
 
           {tabMode === 'buy-queue' && (
