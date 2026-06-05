@@ -1,15 +1,14 @@
 'use client';
 
 import { useState } from 'react';
-import { RefreshCw, Settings, Wifi, WifiOff, TrendingUp } from 'lucide-react';
+import { RefreshCw, Settings, Wifi, WifiOff, TrendingUp, AlertCircle } from 'lucide-react';
 import { useTracker } from './hooks/useTracker';
 import { TRACKED_GAMES } from './lib/games';
-import { GameSignals } from './lib/types';
-import { CompositeScore } from './lib/calculations';
 import { ScoreChart } from './components/ScoreChart';
 import { SignalRow } from './components/SignalRow';
 import { WeightSliders } from './components/WeightSliders';
-import { APIKeyModal } from './components/APIKeyModal';
+import { GameSignals } from './lib/types';
+import { CompositeScore } from './lib/calculations';
 
 export default function GameInterestTrackerPage() {
   const {
@@ -18,22 +17,14 @@ export default function GameInterestTrackerPage() {
     scores,
     fetchState,
     fetchError,
+    hasYouTubeKey,
     mounted,
     refreshAutoSignals,
     updateManualSignal,
     updateSettings,
   } = useTracker();
 
-  const [showApiModal, setShowApiModal] = useState(false);
   const [showWeights, setShowWeights] = useState(false);
-
-  const handleSaveKey = (key: string) => {
-    const newSettings = { ...settings, youtubeApiKey: key };
-    updateSettings(newSettings);
-    refreshAutoSignals(key);
-  };
-
-  const hasApiKey = !!settings.youtubeApiKey;
 
   if (!mounted) {
     return (
@@ -69,7 +60,7 @@ export default function GameInterestTrackerPage() {
               <Settings className="w-4 h-4" />
             </button>
             <button
-              onClick={() => hasApiKey ? refreshAutoSignals() : setShowApiModal(true)}
+              onClick={() => refreshAutoSignals()}
               disabled={fetchState === 'fetching'}
               className="flex items-center gap-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg px-3 py-2 text-sm font-medium transition-colors"
             >
@@ -79,18 +70,15 @@ export default function GameInterestTrackerPage() {
           </div>
         </div>
 
-        {/* API key nudge */}
-        {!hasApiKey && (
-          <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl px-4 py-3 flex items-center justify-between">
+        {/* No YouTube key warning */}
+        {!hasYouTubeKey && (
+          <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl px-4 py-3 flex items-start gap-3">
+            <AlertCircle className="w-4 h-4 text-amber-400 mt-0.5 flex-shrink-0" />
             <p className="text-amber-300 text-sm">
-              Add a YouTube API key to auto-fetch trailer views.
+              <span className="font-medium">NEXT_PUBLIC_YOUTUBE_API_KEY</span> is not set.
+              Add it in your Vercel dashboard → Settings → Environment Variables, then redeploy.
+              Wikipedia views still auto-fetch.
             </p>
-            <button
-              onClick={() => setShowApiModal(true)}
-              className="text-amber-300 hover:text-amber-200 text-sm font-medium underline underline-offset-2 transition-colors"
-            >
-              Add key
-            </button>
           </div>
         )}
 
@@ -150,27 +138,11 @@ export default function GameInterestTrackerPage() {
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between pt-2 text-xs text-gray-600">
-          <span>Scores normalize signals across all tracked games.</span>
-          {hasApiKey && (
-            <button
-              onClick={() => setShowApiModal(true)}
-              className="hover:text-gray-400 transition-colors"
-            >
-              Change API key
-            </button>
-          )}
-        </div>
+        <p className="text-xs text-gray-600 pt-2 text-center">
+          Scores normalize signals across all tracked games.
+        </p>
 
       </div>
-
-      {showApiModal && (
-        <APIKeyModal
-          apiKey={settings.youtubeApiKey}
-          onSave={handleSaveKey}
-          onClose={() => setShowApiModal(false)}
-        />
-      )}
     </div>
   );
 }

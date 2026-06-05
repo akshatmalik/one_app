@@ -10,19 +10,20 @@ import { computeScores, CompositeScore } from '../lib/calculations';
 
 export type FetchState = 'idle' | 'fetching' | 'done' | 'error';
 
+declare const process: { env: Record<string, string | undefined> };
+const YT_API_KEY = process.env.NEXT_PUBLIC_YOUTUBE_API_KEY ?? '';
+
 export function useTracker() {
   const [signals, setSignals] = useState<GameSignals[]>([]);
-  const [settings, setSettings] = useState<TrackerSettings>({ youtubeApiKey: '', weights: { trailerViews: 30, psStoreRank: 20, subredditGrowth: 15, trendsIndex: 20, wikipediaViews: 15 } });
+  const [settings, setSettings] = useState<TrackerSettings>({ weights: { trailerViews: 30, psStoreRank: 20, subredditGrowth: 15, trendsIndex: 20, wikipediaViews: 15 } });
   const [scores, setScores] = useState<CompositeScore[]>([]);
   const [fetchState, setFetchState] = useState<FetchState>('idle');
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    const s = loadSignals();
-    const cfg = loadSettings();
-    setSignals(s);
-    setSettings(cfg);
+    setSignals(loadSignals());
+    setSettings(loadSettings());
     setMounted(true);
   }, []);
 
@@ -32,8 +33,7 @@ export function useTracker() {
     }
   }, [signals, settings.weights, mounted]);
 
-  const refreshAutoSignals = useCallback(async (apiKey?: string) => {
-    const key = apiKey ?? settings.youtubeApiKey;
+  const refreshAutoSignals = useCallback(async () => {
     setFetchState('fetching');
     setFetchError(null);
 
@@ -42,7 +42,7 @@ export function useTracker() {
       const slugs = TRACKED_GAMES.map(g => g.wikipediaSlug);
 
       const [ytResults, wikiResults] = await Promise.all([
-        fetchTrailerViews(videoIds, key),
+        fetchTrailerViews(videoIds, YT_API_KEY),
         fetchAllWikipediaViews(slugs),
       ]);
 
@@ -69,9 +69,9 @@ export function useTracker() {
       saveSignals(updated);
       setSignals(updated);
 
-      const ytErrors = ytResults.filter(r => r.error).map(r => r.error);
+      const ytErrors = ytResults.filter(r => r.error);
       if (ytErrors.length > 0 && ytErrors.length === ytResults.length) {
-        setFetchError(`YouTube: ${ytErrors[0]}`);
+        setFetchError(`YouTube: ${ytErrors[0]?.error}`);
         setFetchState('error');
       } else {
         setFetchState('done');
@@ -80,7 +80,7 @@ export function useTracker() {
       setFetchError(e instanceof Error ? e.message : 'Unknown error');
       setFetchState('error');
     }
-  }, [settings.youtubeApiKey]);
+  }, []);
 
   const updateManualSignal = useCallback((gameId: string, field: 'psStoreRank' | 'subredditGrowth' | 'trendsIndex', value: number | null) => {
     setSignals(prev => {
@@ -101,6 +101,7 @@ export function useTracker() {
     scores,
     fetchState,
     fetchError,
+    hasYouTubeKey: !!YT_API_KEY,
     mounted,
     refreshAutoSignals,
     updateManualSignal,

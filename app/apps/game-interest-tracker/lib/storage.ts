@@ -70,17 +70,14 @@ export function updateSignal(
 }
 
 export function loadSettings(): TrackerSettings {
-  if (typeof window === 'undefined') return { youtubeApiKey: '', weights: DEFAULT_WEIGHTS };
+  if (typeof window === 'undefined') return { weights: DEFAULT_WEIGHTS };
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
-    if (!raw) return { youtubeApiKey: '', weights: DEFAULT_WEIGHTS };
+    if (!raw) return { weights: DEFAULT_WEIGHTS };
     const parsed = JSON.parse(raw) as Partial<TrackerSettings>;
-    return {
-      youtubeApiKey: parsed.youtubeApiKey ?? '',
-      weights: { ...DEFAULT_WEIGHTS, ...(parsed.weights ?? {}) },
-    };
+    return { weights: { ...DEFAULT_WEIGHTS, ...(parsed.weights ?? {}) } };
   } catch {
-    return { youtubeApiKey: '', weights: DEFAULT_WEIGHTS };
+    return { weights: DEFAULT_WEIGHTS };
   }
 }
 

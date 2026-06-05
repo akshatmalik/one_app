@@ -36,7 +36,6 @@ export interface SignalWeights {
 }
 
 export interface TrackerSettings {
-  youtubeApiKey: string;
   weights: SignalWeights;
 }
 
