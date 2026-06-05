@@ -1,6 +1,12 @@
 {
   "entries": [
     {
+      "date": "2026-06-05",
+      "area": "Stats tab",
+      "title": "See how much you actually enjoy your sessions",
+      "body": "The new Session Mood & Vibe panel in Stats shows your gaming quality score, which games give you the best sessions, a breakdown of great/good/meh/grind moments, the vibes you play in most (wind-down vs competitive vs story), and which days of the week you game best. If you tag your mood when logging time, this panel becomes a personal gaming happiness report."
+    },
+    {
       "date": "2026-06-01",
       "area": "Game detail",
       "title": "Compare any two games head to head",

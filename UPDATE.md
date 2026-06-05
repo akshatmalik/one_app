@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-05 12:00 — Stats Tab — Session Mood & Vibe Analytics Panel
+
+**Files**: app/apps/game-analytics/components/MoodPanel.tsx, app/apps/game-analytics/components/StatsView.tsx, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Added a new "Session Mood & Vibe" panel to the Stats tab that surfaces `getMoodAnalysis()` data for the first time — this function existed in calculations.ts but was never used in any component. The panel shows an overall session quality score (0–100), a positive session rate (great+good%), a recharts donut chart with mood breakdown (great/good/meh/grind), a ranked "Happiest Games" leaderboard with per-game quality scores and thumbnails, a vibe breakdown (wind-down/exploration/story/competitive/achievement-hunting/social), and a day-of-week mood quality bar chart to reveal your best gaming days. For users with no mood data it shows a compelling empty state explaining exactly which tap unlocks the insights, creating an incentive loop to tag sessions going forward.
+
+FOLLOW-UP: Could add a mood trend line comparing last 30 days vs the previous period to show whether gaming enjoyment is improving or declining over time.
+
 ## 2026-06-01 06:00 — Game Detail — Head-to-Head Game Comparison
 
 **Files**: app/apps/game-analytics/components/GameCompareModal.tsx, app/apps/game-analytics/components/GameBottomSheet.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json

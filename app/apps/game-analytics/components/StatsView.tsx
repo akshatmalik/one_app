@@ -65,6 +65,7 @@ import { TrophyProgress, TrophyScoreSummary } from '../lib/trophy-calculations';
 import { DiscoverPanel } from './DiscoverPanel';
 import { WeeklyDigest } from './WeeklyDigest';
 import { WhatIfSimulator } from './WhatIfSimulator';
+import { MoodPanel } from './MoodPanel';
 import { PlayedSummary, BoughtSummary } from './RangeGlance';
 import clsx from 'clsx';
 
@@ -1003,6 +1004,9 @@ export function StatsView({ games, summary, budgets = [], onSetBudget, trophies,
 
       {/* Advanced Analytics Panel (Phase 2) */}
       <AnalyticsPanel games={games} />
+
+      {/* Session Mood & Vibe Analytics */}
+      <MoodPanel games={games} />
 
       {/* Alternate Reality / What-If Simulator */}
       <WhatIfSimulator games={games} />
