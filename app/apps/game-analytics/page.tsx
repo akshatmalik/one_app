@@ -49,6 +49,8 @@ import { ErrorLogPanel, ErrorLogButton } from './components/ErrorLogPanel';
 import { WhatsNewModal } from './components/WhatsNewModal';
 import { GameReviewChat } from './components/GameReviewChat';
 import { GameCompareModal } from './components/GameCompareModal';
+import { useLiveSession } from './hooks/useLiveSession';
+import { LiveSessionBanner, LiveStartButton } from './components/LiveSessionBanner';
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist';
@@ -145,6 +147,14 @@ export default function GameAnalyticsPage() {
   const { rankings: allTimeRankings } = useRankings(user?.uid ?? null, 'all', 'all');
   const { allTrophies, summary: trophySummary, pinnedTrophies, pinnedIds: pinnedTrophyIds, togglePin: toggleTrophyPin, toastQueue: trophyToastQueue, dismissToast: dismissTrophyToast } = useTrophies(games, user?.uid ?? null);
   const { assignments: allTimeTiers } = useTierAssignments(user?.uid ?? null, 'all');
+  const {
+    session: liveSession,
+    elapsedSeconds: liveElapsedSeconds,
+    elapsedHours: liveElapsedHours,
+    startSession: startLiveSession,
+    endSession: endLiveSession,
+    clearSession: clearLiveSession,
+  } = useLiveSession(user?.uid ?? null);
   const eloByGameId = useMemo(() => {
     const map = new Map<string, GameRanking>();
     for (const r of allTimeRankings) map.set(r.gameId, r);
@@ -382,6 +392,28 @@ export default function GameAnalyticsPage() {
 
     await updateGame(game.id, updates);
     showToast(`Logged ${hours}h`, 'success');
+  };
+
+  const handleStartLiveSession = (game: GameWithMetrics) => {
+    // If a different game's session is active, switch to the new game
+    if (liveSession && liveSession.gameId !== game.id) {
+      clearLiveSession();
+    }
+    startLiveSession(game.id);
+    showToast(`Live tracking: ${game.name}`, 'success');
+  };
+
+  const handleEndLiveSession = async (hours: number) => {
+    if (!liveSession) return;
+    const game = gamesWithMetrics.find(g => g.id === liveSession.gameId);
+    endLiveSession();
+    if (!game || hours < 0.05) return;
+    await handleQuickLog(game, hours);
+  };
+
+  const handleDiscardLiveSession = () => {
+    clearLiveSession();
+    showToast('Session discarded', 'info');
   };
 
   const toggleCardViewMode = () => {
@@ -940,6 +972,20 @@ export default function GameAnalyticsPage() {
           {/* On This Day */}
           {games.length > 0 && <OnThisDayCard games={games} />}
 
+          {/* Live Session Banner — shown at the top when a session is active */}
+          {liveSession && (() => {
+            const liveGame = games.find(g => g.id === liveSession.gameId);
+            return liveGame ? (
+              <LiveSessionBanner
+                game={liveGame}
+                elapsedSeconds={liveElapsedSeconds}
+                elapsedHours={liveElapsedHours}
+                onEnd={handleEndLiveSession}
+                onDiscard={handleDiscardLiveSession}
+              />
+            ) : null;
+          })()}
+
           {/* Daily Fortune Cookie */}
           {games.length > 0 && <div className="mb-4"><FortuneCookie games={games} /></div>}
 
@@ -1220,6 +1266,8 @@ export default function GameAnalyticsPage() {
                   eloByGameId={eloByGameId}
                   tierAssignments={allTimeTiers}
                   eloTierRanks={eloTierRanks}
+                  liveSessionGameId={liveSession?.gameId}
+                  onStartSession={handleStartLiveSession}
                 />
               )}
             </>
@@ -1647,6 +1695,8 @@ interface GameCardListProps {
   eloByGameId?: Map<string, GameRanking>;
   tierAssignments?: TierAssignmentMap;
   eloTierRanks?: Map<string, { tier: GameTier; rank: number }>;
+  liveSessionGameId?: string;
+  onStartSession?: (game: GameWithMetrics) => void;
 }
 
 function GameCardList({
@@ -1667,6 +1717,8 @@ function GameCardList({
   eloByGameId = new Map(),
   tierAssignments = {},
   eloTierRanks = new Map(),
+  liveSessionGameId,
+  onStartSession,
 }: GameCardListProps) {
   const sections = useMemo(() => groupBySection ? getGameSections(allGames) : [], [allGames, groupBySection]);
 
@@ -1746,7 +1798,7 @@ function GameCardList({
             <div className="space-y-3">
               {nowPlayingGames.map(g => (
                 <div key={g.id} className={`game-card-animate${enteringCards.has(g.id) ? ' game-card-enter' : ''}`}>
-                  <NowPlayingCard game={g} allGames={allGames} onClick={() => onCardClick(g)} onQuickLog={(h) => onQuickLog(g, h)} sortBy={sortBy} tintColor={gameColors.get(g.id)} eloRanking={eloByGameId.get(g.id)} gameTier={tierAssignments[g.id] as GameTier | undefined} eloTierRank={eloTierRanks.get(g.id)} />
+                  <NowPlayingCard game={g} allGames={allGames} onClick={() => onCardClick(g)} onQuickLog={(h) => onQuickLog(g, h)} sortBy={sortBy} tintColor={gameColors.get(g.id)} eloRanking={eloByGameId.get(g.id)} gameTier={tierAssignments[g.id] as GameTier | undefined} eloTierRank={eloTierRanks.get(g.id)} onStartSession={onStartSession ? () => onStartSession(g) : undefined} isLiveActive={liveSessionGameId === g.id} />
                 </div>
               ))}
             </div>
@@ -1789,7 +1841,7 @@ function GameCardList({
           <div className="space-y-3">
             {nowPlayingGames.map(g => (
               <div key={g.id} className={`game-card-animate${enteringCards.has(g.id) ? ' game-card-enter' : ''}`}>
-                <NowPlayingCard game={g} allGames={allGames} onClick={() => onCardClick(g)} onQuickLog={(h) => onQuickLog(g, h)} eloRanking={eloByGameId.get(g.id)} gameTier={tierAssignments[g.id] as GameTier | undefined} />
+                <NowPlayingCard game={g} allGames={allGames} onClick={() => onCardClick(g)} onQuickLog={(h) => onQuickLog(g, h)} eloRanking={eloByGameId.get(g.id)} gameTier={tierAssignments[g.id] as GameTier | undefined} onStartSession={onStartSession ? () => onStartSession(g) : undefined} isLiveActive={liveSessionGameId === g.id} />
               </div>
             ))}
           </div>
@@ -1819,7 +1871,7 @@ function SectionIcon({ id }: { id: string }) {
 
 // --- Now Playing Card ---
 
-function NowPlayingCard({ game, allGames, onClick, onQuickLog, sortBy = 'hours', tintColor, eloRanking, gameTier, eloTierRank }: {
+function NowPlayingCard({ game, allGames, onClick, onQuickLog, sortBy = 'hours', tintColor, eloRanking, gameTier, eloTierRank, onStartSession, isLiveActive = false }: {
   game: GameWithMetrics;
   allGames: Game[];
   onClick: () => void;
@@ -1829,6 +1881,8 @@ function NowPlayingCard({ game, allGames, onClick, onQuickLog, sortBy = 'hours',
   eloRanking?: GameRanking;
   gameTier?: GameTier;
   eloTierRank?: { tier: GameTier; rank: number };
+  onStartSession?: () => void;
+  isLiveActive?: boolean;
 }) {
   const [isFlipped, setIsFlipped] = useState(false);
   const [checkInHours, setCheckInHours] = useState(1);
@@ -2053,6 +2107,12 @@ function NowPlayingCard({ game, allGames, onClick, onQuickLog, sortBy = 'hours',
             >
               {checkInDone ? <><Check size={11} /> Done!</> : <><Clock size={11} /> Check In</>}
             </button>
+            {onStartSession && (
+              <LiveStartButton
+                isActive={isLiveActive}
+                onClick={(e) => { e.stopPropagation(); if (!isLiveActive) onStartSession(); }}
+              />
+            )}
           </div>
 
           {/* Mood pulse strip */}

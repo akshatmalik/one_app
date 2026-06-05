@@ -1,6 +1,12 @@
 {
   "entries": [
     {
+      "date": "2026-06-05",
+      "area": "Games tab",
+      "title": "Live Session Timer — watch your value improve in real time",
+      "body": "Tap \"Live\" on any in-progress game card to start a live session timer. A banner appears showing the running clock, your current cost-per-hour (dropping every second as you play), and a progress bar counting down to the next value tier. When you're done, tap End → confirm → your session is logged automatically. No need to remember how long you played."
+    },
+    {
       "date": "2026-06-01",
       "area": "Game detail",
       "title": "Compare any two games head to head",

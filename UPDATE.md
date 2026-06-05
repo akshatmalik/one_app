@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-05 12:00 — Games Tab — Live Session Tracker
+
+**Files**: app/apps/game-analytics/hooks/useLiveSession.ts, app/apps/game-analytics/components/LiveSessionBanner.tsx, app/apps/game-analytics/page.tsx, app/globals.css, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Added a real-time live session timer. Tap "Live" on any In Progress game card to start the clock; a persistent banner appears showing the live elapsed time, a live cost-per-hour that drops in real-time as you play, and a progress bar counting down to the next value tier (e.g. "17m to Excellent"). When done, tap "End" → confirm → the session is automatically logged as a play entry without opening any modal. The session survives tab switches and page reloads via localStorage, so you can navigate around the app while gaming.
+
+FOLLOW-UP: Add "▶ Live" to PosterCard and CompactCard as well (currently only on NowPlayingCard). Could also add a subtle global indicator in the nav bar when a session is running.
+
 ## 2026-06-01 06:00 — Game Detail — Head-to-Head Game Comparison
 
 **Files**: app/apps/game-analytics/components/GameCompareModal.tsx, app/apps/game-analytics/components/GameBottomSheet.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json

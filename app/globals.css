@@ -126,6 +126,31 @@ input[type="range"]::-moz-range-thumb {
   animation: nowPlayingGlow 3s ease-in-out infinite;
 }
 
+/* Live Session animations */
+@keyframes liveDotPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.7); }
+}
+.live-dot-pulse {
+  animation: liveDotPulse 1.2s ease-in-out infinite;
+}
+
+@keyframes liveTimerGlow {
+  0%, 100% { text-shadow: 0 0 8px rgba(52, 211, 153, 0.2); }
+  50% { text-shadow: 0 0 16px rgba(52, 211, 153, 0.5); }
+}
+.live-timer-glow {
+  animation: liveTimerGlow 2s ease-in-out infinite;
+}
+
+@keyframes liveContainerPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0); }
+  50% { box-shadow: 0 0 12px 2px rgba(52, 211, 153, 0.06); }
+}
+.live-session-container {
+  animation: liveContainerPulse 3s ease-in-out infinite;
+}
+
 /* Chirp entrance animation */
 @keyframes chirpSlideIn {
   from { opacity: 0; transform: translateX(-8px); }
