@@ -7,16 +7,34 @@ export interface TrackedGame {
   price: number | null;
   preOrderAvailable: boolean;
   preOrderUrl?: string;
-  youtubeVideoId: string;
+  youtubeSearchQuery: string;
   wikipediaSlug: string;
   genre: string;
   coverColor: string;
 }
 
+export interface YouTubeVideoData {
+  videoId: string;
+  title: string;
+  channelTitle: string;
+  views: number;
+  likes: number;
+  publishedAt: string; // ISO
+}
+
+export interface YouTubeBuzz {
+  topVideos: YouTubeVideoData[];
+  totalViews: number;
+  totalLikes: number;
+  likeRate: number;       // 0–1
+  viewVelocity: number;   // views per day since oldest video
+  buzzScore: number;      // composite model output
+}
+
 export interface GameSignals {
   gameId: string;
   // auto-fetched
-  trailerViews: number | null;
+  youtubeBuzz: YouTubeBuzz | null;
   wikipediaViews: number | null;
   lastYouTubeFetch: string | null;
   lastWikipediaFetch: string | null;
@@ -28,7 +46,7 @@ export interface GameSignals {
 }
 
 export interface SignalWeights {
-  trailerViews: number;
+  youtubeBuzz: number;
   psStoreRank: number;
   subredditGrowth: number;
   trendsIndex: number;
@@ -42,12 +60,12 @@ export interface TrackerSettings {
 export interface CompositeScore {
   gameId: string;
   normalized: {
-    trailerViews: number;
+    youtubeBuzz: number;
     psStoreRank: number;
     subredditGrowth: number;
     trendsIndex: number;
     wikipediaViews: number;
   };
   composite: number;
-  confidence: number; // 0-1, how many signals have real data
+  confidence: number;
 }

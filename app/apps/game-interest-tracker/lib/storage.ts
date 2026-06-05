@@ -7,7 +7,7 @@ const SIGNALS_KEY = 'game-interest-tracker-signals';
 const SETTINGS_KEY = 'game-interest-tracker-settings';
 
 const DEFAULT_WEIGHTS: SignalWeights = {
-  trailerViews: 30,
+  youtubeBuzz: 30,
   psStoreRank: 20,
   subredditGrowth: 15,
   trendsIndex: 20,
@@ -17,7 +17,7 @@ const DEFAULT_WEIGHTS: SignalWeights = {
 function defaultSignals(): GameSignals[] {
   return TRACKED_GAMES.map(g => ({
     gameId: g.id,
-    trailerViews: null,
+    youtubeBuzz: null,
     wikipediaViews: null,
     lastYouTubeFetch: null,
     lastWikipediaFetch: null,
@@ -34,20 +34,24 @@ export function loadSignals(): GameSignals[] {
     const raw = localStorage.getItem(SIGNALS_KEY);
     if (!raw) return defaultSignals();
     const parsed = JSON.parse(raw) as GameSignals[];
-    // Merge to ensure all games are present
     return TRACKED_GAMES.map(g => {
       const existing = parsed.find(s => s.gameId === g.id);
-      return existing ?? {
-        gameId: g.id,
-        trailerViews: null,
-        wikipediaViews: null,
-        lastYouTubeFetch: null,
-        lastWikipediaFetch: null,
-        psStoreRank: null,
-        subredditGrowth: null,
-        trendsIndex: null,
-        updatedAt: new Date().toISOString(),
-      };
+      if (!existing) return defaultSignals().find(s => s.gameId === g.id)!;
+      // Migrate old trailerViews shape if present
+      const raw = existing as unknown as Record<string, unknown>;
+      if ('trailerViews' in raw && !('youtubeBuzz' in raw)) {
+        const base = defaultSignals().find(s => s.gameId === g.id)!;
+        return {
+          ...base,
+          wikipediaViews: (raw.wikipediaViews as number | null) ?? null,
+          lastYouTubeFetch: (raw.lastYouTubeFetch as string | null) ?? null,
+          lastWikipediaFetch: (raw.lastWikipediaFetch as string | null) ?? null,
+          psStoreRank: (raw.psStoreRank as number | null) ?? null,
+          subredditGrowth: (raw.subredditGrowth as number | null) ?? null,
+          trendsIndex: (raw.trendsIndex as number | null) ?? null,
+        };
+      }
+      return existing;
     });
   } catch {
     return defaultSignals();

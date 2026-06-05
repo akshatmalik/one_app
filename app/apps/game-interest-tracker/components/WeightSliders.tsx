@@ -8,7 +8,7 @@ interface Props {
 }
 
 const SIGNAL_LABELS: { key: keyof SignalWeights; label: string; auto: boolean }[] = [
-  { key: 'trailerViews', label: 'Trailer Views', auto: true },
+  { key: 'youtubeBuzz', label: 'YouTube Buzz', auto: true },
   { key: 'wikipediaViews', label: 'Wikipedia Views', auto: true },
   { key: 'psStoreRank', label: 'PS Store Rank', auto: false },
   { key: 'subredditGrowth', label: 'Sub Growth', auto: false },
