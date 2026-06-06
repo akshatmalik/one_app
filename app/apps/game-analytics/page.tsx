@@ -15,7 +15,9 @@ import { TimelineView } from './components/TimelineView';
 import { StatsView } from './components/StatsView';
 import { AIChatTab } from './components/AIChatTab';
 import { UpNextTab } from './components/UpNextTab';
-import { Game, GameStatus, PlayLog, GameRanking, GameAward, AwardPeriodType, GameTier, TierAssignmentMap, ReviewMessage } from './lib/types';
+import { Game, GameStatus, PlayLog, GameRanking, GameAward, AwardPeriodType, GameTier, TierAssignmentMap, ReviewMessage, SessionMood } from './lib/types';
+import { useSessionTimer } from './hooks/useSessionTimer';
+import { SessionTimerWidget } from './components/SessionTimerWidget';
 import { useTierAssignments } from './hooks/useTierAssignments';
 import { gameRepository } from './lib/storage';
 import { useRankings } from './hooks/useRankings';
@@ -145,6 +147,15 @@ export default function GameAnalyticsPage() {
   const { rankings: allTimeRankings } = useRankings(user?.uid ?? null, 'all', 'all');
   const { allTrophies, summary: trophySummary, pinnedTrophies, pinnedIds: pinnedTrophyIds, togglePin: toggleTrophyPin, toastQueue: trophyToastQueue, dismissToast: dismissTrophyToast } = useTrophies(games, user?.uid ?? null);
   const { assignments: allTimeTiers } = useTierAssignments(user?.uid ?? null, 'all');
+  const {
+    isActive: isTimerActive,
+    session: timerSession,
+    elapsedSeconds: timerElapsed,
+    sessionHours: timerSessionHours,
+    startSession: startTimerSession,
+    stopSession: stopTimerSession,
+    cancelSession: cancelTimerSession,
+  } = useSessionTimer();
   const eloByGameId = useMemo(() => {
     const map = new Map<string, GameRanking>();
     for (const r of allTimeRankings) map.set(r.gameId, r);
@@ -364,13 +375,14 @@ export default function GameAnalyticsPage() {
     showToast(isFirstSession ? 'Game started! Sessions saved' : 'Play sessions saved', 'success');
   };
 
-  const handleQuickLog = async (game: GameWithMetrics, hours: number) => {
+  const handleQuickLog = async (game: GameWithMetrics, hours: number, mood?: SessionMood) => {
     const now = new Date();
     const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
     const newLog: PlayLog = {
       id: `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
       date: dateStr,
       hours,
+      ...(mood ? { mood } : {}),
     };
     const existingLogs = game.playLogs || [];
     const updates: Partial<Game> = { playLogs: [...existingLogs, newLog] };
@@ -381,8 +393,24 @@ export default function GameAnalyticsPage() {
     }
 
     await updateGame(game.id, updates);
-    showToast(`Logged ${hours}h`, 'success');
+    showToast(`Logged ${hours.toFixed(1)}h`, 'success');
   };
+
+  const handleStartTimer = useCallback((game: Game) => {
+    startTimerSession(game);
+  }, [startTimerSession]);
+
+  const handleStopTimer = useCallback((mood?: SessionMood) => {
+    const result = stopTimerSession();
+    if (!result) return;
+    const roundedHours = Math.round(result.hours * 10) / 10;
+    // Find the live GameWithMetrics version so totalHours is current
+    const gameWM = gamesWithMetrics.find(g => g.id === result.game.id);
+    if (gameWM) {
+      handleQuickLog(gameWM, Math.max(roundedHours, 0.1), mood);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stopTimerSession, gamesWithMetrics]);
 
   const toggleCardViewMode = () => {
     const next = cardViewMode === 'poster' ? 'compact' : 'poster';
@@ -557,6 +585,17 @@ export default function GameAnalyticsPage() {
                   Load Samples
                 </button>
               )}
+              {/* Live Session Timer pill */}
+              {isTimerActive && timerSession && (
+                <SessionTimerWidget
+                  session={timerSession}
+                  elapsedSeconds={timerElapsed}
+                  sessionHours={timerSessionHours}
+                  onStop={handleStopTimer}
+                  onCancel={cancelTimerSession}
+                />
+              )}
+
               {/* Command Palette */}
               <div className="relative">
                 <button
@@ -1533,7 +1572,13 @@ export default function GameAnalyticsPage() {
             setCompareGame(detailGame);
             setDetailGame(null);
           }}
+          onStartTimer={() => {
+            handleStartTimer(detailGame);
+            setDetailGame(null);
+            showToast(`Timer started for ${detailGame.name}`, 'success');
+          }}
           isInQueue={isInQueue(detailGame.id)}
+          isTimerActive={isTimerActive && timerSession?.game.id === detailGame.id}
         />
       )}
 

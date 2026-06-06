@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-06 12:00 — Sessions — Live Session Timer
+
+**Files**: app/apps/game-analytics/hooks/useSessionTimer.ts, app/apps/game-analytics/components/SessionTimerWidget.tsx, app/apps/game-analytics/components/GameBottomSheet.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Added a live real-time session timer. Open any game's detail sheet, tap the new ▶ Timer button, and a countdown starts immediately. A pulsing green pill appears in the page header showing elapsed time and game name — visible no matter what tab you're on. Tap the pill to expand a full-screen timer modal showing live cost-per-hour updating every second and total hours accumulating in real time. When you're done, "End Session" lets you pick a session mood (Great/Good/Meh/Grind) before saving — the session is logged automatically with accurate timed hours. The timer persists across tab switches using sessionStorage so it survives navigation without resetting.
+
+FOLLOW-UP: Could add a "Start Timer" quick-access button on the game card itself (not just in the detail sheet), and an optional notification sound/vibration when session hits a round number of hours.
+
 ## 2026-06-01 06:00 — Game Detail — Head-to-Head Game Comparison
 
 **Files**: app/apps/game-analytics/components/GameCompareModal.tsx, app/apps/game-analytics/components/GameBottomSheet.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json

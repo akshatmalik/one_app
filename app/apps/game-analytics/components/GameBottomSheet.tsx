@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useRef, useEffect } from 'react';
-import { Clock, ChevronDown, ChevronUp, ListPlus, Check, Heart, Edit3, Trash2, Trophy, Sparkles, Zap, MessageCircle, ArrowLeftRight } from 'lucide-react';
+import { Clock, ChevronDown, ChevronUp, ListPlus, Check, Heart, Edit3, Trash2, Trophy, Sparkles, Zap, MessageCircle, ArrowLeftRight, Play } from 'lucide-react';
 import { Game } from '../lib/types';
 import { GameWithMetrics } from '../hooks/useAnalytics';
 import {
@@ -39,7 +39,9 @@ interface GameBottomSheetProps {
   onToggleSpecial: () => void;
   onOpenReviewChat: () => void;
   onCompare: () => void;
+  onStartTimer?: () => void;
   isInQueue: boolean;
+  isTimerActive?: boolean;
 }
 
 function getValueColor(rating: string): string {
@@ -64,7 +66,9 @@ export function GameBottomSheet({
   onToggleSpecial,
   onOpenReviewChat,
   onCompare,
+  onStartTimer,
   isInQueue,
+  isTimerActive,
 }: GameBottomSheetProps) {
   const [showAwards, setShowAwards] = useState(false);
   const [showJourney, setShowJourney] = useState(false);
@@ -709,6 +713,21 @@ export function GameBottomSheet({
           >
             <Clock size={14} /> Log Time
           </button>
+          {onStartTimer && game.status !== 'Completed' && game.status !== 'Wishlist' && (
+            <button
+              onClick={onStartTimer}
+              className={clsx(
+                'px-3 py-2.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5',
+                isTimerActive
+                  ? 'bg-emerald-500/20 text-emerald-400 active:bg-emerald-500/30'
+                  : 'bg-white/5 text-white/50 active:bg-white/10'
+              )}
+              title={isTimerActive ? 'Timer active — tap to switch' : 'Start session timer'}
+            >
+              <Play size={14} fill={isTimerActive ? 'currentColor' : 'none'} />
+              {isTimerActive ? 'Active' : 'Timer'}
+            </button>
+          )}
           <button
             onClick={onOpenReviewChat}
             className={

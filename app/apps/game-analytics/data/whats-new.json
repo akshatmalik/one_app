@@ -1,6 +1,12 @@
 {
   "entries": [
     {
+      "date": "2026-06-06",
+      "area": "Session Timer",
+      "title": "Live timer tracks your sessions in real time",
+      "body": "Open any game's detail sheet and tap ▶ Timer to start a live session. A pulsing green pill appears in the header counting up — visible no matter what tab you're on. Your cost-per-hour and total hours update live every second. When you're done, tap End Session, optionally tag the vibe (🔥 Great / 😊 Good / 😐 Meh / 😤 Grind), and the session is saved automatically with the exact timed hours."
+    },
+    {
       "date": "2026-06-01",
       "area": "Game detail",
       "title": "Compare any two games head to head",
