@@ -49,6 +49,7 @@ import { ErrorLogPanel, ErrorLogButton } from './components/ErrorLogPanel';
 import { WhatsNewModal } from './components/WhatsNewModal';
 import { GameReviewChat } from './components/GameReviewChat';
 import { GameCompareModal } from './components/GameCompareModal';
+import { SessionDebrief, SessionDebriefPayload } from './components/SessionDebrief';
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist';
@@ -197,6 +198,7 @@ export default function GameAnalyticsPage() {
   const [detailGame, setDetailGame] = useState<GameWithMetrics | null>(null);
   const [reviewChatGame, setReviewChatGame] = useState<GameWithMetrics | null>(null);
   const [compareGame, setCompareGame] = useState<GameWithMetrics | null>(null);
+  const [sessionDebriefData, setSessionDebriefData] = useState<SessionDebriefPayload | null>(null);
   const [statsCollapsed, setStatsCollapsed] = useState(() => {
     if (typeof window === 'undefined') return false;
     return localStorage.getItem('ga-stats-collapsed') === 'true';
@@ -339,9 +341,16 @@ export default function GameAnalyticsPage() {
   const handleSavePlayLogs = async (playLogs: PlayLog[]) => {
     if (!playLogGame) return;
 
+    // Capture before state for debrief
+    const oldLogs = playLogGame.playLogs || [];
+    const beforeHours = oldLogs.reduce((s, l) => s + l.hours, 0) + (playLogGame.hours || 0);
+    const oldLogIds = new Set(oldLogs.map(l => l.id));
+    const newLogs = playLogs.filter(l => !oldLogIds.has(l.id));
+    const sessionHours = newLogs.reduce((s, l) => s + l.hours, 0);
+
     // Check if this is the first play session for a backlog game
     const isFirstSession = playLogGame.status === 'Not Started' &&
-                          (!playLogGame.playLogs || playLogGame.playLogs.length === 0) &&
+                          oldLogs.length === 0 &&
                           playLogs.length > 0;
 
     const updates: Partial<Game> = {
@@ -362,6 +371,18 @@ export default function GameAnalyticsPage() {
     await updateGame(playLogGame.id, updates);
     setPlayLogGame(null);
     showToast(isFirstSession ? 'Game started! Sessions saved' : 'Play sessions saved', 'success');
+
+    // Show debrief if at least one new session was logged
+    if (sessionHours > 0) {
+      const updatedGame = { ...playLogGame, ...updates } as Game;
+      setSessionDebriefData({
+        game: updatedGame,
+        allGames: games as unknown as Game[],
+        sessionHours,
+        beforeHours,
+        isFirstSession,
+      });
+    }
   };
 
   const handleQuickLog = async (game: GameWithMetrics, hours: number) => {
@@ -373,15 +394,27 @@ export default function GameAnalyticsPage() {
       hours,
     };
     const existingLogs = game.playLogs || [];
+    const beforeHours = existingLogs.reduce((s, l) => s + l.hours, 0) + (game.hours || 0);
+    const isFirstSession = game.status === 'Not Started' && existingLogs.length === 0;
     const updates: Partial<Game> = { playLogs: [...existingLogs, newLog] };
 
-    if (game.status === 'Not Started' && existingLogs.length === 0) {
+    if (isFirstSession) {
       updates.status = 'In Progress';
       updates.startDate = dateStr;
     }
 
     await updateGame(game.id, updates);
     showToast(`Logged ${hours}h`, 'success');
+
+    // Show debrief
+    const updatedGame = { ...game, ...updates } as Game;
+    setSessionDebriefData({
+      game: updatedGame,
+      allGames: games as unknown as Game[],
+      sessionHours: hours,
+      beforeHours,
+      isFirstSession,
+    });
   };
 
   const toggleCardViewMode = () => {
@@ -1559,6 +1592,14 @@ export default function GameAnalyticsPage() {
             }
           }}
           onClose={() => setReviewChatGame(null)}
+        />
+      )}
+
+      {/* Session Debrief */}
+      {sessionDebriefData && (
+        <SessionDebrief
+          payload={sessionDebriefData}
+          onClose={() => setSessionDebriefData(null)}
         />
       )}
     </div>

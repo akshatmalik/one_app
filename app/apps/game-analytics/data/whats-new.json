@@ -1,6 +1,12 @@
 {
   "entries": [
     {
+      "date": "2026-06-06",
+      "area": "Session logging",
+      "title": "See exactly what changed after every session",
+      "body": "Log a session and a debrief card now slides up showing your new cost-per-hour (with the old one crossed out), your current streak, how far you are from the next milestone, and a sharp one-liner about your game. It auto-dismisses after a few seconds — or tap to close. Finally, logging a session feels like it means something."
+    },
+    {
       "date": "2026-06-01",
       "area": "Game detail",
       "title": "Compare any two games head to head",

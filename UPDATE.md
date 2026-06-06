@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-06 06:00 — Session Logging — Session Debrief Modal
+
+**Files**: app/apps/game-analytics/components/SessionDebrief.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Added a rich animated debrief modal that fires after every session log (via PlayLogModal save or quick Check In). Shows the new cost-per-hour with before/after comparison and value tier badge, an active streak indicator with day-dot chain, next milestone progress bar, and a contextual whisper insight. Auto-dismisses after 7 seconds with a visible countdown strip; tapping the overlay or X button dismisses immediately. Surfaces data from `getGameStreak`, `getNextMilestone`, `getContextualWhisper`, and `getValueRating` — all already computed, just never shown at the moment of logging.
+
+FOLLOW-UP: Could wire the debrief into the QuickCheckIn component (GameBottomSheet) for the "two-tap log" fast path as well.
+
 ## 2026-06-01 06:00 — Game Detail — Head-to-Head Game Comparison
 
 **Files**: app/apps/game-analytics/components/GameCompareModal.tsx, app/apps/game-analytics/components/GameBottomSheet.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json
