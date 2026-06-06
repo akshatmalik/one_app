@@ -1,6 +1,12 @@
 {
   "entries": [
     {
+      "date": "2026-06-06",
+      "area": "Stats tab",
+      "title": "See which games bring you joy — and which feel like a grind",
+      "body": "The new Session Quality dashboard in the Stats tab turns your mood tags (🔥 Great / 👍 Good / 😐 Meh / 💪 Grind) into a Joy Score, a 12-week trend chart, and a ranking of your happiest vs grindiest games. Gaming Goals are also now live — set targets for hours, completions, spending, or backlog clearance and watch them track automatically."
+    },
+    {
       "date": "2026-06-01",
       "area": "Game detail",
       "title": "Compare any two games head to head",

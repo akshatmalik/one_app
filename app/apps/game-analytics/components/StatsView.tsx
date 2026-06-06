@@ -66,6 +66,8 @@ import { DiscoverPanel } from './DiscoverPanel';
 import { WeeklyDigest } from './WeeklyDigest';
 import { WhatIfSimulator } from './WhatIfSimulator';
 import { PlayedSummary, BoughtSummary } from './RangeGlance';
+import { SessionQualityPanel } from './SessionQualityPanel';
+import { GoalsPanel } from './GoalsPanel';
 import clsx from 'clsx';
 
 interface StatsViewProps {
@@ -992,6 +994,12 @@ export function StatsView({ games, summary, budgets = [], onSetBudget, trophies,
 
       {/* Fun Stats Panel */}
       <FunStatsPanel games={games} />
+
+      {/* Session Quality / Mood Dashboard */}
+      <SessionQualityPanel games={games} />
+
+      {/* Gaming Goals */}
+      <GoalsPanel games={games} />
 
       {/* Deep Insights Panel (Phase 1 Enhancements) */}
       <InsightsPanel

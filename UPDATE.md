@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-06 12:00 — Stats Tab — Session Quality Dashboard + Goals Integration
+
+**Files**: app/apps/game-analytics/components/SessionQualityPanel.tsx, app/apps/game-analytics/components/StatsView.tsx, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Two dormant features brought to life. First: a new Session Quality Dashboard that surfaces mood analytics users have been silently collecting — every time you tag a session with 🔥 Great, 👍 Good, 😐 Meh, or 💪 Grind, it now feeds a Joy Score, a stacked mood distribution bar, a 12-week trend chart, game joy rankings (which games make you happiest vs feel like work), and a vibe breakdown. Second: the fully-built GoalsPanel (completion, spending, hours, genre variety, backlog, and custom goals with auto-calculated progress) is now wired into the Stats tab for the first time.
+
+FOLLOW-UP: Consider adding a "Joy Score" widget to the header stats strip so it's visible on the Games tab too, not just in Stats. Could also add AI-generated insights like "Your grind games tend to be RPGs over 40 hours."
+
 ## 2026-06-01 06:00 — Game Detail — Head-to-Head Game Comparison
 
 **Files**: app/apps/game-analytics/components/GameCompareModal.tsx, app/apps/game-analytics/components/GameBottomSheet.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json
