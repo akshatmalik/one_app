@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-06 12:00 — Stats Tab — Session Vibe Intelligence
+
+**Files**: app/apps/game-analytics/lib/calculations.ts, app/apps/game-analytics/components/MoodVibePanel.tsx, app/apps/game-analytics/components/StatsView.tsx, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Added a full Mood Vibe Intelligence dashboard to the Stats tab that surfaces session mood data (great/good/meh/grind) users tag on each play session — data that was previously entered but never visualised anywhere. The panel shows a 0–100 vibe score with a trend label (On Cloud Nine / Good Vibes / Mixed Bag / Grinding Through), a mood distribution bar, a 12-week area chart tracking how session happiness has shifted over time, a per-game happiness leaderboard showing which games energise vs drain you, a day-of-week bar chart coloured by mood positivity rate, a session length sweet spot chart, and a "top game per mood" grid. When fewer than 3 sessions are tagged the panel shows a friendly onboarding prompt. Four new calculation functions were added: getMoodByDayOfWeek, getMoodBySessionLength, getMoodTrend, getGameMoodProfiles.
+
+FOLLOW-UP: Could add a mood-based sort mode on the Games tab ("Sort by happiness score") so users can quickly surface their most enjoyable games.
+
 ## 2026-06-01 06:00 — Game Detail — Head-to-Head Game Comparison
 
 **Files**: app/apps/game-analytics/components/GameCompareModal.tsx, app/apps/game-analytics/components/GameBottomSheet.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json

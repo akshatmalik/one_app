@@ -1,6 +1,12 @@
 {
   "entries": [
     {
+      "date": "2026-06-06",
+      "area": "Stats tab",
+      "title": "See how happy your gaming sessions actually are",
+      "body": "The new Session Vibe Intelligence panel in Stats turns all those mood tags you've been logging (great / good / meh / grind) into real insights. See your overall Vibe Score, how it's trended week by week, which games energise vs drain you, and what day of the week — and session length — gives you the happiest gaming. Start tagging moods on your sessions to unlock the full picture."
+    },
+    {
       "date": "2026-06-01",
       "area": "Game detail",
       "title": "Compare any two games head to head",

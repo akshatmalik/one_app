@@ -66,6 +66,7 @@ import { DiscoverPanel } from './DiscoverPanel';
 import { WeeklyDigest } from './WeeklyDigest';
 import { WhatIfSimulator } from './WhatIfSimulator';
 import { PlayedSummary, BoughtSummary } from './RangeGlance';
+import { MoodVibePanel } from './MoodVibePanel';
 import clsx from 'clsx';
 
 interface StatsViewProps {
@@ -989,6 +990,9 @@ export function StatsView({ games, summary, budgets = [], onSetBudget, trophies,
 
       {/* Gaming Activity Heatmap */}
       <GamingHeatmap games={games} />
+
+      {/* Session Vibe Intelligence */}
+      <MoodVibePanel games={games} />
 
       {/* Fun Stats Panel */}
       <FunStatsPanel games={games} />

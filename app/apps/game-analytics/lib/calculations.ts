@@ -14251,3 +14251,307 @@ export function getReviewNudges(games: Game[]): ReviewNudgeSummary {
     recentlyCompletedCount,
   };
 }
+
+// ============================================================
+// Mood Intelligence — extended mood analytics
+// ============================================================
+
+export interface MoodByDayData {
+  days: Array<{
+    dayName: string;
+    dayIndex: number; // 0=Sun..6=Sat
+    totalSessions: number;
+    moodCounts: Partial<Record<SessionMood, number>>;
+    positiveRate: number; // % great+good
+    avgHours: number;
+    dominantMood: SessionMood | null;
+  }>;
+  bestDay: string | null;
+  worstDay: string | null;
+}
+
+export function getMoodByDayOfWeek(games: Game[]): MoodByDayData {
+  const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const FULL_DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+  const dayBuckets = Array.from({ length: 7 }, () => ({
+    totalSessions: 0,
+    totalHours: 0,
+    moodCounts: {} as Partial<Record<SessionMood, number>>,
+    taggedSessions: 0,
+    positiveCount: 0,
+  }));
+
+  games.forEach(game => {
+    game.playLogs?.forEach(log => {
+      const d = parseLocalDate(log.date);
+      const dayIndex = d.getDay();
+      const bucket = dayBuckets[dayIndex];
+      bucket.totalSessions++;
+      bucket.totalHours += log.hours;
+      if (log.mood) {
+        bucket.taggedSessions++;
+        bucket.moodCounts[log.mood] = (bucket.moodCounts[log.mood] ?? 0) + 1;
+        if (log.mood === 'great' || log.mood === 'good') bucket.positiveCount++;
+      }
+    });
+  });
+
+  let bestDayIdx: number | null = null;
+  let worstDayIdx: number | null = null;
+  let bestRate = -1;
+  let worstRate = 101;
+
+  const days = dayBuckets.map((b, idx) => {
+    const positiveRate = b.taggedSessions > 0 ? (b.positiveCount / b.taggedSessions) * 100 : 0;
+    const avgHours = b.totalSessions > 0 ? b.totalHours / b.totalSessions : 0;
+    let dominantMood: SessionMood | null = null;
+    let dominantCount = 0;
+    for (const [mood, count] of Object.entries(b.moodCounts) as [SessionMood, number][]) {
+      if (count > dominantCount) { dominantCount = count; dominantMood = mood; }
+    }
+    if (b.taggedSessions >= 2) {
+      if (positiveRate > bestRate) { bestRate = positiveRate; bestDayIdx = idx; }
+      if (positiveRate < worstRate) { worstRate = positiveRate; worstDayIdx = idx; }
+    }
+    return {
+      dayName: DAY_NAMES[idx],
+      dayIndex: idx,
+      totalSessions: b.totalSessions,
+      moodCounts: b.moodCounts,
+      positiveRate,
+      avgHours: Math.round(avgHours * 10) / 10,
+      dominantMood,
+    };
+  });
+
+  return {
+    days,
+    bestDay: bestDayIdx !== null ? FULL_DAY_NAMES[bestDayIdx] : null,
+    worstDay: (worstDayIdx !== null && worstDayIdx !== bestDayIdx) ? FULL_DAY_NAMES[worstDayIdx] : null,
+  };
+}
+
+export interface MoodByLengthBucket {
+  label: string;
+  minHours: number;
+  maxHours: number;
+  totalSessions: number;
+  moodCounts: Partial<Record<SessionMood, number>>;
+  positiveRate: number;
+  dominantMood: SessionMood | null;
+}
+
+export interface MoodByLengthData {
+  buckets: MoodByLengthBucket[];
+  sweetSpot: string | null;
+}
+
+export function getMoodBySessionLength(games: Game[]): MoodByLengthData {
+  const bucketDefs = [
+    { label: '< 1h', minHours: 0, maxHours: 1 },
+    { label: '1–2h', minHours: 1, maxHours: 2 },
+    { label: '2–3h', minHours: 2, maxHours: 3 },
+    { label: '3h+', minHours: 3, maxHours: Infinity },
+  ];
+
+  const buckets = bucketDefs.map(b => ({
+    ...b,
+    totalSessions: 0,
+    taggedSessions: 0,
+    positiveCount: 0,
+    moodCounts: {} as Partial<Record<SessionMood, number>>,
+  }));
+
+  games.forEach(game => {
+    game.playLogs?.forEach(log => {
+      const bucket = buckets.find(b => log.hours >= b.minHours && log.hours < b.maxHours);
+      if (!bucket) return;
+      bucket.totalSessions++;
+      if (log.mood) {
+        bucket.taggedSessions++;
+        bucket.moodCounts[log.mood] = (bucket.moodCounts[log.mood] ?? 0) + 1;
+        if (log.mood === 'great' || log.mood === 'good') bucket.positiveCount++;
+      }
+    });
+  });
+
+  let sweetSpot: string | null = null;
+  let bestRate = -1;
+
+  const result: MoodByLengthBucket[] = buckets.map(b => {
+    const positiveRate = b.taggedSessions > 0 ? (b.positiveCount / b.taggedSessions) * 100 : 0;
+    let dominantMood: SessionMood | null = null;
+    let dominantCount = 0;
+    for (const [mood, count] of Object.entries(b.moodCounts) as [SessionMood, number][]) {
+      if (count > dominantCount) { dominantCount = count; dominantMood = mood; }
+    }
+    if (b.taggedSessions >= 2 && positiveRate > bestRate) {
+      bestRate = positiveRate;
+      sweetSpot = b.label;
+    }
+    return { label: b.label, minHours: b.minHours, maxHours: b.maxHours, totalSessions: b.totalSessions, moodCounts: b.moodCounts, positiveRate, dominantMood };
+  });
+
+  return { buckets: result, sweetSpot };
+}
+
+export interface MoodTrendPoint {
+  weekKey: string;
+  label: string;
+  taggedSessions: number;
+  positiveRate: number;
+  score: number; // 0-100 weighted: great=100, good=70, meh=30, grind=0
+}
+
+export interface MoodTrendData {
+  weeks: MoodTrendPoint[];
+  recentTrend: 'improving' | 'declining' | 'stable';
+  overallScore: number; // 0-100
+  tagRate: number; // % of sessions that have a mood tag
+}
+
+export function getMoodTrend(games: Game[]): MoodTrendData {
+  const MOOD_WEIGHTS: Record<SessionMood, number> = { great: 100, good: 70, meh: 30, grind: 0 };
+
+  let totalSessions = 0;
+  let taggedCount = 0;
+  const taggedLogs: { dateStr: string; mood: SessionMood }[] = [];
+
+  games.forEach(game => {
+    game.playLogs?.forEach(log => {
+      totalSessions++;
+      if (log.mood) {
+        taggedCount++;
+        taggedLogs.push({ dateStr: log.date, mood: log.mood });
+      }
+    });
+  });
+
+  if (taggedLogs.length === 0) {
+    return { weeks: [], recentTrend: 'stable', overallScore: 0, tagRate: 0 };
+  }
+
+  // Build 12 week buckets going back from current week start (Sunday)
+  const now = new Date();
+  const currentWeekStart = new Date(now);
+  currentWeekStart.setDate(currentWeekStart.getDate() - currentWeekStart.getDay());
+  currentWeekStart.setHours(0, 0, 0, 0);
+
+  type WeekBucket = {
+    weekStartDate: Date;
+    label: string;
+    taggedSessions: number;
+    totalScore: number;
+    positiveCount: number;
+  };
+
+  const weekBuckets: WeekBucket[] = [];
+  for (let w = 11; w >= 0; w--) {
+    const weekStart = new Date(currentWeekStart);
+    weekStart.setDate(weekStart.getDate() - w * 7);
+    weekBuckets.push({
+      weekStartDate: weekStart,
+      label: weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      taggedSessions: 0,
+      totalScore: 0,
+      positiveCount: 0,
+    });
+  }
+
+  taggedLogs.forEach(({ dateStr, mood }) => {
+    const logDate = parseLocalDate(dateStr);
+    for (let i = weekBuckets.length - 1; i >= 0; i--) {
+      const weekStart = weekBuckets[i].weekStartDate;
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekEnd.getDate() + 7);
+      if (logDate >= weekStart && logDate < weekEnd) {
+        weekBuckets[i].taggedSessions++;
+        weekBuckets[i].totalScore += MOOD_WEIGHTS[mood];
+        if (mood === 'great' || mood === 'good') weekBuckets[i].positiveCount++;
+        break;
+      }
+    }
+  });
+
+  const weeks: MoodTrendPoint[] = weekBuckets.map((b, i) => ({
+    weekKey: `W${i}`,
+    label: b.label,
+    taggedSessions: b.taggedSessions,
+    positiveRate: b.taggedSessions > 0 ? Math.round((b.positiveCount / b.taggedSessions) * 100) : 0,
+    score: b.taggedSessions > 0 ? Math.round(b.totalScore / b.taggedSessions) : 0,
+  }));
+
+  const recent4 = weeks.slice(-4).filter(w => w.taggedSessions > 0);
+  const older4 = weeks.slice(-8, -4).filter(w => w.taggedSessions > 0);
+  const recentAvg = recent4.length > 0 ? recent4.reduce((s, w) => s + w.score, 0) / recent4.length : 0;
+  const olderAvg = older4.length > 0 ? older4.reduce((s, w) => s + w.score, 0) / older4.length : 0;
+
+  let recentTrend: 'improving' | 'declining' | 'stable' = 'stable';
+  if (recent4.length > 0 && older4.length > 0) {
+    if (recentAvg > olderAvg + 5) recentTrend = 'improving';
+    else if (recentAvg < olderAvg - 5) recentTrend = 'declining';
+  }
+
+  let totalScoreSum = 0;
+  taggedLogs.forEach(l => { totalScoreSum += MOOD_WEIGHTS[l.mood]; });
+  const overallScore = taggedLogs.length > 0 ? Math.round(totalScoreSum / taggedLogs.length) : 0;
+
+  return {
+    weeks,
+    recentTrend,
+    overallScore,
+    tagRate: totalSessions > 0 ? Math.round((taggedCount / totalSessions) * 100) : 0,
+  };
+}
+
+export interface GameMoodProfile {
+  game: Game;
+  totalSessions: number;
+  taggedSessions: number;
+  moodCounts: Partial<Record<SessionMood, number>>;
+  positiveRate: number;
+  happinessScore: number; // 0-100 weighted composite
+  dominantMood: SessionMood | null;
+}
+
+export function getGameMoodProfiles(games: Game[]): GameMoodProfile[] {
+  const MOOD_WEIGHTS: Record<SessionMood, number> = { great: 100, good: 70, meh: 30, grind: 0 };
+  const owned = games.filter(g => g.status !== 'Wishlist');
+
+  return owned
+    .map(game => {
+      const logs = game.playLogs ?? [];
+      const tagged = logs.filter(l => !!l.mood);
+      if (tagged.length < 2) return null; // need at least 2 tagged sessions to be meaningful
+
+      const moodCounts: Partial<Record<SessionMood, number>> = {};
+      let scoreSum = 0;
+      let positiveCount = 0;
+
+      tagged.forEach(l => {
+        if (!l.mood) return;
+        moodCounts[l.mood] = (moodCounts[l.mood] ?? 0) + 1;
+        scoreSum += MOOD_WEIGHTS[l.mood];
+        if (l.mood === 'great' || l.mood === 'good') positiveCount++;
+      });
+
+      let dominantMood: SessionMood | null = null;
+      let dominantCount = 0;
+      for (const [mood, count] of Object.entries(moodCounts) as [SessionMood, number][]) {
+        if (count > dominantCount) { dominantCount = count; dominantMood = mood; }
+      }
+
+      return {
+        game,
+        totalSessions: logs.length,
+        taggedSessions: tagged.length,
+        moodCounts,
+        positiveRate: Math.round((positiveCount / tagged.length) * 100),
+        happinessScore: Math.round(scoreSum / tagged.length),
+        dominantMood,
+      };
+    })
+    .filter((p): p is GameMoodProfile => p !== null)
+    .sort((a, b) => b.happinessScore - a.happinessScore);
+}
