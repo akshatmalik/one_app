@@ -14251,3 +14251,243 @@ export function getReviewNudges(games: Game[]): ReviewNudgeSummary {
     recentlyCompletedCount,
   };
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PLAY ADVISOR — Smart "what should I play tonight?" recommender
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type SessionLength = '30m' | '1h' | '2h' | '3h' | '4h+' | 'any';
+
+export interface PlayAdvisorBadge {
+  icon: string;
+  label: string;
+  color: string;
+  bg: string;
+}
+
+export interface PlayAdvisorPick {
+  game: Game;
+  score: number;              // 0-100 composite
+  primaryReason: string;
+  badges: PlayAdvisorBadge[];
+  avgSessionHours: number | null;
+  milestoneNote: string | null;  // e.g. "8 more hours → Excellent value"
+  urgencyTier: ShelfLifeTier;
+  urgencyLabel: string;
+  streakDays: number;
+  chemistryGrade: 'S' | 'A' | 'B' | 'C' | 'D';
+  chemistryScore: number;
+  completionProb: number;        // 0-100
+}
+
+export interface PlayAdvisorResult {
+  picks: PlayAdvisorPick[];
+  totalCandidates: number;
+  sessionLabel: string;
+}
+
+const SESSION_HOUR_RANGES: Record<SessionLength, { minH: number; maxH: number }> = {
+  '30m': { minH: 0,   maxH: 0.75 },
+  '1h':  { minH: 0.4, maxH: 1.5  },
+  '2h':  { minH: 1,   maxH: 2.5  },
+  '3h':  { minH: 2,   maxH: 4    },
+  '4h+': { minH: 3,   maxH: Infinity },
+  'any': { minH: 0,   maxH: Infinity },
+};
+
+const SESSION_LABELS: Record<SessionLength, string> = {
+  '30m': '30 minutes',
+  '1h': '1 hour',
+  '2h': '2 hours',
+  '3h': '3 hours',
+  '4h+': '4+ hours',
+  'any': 'any length',
+};
+
+/**
+ * Smart play advisor: ranks unfinished library games by how well they match
+ * your current state, returning the best picks for tonight.
+ *
+ * Scoring weights:
+ *   Chemistry (40%) — genre craving, session fit, momentum, seasonal
+ *   Urgency (25%)   — shelf life tier; at-risk/critical games get boosted
+ *   Session Fit (20%) — how well avg session length matches the requested time
+ *   Progress (10%)  — games close to completion get a boost
+ *   Streak (5%)     — active streak games get a small bonus
+ */
+export function getPlayAdvisorPicks(
+  games: Game[],
+  sessionLength: SessionLength = 'any',
+  count: number = 4,
+): PlayAdvisorResult | null {
+  const candidates = games.filter(
+    g => g.status !== 'Wishlist' && g.status !== 'Completed' && g.status !== 'Abandoned',
+  );
+  if (candidates.length === 0) return null;
+
+  const { minH, maxH } = SESSION_HOUR_RANGES[sessionLength];
+
+  const URGENCY_SCORES: Record<ShelfLifeTier, number> = {
+    thriving:  20,
+    stable:    35,
+    at_risk:   72,
+    critical:  88,
+    expired:   25,
+  };
+
+  interface Scored extends PlayAdvisorPick { _diversityKey: string }
+
+  const scored: Scored[] = candidates.map(game => {
+    const chemistry = getGameChemistry(game, games);
+    const shelf = getShelfLifeExpiry(game, games);
+    const streak = getGameStreak(game);
+    const prob = getCompletionProbability(game, games);
+
+    // ── Chemistry (0-100) ──────────────────────────────────
+    const chemScore = chemistry.score;
+
+    // ── Urgency ──────────────────────────────────────────────
+    const urgencyScore = URGENCY_SCORES[shelf.tier] ?? 30;
+
+    // ── Session fit ─────────────────────────────────────────
+    const logs = game.playLogs ?? [];
+    let avgSessionHours: number | null = null;
+    let sessionFitScore = 65;
+    if (logs.length >= 2) {
+      avgSessionHours = logs.reduce((s, l) => s + l.hours, 0) / logs.length;
+      if (sessionLength !== 'any') {
+        const fits = avgSessionHours >= minH && avgSessionHours <= maxH;
+        const close =
+          avgSessionHours >= minH * 0.5 && avgSessionHours <= maxH * 2;
+        sessionFitScore = fits ? 90 : close ? 58 : 25;
+      }
+    } else if (logs.length === 1) {
+      avgSessionHours = logs[0].hours;
+    }
+
+    // ── Progress / completion ────────────────────────────────
+    const completionProb = prob.probability;
+    const progressScore =
+      completionProb >= 75 ? 85 :
+      completionProb >= 55 ? 65 :
+      40;
+
+    // ── Streak bonus (0-20) ──────────────────────────────────
+    const streakBonus = streak.isActive ? Math.min(20, streak.days * 3) : 0;
+
+    // ── Composite ────────────────────────────────────────────
+    const score = Math.round(
+      chemScore    * 0.40 +
+      urgencyScore * 0.25 +
+      sessionFitScore * 0.20 +
+      progressScore   * 0.10 +
+      streakBonus     * 0.05,
+    );
+
+    // ── Milestone note ───────────────────────────────────────
+    let milestoneNote: string | null = null;
+    const totalH = getTotalHours(game);
+    if (game.price > 0 && totalH >= 0) {
+      const cph = totalH > 0 ? game.price / totalH : Infinity;
+      if (cph > 5 && game.price / 5 - totalH <= 20) {
+        const h = Math.ceil(game.price / 5 - totalH);
+        milestoneNote = `${h}h more → Fair value ($5/hr)`;
+      } else if (cph > 3 && cph <= 5 && game.price / 3 - totalH <= 15) {
+        const h = Math.ceil(game.price / 3 - totalH);
+        milestoneNote = `${h}h more → Good value ($3/hr)`;
+      } else if (cph > 1 && cph <= 3 && game.price / 1 - totalH <= 20) {
+        const h = Math.ceil(game.price / 1 - totalH);
+        milestoneNote = `${h}h more → Excellent value ($1/hr)`;
+      }
+    }
+
+    // ── Primary reason ────────────────────────────────────────
+    let primaryReason: string;
+    if (shelf.tier === 'critical') {
+      primaryReason = `${shelf.reasoning} — now or never`;
+    } else if (shelf.tier === 'at_risk') {
+      primaryReason = `${shelf.reasoning} — time to return`;
+    } else if (streak.isActive && streak.days >= 5) {
+      primaryReason = `${streak.days}-day streak — don't break it now`;
+    } else if (completionProb >= 75) {
+      primaryReason = `You're ${completionProb}% likely to finish this — go for it`;
+    } else if (chemistry.grade === 'S') {
+      primaryReason = 'S-tier chemistry — everything lines up tonight';
+    } else if (chemistry.grade === 'A') {
+      primaryReason = `Great match for tonight — ${chemistry.justification.toLowerCase()}`;
+    } else if (milestoneNote) {
+      primaryReason = `${milestoneNote} — make it happen tonight`;
+    } else {
+      primaryReason = chemistry.justification || 'Solid pick for tonight';
+    }
+
+    // ── Badges ────────────────────────────────────────────────
+    const badges: PlayAdvisorBadge[] = [];
+    if (chemistry.grade === 'S') {
+      badges.push({ icon: '⭐', label: 'S-tier chem', color: '#fbbf24', bg: 'rgba(251,191,36,0.12)' });
+    } else if (chemistry.grade === 'A') {
+      badges.push({ icon: '🔮', label: 'A chem', color: '#ec4899', bg: 'rgba(236,72,153,0.12)' });
+    }
+    if (streak.isActive && streak.days >= 3) {
+      badges.push({ icon: '🔥', label: `${streak.days}d streak`, color: '#f97316', bg: 'rgba(249,115,22,0.12)' });
+    }
+    if (shelf.tier === 'critical') {
+      badges.push({ icon: '⚠️', label: 'Critical', color: '#ef4444', bg: 'rgba(239,68,68,0.12)' });
+    } else if (shelf.tier === 'at_risk') {
+      badges.push({ icon: '⏰', label: 'At Risk', color: '#fbbf24', bg: 'rgba(251,191,36,0.12)' });
+    }
+    if (completionProb >= 70) {
+      badges.push({ icon: '🏁', label: `${completionProb}% finish`, color: '#34d399', bg: 'rgba(52,211,153,0.12)' });
+    }
+    if (milestoneNote) {
+      badges.push({ icon: '🎯', label: 'Value goal', color: '#60a5fa', bg: 'rgba(96,165,250,0.12)' });
+    }
+
+    return {
+      game,
+      score,
+      primaryReason,
+      badges,
+      avgSessionHours,
+      milestoneNote,
+      urgencyTier: shelf.tier,
+      urgencyLabel: shelf.tierLabel,
+      streakDays: streak.isActive ? streak.days : 0,
+      chemistryGrade: chemistry.grade,
+      chemistryScore: chemistry.score,
+      completionProb,
+      _diversityKey: game.genre || '',
+    };
+  });
+
+  // Sort by score descending
+  scored.sort((a, b) => b.score - a.score);
+
+  // Genre-diverse selection: top pick is always #1, alternatives prefer different genres
+  const picks: Scored[] = [];
+  const usedGenres = new Set<string>();
+
+  // Hero pick — always the highest scorer
+  picks.push(scored[0]);
+  if (scored[0]._diversityKey) usedGenres.add(scored[0]._diversityKey);
+
+  // Alternatives — prefer different genres
+  for (const p of scored.slice(1)) {
+    if (picks.length >= count) break;
+    if (!p._diversityKey || !usedGenres.has(p._diversityKey)) {
+      picks.push(p);
+      if (p._diversityKey) usedGenres.add(p._diversityKey);
+    }
+  }
+  // Fill remaining slots if needed (same-genre overflow)
+  for (const p of scored.slice(1)) {
+    if (picks.length >= count) break;
+    if (!picks.includes(p)) picks.push(p);
+  }
+
+  return {
+    picks,
+    totalCandidates: candidates.length,
+    sessionLabel: SESSION_LABELS[sessionLength],
+  };
+}

@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-06 — Games Tab — Play Advisor: Smart Session Recommender
+
+**Files**: app/apps/game-analytics/lib/calculations.ts, app/apps/game-analytics/components/PlayAdvisor.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Added "Tonight's Pick" — a smart play advisor accessible from the ··· command palette on the Games tab. Unlike the existing Random Picker (which is purely random), this ranks your unfinished library games by a composite score: 40% chemistry (genre craving, session momentum, seasonal fit), 25% urgency (shelf-life tier for at-risk/critical games), 20% session fit (avg session length vs your requested time), 10% completion likelihood, and 5% streak maintenance. Users pick how long they have (30m / 1h / 2h / 3h / 4h+ / Any), see one hero recommendation with a large thumbnail, primary reason, and data-driven badges, plus three genre-diverse alternatives — each with a one-tap "Quick Log Session" button. A shuffle button re-ranks candidates.
+
+FOLLOW-UP: Could weight the shuffle by introducing slight score noise so it surfaces genuinely different picks (rather than just re-running the same deterministic algorithm). Could also add a "mood" axis (relaxed / intense / quick win) as a second filter.
+
 ## 2026-06-01 06:00 — Game Detail — Head-to-Head Game Comparison
 
 **Files**: app/apps/game-analytics/components/GameCompareModal.tsx, app/apps/game-analytics/components/GameBottomSheet.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json
