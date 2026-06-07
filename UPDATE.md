@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-07 12:00 — Identity — Gamer Passport
+
+**Files**: app/apps/game-analytics/components/GamingPassport.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Added a full-screen "Gamer Passport" modal accessible via a new cyan person icon in the utility tab row. It synthesises the entire gaming history into one beautiful scrollable identity card with 8 sections: gaming personality type with colour-coded hero banner; key stats strip (hours, library size, completion %, cost/hr); a gaming credit score with gauge and four factor bars; Mount Olympus (top 3 games by hours with thumbnails and medals); a Library DNA radar chart showing 7 dimensions of play style; a Hall of Records with personal bests (best month, longest session, best streak, fastest completion); a value story comparing cost-per-hour to movies and concerts; and a grid of earned achievements. The design uses per-personality accent colours so two users' passports look meaningfully different.
+
+FOLLOW-UP: Could add a "Share as image" button using html2canvas, or allow pinning favourite stats sections.
+
 ## 2026-06-01 06:00 — Game Detail — Head-to-Head Game Comparison
 
 **Files**: app/apps/game-analytics/components/GameCompareModal.tsx, app/apps/game-analytics/components/GameBottomSheet.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json
