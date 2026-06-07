@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-07 00:00 — Games Tab — Smart Session Planner ("Play Now")
+
+**Files**: app/apps/game-analytics/lib/calculations.ts, app/apps/game-analytics/components/SessionPlanner.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Added a smart "Play Now" modal (accessible via a new button in the Games tab filter row) that recommends the best game for the current moment. Users pick their time window (30 min → 4h+), vibe (Chill / Action / Story / Quick / Challenge / Surprise), and whether they want to continue a game or start fresh. The engine scores every eligible game across four dimensions — chemistry (genre craving, freshness, momentum), time fit (how well the game's average session matches the available window), vibe fit (genre → mood mapping), and mood history (% of past sessions rated great/good) — then ranks them with a 0–100 match score shown as a circular gauge on each card. Tapping a recommendation opens its full detail sheet so the user can check in, log time, or compare.
+
+FOLLOW-UP: Could add a "Check in now" shortcut directly from the session planner result card, bypassing the bottom sheet for power users who just want to tap once and log.
+
 ## 2026-06-01 06:00 — Game Detail — Head-to-Head Game Comparison
 
 **Files**: app/apps/game-analytics/components/GameCompareModal.tsx, app/apps/game-analytics/components/GameBottomSheet.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json

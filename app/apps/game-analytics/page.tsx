@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical, Download, Gift, ShoppingCart, Search, X } from 'lucide-react';
+import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical, Download, Gift, ShoppingCart, Search, X, Play } from 'lucide-react';
 import { useGames } from './hooks/useGames';
 import { useAnalytics, GameWithMetrics } from './hooks/useAnalytics';
 import { useBudget } from './hooks/useBudget';
@@ -49,6 +49,7 @@ import { ErrorLogPanel, ErrorLogButton } from './components/ErrorLogPanel';
 import { WhatsNewModal } from './components/WhatsNewModal';
 import { GameReviewChat } from './components/GameReviewChat';
 import { GameCompareModal } from './components/GameCompareModal';
+import { SessionPlanner } from './components/SessionPlanner';
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist';
@@ -217,6 +218,7 @@ export default function GameAnalyticsPage() {
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showErrorLog, setShowErrorLog] = useState(false);
   const [showWhatsNew, setShowWhatsNew] = useState(false);
+  const [showSessionPlanner, setShowSessionPlanner] = useState(false);
 
   // Week recap data for header strip
   const weekRecap = useMemo(() => {
@@ -363,6 +365,12 @@ export default function GameAnalyticsPage() {
     setPlayLogGame(null);
     showToast(isFirstSession ? 'Game started! Sessions saved' : 'Play sessions saved', 'success');
   };
+
+  const handleSessionPlannerSelect = useCallback((game: Game) => {
+    setShowSessionPlanner(false);
+    const gwm = gamesWithMetrics.find(g => g.id === game.id);
+    if (gwm) setDetailGame(gwm);
+  }, [gamesWithMetrics]);
 
   const handleQuickLog = async (game: GameWithMetrics, hours: number) => {
     const now = new Date();
@@ -1106,6 +1114,17 @@ export default function GameAnalyticsPage() {
                   >
                     Sections
                   </button>
+                  {/* Play Now — smart session picker */}
+                  {games.filter(g => g.status === 'In Progress' || g.status === 'Not Started').length > 0 && (
+                    <button
+                      onClick={() => setShowSessionPlanner(true)}
+                      className="flex items-center gap-1 px-2.5 py-1 bg-purple-500/15 border border-purple-500/25 text-purple-400/80 hover:text-purple-300 hover:bg-purple-500/20 rounded-lg text-[10px] font-medium transition-all flex-shrink-0"
+                      title="Smart game picker — get a personalised play recommendation"
+                    >
+                      <Play size={10} className="ml-0.5" />
+                      Play Now
+                    </button>
+                  )}
                   {/* ELO tier config */}
                   <div className="relative">
                     <button
@@ -1426,6 +1445,15 @@ export default function GameAnalyticsPage() {
         <RandomPicker
           games={games}
           onClose={() => setShowRandomPicker(false)}
+        />
+      )}
+
+      {/* Session Planner — smart "Play Now" modal */}
+      {showSessionPlanner && (
+        <SessionPlanner
+          games={games}
+          onClose={() => setShowSessionPlanner(false)}
+          onSelectGame={handleSessionPlannerSelect}
         />
       )}
 

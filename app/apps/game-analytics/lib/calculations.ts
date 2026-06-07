@@ -14251,3 +14251,160 @@ export function getReviewNudges(games: Game[]): ReviewNudgeSummary {
     recentlyCompletedCount,
   };
 }
+
+// ============================================================
+// Session Planner — Smart "Play Now" recommendation engine
+// Scores eligible games by time fit, vibe, mood history, and
+// existing chemistry factors to surface the best pick right now.
+// ============================================================
+
+export type SessionVibeType = 'chill' | 'action' | 'story' | 'quick' | 'challenge' | 'any';
+export type SessionContinuationMode = 'continue' | 'fresh' | 'either';
+export type SessionTimeFit = 'perfect' | 'short' | 'long' | 'unknown';
+
+export interface SessionPlannerPrefs {
+  timeAvailableHours: number;
+  vibe: SessionVibeType;
+  continuationMode: SessionContinuationMode;
+}
+
+export interface SessionPlannerRec {
+  game: Game;
+  score: number;
+  reasons: string[];
+  moodPositivityPct: number | null;
+  timeFit: SessionTimeFit;
+  avgSessionHours: number | null;
+  heroStat: string;
+}
+
+const SESSION_PLANNER_VIBE_MAP: Record<SessionVibeType, string[]> = {
+  chill:     ['puzzle', 'indie', 'simulation', 'visual novel', 'adventure', 'casual', 'narrative', 'platformer', 'life sim'],
+  action:    ['action', 'shooter', 'sports', 'racing', 'fighting', 'beat em up', 'hack and slash', 'action-adventure'],
+  story:     ['rpg', 'adventure', 'jrpg', 'narrative', 'action rpg', 'visual novel', 'story', 'interactive movie', 'metroidvania'],
+  quick:     ['sports', 'racing', 'fighting', 'arcade', 'platformer', 'party', 'puzzle', 'casual'],
+  challenge: ['souls', 'roguelite', 'roguelike', 'strategy', 'simulation', 'rts', 'horror', 'tactics', 'survival', 'soulslike'],
+  any:       [],
+};
+
+export function getSessionPlannerRecs(
+  games: Game[],
+  prefs: SessionPlannerPrefs,
+  limit: number = 5,
+): SessionPlannerRec[] {
+  const { timeAvailableHours, vibe, continuationMode } = prefs;
+
+  const eligible = games.filter(g => {
+    if (g.status === 'Wishlist' || g.status === 'Abandoned') return false;
+    if (continuationMode === 'continue') return g.status === 'In Progress';
+    if (continuationMode === 'fresh') return g.status === 'Not Started' || g.status === 'Completed';
+    return true;
+  });
+
+  if (eligible.length === 0) return [];
+
+  const vibeGenres = SESSION_PLANNER_VIBE_MAP[vibe];
+
+  const scored: SessionPlannerRec[] = eligible.map(game => {
+    const chemistry = getGameChemistry(game, games);
+
+    // ── Time fit ──────────────────────────────────────
+    const logs = game.playLogs ?? [];
+    const rawAvg = logs.length > 0 ? logs.reduce((s, l) => s + l.hours, 0) / logs.length : null;
+    const avgSessionHours = rawAvg !== null ? Math.round(rawAvg * 10) / 10 : null;
+
+    let timeFit: SessionTimeFit = 'unknown';
+    let timeFitScore = 55;
+    if (avgSessionHours !== null) {
+      const ratio = avgSessionHours / timeAvailableHours;
+      if (ratio >= 0.5 && ratio <= 1.35) { timeFit = 'perfect'; timeFitScore = 92; }
+      else if (ratio < 0.5)              { timeFit = 'short';   timeFitScore = 72; }
+      else                               { timeFit = 'long';    timeFitScore = 24; }
+    } else {
+      // No prior sessions — neutral for fresh starts, slight penalty for in-progress
+      timeFitScore = game.status === 'Not Started' ? 64 : 46;
+    }
+
+    // ── Vibe fit ─────────────────────────────────────
+    let vibeFitScore = 55;
+    let vibeMatch = false;
+    if (vibe !== 'any' && game.genre) {
+      const genreLower = game.genre.toLowerCase();
+      vibeMatch = vibeGenres.some(v => genreLower.includes(v));
+      vibeFitScore = vibeMatch ? 92 : 20;
+    } else if (vibe === 'any') {
+      vibeMatch = true;
+      vibeFitScore = 68;
+    }
+
+    // ── Mood history ─────────────────────────────────
+    const moodedLogs = logs.filter(l => l.mood);
+    let moodPositivityPct: number | null = null;
+    let moodScore = 62;
+    if (moodedLogs.length >= 2) {
+      const positive = moodedLogs.filter(l => l.mood === 'great' || l.mood === 'good').length;
+      moodPositivityPct = Math.round((positive / moodedLogs.length) * 100);
+      moodScore = moodPositivityPct >= 70 ? 92
+        : moodPositivityPct >= 50 ? 72
+        : moodPositivityPct >= 30 ? 42
+        : 18;
+    }
+
+    // ── Composite score ───────────────────────────────
+    const score = Math.min(100, Math.round(
+      chemistry.score * 0.25 +
+      timeFitScore    * 0.30 +
+      vibeFitScore    * 0.25 +
+      moodScore       * 0.20,
+    ));
+
+    // ── Reasons ──────────────────────────────────────
+    const reasons: string[] = [];
+    if (timeFit === 'perfect' && avgSessionHours !== null) {
+      reasons.push(`Sessions avg ${avgSessionHours}h — fits your window`);
+    } else if (timeFit === 'short' && avgSessionHours !== null) {
+      reasons.push(`Quick sessions (~${avgSessionHours}h avg)`);
+    } else if (timeFit === 'long' && avgSessionHours !== null) {
+      reasons.push(`Long sessions (${avgSessionHours}h avg) — plan extra time`);
+    }
+    if (vibeMatch && vibe !== 'any') {
+      const vibeLabels: Record<SessionVibeType, string> = {
+        chill:     'Matches your chill vibe',
+        action:    'High-energy pick',
+        story:     'Rich story ready for you',
+        quick:     'Perfect pick-up-and-play',
+        challenge: 'Will push your skills',
+        any:       '',
+      };
+      if (vibeLabels[vibe]) reasons.push(vibeLabels[vibe]);
+    }
+    if (moodPositivityPct !== null && moodPositivityPct >= 70) {
+      reasons.push(`${moodPositivityPct}% of your sessions felt great`);
+    } else if (moodPositivityPct !== null && moodPositivityPct < 40 && moodedLogs.length >= 3) {
+      reasons.push(`Only ${moodPositivityPct}% great sessions historically`);
+    }
+    if (reasons.length < 2 && chemistry.justification) {
+      reasons.push(chemistry.justification);
+    }
+
+    // ── Hero stat ─────────────────────────────────────
+    let heroStat = '';
+    const totalHrs = getTotalHours(game);
+    if (game.status === 'Not Started' && game.datePurchased) {
+      const days = Math.floor((Date.now() - parseLocalDate(game.datePurchased).getTime()) / 86400000);
+      heroStat = days > 60 ? `${days}d waiting on your shelf` : days > 14 ? `Added ${days}d ago` : 'Recently added';
+    } else if (game.price > 0 && totalHrs > 0) {
+      heroStat = `$${(game.price / totalHrs).toFixed(2)}/hr so far`;
+    } else if (totalHrs > 0) {
+      heroStat = `${totalHrs.toFixed(1)}h logged`;
+    } else if (game.rating > 0) {
+      heroStat = `Rated ${game.rating}/10`;
+    } else if (game.price > 0) {
+      heroStat = `Paid $${game.price.toFixed(0)}`;
+    }
+
+    return { game, score, reasons: reasons.slice(0, 3), moodPositivityPct, timeFit, avgSessionHours, heroStat };
+  });
+
+  return scored.sort((a, b) => b.score - a.score).slice(0, limit);
+}
