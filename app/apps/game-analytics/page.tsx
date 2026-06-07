@@ -49,6 +49,8 @@ import { ErrorLogPanel, ErrorLogButton } from './components/ErrorLogPanel';
 import { WhatsNewModal } from './components/WhatsNewModal';
 import { GameReviewChat } from './components/GameReviewChat';
 import { GameCompareModal } from './components/GameCompareModal';
+import { useSessionTimer } from './hooks/useSessionTimer';
+import { SessionTimerBanner } from './components/SessionTimerBanner';
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist';
@@ -183,6 +185,42 @@ export default function GameAnalyticsPage() {
     reorderQueue,
     isInQueue,
   } = useGameQueue(games, updateGame);
+  // Session timer
+  const {
+    activeTimer,
+    elapsedHours,
+    formattedTime,
+    isRunning,
+    startTimer,
+    pauseTimer,
+    resumeTimer,
+    snapshotAndStop,
+    discardTimer,
+  } = useSessionTimer();
+  const [playLogInitialHours, setPlayLogInitialHours] = useState<number | undefined>(undefined);
+
+  const handleStopTimer = useCallback(() => {
+    const result = snapshotAndStop();
+    if (!result) return;
+    const game = games.find(g => g.id === result.gameId);
+    if (!game) return;
+    const gwm = gamesWithMetrics.find(g => g.id === result.gameId);
+    setPlayLogInitialHours(Math.max(0.1, result.hours));
+    setPlayLogGame(gwm ?? (game as GameWithMetrics));
+  }, [snapshotAndStop, games, gamesWithMetrics]);
+
+  const handleStartTimer = useCallback((game: GameWithMetrics) => {
+    if (activeTimer && activeTimer.gameId !== game.id) {
+      const confirmed = window.confirm(
+        `A timer is already running for "${activeTimer.gameName}". Stop it and start a new one for "${game.name}"?`
+      );
+      if (!confirmed) return;
+      discardTimer(); // discard current without logging
+    }
+    startTimer({ id: game.id, name: game.name, thumbnail: game.thumbnail });
+    showToast(`Timer started for ${game.name}`, 'success');
+  }, [activeTimer, discardTimer, startTimer, showToast]);
+
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingGame, setEditingGame] = useState<GameWithMetrics | null>(null);
   const [playLogGame, setPlayLogGame] = useState<GameWithMetrics | null>(null);
@@ -937,6 +975,20 @@ export default function GameAnalyticsPage() {
       {/* Main Content */}
       <div className="flex-1 px-6 py-6">
         <div className="max-w-6xl mx-auto">
+          {/* Session Timer Banner — shown whenever a timer is active */}
+          {activeTimer && (
+            <SessionTimerBanner
+              timer={activeTimer}
+              formattedTime={formattedTime}
+              elapsedHours={elapsedHours}
+              isRunning={isRunning}
+              onPause={pauseTimer}
+              onResume={resumeTimer}
+              onStop={handleStopTimer}
+              onDiscard={discardTimer}
+            />
+          )}
+
           {/* On This Day */}
           {games.length > 0 && <OnThisDayCard games={games} />}
 
@@ -1417,7 +1469,8 @@ export default function GameAnalyticsPage() {
         <PlayLogModal
           game={playLogGame}
           onSave={handleSavePlayLogs}
-          onClose={() => setPlayLogGame(null)}
+          onClose={() => { setPlayLogGame(null); setPlayLogInitialHours(undefined); }}
+          initialHours={playLogInitialHours}
         />
       )}
 
@@ -1533,7 +1586,12 @@ export default function GameAnalyticsPage() {
             setCompareGame(detailGame);
             setDetailGame(null);
           }}
+          onStartTimer={() => {
+            handleStartTimer(detailGame);
+            setDetailGame(null);
+          }}
           isInQueue={isInQueue(detailGame.id)}
+          hasActiveTimer={!!activeTimer}
         />
       )}
 

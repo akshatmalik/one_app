@@ -1,6 +1,12 @@
 {
   "entries": [
     {
+      "date": "2026-06-07",
+      "area": "Session Timer",
+      "title": "Track exactly how long you played — no more guessing",
+      "body": "Open any game's detail sheet and tap Start to begin a live session timer. A banner at the top of the app shows the running clock in real time. When you're done, tap Stop & Log and the exact elapsed time is pre-filled in your play log — just add optional notes and save. You can pause mid-session and resume later, and the timer survives closing and reopening the app."
+    },
+    {
       "date": "2026-06-01",
       "area": "Game detail",
       "title": "Compare any two games head to head",
