@@ -14251,3 +14251,227 @@ export function getReviewNudges(games: Game[]): ReviewNudgeSummary {
     recentlyCompletedCount,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Session Planner
+// ---------------------------------------------------------------------------
+
+export type PlannerMood = 'chill' | 'adventure' | 'story' | 'quick' | 'marathon';
+
+export interface SessionPickReason {
+  text: string;
+  emoji: string;
+}
+
+export interface SessionPlannerPick {
+  game: Game;
+  score: number;
+  headline: string;
+  reasons: SessionPickReason[];
+  projectedCostPerHour: number | null;
+  projectedValueRating: 'Excellent' | 'Good' | 'Fair' | 'Poor' | null;
+  urgencyTier: 'high' | 'medium' | null;
+  streakImpact: boolean;
+}
+
+const MOOD_GENRE_BOOST: Record<PlannerMood, Record<string, number>> = {
+  chill:     { Simulation: 10, Sports: 8, Puzzle: 10, Casual: 12, Racing: 6, 'Party': 8 },
+  adventure: { 'Action-Adventure': 12, Adventure: 10, 'Open World': 10, Action: 8, 'Platformer': 7 },
+  story:     { RPG: 12, 'Action-RPG': 10, Adventure: 8, 'Visual Novel': 12, 'Narrative': 10, 'Horror': 7 },
+  quick:     { Sports: 6, Racing: 8, Puzzle: 7, Action: 5, 'Platformer': 6 },
+  marathon:  { RPG: 12, Strategy: 10, 'Open World': 12, 'Action-RPG': 8, 'Simulation': 7 },
+};
+
+export function getSessionPlannerPicks(
+  games: Game[],
+  availableMinutes: number,
+  moods: PlannerMood[]
+): SessionPlannerPick[] {
+  const playable = games.filter(g =>
+    g.status === 'Not Started' || g.status === 'In Progress'
+  );
+  if (playable.length === 0) return [];
+
+  const availableHours = availableMinutes / 60;
+
+  // Genre preference from completed games
+  const genreRatings: Record<string, number[]> = {};
+  games
+    .filter(g => g.status === 'Completed' && g.genre && g.rating > 0)
+    .forEach(g => {
+      if (!genreRatings[g.genre!]) genreRatings[g.genre!] = [];
+      genreRatings[g.genre!].push(g.rating);
+    });
+  const genreAvg: Record<string, number> = Object.fromEntries(
+    Object.entries(genreRatings).map(([genre, ratings]) => [
+      genre,
+      ratings.reduce((a, b) => a + b, 0) / ratings.length,
+    ])
+  );
+
+  function calcAvgSession(g: Game): number {
+    if (!g.playLogs || g.playLogs.length === 0) return 2;
+    return getTotalHours(g) / g.playLogs.length;
+  }
+
+  const streak = getCurrentGamingStreak(games);
+  const today = new Date().toDateString();
+  const playedToday = games.some(g =>
+    g.playLogs?.some(l => parseLocalDate(l.date).toDateString() === today)
+  );
+  const streakAtRisk = streak > 0 && !playedToday;
+
+  const results: SessionPlannerPick[] = playable.map(game => {
+    let score = 50;
+    const reasons: SessionPickReason[] = [];
+
+    // Genre preference
+    const genreScore = game.genre ? (genreAvg[game.genre] ?? -1) : -1;
+    if (genreScore >= 8) {
+      score += 20;
+      reasons.push({ emoji: '❤️', text: `You love ${game.genre} (avg ${genreScore.toFixed(1)}/10)` });
+    } else if (genreScore >= 6.5) {
+      score += 8;
+      reasons.push({ emoji: '👍', text: `Good track record with ${game.genre}` });
+    } else if (genreScore > 0 && genreScore < 5) {
+      score -= 10;
+    }
+
+    // Mood match
+    let moodBoosted = false;
+    for (const mood of moods) {
+      const boost = game.genre ? (MOOD_GENRE_BOOST[mood][game.genre] ?? 0) : 0;
+      if (boost > 0 && !moodBoosted) {
+        score += boost;
+        moodBoosted = true;
+        const moodLabels: Record<PlannerMood, string> = {
+          chill: 'Good chill game',
+          adventure: 'Matches your adventure mood',
+          story: 'Story-rich — right for tonight',
+          quick: 'Works great in short sessions',
+          marathon: 'Built for deep sessions',
+        };
+        reasons.push({ emoji: '🎯', text: moodLabels[mood] });
+      }
+    }
+
+    // Quick mood: favour games with short avg sessions
+    if (moods.includes('quick') && calcAvgSession(game) <= 1.5 && !moodBoosted) {
+      score += 8;
+      reasons.push({ emoji: '⚡', text: 'Short sessions work well here' });
+    }
+
+    // Time fit
+    const sessionAvg = calcAvgSession(game);
+    if (availableHours >= sessionAvg * 0.6 && availableHours <= sessionAvg * 2.5) {
+      score += 8;
+    } else if (availableHours < sessionAvg * 0.35) {
+      score -= 8;
+    }
+
+    // In Progress boost + recency
+    if (game.status === 'In Progress') {
+      score += 12;
+      const logs = (game.playLogs ?? []).sort((a, b) => b.date.localeCompare(a.date));
+      const lastLog = logs[0] ?? null;
+      if (lastLog) {
+        const daysAgo = Math.floor(
+          (Date.now() - parseLocalDate(lastLog.date).getTime()) / 86400000
+        );
+        if (daysAgo === 0) {
+          score += 8;
+          reasons.push({ emoji: '🔥', text: 'Playing today — keep going!' });
+        } else if (daysAgo <= 3) {
+          score += 8;
+          reasons.push({ emoji: '🔥', text: `Played ${daysAgo}d ago — ride the wave` });
+        } else if (daysAgo <= 14) {
+          score += 3;
+          reasons.push({ emoji: '⚡', text: 'In progress — pick up where you left off' });
+        } else {
+          reasons.push({ emoji: '⏰', text: `${daysAgo} days since last session` });
+        }
+      } else {
+        reasons.push({ emoji: '🎮', text: 'In progress — keep the momentum' });
+      }
+    }
+
+    // Queue position
+    if (game.queuePosition && game.queuePosition <= 3) {
+      score += 12;
+      reasons.push({ emoji: '📋', text: `#${game.queuePosition} on your priority queue` });
+    } else if (game.queuePosition && game.queuePosition <= 6) {
+      score += 5;
+    }
+
+    // Value impact (will tonight push to a better tier?)
+    const totalHrs = getTotalHours(game);
+    const projHrs = totalHrs + availableHours;
+    const projCph = game.price > 0 ? game.price / projHrs : null;
+    const projRating = projCph !== null ? getValueRating(projCph) : null;
+    const currentCph = game.price > 0 && totalHrs > 0 ? game.price / totalHrs : null;
+
+    if (currentCph !== null && projCph !== null && projRating !== null) {
+      const tierOrder = ['Poor', 'Fair', 'Good', 'Excellent'] as const;
+      const curIdx = tierOrder.indexOf(getValueRating(currentCph));
+      const projIdx = tierOrder.indexOf(projRating);
+      if (projIdx > curIdx) {
+        score += 18;
+        reasons.push({
+          emoji: '💰',
+          text: `Tonight → ${projRating} value ($${projCph.toFixed(2)}/hr)`,
+        });
+      }
+    }
+
+    // Streak urgency
+    let streakImpact = false;
+    if (streakAtRisk) {
+      streakImpact = true;
+      score += 10;
+      reasons.push({ emoji: '🔥', text: `Keeps your ${streak}-day streak alive` });
+    }
+
+    // Shelf life / abandonment urgency
+    const expiry = getShelfLifeExpiry(game, games);
+    const urgencyTier: 'high' | 'medium' | null =
+      expiry.tier === 'critical' ? 'high' :
+      expiry.tier === 'at_risk' ? 'medium' : null;
+    if (urgencyTier === 'high') {
+      score += 15;
+      reasons.push({ emoji: '⚠️', text: 'At risk of abandonment — rescue it tonight' });
+    } else if (urgencyTier === 'medium') {
+      score += 8;
+      reasons.push({ emoji: '⏳', text: 'Interest cooling — worth revisiting' });
+    }
+
+    // Build headline
+    let headline = 'Ready to play';
+    if (urgencyTier === 'high') headline = 'Play it before you forget about it';
+    else if (streakImpact && streak >= 3) headline = `Keep the ${streak}-day streak alive`;
+    else if (reasons.find(r => r.emoji === '💰')) headline = 'One session to better value';
+    else if (reasons.find(r => r.emoji === '🔥' && !r.text.includes('streak'))) headline = 'Ride the momentum';
+    else if (reasons.find(r => r.emoji === '❤️')) headline = 'Right in your wheelhouse';
+    else if (reasons.find(r => r.emoji === '📋')) headline = 'Top of your queue';
+    else if (game.status === 'In Progress') headline = 'Pick up where you left off';
+
+    if (reasons.length === 0) {
+      reasons.push({ emoji: '🎮', text: 'In your library, ready to go' });
+    }
+
+    return {
+      game,
+      score,
+      headline,
+      reasons: reasons.slice(0, 3),
+      projectedCostPerHour: projCph !== null ? Math.round(projCph * 100) / 100 : null,
+      projectedValueRating: projRating,
+      urgencyTier,
+      streakImpact,
+    };
+  });
+
+  return results
+    .filter(r => r.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 3);
+}

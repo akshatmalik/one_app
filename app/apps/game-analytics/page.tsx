@@ -49,6 +49,7 @@ import { ErrorLogPanel, ErrorLogButton } from './components/ErrorLogPanel';
 import { WhatsNewModal } from './components/WhatsNewModal';
 import { GameReviewChat } from './components/GameReviewChat';
 import { GameCompareModal } from './components/GameCompareModal';
+import { SessionPlanner } from './components/SessionPlanner';
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist';
@@ -217,6 +218,7 @@ export default function GameAnalyticsPage() {
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showErrorLog, setShowErrorLog] = useState(false);
   const [showWhatsNew, setShowWhatsNew] = useState(false);
+  const [showSessionPlanner, setShowSessionPlanner] = useState(false);
 
   // Week recap data for header strip
   const weekRecap = useMemo(() => {
@@ -570,6 +572,14 @@ export default function GameAnalyticsPage() {
                   <>
                     <div className="fixed inset-0 z-40" onClick={() => setShowCommandPalette(false)} />
                     <div className="absolute right-0 top-full mt-1 z-50 bg-[#1a1a2e] border border-white/10 rounded-xl shadow-2xl py-1 min-w-[180px]">
+                      {games.filter(g => g.status === 'Not Started' || g.status === 'In Progress').length > 0 && (
+                        <button
+                          onClick={() => { setShowSessionPlanner(true); setShowCommandPalette(false); }}
+                          className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white/70 hover:text-white hover:bg-white/5 transition-all"
+                        >
+                          <Clock size={14} /> Plan Tonight
+                        </button>
+                      )}
                       {games.filter(g => g.status !== 'Wishlist' && g.status !== 'Completed' && g.status !== 'Abandoned').length > 0 && (
                         <button
                           onClick={() => { setShowRandomPicker(true); setShowCommandPalette(false); }}
@@ -1559,6 +1569,19 @@ export default function GameAnalyticsPage() {
             }
           }}
           onClose={() => setReviewChatGame(null)}
+        />
+      )}
+
+      {/* Session Planner */}
+      {showSessionPlanner && (
+        <SessionPlanner
+          games={games}
+          onClose={() => setShowSessionPlanner(false)}
+          onSelectGame={game => {
+            setShowSessionPlanner(false);
+            const gwm = gamesWithMetrics.find(g => g.id === game.id);
+            if (gwm) setDetailGame(gwm);
+          }}
         />
       )}
     </div>

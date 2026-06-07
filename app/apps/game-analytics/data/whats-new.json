@@ -1,6 +1,12 @@
 {
   "entries": [
     {
+      "date": "2026-06-07",
+      "area": "Games tab",
+      "title": "Plan tonight's gaming session in seconds",
+      "body": "Open the ⋮ menu and tap \"Plan Tonight\". Tell the app how much time you have and what vibe you're after — Chill, Adventure, Story, Quick hit, or Marathon — and it picks your three best games for the evening. Each pick shows what your cost-per-hour will be after the session, why it's a good fit right now (genre match, streak risk, value milestone), and opens the game detail sheet in one tap."
+    },
+    {
       "date": "2026-06-01",
       "area": "Game detail",
       "title": "Compare any two games head to head",

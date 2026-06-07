@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-07 12:00 — Games Tab — Tonight's Plan Session Planner
+
+**Files**: app/apps/game-analytics/lib/calculations.ts, app/apps/game-analytics/components/SessionPlanner.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Added a "Tonight's Plan" session planner accessible via the ⋮ command palette. Users pick how much time they have (30m–4h+) and an optional mood (Chill / Adventure / Story / Quick hit / Marathon), then see three prioritised game picks with scored reasoning. Each pick shows the projected cost-per-hour after tonight's session, reason tags (streak risk, value tier improvement, genre match, queue priority, shelf-life urgency), and a headline. Tapping a pick opens the game's detail sheet.  The scoring function `getSessionPlannerPicks()` considers genre preference built from completed-game ratings, mood–genre affinity, time-fit vs historical session length, in-progress recency, queue position, value trajectory, streak risk, and shelf-life expiry — filling the gap between the static Up Next queue and the random picker.
+
+FOLLOW-UP: Could surface the planner as a floating "Plan Tonight" CTA button on the Games tab when the user has 3+ playable games, for faster access without opening the command palette.
+
 ## 2026-06-01 06:00 — Game Detail — Head-to-Head Game Comparison
 
 **Files**: app/apps/game-analytics/components/GameCompareModal.tsx, app/apps/game-analytics/components/GameBottomSheet.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json
