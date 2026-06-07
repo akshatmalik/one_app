@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-07 12:00 — Games Tab — Live Session Timer
+
+**Files**: app/apps/game-analytics/hooks/useSessionTimer.ts, app/apps/game-analytics/components/SessionTimer.tsx, app/apps/game-analytics/components/PlayLogModal.tsx, app/apps/game-analytics/page.tsx
+**Risk**: not risky
+
+Added a live session timer so users no longer have to remember how long they played. A floating "Timer" pill sits in the bottom-right corner on every tab. Tap it to pick a game from a searchable list (In Progress games surface first), then the pill turns green and starts counting in real time. Tap the active pill to expand a full-screen overlay with a big digital clock, pause/resume controls, and a "Stop & Log" button that pre-fills the PlayLogModal with the exact elapsed hours. The timer survives page refreshes (localStorage-persisted) and shows the game thumbnail as a blurred background. If you close without logging, a "Discard session" link cancels it cleanly.
+
+FOLLOW-UP: Could show the timer start button on individual Now Playing cards for one-tap launch, or add session streaks when multiple sessions are logged in the same day.
+
 ## 2026-06-01 06:00 — Game Detail — Head-to-Head Game Comparison
 
 **Files**: app/apps/game-analytics/components/GameCompareModal.tsx, app/apps/game-analytics/components/GameBottomSheet.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json

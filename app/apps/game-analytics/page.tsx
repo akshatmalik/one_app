@@ -49,6 +49,8 @@ import { ErrorLogPanel, ErrorLogButton } from './components/ErrorLogPanel';
 import { WhatsNewModal } from './components/WhatsNewModal';
 import { GameReviewChat } from './components/GameReviewChat';
 import { GameCompareModal } from './components/GameCompareModal';
+import { SessionTimer } from './components/SessionTimer';
+import { useSessionTimer } from './hooks/useSessionTimer';
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist';
@@ -217,6 +219,22 @@ export default function GameAnalyticsPage() {
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showErrorLog, setShowErrorLog] = useState(false);
   const [showWhatsNew, setShowWhatsNew] = useState(false);
+
+  // Session timer
+  const { state: timerState, start: startTimer, pause: pauseTimer, resume: resumeTimer, stop: stopTimer, discard: discardTimer } = useSessionTimer();
+  const [timerDefaultHours, setTimerDefaultHours] = useState<number | undefined>();
+
+  const handleTimerStop = useCallback(() => {
+    const result = stopTimer();
+    if (!result) return;
+    const game = gamesWithMetrics.find(g => g.id === result.gameId);
+    if (!game) {
+      showToast(`Couldn't find "${result.gameName}" to log time.`, 'error');
+      return;
+    }
+    setTimerDefaultHours(Math.round(result.hours * 100) / 100);
+    setPlayLogGame(game);
+  }, [stopTimer, gamesWithMetrics, showToast]);
 
   // Week recap data for header strip
   const weekRecap = useMemo(() => {
@@ -1417,7 +1435,8 @@ export default function GameAnalyticsPage() {
         <PlayLogModal
           game={playLogGame}
           onSave={handleSavePlayLogs}
-          onClose={() => setPlayLogGame(null)}
+          onClose={() => { setPlayLogGame(null); setTimerDefaultHours(undefined); }}
+          defaultHours={timerDefaultHours}
         />
       )}
 
@@ -1561,6 +1580,17 @@ export default function GameAnalyticsPage() {
           onClose={() => setReviewChatGame(null)}
         />
       )}
+
+      {/* Session Timer — floating pill + picker + expanded overlay */}
+      <SessionTimer
+        games={games}
+        state={timerState}
+        onStart={startTimer}
+        onPause={pauseTimer}
+        onResume={resumeTimer}
+        onStop={handleTimerStop}
+        onDiscard={discardTimer}
+      />
     </div>
   );
 }

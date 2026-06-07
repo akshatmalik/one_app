@@ -1,6 +1,12 @@
 {
   "entries": [
     {
+      "date": "2026-06-07",
+      "area": "Games tab",
+      "title": "Live session timer — stop guessing how long you played",
+      "body": "Tap the new Timer button (bottom-right corner) to pick a game and start a live clock. The timer persists across tab switches and page refreshes. When you're done, hit Stop & Log and the Play Sessions form opens with the exact elapsed time already filled in — just add a note and save. No more mental math after a long gaming session."
+    },
+    {
       "date": "2026-06-01",
       "area": "Game detail",
       "title": "Compare any two games head to head",

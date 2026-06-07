@@ -11,6 +11,7 @@ interface PlayLogModalProps {
   game: Game;
   onSave: (playLogs: PlayLog[]) => Promise<void>;
   onClose: () => void;
+  defaultHours?: number; // Pre-filled from session timer
 }
 
 // Get local date in YYYY-MM-DD format (not UTC)
@@ -32,7 +33,7 @@ const NOTE_PROMPTS = [
   'Making good progress?',
 ];
 
-export function PlayLogModal({ game, onSave, onClose }: PlayLogModalProps) {
+export function PlayLogModal({ game, onSave, onClose, defaultHours }: PlayLogModalProps) {
   const [logs, setLogs] = useState<PlayLog[]>(game.playLogs || []);
   const [loading, setLoading] = useState(false);
   const [notesExpanded, setNotesExpanded] = useState(false);
@@ -45,7 +46,7 @@ export function PlayLogModal({ game, onSave, onClose }: PlayLogModalProps) {
     vibe?: SessionVibe;
   }>({
     date: getLocalDateString(),
-    hours: '1',
+    hours: defaultHours != null ? String(Math.round(defaultHours * 100) / 100) : '1',
     notes: '',
   });
 
@@ -121,6 +122,16 @@ export function PlayLogModal({ game, onSave, onClose }: PlayLogModalProps) {
             <div className="text-lg font-semibold text-white">{totalHours.toFixed(1)}h</div>
           </div>
         </div>
+
+        {/* Timer session banner */}
+        {defaultHours != null && (
+          <div className="mx-4 mt-3 mb-0 px-3 py-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex items-center gap-2">
+            <span className="text-emerald-400 text-sm">⏱</span>
+            <p className="text-[11px] text-emerald-300/80">
+              Session timed: <strong>{Math.round(defaultHours * 100) / 100}h</strong> pre-filled below. Adjust if needed.
+            </p>
+          </div>
+        )}
 
         {/* Add New Log */}
         <div className="p-4 border-b border-white/5">
