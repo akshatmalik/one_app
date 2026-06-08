@@ -1,0 +1,43 @@
+import { TrackedGame } from './types';
+
+export const TRACKED_GAMES: TrackedGame[] = [
+  {
+    id: 'wolverine',
+    name: "Marvel's Wolverine",
+    developer: 'Insomniac Games',
+    platform: ['PS5'],
+    releaseWindow: 'Fall 2026',
+    price: 79.99,
+    preOrderAvailable: true,
+    youtubeSearchQuery: "Marvel's Wolverine PS5 game trailer 2026",
+    wikipediaSlug: "Marvel's_Wolverine",
+    genre: 'Action-Adventure',
+    coverColor: '#FFB800',
+  },
+  {
+    id: 'control-resonant',
+    name: 'Control: Resonant',
+    developer: 'Remedy Entertainment',
+    platform: ['PS5', 'Xbox Series X/S', 'PC'],
+    releaseWindow: '2026',
+    price: 69.99,
+    preOrderAvailable: false,
+    youtubeSearchQuery: 'Control Resonant Remedy game trailer 2026',
+    wikipediaSlug: 'Control_(video_game)',
+    genre: 'Action-Adventure',
+    coverColor: '#CC3300',
+  },
+  {
+    id: 'gow-laufey',
+    name: 'God of War: Laufey',
+    developer: 'Santa Monica Studio',
+    platform: ['PS5'],
+    releaseWindow: 'September 2026',
+    price: 79.99,
+    preOrderAvailable: true,
+    youtubeSearchQuery: 'God of War Laufey PS5 game trailer 2026',
+    wikipediaSlug: 'God_of_War_(franchise)',
+    genre: 'Action-Adventure',
+    coverColor: '#1A6B8A',
+  },
+];

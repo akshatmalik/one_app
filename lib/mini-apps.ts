@@ -51,6 +51,16 @@ export const MINI_APPS: MiniApp[] = [
     tags: ['game', 'cards', 'strategy'],
     isNew: true,
   },
+  {
+    id: 'game-interest-tracker',
+    name: 'Game Interest Tracker',
+    description: 'Track composite buzz scores for upcoming releases — trailer views, Trends, subreddit growth',
+    icon: '📡',
+    path: '/apps/game-interest-tracker',
+    color: '#7C3AED',
+    tags: ['gaming', 'analytics'],
+    isNew: true,
+  },
 ];
 
 export function getMiniAppById(id: string): MiniApp | undefined {
