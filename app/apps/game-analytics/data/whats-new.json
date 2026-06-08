@@ -1,6 +1,12 @@
 {
   "entries": [
     {
+      "date": "2026-06-08",
+      "area": "Stats tab",
+      "title": "Set goals and actually hit them",
+      "body": "Gaming Goals is now live in the Stats tab. Create goals for completions, hours played, spending limits, genre variety, or backlog clearance — and the app tracks your progress automatically as you play. New: the app analyses your library and suggests personalised goals you can set with a single tap, based on your actual pace and habits."
+    },
+    {
       "date": "2026-06-01",
       "area": "Game detail",
       "title": "Compare any two games head to head",

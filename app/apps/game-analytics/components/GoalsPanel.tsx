@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { Target, Trophy, Plus, Trash2, Edit3, Check, Clock, ChevronDown, ChevronUp, X, Gamepad2, DollarSign, Flame, Layers, Sparkles } from 'lucide-react';
+import { Target, Trophy, Plus, Trash2, Edit3, Check, Clock, ChevronDown, ChevronUp, X, Lightbulb, DollarSign, Flame, Layers, Sparkles } from 'lucide-react';
 import { Game, GamingGoal, GoalType, GoalStatus } from '../lib/types';
-import { getTotalHours, parseLocalDate } from '../lib/calculations';
+import { getTotalHours, parseLocalDate, getSmartGoalSuggestions, GoalSuggestion } from '../lib/calculations';
 import { useGoals } from '../hooks/useGoals';
 import { useAuthContext } from '@/lib/AuthContext';
 import clsx from 'clsx';
@@ -131,6 +131,26 @@ export function GoalsPanel({ games }: { games: Game[] }) {
 
   const activeGoals = useMemo(() => goals.filter(g => g.status === 'active'), [goals]);
   const historyGoals = useMemo(() => goals.filter(g => g.status !== 'active'), [goals]);
+
+  // Smart goal suggestions derived from library data
+  const suggestions = useMemo(() => getSmartGoalSuggestions(games), [games]);
+  const [showSuggestions, setShowSuggestions] = useState(true);
+
+  // Pre-fill the form from a suggestion
+  const handleSetSuggestion = (sug: GoalSuggestion) => {
+    setFormTitle(sug.title);
+    setFormDescription(sug.description);
+    setFormType(sug.type);
+    setFormTarget(sug.targetValue.toString());
+    setFormUnit(sug.unit);
+    setFormEndDate(sug.endDate);
+    const now = new Date();
+    setFormStartDate(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`);
+    setFormCurrentValue('');
+    setEditingGoalId(null);
+    setShowAddForm(true);
+    setShowSuggestions(false);
+  };
 
   // Auto-calculate progress for active goals
   const goalsWithProgress = useMemo(() => {
@@ -409,6 +429,52 @@ export function GoalsPanel({ games }: { games: Game[] }) {
               Cancel
             </button>
           </div>
+        </div>
+      )}
+
+      {/* Smart Suggestions */}
+      {!showAddForm && suggestions.length > 0 && activeGoals.length < 4 && (
+        <div className="mb-5">
+          <button
+            onClick={() => setShowSuggestions(v => !v)}
+            className="w-full flex items-center justify-between mb-2.5 text-left group"
+          >
+            <div className="flex items-center gap-1.5">
+              <Lightbulb size={13} className="text-amber-400" />
+              <span className="text-xs font-medium text-white/50 group-hover:text-white/70 transition-colors">
+                Suggested for you
+              </span>
+            </div>
+            {showSuggestions
+              ? <ChevronUp size={12} className="text-white/20" />
+              : <ChevronDown size={12} className="text-white/20" />}
+          </button>
+
+          {showSuggestions && (
+            <div className="space-y-2">
+              {suggestions.map((sug, i) => {
+                const typeConfig = GOAL_TYPE_CONFIG[sug.type];
+                return (
+                  <div
+                    key={i}
+                    className="flex items-center gap-3 px-3 py-2.5 bg-white/[0.02] border border-white/5 rounded-xl hover:border-white/10 transition-all"
+                  >
+                    <span className="text-base shrink-0 leading-none">{sug.emoji}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-white/80 leading-snug truncate">{sug.title}</p>
+                      <p className="text-[11px] text-white/30 mt-0.5 truncate">{sug.reason}</p>
+                    </div>
+                    <button
+                      onClick={() => handleSetSuggestion(sug)}
+                      className="shrink-0 px-2.5 py-1 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 border border-amber-500/20 rounded-lg text-xs font-medium transition-all"
+                    >
+                      Set
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 

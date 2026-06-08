@@ -1,4 +1,4 @@
-import { Game, GameStatus, GameMetrics, AnalyticsSummary, TasteProfile, SessionMood } from './types';
+import { Game, GameStatus, GameMetrics, AnalyticsSummary, TasteProfile, SessionMood, GoalType } from './types';
 
 /**
  * Parse a YYYY-MM-DD date string as local time instead of UTC.
@@ -14250,4 +14250,158 @@ export function getReviewNudges(games: Game[]): ReviewNudgeSummary {
     reviewableCount: reviewable.length,
     recentlyCompletedCount,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Smart Goal Suggestions
+// ---------------------------------------------------------------------------
+
+export interface GoalSuggestion {
+  type: GoalType;
+  title: string;
+  description: string;
+  targetValue: number;
+  unit: string;
+  endDate: string;
+  reason: string;
+  emoji: string;
+}
+
+function toISODateStr(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/**
+ * Return up to 4 personalised goal suggestions derived entirely from the
+ * user's game library.  Each suggestion is ready to pre-fill the GoalsPanel
+ * form with a single click.
+ */
+export function getSmartGoalSuggestions(games: Game[]): GoalSuggestion[] {
+  const suggestions: GoalSuggestion[] = [];
+  const now = new Date();
+
+  const inOneMonth = new Date(now);
+  inOneMonth.setMonth(inOneMonth.getMonth() + 1);
+
+  const inTwoMonths = new Date(now);
+  inTwoMonths.setMonth(inTwoMonths.getMonth() + 2);
+
+  const yearEnd = new Date(now.getFullYear(), 11, 31);
+
+  const ownedGames = games.filter(g => g.status !== 'Wishlist');
+
+  // ---- 1. Backlog clearance -------------------------------------------------
+  const notStarted = ownedGames.filter(g => g.status === 'Not Started');
+  if (notStarted.length >= 4) {
+    const target = Math.min(3, Math.ceil(notStarted.length / 3));
+    suggestions.push({
+      type: 'backlog',
+      title: `Start ${target} game${target > 1 ? 's' : ''} from your backlog`,
+      description: `${notStarted.length} owned games haven't been played yet`,
+      targetValue: target,
+      unit: 'games started',
+      endDate: toISODateStr(inTwoMonths),
+      reason: `${notStarted.length} unstarted games are collecting dust`,
+      emoji: '📦',
+    });
+  }
+
+  // ---- 2. Finish something in progress ------------------------------------
+  const inProgress = ownedGames.filter(g => g.status === 'In Progress');
+  if (inProgress.length >= 2) {
+    const target = Math.max(1, Math.min(2, Math.floor(inProgress.length / 2)));
+    suggestions.push({
+      type: 'completion',
+      title: `Complete ${target === 1 ? 'a' : target} game${target > 1 ? 's' : ''} this month`,
+      description: `${inProgress.length} games are currently in progress`,
+      targetValue: target,
+      unit: 'games completed',
+      endDate: toISODateStr(inOneMonth),
+      reason: `${inProgress.length} games in progress — time to close one out`,
+      emoji: '🏁',
+    });
+  }
+
+  // ---- 3. Hours target based on recent activity ---------------------------
+  const thirtyDaysAgo = new Date(now);
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  const recentHours = getAllPlayLogs(games)
+    .filter(({ log }) => parseLocalDate(log.date) >= thirtyDaysAgo)
+    .reduce((sum, { log }) => sum + log.hours, 0);
+
+  if (recentHours >= 8) {
+    // Suggest ~20 % more than recent pace, rounded to nearest 5
+    const target = Math.ceil(recentHours * 1.2 / 5) * 5;
+    suggestions.push({
+      type: 'hours',
+      title: `Log ${target}+ hours this month`,
+      description: `You played ~${Math.round(recentHours)} hours last month`,
+      targetValue: target,
+      unit: 'hours',
+      endDate: toISODateStr(inOneMonth),
+      reason: `Recent pace: ${Math.round(recentHours)} hrs/month — a modest stretch`,
+      emoji: '⏱️',
+    });
+  } else if (ownedGames.length >= 3 && recentHours < 5) {
+    suggestions.push({
+      type: 'hours',
+      title: 'Play for 10 hours this month',
+      description: 'A gentle goal to get back into gaming',
+      targetValue: 10,
+      unit: 'hours',
+      endDate: toISODateStr(inOneMonth),
+      reason: 'Low recent activity — even 30 min a day adds up',
+      emoji: '⏱️',
+    });
+  }
+
+  // ---- 4. Spending cap based on current year trajectory -------------------
+  const thisYearStart = new Date(now.getFullYear(), 0, 1);
+  const thisYearSpent = ownedGames
+    .filter(g => g.datePurchased && parseLocalDate(g.datePurchased) >= thisYearStart)
+    .reduce((sum, g) => sum + g.price, 0);
+  const monthsElapsed = Math.max(1, now.getMonth() + 1);
+  const monthlyRate = thisYearSpent / monthsElapsed;
+
+  if (monthlyRate >= 25) {
+    const remainingMonths = 12 - monthsElapsed;
+    const projectedAnnual = thisYearSpent + monthlyRate * remainingMonths;
+    // Suggest 15 % below projected, rounded to nearest $50
+    const cap = Math.floor(projectedAnnual * 0.85 / 50) * 50;
+    if (cap >= 50) {
+      suggestions.push({
+        type: 'spending',
+        title: `Keep ${now.getFullYear()} spending under $${cap}`,
+        description: `On pace to spend ~$${Math.round(projectedAnnual)} this year`,
+        targetValue: cap,
+        unit: 'dollars',
+        endDate: toISODateStr(yearEnd),
+        reason: `$${Math.round(monthlyRate)}/month → ~$${Math.round(projectedAnnual)} projected`,
+        emoji: '💳',
+      });
+    }
+  }
+
+  // ---- 5. Genre variety (if in a rut) -------------------------------------
+  const genresInLibrary = new Set(ownedGames.filter(g => g.genre).map(g => g.genre!));
+  const recentGenres = new Set(
+    ownedGames
+      .filter(g => g.genre && (g.playLogs ?? []).some(log => parseLocalDate(log.date) >= thirtyDaysAgo))
+      .map(g => g.genre!)
+  );
+
+  if (genresInLibrary.size >= 3 && recentGenres.size <= 1 && suggestions.length < 4) {
+    suggestions.push({
+      type: 'genre_variety',
+      title: 'Play games from 3 different genres',
+      description: `You have ${genresInLibrary.size} genres in your library`,
+      targetValue: 3,
+      unit: 'genres',
+      endDate: toISODateStr(inTwoMonths),
+      reason: `Only playing ${recentGenres.size || 'one'} genre lately — branch out`,
+      emoji: '🌍',
+    });
+  }
+
+  return suggestions.slice(0, 4);
 }

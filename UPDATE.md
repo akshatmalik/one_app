@@ -5,6 +5,17 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-08 12:00 — Stats Tab — Gaming Goals (wire-in + smart suggestions)
+
+**Files**: app/apps/game-analytics/lib/calculations.ts, app/apps/game-analytics/components/GoalsPanel.tsx, app/apps/game-analytics/components/StatsView.tsx, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Surfaced the fully-built but previously unwired GoalsPanel into the Stats tab. Users can now set, track, and close goals for completions, hours, spending, genre variety, and backlog clearance — with progress calculated automatically from their library data. Added a new `getSmartGoalSuggestions()` engine that analyses each user's current library state (backlog depth, completion pace, spending trajectory, genre rut) and surfaces up to 4 personalised goal ideas with one-tap "Set" buttons to pre-fill the form instantly.
+
+FOLLOW-UP: Could add a goal progress summary widget to the main header strip (e.g. "Goal: 2/3 completions this month"), and a toast notification when a goal is automatically detected as complete.
+
+---
+
 ## 2026-06-01 06:00 — Game Detail — Head-to-Head Game Comparison
 
 **Files**: app/apps/game-analytics/components/GameCompareModal.tsx, app/apps/game-analytics/components/GameBottomSheet.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json
