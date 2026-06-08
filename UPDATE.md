@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-08 12:00 — Identity — Gaming Profile Card
+
+**Files**: app/apps/game-analytics/components/GamingProfileCard.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Added a "Gaming Profile Card" — a beautiful, screenshot-ready identity card opened via a new Profile button in the header (visible when you have games). The card surfaces your gaming personality type with a colour-coded section, your Gaming Score with tier label, a Hall of Fame row of your top 3 games with thumbnails, a 6-stat grid (hours, games, cost/hr, completion rate, avg rating, total spent), a Genre DNA section with colour-coded bars, and a current/best streak display. A "Copy Profile Text" button generates a formatted plain-text summary ready to paste anywhere. Users can also screenshot the card directly to share their gaming identity.
+
+FOLLOW-UP: Could add a "Download as Image" button using the Canvas API, or a "Share Link" feature that encodes the card data as a URL-safe base64 string.
+
 ## 2026-06-01 06:00 — Game Detail — Head-to-Head Game Comparison
 
 **Files**: app/apps/game-analytics/components/GameCompareModal.tsx, app/apps/game-analytics/components/GameBottomSheet.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json
