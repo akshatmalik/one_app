@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-08 00:00 — Games Tab — Tonight's Pick
+
+**Files**: app/apps/game-analytics/lib/calculations.ts, app/apps/game-analytics/components/TonightsPick.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Added a "Tonight's Pick" wizard that solves the most common daily dilemma: what should I actually play right now? A new banner prompt on the Games tab opens a two-step sheet — pick your available time (30 min / 1 hr / 2 hr / 4 hr+) then your mood (Anything / Chill / Story / Action / Competitive) — and instantly surfaces your top 3 library picks with specific, human-readable reasons: active streaks to protect, queue position, session-length fit, how long a game has been waiting, and mood/genre match. The #1 pick is expanded by default with a prominent "Play" button; tapping it opens the game's detail sheet for a quick check-in.
+
+FOLLOW-UP: Could add "Recently played" filtering (hide games played in the last hour) and a "surprised me!" short-cut that runs with random time/mood for serendipity.
+
 ## 2026-06-01 06:00 — Game Detail — Head-to-Head Game Comparison
 
 **Files**: app/apps/game-analytics/components/GameCompareModal.tsx, app/apps/game-analytics/components/GameBottomSheet.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json

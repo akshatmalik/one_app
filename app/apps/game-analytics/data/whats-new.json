@@ -1,6 +1,12 @@
 {
   "entries": [
     {
+      "date": "2026-06-08",
+      "area": "Games tab",
+      "title": "Tonight's Pick — what should I play right now?",
+      "body": "A new prompt on the Games tab asks two quick questions: how much time do you have, and what's your mood? In seconds you get your top 3 personalised picks from your own library — with specific reasons like 'you have a 5-day streak to protect' or 'this game has been waiting 47 days'. Tap Play on the top pick to log your session and get going."
+    },
+    {
       "date": "2026-06-01",
       "area": "Game detail",
       "title": "Compare any two games head to head",

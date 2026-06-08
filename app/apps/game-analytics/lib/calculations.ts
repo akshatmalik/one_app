@@ -14251,3 +14251,221 @@ export function getReviewNudges(games: Game[]): ReviewNudgeSummary {
     recentlyCompletedCount,
   };
 }
+
+// ── Tonight's Pick ────────────────────────────────────────────────────────────
+
+export type TonightsPickTime = '30min' | '1hr' | '2hr' | '4hr+';
+export type TonightsPickMood = 'anything' | 'chill' | 'competitive' | 'story' | 'action';
+
+export interface TonightsPickResult {
+  game: Game;
+  score: number;
+  reasons: string[];
+  matchLabel: 'Perfect Match' | 'Great Pick' | 'Good Option';
+  matchColor: string;
+  avgSessionHours: number | null;
+}
+
+const MOOD_GENRES: Record<TonightsPickMood, string[]> = {
+  anything: [],
+  chill: ['puzzle', 'simulation', 'casual', 'sports', 'strategy', 'indie', 'platformer'],
+  competitive: ['sports', 'fighting', 'fps', 'first-person shooter', 'battle royale', 'racing', 'multiplayer', 'online'],
+  story: ['rpg', 'adventure', 'visual novel', 'narrative', 'action-rpg', 'jrpg', 'role-playing', 'interactive fiction'],
+  action: ['action', 'action-rpg', 'hack and slash', 'shooter', 'fps', 'brawler', 'beat em up'],
+};
+
+function timeToHours(t: TonightsPickTime): number {
+  if (t === '30min') return 0.5;
+  if (t === '1hr') return 1;
+  if (t === '2hr') return 2;
+  return 4;
+}
+
+function matchesMood(game: Game, mood: TonightsPickMood): 'perfect' | 'partial' | 'none' {
+  if (mood === 'anything') return 'partial';
+  const genres = MOOD_GENRES[mood];
+  if (!game.genre) return 'none';
+  const g = game.genre.toLowerCase();
+  const exact = genres.some(gm => g.includes(gm) || gm.includes(g));
+  if (exact) return 'perfect';
+  // RPG cross-matches story
+  if (mood === 'story' && (g.includes('rpg') || g.includes('role'))) return 'perfect';
+  if (mood === 'action' && (g.includes('rpg') || g.includes('adventure'))) return 'partial';
+  return 'none';
+}
+
+function avgSessionHoursFor(game: Game): number | null {
+  const logs = game.playLogs;
+  if (!logs || logs.length === 0) return null;
+  return logs.reduce((s, l) => s + l.hours, 0) / logs.length;
+}
+
+function sessionFitScore(game: Game, availHours: number): number {
+  const avg = avgSessionHoursFor(game);
+  if (avg === null) {
+    // No sessions yet — estimate based on game length/status
+    // Assume a 2-hour session for unknown games
+    const diff = Math.abs(availHours - 2) / 2;
+    if (diff <= 0.3) return 18;
+    if (diff <= 0.8) return 12;
+    return 6;
+  }
+  const ratio = Math.abs(avg - availHours) / Math.max(avg, availHours);
+  if (ratio <= 0.25) return 20;
+  if (ratio <= 0.55) return 13;
+  if (ratio <= 0.9) return 7;
+  return 3;
+}
+
+/**
+ * Rank owned games by how well they fit the user's current situation.
+ * Returns top 5 candidates with scores + human-readable reasons.
+ */
+export function getTonightsPick(
+  games: Game[],
+  availableTime: TonightsPickTime,
+  mood: TonightsPickMood,
+): TonightsPickResult[] {
+  const availHours = timeToHours(availableTime);
+  const now = new Date();
+  const todayStr = now.toISOString().split('T')[0];
+  const owned = games.filter(g => g.status !== 'Wishlist');
+  if (owned.length === 0) return [];
+
+  const scored = owned.map(game => {
+    let score = 0;
+    const reasons: string[] = [];
+
+    // ── 1. Status fit (30 pts) ─────────────────────────────────────────────
+    if (game.status === 'In Progress') {
+      score += 30;
+    } else if (game.status === 'Not Started') {
+      const hasQueue = (game.queuePosition ?? 0) > 0;
+      score += hasQueue ? 20 : 10;
+    } else if (game.status === 'Completed') {
+      score += 3; // replay
+    } else {
+      score += 0; // Abandoned
+    }
+
+    // ── 2. Streak protection (20 pts) ──────────────────────────────────────
+    const streak = getGameStreak(game);
+    if (streak.isActive && streak.days >= 2) {
+      const bonus = Math.min(streak.days * 3, 20);
+      score += bonus;
+      reasons.push(`🔥 ${streak.days}-day streak — keep it alive!`);
+    }
+
+    // ── 3. Session length fit (20 pts) ─────────────────────────────────────
+    score += sessionFitScore(game, availHours);
+    const avg = avgSessionHoursFor(game);
+    if (avg !== null) {
+      const diff = Math.abs(avg - availHours) / Math.max(avg, availHours);
+      if (diff <= 0.25) reasons.push(`⏱️ Your ${avg.toFixed(1)}h avg session fits perfectly`);
+    } else if (game.status === 'Not Started') {
+      const hourLabel = availHours >= 4 ? '4+ hours' : `${availHours}h`;
+      reasons.push(`✨ ${hourLabel} is a great time to start something new`);
+    }
+
+    // ── 4. Mood/genre fit (15 pts) ─────────────────────────────────────────
+    const moodMatch = matchesMood(game, mood);
+    if (moodMatch === 'perfect') {
+      score += 15;
+      if (mood !== 'anything' && game.genre) {
+        reasons.push(`🎯 Matches your ${mood} mood`);
+      }
+    } else if (moodMatch === 'partial') {
+      score += 8;
+    }
+
+    // ── 5. Recency nudge (10 pts) ──────────────────────────────────────────
+    const logs = game.playLogs || [];
+    const lastLog = logs.length > 0
+      ? logs.map(l => l.date).sort().reverse()[0]
+      : null;
+    const daysSincePlayed = lastLog
+      ? Math.floor((now.getTime() - parseLocalDate(lastLog).getTime()) / 86400000)
+      : null;
+
+    if (game.status === 'Not Started' && game.datePurchased) {
+      const daysSince = Math.floor(
+        (now.getTime() - parseLocalDate(game.datePurchased).getTime()) / 86400000,
+      );
+      if (daysSince >= 30) {
+        score += 10;
+        reasons.push(`😴 Waiting in your library for ${daysSince} days`);
+      } else {
+        score += 5;
+        reasons.push(`🆕 Just added ${daysSince} day${daysSince !== 1 ? 's' : ''} ago`);
+      }
+    } else if (daysSincePlayed !== null) {
+      if (daysSincePlayed >= 14) {
+        score += 8;
+        reasons.push(`⏳ Not touched in ${daysSincePlayed} days`);
+      } else if (daysSincePlayed >= 7) {
+        score += 4;
+      }
+      // Played today/very recently — small bonus (not huge, streak handles that)
+      if (daysSincePlayed === 0 || daysSincePlayed === 1) {
+        score += 3;
+        reasons.push(`🕹️ Already going strong today`);
+      }
+    }
+
+    // ── 6. Queue position (5 pts) ──────────────────────────────────────────
+    const qPos = game.queuePosition ?? 0;
+    if (qPos === 1) {
+      score += 5;
+      reasons.push(`📋 First in your Up Next queue`);
+    } else if (qPos >= 2 && qPos <= 5) {
+      score += 3;
+      reasons.push(`📋 #${qPos} in your Up Next queue`);
+    }
+
+    // ── Extra context reasons ──────────────────────────────────────────────
+    if (game.status === 'In Progress' && !reasons.some(r => r.startsWith('🔥'))) {
+      const totalHours = getTotalHours(game);
+      if (totalHours >= 5) {
+        reasons.push(`🎮 ${totalHours.toFixed(0)}h invested — keep the momentum`);
+      } else {
+        reasons.push(`🎮 Just getting started`);
+      }
+    }
+
+    if (game.status === 'Completed' && game.rating >= 8 && reasons.length === 0) {
+      reasons.push(`⭐ You loved this one (${game.rating}/10) — worth revisiting`);
+    }
+
+    return { game, score, reasons, avg };
+  });
+
+  // Sort descending
+  scored.sort((a, b) => b.score - a.score);
+
+  // Take top 5, trim to max 3 reasons each, add match labels
+  return scored.slice(0, 5).map((s, i) => {
+    const topReasons = s.reasons.slice(0, 3);
+    if (topReasons.length === 0) {
+      // Fallback reason
+      if (s.game.status === 'In Progress') topReasons.push('🎮 Currently in progress');
+      else if (s.game.status === 'Completed') topReasons.push('⭐ A proven favourite');
+      else topReasons.push('🎯 A solid choice right now');
+    }
+
+    const matchLabel = i === 0
+      ? 'Perfect Match'
+      : i === 1
+      ? 'Great Pick'
+      : 'Good Option';
+    const matchColor = i === 0 ? '#10b981' : i === 1 ? '#3b82f6' : '#8b5cf6';
+
+    return {
+      game: s.game,
+      score: s.score,
+      reasons: topReasons,
+      matchLabel,
+      matchColor,
+      avgSessionHours: s.avg,
+    };
+  });
+}

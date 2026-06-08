@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical, Download, Gift, ShoppingCart, Search, X } from 'lucide-react';
+import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, ChevronRight, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical, Download, Gift, ShoppingCart, Search, X } from 'lucide-react';
 import { useGames } from './hooks/useGames';
 import { useAnalytics, GameWithMetrics } from './hooks/useAnalytics';
 import { useBudget } from './hooks/useBudget';
@@ -49,6 +49,7 @@ import { ErrorLogPanel, ErrorLogButton } from './components/ErrorLogPanel';
 import { WhatsNewModal } from './components/WhatsNewModal';
 import { GameReviewChat } from './components/GameReviewChat';
 import { GameCompareModal } from './components/GameCompareModal';
+import { TonightsPick } from './components/TonightsPick';
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist';
@@ -217,6 +218,7 @@ export default function GameAnalyticsPage() {
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showErrorLog, setShowErrorLog] = useState(false);
   const [showWhatsNew, setShowWhatsNew] = useState(false);
+  const [showTonightsPick, setShowTonightsPick] = useState(false);
 
   // Week recap data for header strip
   const weekRecap = useMemo(() => {
@@ -570,6 +572,14 @@ export default function GameAnalyticsPage() {
                   <>
                     <div className="fixed inset-0 z-40" onClick={() => setShowCommandPalette(false)} />
                     <div className="absolute right-0 top-full mt-1 z-50 bg-[#1a1a2e] border border-white/10 rounded-xl shadow-2xl py-1 min-w-[180px]">
+                      {games.filter(g => g.status !== 'Wishlist').length > 0 && (
+                        <button
+                          onClick={() => { setShowTonightsPick(true); setShowCommandPalette(false); }}
+                          className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white/70 hover:text-white hover:bg-white/5 transition-all"
+                        >
+                          <Sparkles size={14} className="text-purple-400" /> Tonight&apos;s Pick
+                        </button>
+                      )}
                       {games.filter(g => g.status !== 'Wishlist' && g.status !== 'Completed' && g.status !== 'Abandoned').length > 0 && (
                         <button
                           onClick={() => { setShowRandomPicker(true); setShowCommandPalette(false); }}
@@ -1056,6 +1066,23 @@ export default function GameAnalyticsPage() {
                     )}
                   </div>
                 )}
+              {/* Tonight's Pick prompt — shown when user has owned games */}
+              {games.filter(g => g.status !== 'Wishlist').length > 0 && (
+                <button
+                  onClick={() => setShowTonightsPick(true)}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-gradient-to-r from-purple-500/10 to-blue-500/10 border border-purple-500/20 hover:border-purple-500/40 hover:from-purple-500/15 hover:to-blue-500/15 transition-all group"
+                >
+                  <div className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center flex-shrink-0">
+                    <Sparkles size={16} className="text-purple-400" />
+                  </div>
+                  <div className="flex-1 text-left min-w-0">
+                    <div className="text-sm font-semibold text-white/80 group-hover:text-white transition-colors">Tonight&apos;s Pick</div>
+                    <div className="text-xs text-white/40">Tell me your time + mood → get a smart recommendation</div>
+                  </div>
+                  <ChevronRight size={16} className="text-white/30 group-hover:text-purple-400 transition-colors flex-shrink-0" />
+                </button>
+              )}
+
               <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
                 <div className="flex items-center gap-1 bg-white/[0.02] rounded-lg p-1">
                   {(['all', 'owned', 'wishlist'] as ViewMode[]).map((mode) => (
@@ -1437,6 +1464,19 @@ export default function GameAnalyticsPage() {
       {/* What's New Modal */}
       {showWhatsNew && (
         <WhatsNewModal onClose={() => setShowWhatsNew(false)} />
+      )}
+
+      {/* Tonight's Pick */}
+      {showTonightsPick && (
+        <TonightsPick
+          games={games}
+          onClose={() => setShowTonightsPick(false)}
+          onPlay={(game) => {
+            setShowTonightsPick(false);
+            const gwm = gamesWithMetrics.find(g => g.id === game.id);
+            if (gwm) setDetailGame(gwm);
+          }}
+        />
       )}
 
       {/* Export Panel */}
