@@ -49,6 +49,7 @@ import { ErrorLogPanel, ErrorLogButton } from './components/ErrorLogPanel';
 import { WhatsNewModal } from './components/WhatsNewModal';
 import { GameReviewChat } from './components/GameReviewChat';
 import { GameCompareModal } from './components/GameCompareModal';
+import { PlayAdvisorModal } from './components/PlayAdvisorModal';
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist';
@@ -197,6 +198,7 @@ export default function GameAnalyticsPage() {
   const [detailGame, setDetailGame] = useState<GameWithMetrics | null>(null);
   const [reviewChatGame, setReviewChatGame] = useState<GameWithMetrics | null>(null);
   const [compareGame, setCompareGame] = useState<GameWithMetrics | null>(null);
+  const [showPlayAdvisor, setShowPlayAdvisor] = useState(false);
   const [statsCollapsed, setStatsCollapsed] = useState(() => {
     if (typeof window === 'undefined') return false;
     return localStorage.getItem('ga-stats-collapsed') === 'true';
@@ -1096,6 +1098,17 @@ export default function GameAnalyticsPage() {
                   >
                     {cardViewMode === 'poster' ? 'Compact' : 'Poster'}
                   </button>
+                  {/* Play Advisor button */}
+                  {games.filter(g => g.status !== 'Wishlist' && g.status !== 'Completed' && g.status !== 'Abandoned').length > 0 && (
+                    <button
+                      onClick={() => setShowPlayAdvisor(true)}
+                      className="px-2 py-1 bg-purple-600/20 border border-purple-500/30 text-purple-300 text-[10px] rounded-lg flex items-center gap-1 hover:bg-purple-600/30 transition-all"
+                      title="Play Advisor — What should I play right now?"
+                    >
+                      <Sparkles size={10} />
+                      Advisor
+                    </button>
+                  )}
                   {/* Group toggle */}
                   <button
                     onClick={toggleGroupBySection}
@@ -1534,6 +1547,18 @@ export default function GameAnalyticsPage() {
             setDetailGame(null);
           }}
           isInQueue={isInQueue(detailGame.id)}
+        />
+      )}
+
+      {/* Play Advisor Modal */}
+      {showPlayAdvisor && (
+        <PlayAdvisorModal
+          games={games}
+          onClose={() => setShowPlayAdvisor(false)}
+          onLogTime={(game) => {
+            const gwm = gamesWithMetrics.find(g => g.id === game.id);
+            if (gwm) handleOpenPlayLog(gwm);
+          }}
         />
       )}
 

@@ -14225,6 +14225,216 @@ function buildNudge(game: Game): ReviewNudge | null {
   return null;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// PLAY ADVISOR — "What should I play right now?"
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type PlayTimeSlot = 'quick' | 'medium' | 'long' | 'marathon';
+export type PlayMood = 'chill' | 'focused' | 'story' | 'competitive' | 'explore' | 'anything';
+
+export interface PlayAdvisorRecommendation {
+  game: Game;
+  score: number;                    // 0–100 composite advisor score
+  headline: string;                 // e.g. "Your fastest path to Excellent value"
+  reasons: string[];                // 2-3 bullet-point reasons
+  sessionNote: string;              // e.g. "A 1.5h session drops $/hr from $3.20 → $2.10"
+  moodFit: 'perfect' | 'good' | 'ok';
+  timeFit: 'perfect' | 'good' | 'ok';
+  chemistryScore: number;
+  relationship: RelationshipStatus;
+}
+
+const MOOD_GENRE_MAP: Record<PlayMood, string[]> = {
+  chill:       ['puzzle', 'simulation', 'strategy', 'adventure', 'casual', 'indie', 'platformer'],
+  focused:     ['rpg', 'action', 'action-adventure', 'action rpg', 'souls', 'platformer', 'metroidvania'],
+  story:       ['rpg', 'adventure', 'visual novel', 'interactive', 'narrative', 'walking simulator', 'action-adventure'],
+  competitive: ['sports', 'fighting', 'fps', 'shooter', 'racing', 'battle royale', 'moba', 'online'],
+  explore:     ['open world', 'rpg', 'action-adventure', 'adventure', 'sandbox', 'survival', 'exploration'],
+  anything:    [],
+};
+
+const TIME_SLOT_HOURS: Record<PlayTimeSlot, { min: number; max: number; label: string }> = {
+  quick:    { min: 0.25, max: 1,   label: 'Quick (<1h)' },
+  medium:   { min: 1,    max: 2.5, label: 'Medium (1–2.5h)' },
+  long:     { min: 2,    max: 4,   label: 'Long (2–4h)' },
+  marathon: { min: 4,    max: 12,  label: 'Marathon (4h+)' },
+};
+
+function getAvgSessionLength(game: Game): number {
+  if (!game.playLogs || game.playLogs.length === 0) return 1.5;
+  const total = game.playLogs.reduce((s, l) => s + l.hours, 0);
+  return total / game.playLogs.length;
+}
+
+function getMoodFit(game: Game, mood: PlayMood): 'perfect' | 'good' | 'ok' {
+  if (mood === 'anything') return 'perfect';
+  const genres = MOOD_GENRE_MAP[mood];
+  const gameGenre = (game.genre || '').toLowerCase();
+  const gameName = game.name.toLowerCase();
+  const perfect = genres.some(g => gameGenre.includes(g) || gameName.includes(g));
+  if (perfect) return 'perfect';
+  // Adjacent check: chill is good for anything relaxed, competitive is good for any action
+  if (mood === 'chill' && game.rating >= 7) return 'good';
+  if (mood === 'focused' && (game.playLogs || []).length > 2) return 'good';
+  if (mood === 'story' && (game.notes || game.review || (game.reviewMessages || []).length > 0)) return 'good';
+  if (mood === 'explore' && game.status === 'Not Started') return 'good';
+  return 'ok';
+}
+
+function getTimeFit(game: Game, slot: PlayTimeSlot): 'perfect' | 'good' | 'ok' {
+  const avg = getAvgSessionLength(game);
+  const { min, max } = TIME_SLOT_HOURS[slot];
+  if (avg >= min * 0.7 && avg <= max * 1.3) return 'perfect';
+  if (avg >= min * 0.4 && avg <= max * 2) return 'good';
+  return 'ok';
+}
+
+function buildSessionNote(game: Game, timeSlot: PlayTimeSlot): string {
+  const slotMax = TIME_SLOT_HOURS[timeSlot].max;
+  const sessionHours = Math.min(slotMax, TIME_SLOT_HOURS[timeSlot].max);
+  const totalHours = getTotalHours(game);
+  if (game.price > 0 && totalHours > 0) {
+    const currentCPH = game.price / totalHours;
+    const afterCPH = game.price / (totalHours + sessionHours);
+    if (currentCPH > 1) {
+      return `A ${sessionHours}h session drops $/hr from $${currentCPH.toFixed(2)} → $${afterCPH.toFixed(2)}`;
+    }
+  }
+  if (game.status === 'In Progress' && totalHours > 0) {
+    return `${totalHours.toFixed(1)}h in — keep the momentum going`;
+  }
+  if (game.status === 'Not Started') {
+    return `Fresh start — no preconceptions, no baggage`;
+  }
+  return `${totalHours.toFixed(1)}h played so far`;
+}
+
+function buildHeadline(game: Game, reasons: string[], moodFit: 'perfect' | 'good' | 'ok'): string {
+  const totalHours = getTotalHours(game);
+  if (game.status === 'In Progress' && (game.playLogs || []).length > 0) {
+    const lastLog = [...(game.playLogs || [])].sort((a, b) => parseLocalDate(b.date).getTime() - parseLocalDate(a.date).getTime())[0];
+    const daysSince = Math.floor((Date.now() - parseLocalDate(lastLog.date).getTime()) / 86400000);
+    if (daysSince <= 2) return 'Continue where you left off';
+    if (daysSince <= 7) return 'Pick it back up — you were on a roll';
+    return 'Your current story is waiting to continue';
+  }
+  if (game.price > 0 && totalHours > 0) {
+    const cph = game.price / totalHours;
+    if (cph < 1) return 'Already excellent value — just keep enjoying it';
+    if (cph < 3) return 'Good value and getting better every session';
+    return 'Every session brings this closer to great value';
+  }
+  if (game.status === 'Not Started') return 'Uncharted territory — time to find out';
+  if (moodFit === 'perfect') return 'Perfect match for your current mood';
+  return 'A solid pick for right now';
+}
+
+export function getPlayAdvisorRecommendations(
+  games: Game[],
+  timeSlot: PlayTimeSlot,
+  mood: PlayMood,
+): PlayAdvisorRecommendation[] {
+  const owned = games.filter(g =>
+    g.status !== 'Wishlist' &&
+    g.status !== 'Completed' &&
+    g.status !== 'Abandoned',
+  );
+  if (owned.length === 0) return [];
+
+  const now = Date.now();
+
+  const scored = owned.map(game => {
+    const chemistry = getGameChemistry(game, games);
+    const relationship = getRelationshipStatus(game, games);
+    const moodFit = getMoodFit(game, mood);
+    const timeFit = getTimeFit(game, timeSlot);
+    const totalHours = getTotalHours(game);
+    const avgSession = getAvgSessionLength(game);
+
+    // Base score: chemistry (0–100)
+    let score = chemistry.score * 0.35;
+
+    // Mood fit bonus
+    score += moodFit === 'perfect' ? 25 : moodFit === 'good' ? 15 : 5;
+
+    // Time fit bonus
+    score += timeFit === 'perfect' ? 20 : timeFit === 'good' ? 12 : 4;
+
+    // In Progress bonus — already invested
+    if (game.status === 'In Progress') score += 12;
+
+    // Recency: recently played gets small boost (streaks feel good)
+    const logs = (game.playLogs || []).sort((a, b) => parseLocalDate(b.date).getTime() - parseLocalDate(a.date).getTime());
+    if (logs.length > 0) {
+      const daysSince = Math.floor((now - parseLocalDate(logs[0].date).getTime()) / 86400000);
+      if (daysSince <= 1) score += 8;
+      else if (daysSince <= 3) score += 5;
+      else if (daysSince > 30) score -= 5; // going stale
+    }
+
+    // Queue priority bonus
+    if (game.queuePosition && game.queuePosition <= 3) score += 8;
+
+    // Value trajectory: games that will reach a new tier soon get a boost
+    if (game.price > 0 && totalHours > 0) {
+      const cph = game.price / totalHours;
+      const sessionHours = TIME_SLOT_HOURS[timeSlot].max;
+      const afterCPH = game.price / (totalHours + sessionHours);
+      if (cph > 3.5 && afterCPH <= 3.5) score += 15; // will hit Good tier this session
+      if (cph > 1 && afterCPH <= 1) score += 10;      // will hit Excellent tier
+    }
+
+    // Rating: high-rated games are always a good bet
+    if (game.rating >= 8) score += 8;
+    else if (game.rating >= 6) score += 4;
+
+    score = Math.min(100, Math.max(0, Math.round(score)));
+
+    // Build reasons
+    const reasons: string[] = [];
+    if (game.status === 'In Progress' && logs.length > 0) {
+      const daysSince = Math.floor((now - parseLocalDate(logs[0].date).getTime()) / 86400000);
+      if (daysSince <= 1) reasons.push(`You played yesterday — continue the momentum`);
+      else if (daysSince <= 7) reasons.push(`Last session ${daysSince}d ago — still fresh in memory`);
+      else reasons.push(`${totalHours.toFixed(0)}h invested — worth returning to`);
+    } else if (game.status === 'Not Started') {
+      const daysSince = game.datePurchased
+        ? Math.floor((now - parseLocalDate(game.datePurchased).getTime()) / 86400000)
+        : null;
+      if (daysSince !== null && daysSince > 30) reasons.push(`Owned for ${daysSince}d — time to finally start`);
+      else reasons.push('Fresh game — no expectations, just excitement');
+    }
+
+    if (moodFit === 'perfect') reasons.push(`Genre is a perfect fit for your ${mood} mood`);
+    else if (moodFit === 'good') reasons.push(`Good match for your current headspace`);
+
+    if (chemistry.score >= 70) reasons.push(`Chemistry score ${chemistry.score} — ${chemistry.justification.toLowerCase()}`);
+
+    if (game.price > 0 && totalHours > 0) {
+      const cph = game.price / totalHours;
+      if (cph < 1) reasons.push(`Excellent value at $${cph.toFixed(2)}/hr — every session is pure profit`);
+      else if (cph < 3.5) reasons.push(`Good value at $${cph.toFixed(2)}/hr and improving`);
+    }
+
+    if (game.queuePosition && game.queuePosition === 1) reasons.push('Top of your play queue');
+    if (game.rating >= 8) reasons.push(`You rated this ${game.rating}/10 — you love it`);
+
+    if (reasons.length > 3) reasons.splice(3);
+    if (reasons.length === 0) reasons.push('A solid pick for right now');
+
+    const sessionNote = buildSessionNote(game, timeSlot);
+    const headline = buildHeadline(game, reasons, moodFit);
+
+    return { game, score, headline, reasons, sessionNote, moodFit, timeFit, chemistryScore: chemistry.score, relationship };
+  });
+
+  return scored
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 3);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 /**
  * Build the prioritized list of games that deserve a review and a few
  * progress counters so the UI can frame it as a gentle, finishable task.

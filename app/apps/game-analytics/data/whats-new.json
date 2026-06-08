@@ -1,6 +1,18 @@
 {
   "entries": [
     {
+      "date": "2026-06-08",
+      "area": "Play Advisor",
+      "title": "\"What should I play right now?\" — answered",
+      "body": "Tap the new Advisor button in the Games tab. Tell it how much time you have (Quick, Medium, Long, or Marathon) and your mood (Chill, Focused, Story, Competitive, Explore, or Anything). It instantly finds your top 3 picks with a match score, personalized reasons, chemistry rating, and a note showing exactly how each session improves that game's value."
+    },
+    {
+      "date": "2026-06-08",
+      "area": "Stats tab",
+      "title": "Set and track personal gaming goals",
+      "body": "The Stats tab now has a Goals section. Set targets like \"complete 5 games this quarter\", \"keep spending under $200 this year\", or \"log 50 hours this month\" — and watch real-time progress bars fill up as you play. Goals auto-track against your actual game data."
+    },
+    {
       "date": "2026-06-01",
       "area": "Game detail",
       "title": "Compare any two games head to head",

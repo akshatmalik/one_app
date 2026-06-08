@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-08 — Games Tab + Stats Tab — Play Advisor & Goals Panel
+
+**Files**: app/apps/game-analytics/lib/calculations.ts, app/apps/game-analytics/components/PlayAdvisorModal.tsx, app/apps/game-analytics/components/StatsView.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Added a Play Advisor modal (tap "Advisor" in the Games tab toolbar) that takes "how much time you have" (Quick/Medium/Long/Marathon) and "what's your mood" (Anything/Chill/Focused/Story/Competitive/Explore) and instantly surfaces the 3 best games from your active library with an advisor score, mood/time fit badges, chemistry score, per-game reasons, and a session-impact note ("A 1.5h session drops $/hr from $3.20 → $2.10"). Also wired in the previously-orphaned GoalsPanel into the Stats tab so users can set and track gaming goals (completion targets, spending limits, hours, genre variety, backlog clearance) with real-time progress bars.
+
+FOLLOW-UP: Could add a "Start session" one-tap flow from the Advisor that opens the quick check-in directly. GoalsPanel could also get milestone celebration toasts when a goal is hit.
+
 ## 2026-06-01 06:00 — Game Detail — Head-to-Head Game Comparison
 
 **Files**: app/apps/game-analytics/components/GameCompareModal.tsx, app/apps/game-analytics/components/GameBottomSheet.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json
