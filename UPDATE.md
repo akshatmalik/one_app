@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-08 — Games Tab — Live Session Timer
+
+**Files**: app/apps/game-analytics/hooks/useLiveSession.ts (new), app/apps/game-analytics/components/LiveSessionBanner.tsx (new), app/apps/game-analytics/components/SessionCompleteModal.tsx (new), app/apps/game-analytics/page.tsx
+**Risk**: not risky
+
+Added a real-time live session timer so players can track exactly how long they're playing. A ⏱ timer button appears on the Now Playing card (top of Games tab) and on any In Progress poster card. Tapping it starts a live timer that persists across page refreshes via localStorage. A fixed bottom banner (Spotify mini-player style) shows the ticking clock with the game name and thumbnail. Stopping the session (or cancelling with ×) shows a completion modal with the elapsed time, hours-to-be-logged, and a 4-option mood picker (🔥 Great / 👍 Good / 😐 Meh / 💪 Grind). Confirming logs the session as a PlayLog with the mood attached. Sessions under 60 s are silently discarded to avoid accidental logs.
+
+FOLLOW-UP: Could add push notifications or a Web Worker so the timer keeps running if the tab goes to background; could also surface a "session in progress" indicator in the page title.
+
 ## 2026-06-01 06:00 — Game Detail — Head-to-Head Game Comparison
 
 **Files**: app/apps/game-analytics/components/GameCompareModal.tsx, app/apps/game-analytics/components/GameBottomSheet.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json

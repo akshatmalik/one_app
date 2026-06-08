@@ -1,6 +1,12 @@
 {
   "entries": [
     {
+      "date": "2026-06-08",
+      "area": "Games tab",
+      "title": "Live session timer — track play time in real time",
+      "body": "Tap the new ⏱ button on any In Progress game to start a live session timer. A persistent banner at the bottom of the screen shows your game name and a ticking clock that survives page refreshes. When you're done, hit Stop to see your total time and optionally pick a session mood (🔥 Great, 👍 Good, 😐 Meh, 💪 Grind) before logging. Your hours and mood are saved as a play session automatically."
+    },
+    {
       "date": "2026-06-01",
       "area": "Game detail",
       "title": "Compare any two games head to head",

@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical, Download, Gift, ShoppingCart, Search, X } from 'lucide-react';
+import { useState, useMemo, useEffect, useCallback, useRef, createContext, useContext } from 'react';
+import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical, Download, Gift, ShoppingCart, Search, X, Timer } from 'lucide-react';
 import { useGames } from './hooks/useGames';
 import { useAnalytics, GameWithMetrics } from './hooks/useAnalytics';
 import { useBudget } from './hooks/useBudget';
@@ -15,7 +15,7 @@ import { TimelineView } from './components/TimelineView';
 import { StatsView } from './components/StatsView';
 import { AIChatTab } from './components/AIChatTab';
 import { UpNextTab } from './components/UpNextTab';
-import { Game, GameStatus, PlayLog, GameRanking, GameAward, AwardPeriodType, GameTier, TierAssignmentMap, ReviewMessage } from './lib/types';
+import { Game, GameStatus, PlayLog, SessionMood, GameRanking, GameAward, AwardPeriodType, GameTier, TierAssignmentMap, ReviewMessage } from './lib/types';
 import { useTierAssignments } from './hooks/useTierAssignments';
 import { gameRepository } from './lib/storage';
 import { useRankings } from './hooks/useRankings';
@@ -50,10 +50,20 @@ import { WhatsNewModal } from './components/WhatsNewModal';
 import { GameReviewChat } from './components/GameReviewChat';
 import { GameCompareModal } from './components/GameCompareModal';
 import clsx from 'clsx';
+import { useLiveSession } from './hooks/useLiveSession';
+import { LiveSessionBanner } from './components/LiveSessionBanner';
+import { SessionCompleteModal } from './components/SessionCompleteModal';
 
 type ViewMode = 'all' | 'owned' | 'wishlist';
 type TabMode = 'games' | 'timeline' | 'stats' | 'ai-coach' | 'up-next' | 'discover' | 'leaderboard' | 'buy-queue';
 type CardViewMode = 'poster' | 'compact';
+
+// Context for live session — avoids prop-drilling through GameCardList into individual cards
+interface SessionCtx {
+  activeGameId: string | null;
+  onStart: (game: GameWithMetrics) => void;
+}
+const SessionContext = createContext<SessionCtx | null>(null);
 
 function getValueColor(rating: string): string {
   switch (rating) {
@@ -290,6 +300,11 @@ export default function GameAnalyticsPage() {
     return getGamesPlayedInTimeRange(games, monthAgo, now);
   }, [games]);
 
+  // Live session timer — persists across page refreshes via localStorage
+  const { session: liveSession, elapsedSeconds: liveElapsedSeconds, isActive: liveSessionIsActive, startSession, stopSession, cancelSession } = useLiveSession();
+  const [sessionCompleteGame, setSessionCompleteGame] = useState<GameWithMetrics | null>(null);
+  const [sessionElapsed, setSessionElapsed] = useState(0);
+
   const handleAddGame = async (gameData: Omit<Game, 'id' | 'userId' | 'createdAt' | 'updatedAt'>) => {
     try {
       if (editingGame) {
@@ -383,6 +398,55 @@ export default function GameAnalyticsPage() {
     await updateGame(game.id, updates);
     showToast(`Logged ${hours}h`, 'success');
   };
+
+  const handleStartSession = useCallback((game: GameWithMetrics) => {
+    if (liveSessionIsActive && liveSession?.gameId === game.id) {
+      showToast('Timer already running for this game', 'success');
+      return;
+    }
+    if (liveSessionIsActive) {
+      showToast(`Stop "${liveSession?.gameName}" first`, 'error');
+      return;
+    }
+    startSession({ id: game.id, name: game.name, thumbnail: game.thumbnail });
+    showToast(`⏱ Session started — ${game.name}`, 'success');
+  }, [liveSessionIsActive, liveSession, startSession, showToast]);
+
+  const handleStopSession = useCallback(() => {
+    const gameId = liveSession?.gameId;
+    const elapsed = stopSession();
+    const game = gamesWithMetrics.find(g => g.id === gameId);
+    if (!game) return;
+    if (elapsed >= 60) {
+      setSessionCompleteGame(game);
+      setSessionElapsed(elapsed);
+    } else if (elapsed > 0) {
+      // Very short session — log silently without modal
+      handleQuickLog(game, Math.max(0.1, Math.round(elapsed / 360) / 10));
+    }
+  }, [liveSession, stopSession, gamesWithMetrics, handleQuickLog]);
+
+  const handleSessionLog = useCallback(async (hours: number, mood?: SessionMood) => {
+    if (!sessionCompleteGame) return;
+    const now = new Date();
+    const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const newLog: PlayLog = {
+      id: `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+      date: dateStr,
+      hours,
+      mood,
+    };
+    const existingLogs = sessionCompleteGame.playLogs || [];
+    const updates: Partial<Game> = { playLogs: [...existingLogs, newLog] };
+    if (sessionCompleteGame.status === 'Not Started' && existingLogs.length === 0) {
+      updates.status = 'In Progress';
+      updates.startDate = dateStr;
+    }
+    await updateGame(sessionCompleteGame.id, updates);
+    showToast(`Logged ${hours}h`, 'success');
+    setSessionCompleteGame(null);
+    setSessionElapsed(0);
+  }, [sessionCompleteGame, updateGame, showToast]);
 
   const toggleCardViewMode = () => {
     const next = cardViewMode === 'poster' ? 'compact' : 'poster';
@@ -1183,6 +1247,7 @@ export default function GameAnalyticsPage() {
                   )}
                 </div>
               ) : (
+                <SessionContext.Provider value={{ activeGameId: liveSession?.gameId ?? null, onStart: handleStartSession }}>
                 <GameCardList
                   games={filteredGames}
                   allGames={games}
@@ -1221,6 +1286,7 @@ export default function GameAnalyticsPage() {
                   tierAssignments={allTimeTiers}
                   eloTierRanks={eloTierRanks}
                 />
+                </SessionContext.Provider>
               )}
             </>
           )}
@@ -1561,6 +1627,27 @@ export default function GameAnalyticsPage() {
           onClose={() => setReviewChatGame(null)}
         />
       )}
+
+      {/* Live Session Banner — fixed at the bottom whenever a session is running */}
+      {liveSessionIsActive && liveSession && (
+        <LiveSessionBanner
+          session={liveSession}
+          elapsedSeconds={liveElapsedSeconds}
+          onStop={handleStopSession}
+          onCancel={cancelSession}
+        />
+      )}
+
+      {/* Session Complete Modal — shown after stopping a session */}
+      {sessionCompleteGame && (
+        <SessionCompleteModal
+          gameName={sessionCompleteGame.name}
+          thumbnail={sessionCompleteGame.thumbnail}
+          elapsedSeconds={sessionElapsed}
+          onLog={handleSessionLog}
+          onDiscard={() => { setSessionCompleteGame(null); setSessionElapsed(0); }}
+        />
+      )}
     </div>
   );
 }
@@ -1833,6 +1920,7 @@ function NowPlayingCard({ game, allGames, onClick, onQuickLog, sortBy = 'hours',
   const [isFlipped, setIsFlipped] = useState(false);
   const [checkInHours, setCheckInHours] = useState(1);
   const [checkInDone, setCheckInDone] = useState(false);
+  const sessionCtx = useContext(SessionContext);
   const rarity = getCardRarity(game);
   const relationship = getRelationshipStatus(game, allGames);
   const streak = getGameStreak(game);
@@ -2053,6 +2141,24 @@ function NowPlayingCard({ game, allGames, onClick, onQuickLog, sortBy = 'hours',
             >
               {checkInDone ? <><Check size={11} /> Done!</> : <><Clock size={11} /> Check In</>}
             </button>
+            {/* Live timer button */}
+            {sessionCtx && (
+              <button
+                onClick={(e) => { e.stopPropagation(); sessionCtx.onStart(game); }}
+                title={sessionCtx.activeGameId === game.id ? 'Session running — stop via the banner' : 'Start live session timer'}
+                className={clsx(
+                  'w-7 h-7 flex items-center justify-center rounded-lg transition-all shrink-0',
+                  sessionCtx.activeGameId === game.id
+                    ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                    : 'bg-white/5 text-white/30 hover:bg-white/10 hover:text-white/50'
+                )}
+              >
+                {sessionCtx.activeGameId === game.id
+                  ? <div className="w-2 h-2 rounded-sm bg-blue-400 animate-pulse" />
+                  : <Timer size={12} />
+                }
+              </button>
+            )}
           </div>
 
           {/* Mood pulse strip */}
@@ -2099,6 +2205,7 @@ function PosterCard({ game, allGames, idx, onClick, onQuickLog, isInQueue, sortB
   eloTierRank?: { tier: GameTier; rank: number };
 }) {
   const [isFlipped, setIsFlipped] = useState(false);
+  const sessionCtx = useContext(SessionContext);
   const rarity = getCardRarity(game);
   const relationship = getRelationshipStatus(game, allGames);
   const streak = getGameStreak(game);
@@ -2284,6 +2391,24 @@ function PosterCard({ game, allGames, idx, onClick, onQuickLog, isInQueue, sortB
             {/* Momentum sparkline */}
             {momentum.length >= 2 && <MomentumDots sessions={momentum} />}
             {game.platform && <span className="text-[9px] px-1.5 py-0.5 bg-white/5 rounded text-white/30">{game.platform}</span>}
+            {/* Timer button for In Progress games */}
+            {game.status === 'In Progress' && sessionCtx && (
+              <button
+                onClick={(e) => { e.stopPropagation(); sessionCtx.onStart(game); }}
+                title={sessionCtx.activeGameId === game.id ? 'Session timer running' : 'Start live session timer'}
+                className={clsx(
+                  'flex items-center justify-center rounded transition-all w-5 h-5',
+                  sessionCtx.activeGameId === game.id
+                    ? 'text-blue-400'
+                    : 'text-white/20 hover:text-white/50'
+                )}
+              >
+                {sessionCtx.activeGameId === game.id
+                  ? <div className="w-1.5 h-1.5 rounded-sm bg-blue-400 animate-pulse" />
+                  : <Timer size={10} />
+                }
+              </button>
+            )}
           </div>
 
           {/* Smart one-liner + contextual whisper */}
