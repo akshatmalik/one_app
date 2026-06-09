@@ -1,9 +1,11 @@
 'use client';
 
-import { getAI, getGenerativeModel, GoogleAIBackend } from 'firebase/ai';
+import { getAI, getGenerativeModel, GoogleAIBackend, Schema, FunctionDeclaration, Content } from 'firebase/ai';
 import { initializeApp, getApps } from 'firebase/app';
-import { WeekInReviewData, MonthInReviewData, OscarAward, buildTasteProfile } from './calculations';
+import { WeekInReviewData, MonthInReviewData, OscarAward, buildTasteProfile, getTotalHours } from './calculations';
 import { Game, TasteProfile } from './types';
+import { WRITE_FUNCTION_DECLARATIONS, parseFunctionCall, PendingAction } from './ai-actions';
+import { searchRAWGGame } from './rawg-api';
 
 const firebaseConfig = {
   apiKey: "AIzaSyBS3IVvszDrm_zjjXu8TATgs1H-FlegHtM",
@@ -819,6 +821,251 @@ Return ONLY the review prose — no headings, no quotes, no JSON.`;
       .map(t => t.text)
       .join(' ');
     return { review: fallback, error: String(e) };
+  }
+}
+
+// ── AGENT MODE ─────────────────────────────────────────────────────
+// Turns the chat into an agent that can perform app actions via Gemini
+// function calling. The model PROPOSES write actions; the host executes
+// them only after the user confirms (one confirmation per proposal turn).
+// Read tools (findGames, lookupGames) run here directly — they never mutate.
+
+export interface AgentChatContext {
+  weekData: WeekInReviewData | null;
+  monthGames: Game[];
+  allGames: Game[];
+}
+
+export interface AgentActionResult {
+  summary: string;
+  ok: boolean;
+}
+
+/** Result of one agent turn: either plain text, or a set of actions awaiting confirmation. */
+export type AgentTurn =
+  | { kind: 'text'; text: string }
+  | {
+      kind: 'actions';
+      text: string; // any prose the model said alongside the proposal (may be empty)
+      actions: PendingAction[];
+      /** Call after the user confirms + the host runs the actions. Resumes the model. */
+      resume: (results: AgentActionResult[]) => Promise<AgentTurn>;
+    };
+
+const READ_FUNCTION_DECLARATIONS: FunctionDeclaration[] = [
+  {
+    name: 'findGames',
+    description: 'Search the user\'s library to resolve a game name to its id (needed before any update/log/status/queue/delete action). Returns matching games with ids. Call this whenever the user refers to a game by name.',
+    parameters: Schema.object({
+      properties: {
+        query: Schema.string({ description: 'Partial or full game name to match. Omit to list everything.' }),
+        status: Schema.enumString({
+          enum: ['Not Started', 'In Progress', 'Completed', 'Wishlist', 'Abandoned'],
+          description: 'Optional status filter',
+        }),
+      },
+      optionalProperties: ['query', 'status'],
+    }),
+  },
+  {
+    name: 'lookupGames',
+    description: 'Look up real metadata (release date, metacritic, rating, thumbnail) for games by name from the games database. ALWAYS call this before addGames so release dates are real, not guessed.',
+    parameters: Schema.object({
+      properties: {
+        names: Schema.array({ items: Schema.string(), description: 'Game names to look up' }),
+      },
+    }),
+  },
+];
+
+const READ_NAMES = new Set(['findGames', 'lookupGames']);
+
+/** Minimal shape of the SDK response we rely on (text + functionCalls accessors). */
+interface AgentResponse {
+  text: () => string;
+  functionCalls: () => Array<{ name: string; args: Record<string, unknown> }> | undefined;
+}
+
+function getAgentModel(systemInstruction: string) {
+  const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
+  const ai = getAI(app, { backend: new GoogleAIBackend() });
+  return getGenerativeModel(ai, {
+    model: 'gemini-2.5-flash',
+    tools: [{ functionDeclarations: [...READ_FUNCTION_DECLARATIONS, ...WRITE_FUNCTION_DECLARATIONS] }],
+    systemInstruction,
+  });
+}
+
+function buildAgentSystemInstruction(context: AgentChatContext): string {
+  return `You are an AI gaming coach AND assistant for a game-tracking app. You can BOTH answer questions about the player's gaming data and PERFORM actions on their behalf using the provided tools.
+
+${buildChatContext(context)}
+
+ACTION RULES:
+- To act on an existing game (update, log a session, change status, queue, delete, review, mark special), FIRST call findGames to resolve the game's id, then call the write tool with that id.
+- For games the user is "interested in" but doesn't own yet, FIRST call lookupGames to fetch real release dates and thumbnails, THEN call addGames. Default unreleased/TBA games to the "queue" destination and already-released games to "wishlist", unless the user specifies otherwise. If they say "both", use "both".
+- For a game the user already owns/played, use addGame (not addGames).
+- You may propose multiple write actions in one turn when the user asks for several things — they will be confirmed together.
+- The app shows the user a confirmation card for every write action and runs it only if they approve. Do NOT ask "should I?" in prose — just call the tool; the confirmation UI handles approval. After an action runs you receive its result; then give a brief, friendly confirmation.
+- Never invent release dates, ratings, or metadata — only use values returned by lookupGames or findGames.
+- Keep prose concise and specific to the player's data.`;
+}
+
+async function executeReadTool(
+  name: string,
+  args: Record<string, unknown>,
+  context: AgentChatContext,
+): Promise<object> {
+  if (name === 'findGames') {
+    const query = args.query ? String(args.query).toLowerCase() : '';
+    const status = args.status ? String(args.status) : '';
+    const matches = context.allGames
+      .filter(g => (!query || g.name.toLowerCase().includes(query)) && (!status || g.status === status))
+      .slice(0, 20)
+      .map(g => ({
+        id: g.id,
+        name: g.name,
+        status: g.status,
+        hours: Math.round(getTotalHours(g) * 10) / 10,
+        rating: g.rating,
+        genre: g.genre ?? null,
+        platform: g.platform ?? null,
+        inQueue: g.queuePosition !== undefined,
+      }));
+    return { count: matches.length, games: matches };
+  }
+
+  if (name === 'lookupGames') {
+    const names: string[] = Array.isArray(args.names) ? args.names.map(String) : [];
+    const results = await Promise.all(
+      names.map(async (n) => {
+        const data = await searchRAWGGame(n);
+        return {
+          query: n,
+          found: !!data,
+          name: data?.name ?? n,
+          released: data?.released ?? null,
+          metacritic: data?.metacritic ?? null,
+          rawgRating: data?.rating ?? null,
+          thumbnail: data?.backgroundImage ?? null,
+        };
+      }),
+    );
+    return { results };
+  }
+
+  return { error: `Unknown read tool: ${name}` };
+}
+
+/**
+ * Drive the model forward from a response, auto-handling read tools until it
+ * either returns prose or proposes write actions (which pause for confirmation).
+ */
+async function advanceAgent(
+  chat: ReturnType<ReturnType<typeof getAgentModel>['startChat']>,
+  initialResponse: AgentResponse,
+  context: AgentChatContext,
+): Promise<AgentTurn> {
+  let response = initialResponse;
+
+  for (let i = 0; i < 8; i++) {
+    const calls = response.functionCalls() ?? [];
+    if (!calls || calls.length === 0) {
+      return { kind: 'text', text: response.text() || 'Done.' };
+    }
+
+    const reads = calls.filter((c: { name: string }) => READ_NAMES.has(c.name));
+    const writes = calls.filter((c: { name: string }) => !READ_NAMES.has(c.name));
+
+    // Resolve read tools immediately — they're side-effect free.
+    const readParts = await Promise.all(
+      reads.map(async (c: { name: string; args: Record<string, unknown> }) => ({
+        functionResponse: { name: c.name, response: await executeReadTool(c.name, c.args, context) },
+      })),
+    );
+
+    if (writes.length > 0) {
+      // Parse each write into a PendingAction (parallel array; nulls = invalid).
+      const parsed = writes.map((c: { name: string; args: Record<string, unknown> }) =>
+        parseFunctionCall(c.name, c.args),
+      );
+      const actions = parsed.filter((a: PendingAction | null): a is PendingAction => a !== null);
+
+      if (actions.length === 0) {
+        // Nothing executable — tell the model and keep going.
+        const errParts = writes.map((c: { name: string }) => ({
+          functionResponse: { name: c.name, response: { error: 'Invalid or incomplete arguments.' } },
+        }));
+        response = (await chat.sendMessage([...readParts, ...errParts])).response as unknown as AgentResponse;
+        continue;
+      }
+
+      const text = response.text() || '';
+      const resume = async (results: AgentActionResult[]): Promise<AgentTurn> => {
+        let ri = 0;
+        const writeParts = writes.map((c: { name: string }, idx: number) => {
+          if (parsed[idx] === null) {
+            return { functionResponse: { name: c.name, response: { error: 'Invalid arguments, skipped.' } } };
+          }
+          const r = results[ri++];
+          return {
+            functionResponse: {
+              name: c.name,
+              response: r
+                ? { success: r.ok, result: r.summary }
+                : { success: false, result: 'No result returned.' },
+            },
+          };
+        });
+        const next = (await chat.sendMessage([...readParts, ...writeParts])).response as unknown as AgentResponse;
+        return advanceAgent(chat, next, context);
+      };
+
+      return { kind: 'actions', text, actions, resume };
+    }
+
+    // Reads only — feed results back and continue the loop.
+    response = (await chat.sendMessage(readParts)).response as unknown as AgentResponse;
+  }
+
+  return { kind: 'text', text: response.text() || 'Done.' };
+}
+
+/**
+ * Start one agent turn. Returns plain text or a set of actions awaiting
+ * confirmation (with a `resume` continuation to call after they run).
+ */
+export async function runAgentTurn(params: {
+  userMessage: string;
+  context: AgentChatContext;
+  history: Array<{ role: 'user' | 'assistant'; content: string }>;
+}): Promise<AgentTurn> {
+  const { userMessage, context, history } = params;
+  const model = getAgentModel(buildAgentSystemInstruction(context));
+
+  // Gemini requires history to start with a user turn and alternate roles.
+  // Merge consecutive same-role messages (e.g. proposal text + cancel note).
+  const mappedHistory: Content[] = [];
+  for (const m of history.slice(-12)) {
+    const role: 'user' | 'model' = m.role === 'user' ? 'user' : 'model';
+    const last = mappedHistory[mappedHistory.length - 1];
+    if (last && last.role === role) {
+      last.parts.push({ text: m.content });
+    } else {
+      mappedHistory.push({ role, parts: [{ text: m.content }] });
+    }
+  }
+  while (mappedHistory.length && mappedHistory[0].role !== 'user') {
+    mappedHistory.shift();
+  }
+
+  try {
+    const chat = model.startChat({ history: mappedHistory });
+    const response = (await chat.sendMessage(userMessage)).response as unknown as AgentResponse;
+    return await advanceAgent(chat, response, context);
+  } catch (error) {
+    console.error('Agent turn error:', error);
+    return { kind: 'text', text: "Sorry, I hit a snag processing that. Mind trying again?" };
   }
 }
 

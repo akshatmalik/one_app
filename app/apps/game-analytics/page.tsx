@@ -14,6 +14,7 @@ import { PlayLogModal } from './components/PlayLogModal';
 import { TimelineView } from './components/TimelineView';
 import { StatsView } from './components/StatsView';
 import { AIChatTab } from './components/AIChatTab';
+import { AgentExecutors } from './lib/ai-actions';
 import { UpNextTab } from './components/UpNextTab';
 import { Game, GameStatus, PlayLog, GameRanking, GameAward, AwardPeriodType, GameTier, TierAssignmentMap, ReviewMessage } from './lib/types';
 import { useTierAssignments } from './hooks/useTierAssignments';
@@ -141,7 +142,7 @@ export default function GameAnalyticsPage() {
   const { games, loading, error, addGame, updateGame, deleteGame, refresh } = useGames(user?.uid ?? null);
   const { gamesWithMetrics, summary } = useAnalytics(games);
   const { budgets, setBudget } = useBudget(user?.uid ?? null);
-  const { upcomingEntries } = usePurchaseQueue(user?.uid ?? null);
+  const { upcomingEntries, addEntry: addPurchaseEntry } = usePurchaseQueue(user?.uid ?? null);
   const { loading: thumbnailsLoading, fetchedCount } = useGameThumbnails(games, updateGame);
   const gameColors = useGameColors(games);
   const { quips: gameQuips } = useGameQuips(games, user?.uid ?? null);
@@ -448,6 +449,19 @@ export default function GameAnalyticsPage() {
       });
     } catch { /* non-critical */ }
   }, [user?.uid, allTimeRankings]);
+
+  // Executors the AI Coach uses to perform confirmed actions. All route through
+  // the existing hooks so per-user storage rules and optimistic UI still apply.
+  const aiExecutors: AgentExecutors = useMemo(() => ({
+    addGame,
+    updateGame,
+    deleteGame,
+    addToQueue,
+    removeFromQueue,
+    clearUpcoming,
+    setBudget,
+    addPurchaseEntry,
+  }), [addGame, updateGame, deleteGame, addToQueue, removeFromQueue, clearUpcoming, setBudget, addPurchaseEntry]);
 
   const handleBulkWishlist = async (gamesToAdd: Omit<Game, 'id' | 'userId' | 'createdAt' | 'updatedAt'>[]) => {
     try {
@@ -1289,6 +1303,7 @@ export default function GameAnalyticsPage() {
               weekData={weekData}
               monthGames={monthGames}
               allGames={games}
+              executors={aiExecutors}
               onBack={() => setTabMode('games')}
             />
           )}

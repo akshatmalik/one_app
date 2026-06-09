@@ -5,93 +5,51 @@ import { Send, Sparkles, MessageCircle, Loader2, ArrowLeft } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion';
 import { Game } from '../lib/types';
 import { WeekInReviewData } from '../lib/calculations';
-import { generateChatResponse } from '../lib/ai-service';
+import { AgentExecutors } from '../lib/ai-actions';
+import { useAIAgent } from '../hooks/useAIAgent';
+import { AIActionCard } from './AIActionCard';
 
 interface AIChatTabProps {
   weekData: WeekInReviewData | null;
   monthGames: Game[];
   allGames: Game[];
+  executors: AgentExecutors;
   onBack?: () => void;
 }
 
-interface ChatMessage {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;
-  timestamp: Date;
-}
+export function AIChatTab({ weekData, monthGames, allGames, executors, onBack }: AIChatTabProps) {
+  const {
+    messages,
+    isLoading,
+    pending,
+    sendMessage,
+    confirmPending,
+    cancelPending,
+    updatePendingActions,
+  } = useAIAgent({
+    context: { weekData, monthGames, allGames },
+    games: allGames,
+    executors,
+  });
 
-export function AIChatTab({ weekData, monthGames, allGames, onBack }: AIChatTabProps) {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Auto-scroll to bottom when new messages arrive
+  // Auto-scroll to bottom when new messages or a confirmation card arrive
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
-
-  // Add welcome message on mount
-  useEffect(() => {
-    if (messages.length === 0) {
-      setMessages([{
-        id: '1',
-        role: 'assistant',
-        content: "Hey! I'm your AI gaming companion. Ask me anything about your gaming stats, habits, or get insights about your library. I have access to your week and month data!",
-        timestamp: new Date(),
-      }]);
-    }
-  }, []);
+  }, [messages, pending, isLoading]);
 
   // Focus input
   useEffect(() => {
     inputRef.current?.focus();
   }, []);
 
-  const handleSend = async () => {
+  const handleSend = () => {
     if (!input.trim() || isLoading) return;
-
-    const userMessage: ChatMessage = {
-      id: Date.now().toString(),
-      role: 'user',
-      content: input.trim(),
-      timestamp: new Date(),
-    };
-
-    setMessages(prev => [...prev, userMessage]);
+    sendMessage(input);
     setInput('');
-    setIsLoading(true);
-
-    try {
-      const response = await generateChatResponse(input.trim(), {
-        weekData,
-        monthGames,
-        allGames,
-        conversationHistory: messages,
-      });
-
-      const assistantMessage: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: response,
-        timestamp: new Date(),
-      };
-
-      setMessages(prev => [...prev, assistantMessage]);
-    } catch (error) {
-      console.error('Chat error:', error);
-      const errorMessage: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: "Oops! I had trouble processing that. Can you try rephrasing your question?",
-        timestamp: new Date(),
-      };
-      setMessages(prev => [...prev, errorMessage]);
-    } finally {
-      setIsLoading(false);
-    }
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -102,11 +60,11 @@ export function AIChatTab({ weekData, monthGames, allGames, onBack }: AIChatTabP
   };
 
   const suggestedQuestions = [
-    "What games should I focus on this week?",
-    "How is my gaming balance?",
+    "Log 2 hours on my most played game",
+    "I'm interested in Silksong and Hades 2 — find release dates and add them",
+    "Mark my current game as completed",
     "What's my most efficient game?",
-    "Am I getting good value from my library?",
-    "Which genres do I play the most?",
+    "Add Stardew Valley to my Up Next queue",
   ];
 
   return (
@@ -127,7 +85,7 @@ export function AIChatTab({ weekData, monthGames, allGames, onBack }: AIChatTabP
         </div>
         <div>
           <h2 className="text-xl font-bold text-white">AI Gaming Coach</h2>
-          <p className="text-sm text-white/50">Ask me anything about your gaming</p>
+          <p className="text-sm text-white/50">Ask questions or tell me to do things</p>
         </div>
       </div>
 
@@ -164,6 +122,20 @@ export function AIChatTab({ weekData, monthGames, allGames, onBack }: AIChatTabP
           ))}
         </AnimatePresence>
 
+        {/* Pending action confirmation card */}
+        {pending && (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
+            <AIActionCard
+              actions={pending.actions}
+              games={allGames}
+              isLoading={isLoading}
+              onConfirm={confirmPending}
+              onCancel={cancelPending}
+              onChange={updatePendingActions}
+            />
+          </motion.div>
+        )}
+
         {isLoading && (
           <motion.div
             initial={{ opacity: 0, y: 10 }}
@@ -172,7 +144,7 @@ export function AIChatTab({ weekData, monthGames, allGames, onBack }: AIChatTabP
           >
             <div className="bg-white/10 rounded-2xl px-4 py-3 flex items-center gap-2 border border-white/5">
               <Loader2 size={16} className="text-purple-400 animate-spin" />
-              <span className="text-sm text-white/70">AI Coach is thinking...</span>
+              <span className="text-sm text-white/70">Working on it...</span>
             </div>
           </motion.div>
         )}
@@ -181,9 +153,9 @@ export function AIChatTab({ weekData, monthGames, allGames, onBack }: AIChatTabP
       </div>
 
       {/* Suggested Questions */}
-      {messages.length <= 1 && !isLoading && (
+      {messages.length <= 1 && !isLoading && !pending && (
         <div className="px-4 pb-3">
-          <p className="text-xs text-white/40 mb-2">Try asking:</p>
+          <p className="text-xs text-white/40 mb-2">Try:</p>
           <div className="flex flex-wrap gap-2">
             {suggestedQuestions.map((question, index) => (
               <button
@@ -207,7 +179,7 @@ export function AIChatTab({ weekData, monthGames, allGames, onBack }: AIChatTabP
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyPress={handleKeyPress}
-            placeholder="Ask about your gaming stats, habits, or recommendations..."
+            placeholder="Ask about your gaming, or tell me to do something..."
             className="flex-1 px-5 py-4 bg-white/5 border border-white/10 rounded-2xl text-white text-base placeholder-white/40 focus:outline-none focus:border-purple-500/50 focus:bg-white/10 transition-colors"
             disabled={isLoading}
           />
@@ -220,7 +192,7 @@ export function AIChatTab({ weekData, monthGames, allGames, onBack }: AIChatTabP
           </button>
         </div>
         <p className="text-xs text-white/30 mt-3 text-center">
-          Press Enter to send • AI has access to your week & month gaming data
+          I confirm before changing anything • I can add, log, queue, update & more
         </p>
       </div>
     </div>
