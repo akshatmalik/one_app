@@ -119,6 +119,17 @@ export function useGameQueue(
     await Promise.all(updates.map(u => updateGame(u.id, { queuePosition: u.position })));
   };
 
+  // Clear everything planned for "after today" — removes all queued games EXCEPT
+  // the ones currently being played (In Progress). The active game(s) stay put;
+  // the on-deck/backlog you'd planned for later get cleared out.
+  const clearUpcoming = async () => {
+    const toClear = games.filter(
+      g => g.queuePosition !== undefined && g.status !== 'In Progress'
+    );
+    if (toClear.length === 0) return;
+    await Promise.all(toClear.map(g => updateGame(g.id, { queuePosition: undefined })));
+  };
+
   // Check if a game is in the queue
   const isInQueue = (gameId: string): boolean => {
     const game = games.find(g => g.id === gameId);
@@ -133,6 +144,7 @@ export function useGameQueue(
     addToQueue,
     removeFromQueue,
     reorderQueue,
+    clearUpcoming,
     isInQueue,
   };
 }

@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { ChevronDown, X, Tag, DollarSign, Calendar, MessageSquare, Sparkles } from 'lucide-react';
+import { ChevronDown, X, Tag, DollarSign, Calendar, MessageSquare, Sparkles, Loader2 } from 'lucide-react';
 import { Game, GameStatus, PurchaseSource, SubscriptionSource } from '../lib/types';
 import { calculateCostPerHour, getValueRating, formatRating, getTotalHours } from '../lib/calculations';
+import { lookupGameLength } from '../lib/ai-timeline-service';
 import { AIReviewInterview } from './AIReviewInterview';
 import clsx from 'clsx';
 
@@ -102,10 +103,13 @@ function Section({ title, icon, defaultOpen = false, children, badge }: {
 export function GameForm({ onSubmit, onClose, initialGame, allGames = [], existingFranchises = [] }: GameFormProps) {
   const [loading, setLoading] = useState(false);
   const [showInterview, setShowInterview] = useState(false);
+  const [lengthLoading, setLengthLoading] = useState(false);
+  const [lengthNote, setLengthNote] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     name: initialGame?.name || '',
     price: initialGame?.price !== undefined ? initialGame.price.toString() : '',
     hours: initialGame?.hours !== undefined ? initialGame.hours.toString() : '',
+    expectedHours: initialGame?.expectedHours !== undefined ? initialGame.expectedHours.toString() : '',
     rating: initialGame?.rating || 8,
     status: (initialGame?.status || 'Not Started') as GameStatus,
     platform: initialGame?.platform || 'PS5',
@@ -192,6 +196,7 @@ export function GameForm({ onSubmit, onClose, initialGame, allGames = [], existi
         franchise: formData.franchise ? toTitleCase(formData.franchise.trim()) : undefined,
         price: parseFloat(formData.price) || 0,
         hours: parseFloat(formData.hours) || 0,
+        expectedHours: formData.expectedHours ? parseFloat(formData.expectedHours) : undefined,
         originalPrice: formData.originalPrice ? parseFloat(formData.originalPrice) : undefined,
         purchaseSource: formData.purchaseSource || undefined,
         acquiredFree: formData.acquiredFree || undefined,
@@ -203,6 +208,28 @@ export function GameForm({ onSubmit, onClose, initialGame, allGames = [], existi
       onClose();
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleLookupLength = async () => {
+    if (!formData.name.trim()) {
+      setLengthNote('Enter a game name first');
+      return;
+    }
+    setLengthLoading(true);
+    setLengthNote(null);
+    try {
+      const res = await lookupGameLength(formData.name.trim(), formData.platform);
+      if (res.hours) {
+        setFormData(prev => ({ ...prev, expectedHours: String(res.hours) }));
+        setLengthNote(res.note || `~${res.hours}h to beat`);
+      } else {
+        setLengthNote("Couldn't find an estimate — enter it manually");
+      }
+    } catch {
+      setLengthNote('Lookup failed — enter it manually');
+    } finally {
+      setLengthLoading(false);
     }
   };
 
@@ -352,6 +379,37 @@ export function GameForm({ onSubmit, onClose, initialGame, allGames = [], existi
                 className="w-full px-3 py-3 bg-white/[0.03] border border-white/5 text-white rounded-xl text-sm focus:outline-none focus:bg-white/[0.05] focus:border-white/10 transition-all"
                 placeholder="0.0"
               />
+            </div>
+
+            {/* Expected Hours to Finish (for Timeline Estimator) */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-xs font-medium text-white/50">Hours to Finish</label>
+                <button
+                  type="button"
+                  onClick={handleLookupLength}
+                  disabled={lengthLoading}
+                  className="flex items-center gap-1 text-[11px] px-2 py-1 rounded-lg bg-purple-500/10 text-purple-300 hover:bg-purple-500/20 disabled:opacity-50 transition-all"
+                >
+                  {lengthLoading ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                  {lengthLoading ? 'Searching…' : 'Estimate with AI'}
+                </button>
+              </div>
+              <input
+                type="number"
+                step="0.5"
+                min="0"
+                value={formData.expectedHours}
+                onChange={e => { setFormData({ ...formData, expectedHours: e.target.value }); setLengthNote(null); }}
+                className="w-full px-3 py-3 bg-white/[0.03] border border-white/5 text-white rounded-xl text-sm focus:outline-none focus:bg-white/[0.05] focus:border-white/10 transition-all"
+                placeholder="e.g. 25 — used by the Timeline Estimator"
+              />
+              {lengthNote && (
+                <p className="mt-1 text-[11px] text-white/40 flex items-center gap-1">
+                  <Sparkles size={10} className="text-purple-400/50" />
+                  {lengthNote}
+                </p>
+              )}
             </div>
 
             {/* Live Value Card */}
