@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-09 00:00 — Profile — Gamer Profile Modal
+
+**Files**: app/apps/game-analytics/components/GamerProfileModal.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Added a "Gamer Profile" modal (fingerprint button in the header utility row) that surfaces five layers of identity data that were calculated but never shown: your gaming archetype (Completionist/Explorer/Deep Diver etc.) with a confidence score and trait badges, a 7-axis DNA radar chart (Engagement, Completion, Genre Variety, Platform Spread, Time Invested, Quality Bar, Budget Level), your session style (Marathon Runner/Snack Gamer/etc.) with session stats, a Personal Records grid (longest session, speed finish, best value, century club, best streak, top franchise), and a quarterly Personality Evolution timeline. The modal is mobile-native (slides up from bottom on phones, centered on desktop) and uses the archetype colour throughout for visual consistency.
+
+FOLLOW-UP: Could add a shareable screenshot export or copy-to-clipboard function so users can share their gamer profile.
+
 ## 2026-06-01 06:00 — Game Detail — Head-to-Head Game Comparison
 
 **Files**: app/apps/game-analytics/components/GameCompareModal.tsx, app/apps/game-analytics/components/GameBottomSheet.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json
