@@ -49,6 +49,7 @@ import { ErrorLogPanel, ErrorLogButton } from './components/ErrorLogPanel';
 import { WhatsNewModal } from './components/WhatsNewModal';
 import { GameReviewChat } from './components/GameReviewChat';
 import { GameCompareModal } from './components/GameCompareModal';
+import { PlayRecommendation } from './components/PlayRecommendation';
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist';
@@ -942,6 +943,25 @@ export default function GameAnalyticsPage() {
 
           {/* Daily Fortune Cookie */}
           {games.length > 0 && <div className="mb-4"><FortuneCookie games={games} /></div>}
+
+          {/* Tonight's Pick — smart daily play recommendation */}
+          {games.length > 0 && (
+            <PlayRecommendation
+              games={games}
+              onQuickLog={(game, hours) => {
+                const gwm = gamesWithMetrics.find(g => g.id === game.id);
+                if (gwm) handleQuickLog(gwm, hours);
+              }}
+              onOpenPlayLog={(game) => {
+                const gwm = gamesWithMetrics.find(g => g.id === game.id);
+                if (gwm) handleOpenPlayLog(gwm);
+              }}
+              onCardClick={(game) => {
+                const gwm = gamesWithMetrics.find(g => g.id === game.id);
+                if (gwm) setDetailGame(gwm);
+              }}
+            />
+          )}
 
           {/* Gentle nudge to review finished games — leads into the review chat */}
           {games.length > 0 && (

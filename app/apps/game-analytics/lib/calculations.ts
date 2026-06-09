@@ -14251,3 +14251,176 @@ export function getReviewNudges(games: Game[]): ReviewNudgeSummary {
     recentlyCompletedCount,
   };
 }
+
+// ============================================================
+// Tonight's Pick — daily smart play recommendation
+// ============================================================
+
+export interface PlayRecommendation {
+  game: Game;
+  headline: string;
+  reason: string;
+  suggestedHours: number;
+  score: number;
+  playedToday: boolean;
+  factors: {
+    isStreak: boolean;
+    streakDays: number;
+    queuePosition: number | null;
+    daysSinceLast: number | null;
+    chemistry: number;
+    avgSessionHours: number;
+  };
+  alternates: Game[];
+}
+
+function getTodayStr(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+}
+
+export function getPlayRecommendation(games: Game[]): PlayRecommendation | null {
+  const candidates = games.filter(
+    g => g.status === 'In Progress' || g.status === 'Not Started'
+  );
+  if (candidates.length === 0) return null;
+
+  const todayStr = getTodayStr();
+  const now = new Date();
+
+  const scored = candidates.map(game => {
+    const chemistry = getGameChemistry(game, games);
+    const streak = getGameStreak(game);
+    const logs = [...(game.playLogs ?? [])].sort(
+      (a, b) => parseLocalDate(b.date).getTime() - parseLocalDate(a.date).getTime()
+    );
+    const lastPlayDate = logs.length > 0 ? parseLocalDate(logs[0].date) : null;
+    const daysSinceLast = lastPlayDate
+      ? Math.floor((now.getTime() - lastPlayDate.getTime()) / (24 * 60 * 60 * 1000))
+      : null;
+    const playedToday = logs.length > 0 && logs[0].date === todayStr;
+
+    const avgSessionHours =
+      logs.length > 0
+        ? Math.round((logs.reduce((s, l) => s + l.hours, 0) / logs.length) * 2) / 2
+        : 1;
+    const suggestedHours = Math.max(0.5, Math.min(3, avgSessionHours));
+
+    let score = chemistry.score * 0.45;
+
+    // Queue position boost
+    const queuePos = game.queuePosition ?? null;
+    if (queuePos !== null && queuePos >= 1) {
+      score += Math.max(5, 40 - (queuePos - 1) * 8);
+    }
+
+    // Active streak: keep it going
+    if (streak.isActive && streak.days >= 2) {
+      score += streak.days >= 5 ? 30 : 20;
+    }
+
+    // In Progress games get baseline preference
+    if (game.status === 'In Progress') score += 12;
+
+    // Gap since last play
+    if (daysSinceLast !== null) {
+      if (daysSinceLast === 0) score += 8; // already played today — can do more
+      else if (daysSinceLast === 1) score += 22; // yesterday — perfect continuation
+      else if (daysSinceLast <= 3) score += 15;
+      else if (daysSinceLast <= 7) score += 8;
+      else if (daysSinceLast > 30) score -= 8; // stale
+    }
+
+    // Shelf life urgency
+    try {
+      const expiry = getShelfLifeExpiry(game, games);
+      if (expiry.tier === 'critical') score += 12;
+      else if (expiry.tier === 'at_risk') score += 6;
+    } catch {
+      // non-critical
+    }
+
+    return {
+      game,
+      score,
+      chemistry: chemistry.score,
+      streak,
+      daysSinceLast,
+      queuePos,
+      suggestedHours,
+      playedToday,
+      avgSessionHours,
+    };
+  });
+
+  scored.sort((a, b) => b.score - a.score);
+  const top = scored[0];
+
+  // Headline — pick most compelling reason
+  let headline = "Tonight's Pick";
+  const s = top.streak;
+  if (s.isActive && s.days >= 5) {
+    headline = `🔥 ${s.days}-day streak — keep it alive`;
+  } else if (s.isActive && s.days >= 3) {
+    headline = `Keep your ${s.days}-day streak going`;
+  } else if (top.queuePos === 1) {
+    headline = 'Your #1 Up Next game';
+  } else if (top.playedToday) {
+    headline = 'Continue where you left off today';
+  } else if (top.daysSinceLast === 1) {
+    headline = 'Continue where you left off';
+  } else if (top.daysSinceLast !== null && top.daysSinceLast >= 14) {
+    headline = `It's been ${top.daysSinceLast} days — time to return`;
+  } else if (top.chemistry >= 75) {
+    headline = 'High chemistry match for tonight';
+  } else if (top.game.status === 'Not Started' && top.queuePos !== null) {
+    headline = 'Time to start this one';
+  }
+
+  // Reason — 1-2 data-driven sentences
+  const parts: string[] = [];
+
+  if (top.avgSessionHours >= 2) {
+    parts.push(`Your sessions average ${top.avgSessionHours.toFixed(1)}h on this game.`);
+  } else if (top.avgSessionHours > 0 && top.avgSessionHours < 2) {
+    parts.push(`Quick ${top.suggestedHours}h sessions work great for this game.`);
+  }
+
+  if (top.daysSinceLast === 1) {
+    parts.push('You played yesterday — momentum is on your side.');
+  } else if (top.daysSinceLast !== null && top.daysSinceLast >= 7) {
+    parts.push(`You last played ${top.daysSinceLast} days ago. A session now will keep it fresh.`);
+  } else if (top.daysSinceLast === null && top.game.status === 'Not Started') {
+    parts.push('This one is waiting to be started — the best time is now.');
+  }
+
+  if (top.chemistry >= 75 && parts.length < 2) {
+    parts.push('Chemistry score is high based on your recent patterns.');
+  }
+
+  const reason = parts.slice(0, 2).join(' ').trim();
+
+  const alternates = scored
+    .slice(1, 4)
+    .filter(s => !s.playedToday || top.playedToday)
+    .slice(0, 2)
+    .map(s => s.game);
+
+  return {
+    game: top.game,
+    headline,
+    reason,
+    suggestedHours: top.suggestedHours,
+    score: Math.round(top.score),
+    playedToday: top.playedToday,
+    factors: {
+      isStreak: s.isActive,
+      streakDays: s.days,
+      queuePosition: top.queuePos,
+      daysSinceLast: top.daysSinceLast,
+      chemistry: top.chemistry,
+      avgSessionHours: top.avgSessionHours,
+    },
+    alternates,
+  };
+}

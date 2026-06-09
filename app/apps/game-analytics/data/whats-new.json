@@ -1,6 +1,12 @@
 {
   "entries": [
     {
+      "date": "2026-06-09",
+      "area": "Games tab",
+      "title": "Tonight's Pick: your smartest game recommendation yet",
+      "body": "Every time you open the app, a new card tells you exactly which game to play tonight and why. It weighs your active streaks, queue order, days since you last played, genre momentum, and more — then gives you one clear recommendation with a quick-log button so you can log a session in two taps. Dismiss it for the day and it's gone until tomorrow."
+    },
+    {
       "date": "2026-06-01",
       "area": "Game detail",
       "title": "Compare any two games head to head",

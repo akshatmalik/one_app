@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-09 00:00 — Games Tab — Tonight's Pick recommendation card
+
+**Files**: app/apps/game-analytics/lib/calculations.ts, app/apps/game-analytics/components/PlayRecommendation.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Added a "Tonight's Pick" card that appears above the game list and recommends the single best game to play right now — drawn from your actual library. The `getPlayRecommendation()` engine scores every playable game on six signals: chemistry (genre craving, session fit, momentum), active streak, queue position, days since last play, shelf-life urgency, and whether you already played today. The card shows a data-driven headline ("Keep your 5-day streak", "Continue where you left off"), a 1-2 sentence contextual reason, two quick-log hour buttons for instant session logging, and 2 thumbnail alternates. Dismissing saves to localStorage keyed to today's date so it resets every morning.
+
+FOLLOW-UP: Could add a "Not feeling it — show me something different" button that cycles through alternates without dismissing the card entirely.
+
 ## 2026-06-01 06:00 — Game Detail — Head-to-Head Game Comparison
 
 **Files**: app/apps/game-analytics/components/GameCompareModal.tsx, app/apps/game-analytics/components/GameBottomSheet.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json
