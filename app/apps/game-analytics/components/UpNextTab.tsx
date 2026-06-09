@@ -19,7 +19,7 @@ import {
 import {
   ListOrdered, Search, Plus, Gamepad2, Swords, Sparkles, Brain,
   MessageSquare, TrendingUp, ChevronDown, ChevronUp, RefreshCw,
-  Flame, Zap, Map, BookOpen,
+  Flame, Zap, Map, BookOpen, Trash2,
 } from 'lucide-react';
 import { QueueGameCard } from './QueueGameCard';
 import { GameWithMetrics } from '../hooks/useAnalytics';
@@ -43,6 +43,7 @@ interface UpNextTabProps {
   onAddToQueue: (gameId: string) => Promise<void>;
   onRemoveFromQueue: (gameId: string) => Promise<void>;
   onReorderQueue: (gameId: string, newPosition: number) => Promise<void>;
+  onClearUpcoming?: () => Promise<void>;
   onLogTime?: (game: GameWithMetrics) => void;
   onStartGame?: (game: GameWithMetrics) => void;
 }
@@ -58,6 +59,7 @@ export function UpNextTab({
   onAddToQueue,
   onRemoveFromQueue,
   onReorderQueue,
+  onClearUpcoming,
   onLogTime,
   onStartGame,
 }: UpNextTabProps) {
@@ -115,6 +117,16 @@ export function UpNextTab({
     }
     return { count: activeGames.length, totalHours: Math.round(totalHours), timeLabel };
   }, [queuedGames, weeklyPace]);
+
+  // "Clear Upcoming" only touches queued games that aren't currently being played.
+  const currentlyPlayingCount = useMemo(
+    () => queuedGames.filter(g => g.status === 'In Progress').length,
+    [queuedGames]
+  );
+  const clearableCount = useMemo(
+    () => queuedGames.filter(g => g.status !== 'In Progress').length,
+    [queuedGames]
+  );
 
   // Index of the last In Progress game (for On Deck divider placement)
   const lastHeroIndex = useMemo(() => {
@@ -261,6 +273,22 @@ export function UpNextTab({
         </div>
 
         <div className="flex items-center gap-2">
+          {onClearUpcoming && clearableCount > 0 && (
+            <button
+              onClick={async () => {
+                if (window.confirm(
+                  `Clear ${clearableCount} upcoming game${clearableCount !== 1 ? 's' : ''} from the queue? Your current game${currentlyPlayingCount !== 1 ? 's' : ''} stay${currentlyPlayingCount === 1 ? 's' : ''} put.`
+                )) {
+                  await onClearUpcoming();
+                }
+              }}
+              title="Clear everything planned for after today (keeps what you're playing now)"
+              className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all bg-white/5 text-white/60 border border-white/5 hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/30"
+            >
+              <Trash2 size={14} />
+              Clear Upcoming
+            </button>
+          )}
           <button
             onClick={onToggleHideFinished}
             className={clsx(

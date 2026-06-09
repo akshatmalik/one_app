@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical, Download, Gift, ShoppingCart, Search, X } from 'lucide-react';
+import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, CalendarClock, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical, Download, Gift, ShoppingCart, Search, X } from 'lucide-react';
 import { useGames } from './hooks/useGames';
 import { useAnalytics, GameWithMetrics } from './hooks/useAnalytics';
 import { useBudget } from './hooks/useBudget';
@@ -34,6 +34,8 @@ import { GameBottomSheet } from './components/GameBottomSheet';
 import { DiscoverTab } from './components/DiscoverTab';
 import { LeaderboardTab } from './components/LeaderboardTab';
 import { BuyQueueTab } from './components/BuyQueueTab';
+import { TimelineEstimatorTab } from './components/TimelineEstimatorTab';
+import { usePurchaseQueue } from './hooks/usePurchaseQueue';
 import { RatingStars } from './components/RatingStars';
 import { MomentumDots } from './components/MomentumDots';
 import { ProgressRing } from './components/ProgressRing';
@@ -52,7 +54,7 @@ import { GameCompareModal } from './components/GameCompareModal';
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist';
-type TabMode = 'games' | 'timeline' | 'stats' | 'ai-coach' | 'up-next' | 'discover' | 'leaderboard' | 'buy-queue';
+type TabMode = 'games' | 'timeline' | 'stats' | 'ai-coach' | 'up-next' | 'discover' | 'leaderboard' | 'buy-queue' | 'estimator';
 type CardViewMode = 'poster' | 'compact';
 
 function getValueColor(rating: string): string {
@@ -139,6 +141,7 @@ export default function GameAnalyticsPage() {
   const { games, loading, error, addGame, updateGame, deleteGame, refresh } = useGames(user?.uid ?? null);
   const { gamesWithMetrics, summary } = useAnalytics(games);
   const { budgets, setBudget } = useBudget(user?.uid ?? null);
+  const { upcomingEntries } = usePurchaseQueue(user?.uid ?? null);
   const { loading: thumbnailsLoading, fetchedCount } = useGameThumbnails(games, updateGame);
   const gameColors = useGameColors(games);
   const { quips: gameQuips } = useGameQuips(games, user?.uid ?? null);
@@ -181,6 +184,7 @@ export default function GameAnalyticsPage() {
     addToQueue,
     removeFromQueue,
     reorderQueue,
+    clearUpcoming,
     isInQueue,
   } = useGameQueue(games, updateGame);
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -992,6 +996,7 @@ export default function GameAnalyticsPage() {
                   { id: 'discover',    icon: <Compass size={16} />,     title: 'Discover' },
                   { id: 'leaderboard', icon: <Trophy size={16} />,      title: 'Ranks' },
                   { id: 'buy-queue',   icon: <ShoppingCart size={16} />, title: 'Buy Queue' },
+                  { id: 'estimator',   icon: <CalendarClock size={16} />, title: 'Timeline Estimator' },
                 ] as const).map((tab) => (
                   <button
                     key={tab.id}
@@ -1321,6 +1326,14 @@ export default function GameAnalyticsPage() {
                   showToast(`Failed to reorder queue: ${(e as Error).message}`, 'error');
                 }
               }}
+              onClearUpcoming={async () => {
+                try {
+                  await clearUpcoming();
+                  showToast('Cleared upcoming games from the queue', 'success');
+                } catch (e) {
+                  showToast(`Failed to clear queue: ${(e as Error).message}`, 'error');
+                }
+              }}
               onLogTime={(game) => {
                 const gameWithMetrics = gamesWithMetrics.find(g => g.id === game.id);
                 if (gameWithMetrics) {
@@ -1396,6 +1409,19 @@ export default function GameAnalyticsPage() {
                 await addToQueue(gameId);
                 showToast('Added to Up Next', 'success');
               }}
+            />
+          )}
+
+          {tabMode === 'estimator' && (
+            <TimelineEstimatorTab
+              userId={user?.uid ?? null}
+              queuedGames={queuedGames}
+              allGames={games}
+              upcomingEntries={upcomingEntries}
+              annualBudget={budgets.find(b => b.year === new Date().getFullYear())?.yearlyBudget ?? null}
+              yearSpent={currentYearSpent}
+              onUpdateGame={updateGame}
+              onGoToQueue={() => setTabMode('up-next')}
             />
           )}
         </div>
