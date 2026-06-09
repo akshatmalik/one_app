@@ -49,6 +49,7 @@ import { ErrorLogPanel, ErrorLogButton } from './components/ErrorLogPanel';
 import { WhatsNewModal } from './components/WhatsNewModal';
 import { GameReviewChat } from './components/GameReviewChat';
 import { GameCompareModal } from './components/GameCompareModal';
+import { TonightMode } from './components/TonightMode';
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist';
@@ -217,6 +218,7 @@ export default function GameAnalyticsPage() {
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showErrorLog, setShowErrorLog] = useState(false);
   const [showWhatsNew, setShowWhatsNew] = useState(false);
+  const [showTonightMode, setShowTonightMode] = useState(false);
 
   // Week recap data for header strip
   const weekRecap = useMemo(() => {
@@ -1057,6 +1059,16 @@ export default function GameAnalyticsPage() {
                   </div>
                 )}
               <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                {/* Play Tonight button */}
+                {games.length > 0 && (
+                  <button
+                    onClick={() => setShowTonightMode(true)}
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-gradient-to-r from-purple-600/70 to-fuchsia-600/70 hover:from-purple-600 hover:to-fuchsia-600 text-white text-xs font-semibold transition-all shadow-lg shadow-purple-900/30 shrink-0"
+                  >
+                    <span>🎮</span>
+                    Play Tonight?
+                  </button>
+                )}
                 <div className="flex items-center gap-1 bg-white/[0.02] rounded-lg p-1">
                   {(['all', 'owned', 'wishlist'] as ViewMode[]).map((mode) => (
                     <button
@@ -1543,6 +1555,18 @@ export default function GameAnalyticsPage() {
           game1={compareGame}
           allGames={gamesWithMetrics}
           onClose={() => setCompareGame(null)}
+        />
+      )}
+
+      {/* Play Tonight Modal */}
+      {showTonightMode && (
+        <TonightMode
+          games={gamesWithMetrics}
+          onClose={() => setShowTonightMode(false)}
+          onLogTime={(game) => {
+            setShowTonightMode(false);
+            handleOpenPlayLog(game);
+          }}
         />
       )}
 

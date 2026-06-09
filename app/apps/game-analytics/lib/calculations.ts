@@ -14251,3 +14251,177 @@ export function getReviewNudges(games: Game[]): ReviewNudgeSummary {
     recentlyCompletedCount,
   };
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TONIGHT PICKS — Pre-session game recommendation engine
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type TonightVibe =
+  | 'continue'    // Pick up an in-progress game
+  | 'start_fresh' // Start something new
+  | 'chill'       // Low-intensity, relaxed session
+  | 'challenge'   // Intense, demanding play
+  | 'surprise';   // Random pick, anything goes
+
+export interface TonightPick {
+  game: Game;
+  score: number;
+  headline: string;
+  timeMatch: 'perfect' | 'close' | 'stretch' | 'unknown';
+  avgSessionHours: number;
+  factors: {
+    vibeScore: number;
+    timeScore: number;
+    freshnessScore: number;
+    engagementScore: number;
+  };
+}
+
+export function getTonightPicks(
+  games: Game[],
+  availableMinutes: number,
+  vibe: TonightVibe,
+): TonightPick[] {
+  const availableHours = availableMinutes / 60;
+  const todayStr = new Date().toDateString();
+
+  // Filter candidates by vibe
+  let candidates: Game[];
+  if (vibe === 'continue') {
+    candidates = games.filter(g => g.status === 'In Progress' || g.status === 'Not Started');
+  } else if (vibe === 'start_fresh') {
+    candidates = games.filter(g => g.status === 'Not Started');
+    // fallback: include In Progress if nothing unstarted
+    if (candidates.length === 0) candidates = games.filter(g => g.status !== 'Wishlist' && g.status !== 'Abandoned');
+  } else {
+    candidates = games.filter(g => g.status !== 'Wishlist' && g.status !== 'Abandoned');
+  }
+
+  if (candidates.length === 0) return [];
+
+  const scored: TonightPick[] = candidates.map(game => {
+    const logs = (game.playLogs ?? []).sort((a, b) => b.date.localeCompare(a.date));
+    const avgSessionHours =
+      logs.length > 0
+        ? logs.reduce((s, l) => s + l.hours, 0) / logs.length
+        : 1.5;
+
+    // ── Time fit (0-30 pts) ──────────────────────────────────────────────────
+    let timeScore = 12;
+    if (logs.length > 0) {
+      const ratio = availableHours / avgSessionHours;
+      if (ratio >= 0.8 && ratio <= 1.5) timeScore = 30;
+      else if (ratio >= 0.6 && ratio <= 2.2) timeScore = 20;
+      else if (ratio >= 0.4) timeScore = 10;
+      else timeScore = 4;
+    }
+    const timeMatch: TonightPick['timeMatch'] =
+      timeScore >= 28 ? 'perfect' : timeScore >= 18 ? 'close' : timeScore >= 8 ? 'stretch' : 'unknown';
+
+    // ── Vibe alignment (0-35 pts) ────────────────────────────────────────────
+    const genre = (game.genre ?? '').toLowerCase();
+    const status = game.status;
+    let vibeScore = 10;
+
+    if (vibe === 'continue') {
+      vibeScore = status === 'In Progress' ? 35 : 8;
+    } else if (vibe === 'start_fresh') {
+      vibeScore = status === 'Not Started' ? 35 : 8;
+    } else if (vibe === 'chill') {
+      const chillTags = ['sports', 'racing', 'puzzle', 'casual', 'simulation', 'platformer', 'indie', 'music', 'rhythm'];
+      const intenseTags = ['horror', 'survival', 'fighting', 'battle royale'];
+      if (chillTags.some(t => genre.includes(t))) vibeScore = 30;
+      else if (intenseTags.some(t => genre.includes(t))) vibeScore = 5;
+      else vibeScore = 18;
+    } else if (vibe === 'challenge') {
+      const hardTags = ['rpg', 'action', 'fighting', 'strategy', 'survival', 'souls', 'adventure', 'rogue'];
+      const easyTags = ['puzzle', 'casual', 'simulation', 'rhythm'];
+      if (hardTags.some(t => genre.includes(t))) vibeScore = 30;
+      else if (easyTags.some(t => genre.includes(t))) vibeScore = 6;
+      else vibeScore = 18;
+    } else {
+      // surprise: light genre randomisation so re-rolls feel different
+      vibeScore = 12 + ((game.id.charCodeAt(0) + new Date().getDate()) % 14);
+    }
+
+    // ── Freshness (0-20 pts) — reward ongoing streaks, penalise today ────────
+    let freshnessScore = 10;
+    if (logs.length > 0) {
+      const isToday = parseLocalDate(logs[0].date).toDateString() === todayStr;
+      if (isToday) {
+        freshnessScore = 2;
+      } else {
+        const daysSince = Math.floor(
+          (Date.now() - parseLocalDate(logs[0].date).getTime()) / (24 * 60 * 60 * 1000),
+        );
+        if (daysSince <= 2) freshnessScore = 20;
+        else if (daysSince <= 7) freshnessScore = 16;
+        else if (daysSince <= 30) freshnessScore = 10;
+        else freshnessScore = 5;
+      }
+    } else {
+      freshnessScore = 14; // never played → fresh-start energy
+    }
+
+    // ── Engagement quality (0-15 pts) ────────────────────────────────────────
+    const engagementScore = game.rating > 0 ? Math.round((game.rating / 10) * 15) : 7;
+
+    const total = timeScore + vibeScore + freshnessScore + engagementScore;
+
+    // ── Headline ─────────────────────────────────────────────────────────────
+    let headline = 'Solid pick for tonight.';
+
+    if (status === 'In Progress' && vibe === 'continue') {
+      headline = 'Mid-session — pick up exactly where you left off.';
+    } else if (status === 'Not Started' && vibe === 'start_fresh') {
+      if (game.datePurchased) {
+        const daysSince = Math.floor(
+          (Date.now() - parseLocalDate(game.datePurchased).getTime()) / (24 * 60 * 60 * 1000),
+        );
+        if (daysSince > 60) headline = `Bought ${daysSince} days ago and never started — tonight's the night.`;
+        else headline = 'Fresh start, zero spoilers, pure excitement.';
+      } else {
+        headline = 'Nothing to unlearn — pure adventure from the first minute.';
+      }
+    } else if (timeMatch === 'perfect') {
+      headline = `Your typical session here is ${avgSessionHours.toFixed(1)}h — fits tonight perfectly.`;
+    } else if (freshnessScore >= 16) {
+      headline = "You've been on a roll — keep that momentum alive.";
+    } else if (freshnessScore <= 5 && logs.length > 0) {
+      const daysSince = Math.floor(
+        (Date.now() - parseLocalDate(logs[0].date).getTime()) / (24 * 60 * 60 * 1000),
+      );
+      headline = `It's been ${daysSince} day${daysSince !== 1 ? 's' : ''} — time to pick this back up.`;
+    } else if (game.rating >= 8) {
+      headline = `One of your top-rated games — always worth another session.`;
+    } else if (availableHours <= 1) {
+      headline = 'Short sessions work well here — great for a quick hit.';
+    }
+
+    return {
+      game,
+      score: total,
+      headline,
+      timeMatch,
+      avgSessionHours,
+      factors: { vibeScore, timeScore, freshnessScore, engagementScore },
+    };
+  });
+
+  // Sort descending by score
+  scored.sort((a, b) => b.score - a.score);
+
+  // Diversify: same genre capped at 2 picks
+  const genreSeen: Record<string, number> = {};
+  const result: TonightPick[] = [];
+  for (const pick of scored) {
+    const g = pick.game.genre ?? '__none__';
+    if ((genreSeen[g] ?? 0) < 2) {
+      result.push(pick);
+      genreSeen[g] = (genreSeen[g] ?? 0) + 1;
+    }
+    if (result.length >= 3) break;
+  }
+
+  return result;
+}

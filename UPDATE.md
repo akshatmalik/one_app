@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-09 12:00 — Games Tab — "Play Tonight?" Session Planner
+
+**Files**: app/apps/game-analytics/lib/calculations.ts, app/apps/game-analytics/components/TonightMode.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Added a "Play Tonight?" button in the Games tab toolbar that opens a two-step modal: first, pick how much time you have (1h / 2h / 3-4h / all evening), then pick your vibe (Continue, Start Fresh, Chill, Challenge, or Surprise Me). The engine scores every owned game on time fit, vibe alignment, freshness, and engagement, returning the top 3 picks with thumbnails, relationship labels, time-match chips, and a one-line reasoning headline. Tapping "Log a session" on any pick opens the play-log modal directly. This creates a new pre-session use pattern — users open the app *before* gaming, not just after.
+
+FOLLOW-UP: Could add a history of recent Tonight picks so users see patterns in what they actually chose vs. what was recommended.
+
 ## 2026-06-01 06:00 — Game Detail — Head-to-Head Game Comparison
 
 **Files**: app/apps/game-analytics/components/GameCompareModal.tsx, app/apps/game-analytics/components/GameBottomSheet.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json
