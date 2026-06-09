@@ -14251,3 +14251,134 @@ export function getReviewNudges(games: Game[]): ReviewNudgeSummary {
     recentlyCompletedCount,
   };
 }
+
+// ========================
+// PERSONAL GAMING RECORDS
+// ========================
+
+export interface DayRecord {
+  hours: number;
+  date: string;
+  gameNames: string[];
+}
+
+export interface WeekRecord {
+  hours: number;
+  weekStart: string;
+  weekEnd: string;
+  gameNames: string[];
+}
+
+export interface MonthCompletionRecord {
+  count: number;
+  month: string;
+  gameNames: string[];
+}
+
+export interface BiggestGameRecord {
+  game: Game;
+  hours: number;
+}
+
+/** Best single calendar day by total hours logged across all games. */
+export function getBestGamingDay(games: Game[]): DayRecord | null {
+  const dayMap = new Map<string, { hours: number; gameNames: string[] }>();
+
+  for (const game of games) {
+    for (const log of game.playLogs ?? []) {
+      const existing = dayMap.get(log.date) ?? { hours: 0, gameNames: [] };
+      existing.hours += log.hours;
+      if (!existing.gameNames.includes(game.name)) existing.gameNames.push(game.name);
+      dayMap.set(log.date, existing);
+    }
+  }
+
+  if (dayMap.size === 0) return null;
+
+  let best: DayRecord | null = null;
+  for (const [date, data] of dayMap) {
+    if (!best || data.hours > best.hours) {
+      best = { hours: data.hours, date, gameNames: data.gameNames };
+    }
+  }
+  return best;
+}
+
+/** Best rolling 7-day period by total hours. */
+export function getBestGamingWeek(games: Game[]): WeekRecord | null {
+  const dayMap = new Map<string, number>();
+  const dayGameMap = new Map<string, Set<string>>();
+
+  for (const game of games) {
+    for (const log of game.playLogs ?? []) {
+      dayMap.set(log.date, (dayMap.get(log.date) ?? 0) + log.hours);
+      if (!dayGameMap.has(log.date)) dayGameMap.set(log.date, new Set<string>());
+      dayGameMap.get(log.date)!.add(game.name);
+    }
+  }
+
+  if (dayMap.size === 0) return null;
+
+  const sortedDates = [...dayMap.keys()].sort();
+  let best: WeekRecord | null = null;
+
+  for (const startDate of sortedDates) {
+    const start = parseLocalDate(startDate);
+    const endD = new Date(start);
+    endD.setDate(endD.getDate() + 6);
+
+    let weekHours = 0;
+    const weekGames = new Set<string>();
+
+    for (const [d, h] of dayMap) {
+      const date = parseLocalDate(d);
+      if (date >= start && date <= endD) {
+        weekHours += h;
+        (dayGameMap.get(d) ?? new Set<string>()).forEach(g => weekGames.add(g));
+      }
+    }
+
+    if (!best || weekHours > best.hours) {
+      const pad = (n: number) => String(n).padStart(2, '0');
+      const endStr = `${endD.getFullYear()}-${pad(endD.getMonth() + 1)}-${pad(endD.getDate())}`;
+      best = { hours: weekHours, weekStart: startDate, weekEnd: endStr, gameNames: [...weekGames] };
+    }
+  }
+
+  return best;
+}
+
+/** Game with the most total hours (baseline + play logs). */
+export function getBiggestGame(games: Game[]): BiggestGameRecord | null {
+  const owned = games.filter(g => g.status !== 'Wishlist');
+  if (owned.length === 0) return null;
+
+  let best: BiggestGameRecord | null = null;
+  for (const game of owned) {
+    const hours = getTotalHours(game);
+    if (!best || hours > best.hours) best = { game, hours };
+  }
+  return best;
+}
+
+/** Calendar month with the most completed games. */
+export function getMostCompletedMonth(games: Game[]): MonthCompletionRecord | null {
+  const completed = games.filter(g => g.status === 'Completed' && g.endDate);
+  if (completed.length === 0) return null;
+
+  const monthMap = new Map<string, string[]>();
+  for (const game of completed) {
+    const month = game.endDate!.substring(0, 7);
+    const existing = monthMap.get(month) ?? [];
+    existing.push(game.name);
+    monthMap.set(month, existing);
+  }
+
+  let best: MonthCompletionRecord | null = null;
+  for (const [month, names] of monthMap) {
+    if (!best || names.length > best.count) {
+      best = { count: names.length, month, gameNames: names };
+    }
+  }
+  return best;
+}

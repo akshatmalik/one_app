@@ -1,6 +1,12 @@
 {
   "entries": [
     {
+      "date": "2026-06-09",
+      "area": "Stats tab",
+      "title": "Your personal gaming records, all in one place",
+      "body": "A new Personal Records panel in the Stats tab tracks nine all-time personal bests: best gaming day, best week, best month, longest streak, longest session, biggest game, fastest finish, best value, and most completions in a month. Each record shows the game or date that set it, and records you're currently close to beating light up with a live progress bar — so you always know when a streak or big week might make history."
+    },
+    {
       "date": "2026-06-01",
       "area": "Game detail",
       "title": "Compare any two games head to head",

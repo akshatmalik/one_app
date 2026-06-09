@@ -65,6 +65,7 @@ import { TrophyProgress, TrophyScoreSummary } from '../lib/trophy-calculations';
 import { DiscoverPanel } from './DiscoverPanel';
 import { WeeklyDigest } from './WeeklyDigest';
 import { WhatIfSimulator } from './WhatIfSimulator';
+import { GamingRecordsPanel } from './GamingRecordsPanel';
 import { PlayedSummary, BoughtSummary } from './RangeGlance';
 import clsx from 'clsx';
 
@@ -992,6 +993,9 @@ export function StatsView({ games, summary, budgets = [], onSetBudget, trophies,
 
       {/* Fun Stats Panel */}
       <FunStatsPanel games={games} />
+
+      {/* Personal Records Panel */}
+      <GamingRecordsPanel games={games} />
 
       {/* Deep Insights Panel (Phase 1 Enhancements) */}
       <InsightsPanel

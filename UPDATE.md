@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-09 12:00 — Stats Tab — Personal Gaming Records Panel
+
+**Files**: app/apps/game-analytics/lib/calculations.ts, app/apps/game-analytics/components/GamingRecordsPanel.tsx, app/apps/game-analytics/components/StatsView.tsx, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Added a "Personal Records" panel to the Stats tab that surfaces nine all-time personal bests: best gaming day, best gaming week, best gaming month, longest streak, longest single session, biggest game by total hours, fastest game completion, best value per hour, and most completions in a calendar month. Each record card shows the record value, the game or date that set it, and when it was achieved. Three records (Best Week, Longest Streak, Most Completed Month) include a live "at risk" progress bar that appears whenever your current pace is within 50% of the record — turning red with a 🔥 alert at 90%+ to let you know you're about to make history. Four new pure calculation functions were added to calculations.ts (getBestGamingDay, getBestGamingWeek, getBiggestGame, getMostCompletedMonth); the five existing record-adjacent functions were reused directly.
+
+FOLLOW-UP: Could add a "Records broken this year" badge count on the Stats tab, or a notification toast when a record is actually beaten mid-session.
+
 ## 2026-06-01 06:00 — Game Detail — Head-to-Head Game Comparison
 
 **Files**: app/apps/game-analytics/components/GameCompareModal.tsx, app/apps/game-analytics/components/GameBottomSheet.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json
