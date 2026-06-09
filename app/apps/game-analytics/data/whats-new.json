@@ -1,6 +1,12 @@
 {
   "entries": [
     {
+      "date": "2026-06-09",
+      "area": "Session Timer",
+      "title": "Track your sessions in real time",
+      "body": "Tap 'Start a session…' at the top of the screen, pick your game, and a live timer starts counting. When you're done, hit End, pick your mood, and the time is automatically logged. The timer even survives closing and reopening the app — so you never lose your session."
+    },
+    {
       "date": "2026-06-01",
       "area": "Game detail",
       "title": "Compare any two games head to head",

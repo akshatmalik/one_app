@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-09 — Games Tab — Live Session Timer
+
+**Files**: app/apps/game-analytics/components/SessionTimerBanner.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Added a persistent live session timer that sits above all tabs so it stays visible no matter what screen you're on. Tap "Start a session…", pick a game, and a real-time clock starts ticking. When you're done, tap End, optionally pick a mood (🔥 Great / 👍 Good / 😐 Meh / 💪 Grind), and tap "Log Session" — the elapsed time is automatically rounded to the nearest 15 minutes and saved as a play log. The session survives page refreshes via localStorage, so closing and reopening the tab mid-session keeps the timer going. This is the first real-time feature in the app — every other surface analyzes data after the fact.
+
+FOLLOW-UP: Could add a "Start Session" shortcut directly on each game card in the games list, and optionally surface the current session game as a pinned "Now Playing" card at the top of the games list.
+
 ## 2026-06-01 06:00 — Game Detail — Head-to-Head Game Comparison
 
 **Files**: app/apps/game-analytics/components/GameCompareModal.tsx, app/apps/game-analytics/components/GameBottomSheet.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json

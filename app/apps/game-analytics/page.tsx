@@ -15,7 +15,8 @@ import { TimelineView } from './components/TimelineView';
 import { StatsView } from './components/StatsView';
 import { AIChatTab } from './components/AIChatTab';
 import { UpNextTab } from './components/UpNextTab';
-import { Game, GameStatus, PlayLog, GameRanking, GameAward, AwardPeriodType, GameTier, TierAssignmentMap, ReviewMessage } from './lib/types';
+import { Game, GameStatus, PlayLog, GameRanking, GameAward, AwardPeriodType, GameTier, TierAssignmentMap, ReviewMessage, SessionMood } from './lib/types';
+import { SessionTimerBanner } from './components/SessionTimerBanner';
 import { useTierAssignments } from './hooks/useTierAssignments';
 import { gameRepository } from './lib/storage';
 import { useRankings } from './hooks/useRankings';
@@ -383,6 +384,27 @@ export default function GameAnalyticsPage() {
     await updateGame(game.id, updates);
     showToast(`Logged ${hours}h`, 'success');
   };
+
+  const handleSessionLog = useCallback(async (gameId: string, hours: number, mood?: SessionMood) => {
+    const game = gamesWithMetrics.find(g => g.id === gameId);
+    if (!game) { showToast('Game not found', 'error'); return; }
+    const now = new Date();
+    const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const newLog: PlayLog = {
+      id: `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+      date: dateStr,
+      hours,
+      ...(mood && { mood }),
+    };
+    const existingLogs = game.playLogs || [];
+    const updates: Partial<Game> = { playLogs: [...existingLogs, newLog] };
+    if (game.status === 'Not Started' && existingLogs.length === 0) {
+      updates.status = 'In Progress';
+      updates.startDate = dateStr;
+    }
+    await updateGame(game.id, updates);
+    showToast(`${hours}h on ${game.name} logged`, 'success');
+  }, [gamesWithMetrics, updateGame, showToast]);
 
   const toggleCardViewMode = () => {
     const next = cardViewMode === 'poster' ? 'compact' : 'poster';
@@ -937,6 +959,11 @@ export default function GameAnalyticsPage() {
       {/* Main Content */}
       <div className="flex-1 px-6 py-6">
         <div className="max-w-6xl mx-auto">
+          {/* Live Session Timer */}
+          {games.length > 0 && (
+            <SessionTimerBanner games={games} onLog={handleSessionLog} />
+          )}
+
           {/* On This Day */}
           {games.length > 0 && <OnThisDayCard games={games} />}
 
