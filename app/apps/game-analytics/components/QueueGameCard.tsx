@@ -406,7 +406,7 @@ export function QueueGameCard({
           {onLogTime && (
             <button
               onClick={(e) => { e.stopPropagation(); onLogTime(); }}
-              className="touch-manipulation p-2 -m-1 text-white/20 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg transition-all sm:opacity-0 sm:group-hover:opacity-100"
+              className="touch-manipulation p-2 -m-1 text-white/30 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg transition-all"
               aria-label="Log play session"
             >
               <Clock size={18} />
@@ -414,7 +414,7 @@ export function QueueGameCard({
           )}
           <button
             onClick={(e) => { e.stopPropagation(); onRemove(); }}
-            className="touch-manipulation p-2 -m-1 text-white/20 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all shrink-0 sm:opacity-0 sm:group-hover:opacity-100"
+            className="touch-manipulation p-2 -m-1 text-white/30 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all shrink-0"
             aria-label="Remove from queue"
           >
             <X size={18} />

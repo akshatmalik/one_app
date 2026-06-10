@@ -170,6 +170,14 @@ export interface GameRepository {
   getById(id: string): Promise<Game | null>;
   create(game: Omit<Game, 'id' | 'userId' | 'createdAt' | 'updatedAt'>): Promise<Game>;
   update(id: string, updates: Partial<Game>): Promise<Game>;
+  /**
+   * Apply several game updates atomically/in one persist. Critical for queue
+   * operations that shift multiple positions at once — running these as parallel
+   * single updates clobbers localStorage (each call rewrites the whole array from
+   * a stale snapshot) and is non-atomic on Firestore. A `changes` value of
+   * `undefined` clears that field (e.g. removing a game from the queue).
+   */
+  updateMany(updates: Array<{ id: string; changes: Partial<Game> }>): Promise<void>;
   delete(id: string): Promise<void>;
 }
 

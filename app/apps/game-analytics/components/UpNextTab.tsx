@@ -15,19 +15,27 @@ import {
   SortableContext,
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
+  arrayMove,
 } from '@dnd-kit/sortable';
 import {
   ListOrdered, Search, Plus, Gamepad2, Swords, Sparkles, Brain,
   MessageSquare, TrendingUp, ChevronDown, ChevronUp, RefreshCw,
-  Flame, Zap, Map, BookOpen, Trash2,
+  Flame, Zap, Map, BookOpen, Trash2, Clock, AlertTriangle, CheckCircle2,
 } from 'lucide-react';
 import { QueueGameCard } from './QueueGameCard';
+import { QueueTimelineStrip } from './QueueTimelineStrip';
+import { SuggestedNextRail } from './SuggestedNextRail';
 import { GameWithMetrics } from '../hooks/useAnalytics';
-import { Game } from '../lib/types';
+import { useQueuePreferences } from '../hooks/useQueuePreferences';
+import { Game, PurchaseQueueEntry } from '../lib/types';
 import {
   getQueueSmartChirps, getQueueRivalry, getEstimatedHoursToReach,
   buildQueueAIContext, SmartChirp, RivalryData, getUserGamingPace,
 } from '../lib/calculations';
+import {
+  buildPlaythroughTimeline, detectGap, UpcomingRelease,
+} from '../lib/timeline-estimator';
+import { loadEstimatorSettings, saveEstimatorSettings } from '../lib/estimator-settings';
 import {
   generateHypeChirps, generateNarrativeThread, generateQueueRoast,
   generateQueueHype, generateQueueAdvice, clearQueueAICache,
@@ -35,25 +43,30 @@ import {
 import clsx from 'clsx';
 
 interface UpNextTabProps {
+  userId: string | null;
   queuedGames: GameWithMetrics[];
   availableGames: Game[];
   allGames: Game[];
+  upcomingEntries?: PurchaseQueueEntry[];
   hideFinished: boolean;
   onToggleHideFinished: () => void;
   onAddToQueue: (gameId: string) => Promise<void>;
   onRemoveFromQueue: (gameId: string) => Promise<void>;
-  onReorderQueue: (gameId: string, newPosition: number) => Promise<void>;
+  onReorderQueue: (orderedIds: string[]) => Promise<void>;
   onClearUpcoming?: () => Promise<void>;
   onLogTime?: (game: GameWithMetrics) => void;
   onStartGame?: (game: GameWithMetrics) => void;
+  onGoToEstimator?: () => void;
 }
 
 type AIMode = 'hype' | 'roast' | 'narrative' | 'advisor' | null;
 
 export function UpNextTab({
+  userId,
   queuedGames,
   availableGames,
   allGames,
+  upcomingEntries,
   hideFinished,
   onToggleHideFinished,
   onAddToQueue,
@@ -62,6 +75,7 @@ export function UpNextTab({
   onClearUpcoming,
   onLogTime,
   onStartGame,
+  onGoToEstimator,
 }: UpNextTabProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddingGames, setIsAddingGames] = useState(false);
@@ -99,6 +113,53 @@ export function UpNextTab({
 
   // Weekly gaming pace (hours/week over last 4 weeks)
   const weeklyPace = useMemo(() => getUserGamingPace(allGames), [allGames]);
+
+  // Suggestion tuning (thumbs up/down)
+  const { prefs, like, dislike, stateOf } = useQueuePreferences(userId);
+
+  // Shared planning pace — same localStorage settings the Estimator tab uses, so
+  // adjusting it here keeps both surfaces in sync.
+  const [weeklyHours, setWeeklyHours] = useState<number>(
+    () => loadEstimatorSettings(userId || 'local-user', weeklyPace).weeklyHours
+  );
+  const updateWeeklyHours = useCallback((value: number) => {
+    const next = Math.max(0.5, value);
+    setWeeklyHours(next);
+    const uid = userId || 'local-user';
+    saveEstimatorSettings(uid, { ...loadEstimatorSettings(uid, weeklyPace), weeklyHours: next });
+  }, [userId, weeklyPace]);
+
+  // Active (unfinished) queue in play order — the basis for timeline + gap
+  const activeQueue = useMemo(
+    () => queuedGames.filter(g => g.status !== 'Completed' && g.status !== 'Abandoned'),
+    [queuedGames]
+  );
+
+  // Gap before the next tracked release (synergy with the Buy Queue / Estimator)
+  const gap = useMemo(() => {
+    if (activeQueue.length === 0) return null;
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const timeline = buildPlaythroughTimeline(activeQueue, weeklyHours, today, allGames);
+    if (timeline.length === 0) return null;
+    const queueEndDate = timeline[timeline.length - 1].endDate;
+    const releases: UpcomingRelease[] = (upcomingEntries ?? [])
+      .filter(e => e.releaseDate)
+      .map(e => ({
+        id: e.id,
+        name: e.gameName,
+        date: new Date(e.releaseDate as string),
+        price: e.targetPrice ?? e.currentPrice ?? e.msrpEstimate ?? 70,
+        isDayOne: e.isDayOneBuy,
+        thumbnail: e.thumbnail,
+      }));
+    // Only surface a gap banner when there's actually a tracked release ahead.
+    const info = detectGap(queueEndDate, releases, weeklyHours);
+    return info.nextRelease ? info : null;
+  }, [activeQueue, allGames, weeklyHours, upcomingEntries]);
+
+  const fmtGapDate = (d: Date) => d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  const humanizeGap = (weeks: number) =>
+    weeks < 1 ? `${Math.round(weeks * 7)} days` : weeks < 8 ? `${weeks.toFixed(0)} weeks` : `${(weeks / 4.345).toFixed(0)} months`;
 
   // Queue summary: active game count + total estimated remaining hours
   const queueSummary = useMemo(() => {
@@ -161,8 +222,10 @@ export function UpNextTab({
     const oldIndex = queuedGames.findIndex(g => g.id === active.id);
     const newIndex = queuedGames.findIndex(g => g.id === over.id);
     if (oldIndex !== -1 && newIndex !== -1) {
-      const newPosition = newIndex + 1;
-      await onReorderQueue(active.id as string, newPosition);
+      // Renumber from the full displayed order — robust to finished games being
+      // floated to the bottom (display index ≠ stored queuePosition otherwise).
+      const orderedIds = arrayMove(queuedGames, oldIndex, newIndex).map(g => g.id);
+      await onReorderQueue(orderedIds);
     }
   };
 
@@ -334,6 +397,76 @@ export function UpNextTab({
           </div>
         </div>
       )}
+
+      {/* Projected completion timeline (re-flows live as you reorder) + shared pace */}
+      {activeQueue.length > 0 && (
+        <div className="space-y-2">
+          <QueueTimelineStrip
+            activeQueue={activeQueue}
+            allGames={allGames}
+            weeklyHours={weeklyHours}
+            onOpenEstimator={onGoToEstimator}
+          />
+          <div className="flex items-center gap-2 px-1">
+            <Clock size={13} className="text-white/35 shrink-0" />
+            <span className="text-[11px] text-white/45 shrink-0">Pace</span>
+            <input
+              type="range" min="1" max="40" step="0.5"
+              value={weeklyHours}
+              onChange={e => updateWeeklyHours(parseFloat(e.target.value))}
+              className="flex-1 accent-purple-500 h-1"
+              aria-label="Weekly hours pace"
+            />
+            <span className="text-[11px] font-medium text-white/60 w-16 text-right shrink-0">{weeklyHours}h/wk</span>
+            {weeklyPace > 0 && (
+              <button
+                onClick={() => updateWeeklyHours(Math.round(weeklyPace * 10) / 10)}
+                className="text-[10px] text-white/30 hover:text-purple-300 shrink-0 transition-colors"
+                title="Use your recent actual pace"
+              >
+                actual ~{weeklyPace.toFixed(1)}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Gap before next tracked release */}
+      {gap && gap.nextRelease && (
+        <div className={clsx(
+          'flex items-start gap-2.5 px-4 py-3 rounded-xl border',
+          gap.severity === 'long' ? 'border-red-500/25 bg-red-500/5'
+            : gap.severity === 'medium' ? 'border-amber-500/25 bg-amber-500/5'
+            : 'border-emerald-500/25 bg-emerald-500/5'
+        )}>
+          {gap.severity === 'short'
+            ? <CheckCircle2 size={16} className="text-emerald-400 shrink-0 mt-0.5" />
+            : <AlertTriangle size={16} className={clsx('shrink-0 mt-0.5', gap.severity === 'long' ? 'text-red-400' : 'text-amber-400')} />}
+          <div className="min-w-0">
+            <p className="text-xs text-white/70">
+              You&apos;ll wrap this queue around <strong>{fmtGapDate(gap.queueEndDate)}</strong>
+              {gap.hasGap ? (
+                <> — <strong>{humanizeGap(gap.gapWeeks)}</strong> before <strong>{gap.nextRelease.name}</strong> drops {fmtGapDate(gap.nextRelease.date)}.</>
+              ) : (
+                <> — right as <strong>{gap.nextRelease.name}</strong> drops {fmtGapDate(gap.nextRelease.date)}. Seamless.</>
+              )}
+            </p>
+            {gap.hasGap && (
+              <p className="text-[11px] text-white/35 mt-0.5">Fill it from the suggestions below, or check the estimator for deals.</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Curatable suggestions — pick what fits next, teach it what you like */}
+      <SuggestedNextRail
+        availableGames={availableGames}
+        prefs={prefs}
+        onAdd={(id) => { onAddToQueue(id); }}
+        onLike={like}
+        onDislike={dislike}
+        stateOf={stateOf}
+      />
 
       {/* Smart Chirp Banner (secondary) */}
       {statsChirp && queuedGames.length > 0 && (

@@ -11,6 +11,8 @@ import {
   setDoc,
   updateDoc,
   deleteDoc,
+  deleteField,
+  writeBatch,
   query,
   where,
   orderBy,
@@ -37,6 +39,19 @@ function cleanUndefinedValues<T>(obj: T): T {
     return cleaned as T;
   }
   return obj;
+}
+
+// Prepare a Firestore update payload. An explicit `undefined` on a field means
+// "clear this field" → translate to Firestore's deleteField() sentinel (plain
+// stripping would leave the old value in the document, which is exactly the bug
+// that made "remove from queue" a no-op for logged-in users). Defined values
+// still get their nested undefineds cleaned, since Firestore rejects those.
+function prepareFirestoreUpdate(updates: Record<string, unknown>): Record<string, unknown> {
+  const prepared: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(updates)) {
+    prepared[key] = value === undefined ? deleteField() : cleanUndefinedValues(value);
+  }
+  return prepared;
 }
 
 // Firebase Repository - filters by userId
@@ -96,14 +111,27 @@ export class FirebaseGameRepository implements GameRepository {
   async update(id: string, updates: Partial<Game>): Promise<Game> {
     const docRef = doc(this.db, COLLECTION_NAME, id);
 
-    // Clean undefined values recursively - Firestore doesn't accept them
-    const cleanUpdates = cleanUndefinedValues(updates) as Record<string, unknown>;
-    cleanUpdates.updatedAt = new Date().toISOString();
+    // undefined fields → deleteField(); defined fields get nested undefineds cleaned
+    const preparedUpdates = prepareFirestoreUpdate(updates as Record<string, unknown>);
+    preparedUpdates.updatedAt = new Date().toISOString();
 
-    await updateDoc(docRef, cleanUpdates);
+    await updateDoc(docRef, preparedUpdates);
 
     const updated = await getDoc(docRef);
     return updated.data() as Game;
+  }
+
+  async updateMany(updates: Array<{ id: string; changes: Partial<Game> }>): Promise<void> {
+    if (updates.length === 0) return;
+    const batch = writeBatch(this.db);
+    const now = new Date().toISOString();
+    for (const { id, changes } of updates) {
+      const ref = doc(this.db, COLLECTION_NAME, id);
+      const prepared = prepareFirestoreUpdate(changes as Record<string, unknown>);
+      prepared.updatedAt = now;
+      batch.update(ref, prepared);
+    }
+    await batch.commit();
   }
 
   async delete(id: string): Promise<void> {
@@ -165,6 +193,24 @@ export class LocalStorageGameRepository implements GameRepository {
     return games[index];
   }
 
+  async updateMany(updates: Array<{ id: string; changes: Partial<Game> }>): Promise<void> {
+    if (updates.length === 0) return;
+    // Single read-modify-write over the whole array. Doing these as parallel
+    // update() calls each re-reads the same stale snapshot and the last save()
+    // wins — which silently dropped queue position shifts.
+    const games = await this.getAll();
+    const now = new Date().toISOString();
+    const changeMap = new Map(updates.map(u => [u.id, u.changes]));
+    const next = games.map(g => {
+      const changes = changeMap.get(g.id);
+      if (!changes) return g;
+      // Spreading a key whose value is `undefined` sets it to undefined; JSON
+      // serialization then drops it, so "clear field" semantics hold locally too.
+      return { ...g, ...changes, id: g.id, createdAt: g.createdAt, updatedAt: now };
+    });
+    this.save(next);
+  }
+
   async delete(id: string): Promise<void> {
     const games = await this.getAll();
     const filtered = games.filter(g => g.id !== id);
@@ -210,6 +256,10 @@ class HybridGameRepository implements GameRepository {
 
   update(id: string, updates: Partial<Game>): Promise<Game> {
     return this.repo.update(id, updates);
+  }
+
+  updateMany(updates: Array<{ id: string; changes: Partial<Game> }>): Promise<void> {
+    return this.repo.updateMany(updates);
   }
 
   delete(id: string): Promise<void> {
