@@ -4210,9 +4210,53 @@ export interface Recommendation {
   reasons: string[];
 }
 
-export function getPlayNextRecommendations(games: Game[], maxResults: number = 5): Recommendation[] {
+/**
+ * Learned preference signals from the user's thumbs up/down on suggestions.
+ * Weights are net like/dislike tallies per dimension bucket (positive = liked).
+ */
+export interface RecommendationPreferences {
+  liked: string[];                          // explicitly liked game ids
+  disliked: string[];                       // explicitly disliked game ids (hidden from suggestions)
+  genreWeights: Record<string, number>;     // genre → net signal
+  priceWeights: Record<string, number>;     // price bracket → net signal
+  lengthWeights: Record<string, number>;    // length bucket → net signal
+}
+
+/** Price bracket key for preference learning (kept stable across the app). */
+export function getRecPriceBracket(price: number): string {
+  if (!price || price <= 0) return 'free';
+  if (price < 15) return 'budget';
+  if (price < 30) return 'mid';
+  if (price < 50) return 'premium';
+  return 'full';
+}
+
+/** Length bucket key (prefers an explicit estimate, falls back to logged hours). */
+export function getRecLengthBucket(game: Game): string {
+  const h = (game.expectedHours && game.expectedHours > 0) ? game.expectedHours : getTotalHours(game);
+  if (!h || h <= 0) return 'unknown';
+  if (h < 10) return 'short';
+  if (h < 30) return 'medium';
+  if (h < 60) return 'long';
+  return 'epic';
+}
+
+// Convert a net signal weight into a bounded score nudge.
+function prefNudge(weight: number | undefined, perPoint: number, cap: number): number {
+  if (!weight) return 0;
+  return Math.max(-cap, Math.min(cap, weight * perPoint));
+}
+
+export function getPlayNextRecommendations(
+  games: Game[],
+  maxResults: number = 5,
+  prefs?: RecommendationPreferences
+): Recommendation[] {
+  const dislikedSet = new Set(prefs?.disliked ?? []);
+  const likedSet = new Set(prefs?.liked ?? []);
+
   const candidates = games.filter(g =>
-    g.status === 'Not Started' || g.status === 'In Progress'
+    (g.status === 'Not Started' || g.status === 'In Progress') && !dislikedSet.has(g.id)
   );
 
   if (candidates.length === 0) return [];
@@ -4300,6 +4344,21 @@ export function getPlayNextRecommendations(games: Game[], maxResults: number = 5
         score += 5;
         reasons.push(`Been on shelf ${Math.round(monthsOwned)} months`);
       }
+    }
+
+    // Learned preferences — thumbs up/down tuning across game id, genre, price, length
+    if (prefs) {
+      if (likedSet.has(game.id)) {
+        score += 25;
+        reasons.unshift('You liked this suggestion');
+      }
+      if (game.genre) {
+        const g = prefNudge(prefs.genreWeights[game.genre], 6, 18);
+        if (g > 0) reasons.push(`Matches genres you like (${game.genre})`);
+        score += g;
+      }
+      score += prefNudge(prefs.priceWeights[getRecPriceBracket(game.price)], 3, 9);
+      score += prefNudge(prefs.lengthWeights[getRecLengthBucket(game)], 3, 9);
     }
 
     return { game, score: Math.min(100, Math.max(0, score)), reasons };

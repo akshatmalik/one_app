@@ -3,9 +3,11 @@
 import { useState, useMemo } from 'react';
 import { Game } from '../lib/types';
 
+type QueueUpdate = { id: string; changes: Partial<Game> };
+
 export function useGameQueue(
   games: Game[],
-  updateGame: (id: string, updates: Partial<Game>) => Promise<Game>
+  updateManyGames: (updates: QueueUpdate[]) => Promise<void>
 ) {
   const [hideFinished, setHideFinished] = useState(false);
 
@@ -40,83 +42,48 @@ export function useGameQueue(
 
     if (hasHero) {
       // Shift all games at position >= 2 down by 1, then insert at 2
-      const gamesToShift = games.filter(
-        g => g.id !== gameId && g.queuePosition !== undefined && (g.queuePosition || 0) >= 2
-      );
-      await Promise.all([
-        ...gamesToShift.map(g => updateGame(g.id, { queuePosition: (g.queuePosition || 0) + 1 })),
-        updateGame(gameId, { queuePosition: 2 }),
-      ]);
+      const updates: QueueUpdate[] = games
+        .filter(g => g.id !== gameId && g.queuePosition !== undefined && (g.queuePosition || 0) >= 2)
+        .map(g => ({ id: g.id, changes: { queuePosition: (g.queuePosition || 0) + 1 } }));
+      updates.push({ id: gameId, changes: { queuePosition: 2 } });
+      await updateManyGames(updates);
     } else {
       const positions = games
         .filter(g => g.queuePosition !== undefined)
         .map(g => g.queuePosition || 0);
       const nextPosition = positions.length > 0 ? Math.max(...positions) + 1 : 1;
-      await updateGame(gameId, { queuePosition: nextPosition });
+      await updateManyGames([{ id: gameId, changes: { queuePosition: nextPosition } }]);
     }
   };
 
-  // Remove a game from the queue
+  // Remove a game from the queue (clears its position and closes the gap) — one batch
   const removeFromQueue = async (gameId: string) => {
     const game = games.find(g => g.id === gameId);
     if (!game || game.queuePosition === undefined) return;
 
     const removedPosition = game.queuePosition;
+    const updates: QueueUpdate[] = [{ id: gameId, changes: { queuePosition: undefined } }];
+    games
+      .filter(g => g.id !== gameId && g.queuePosition !== undefined && g.queuePosition > removedPosition)
+      .forEach(g => updates.push({ id: g.id, changes: { queuePosition: (g.queuePosition || 0) - 1 } }));
 
-    const gamesToShift = games.filter(
-      g => g.id !== gameId && g.queuePosition !== undefined && g.queuePosition > removedPosition
-    );
-
-    // Run all updates in parallel — React 18 batches the resulting state updates
-    await Promise.all([
-      updateGame(gameId, { queuePosition: undefined }),
-      ...gamesToShift.map(g => updateGame(g.id, { queuePosition: (g.queuePosition || 0) - 1 })),
-    ]);
+    await updateManyGames(updates);
   };
 
-  // Reorder a game in the queue
-  const reorderQueue = async (gameId: string, newPosition: number) => {
-    const game = games.find(g => g.id === gameId);
-    if (!game || game.queuePosition === undefined) return;
-
-    const oldPosition = game.queuePosition;
-    if (oldPosition === newPosition) return;
-
-    // Collect all updates
-    const updates: Array<{ id: string; position: number }> = [];
-
-    // Update the dragged game
-    updates.push({ id: gameId, position: newPosition });
-
-    // Shift other games
-    if (newPosition < oldPosition) {
-      // Moving up - shift down games between new and old position
-      const gamesToShift = games.filter(
-        g => g.id !== gameId &&
-             g.queuePosition !== undefined &&
-             g.queuePosition >= newPosition &&
-             g.queuePosition < oldPosition
-      );
-
-      for (const g of gamesToShift) {
-        updates.push({ id: g.id, position: (g.queuePosition || 0) + 1 });
+  // Set the queue order from a fully-ordered list of game ids (the displayed
+  // order after a drag). Renumbering the whole queue from the visible sequence
+  // avoids the display-index vs stored-position mismatch caused by floating
+  // finished games to the bottom.
+  const setQueueOrder = async (orderedIds: string[]) => {
+    const updates: QueueUpdate[] = [];
+    orderedIds.forEach((id, i) => {
+      const position = i + 1;
+      const g = games.find(x => x.id === id);
+      if (g && g.queuePosition !== position) {
+        updates.push({ id, changes: { queuePosition: position } });
       }
-    } else {
-      // Moving down - shift up games between old and new position
-      const gamesToShift = games.filter(
-        g => g.id !== gameId &&
-             g.queuePosition !== undefined &&
-             g.queuePosition > oldPosition &&
-             g.queuePosition <= newPosition
-      );
-
-      for (const g of gamesToShift) {
-        updates.push({ id: g.id, position: (g.queuePosition || 0) - 1 });
-      }
-    }
-
-    // Run all updates in parallel — React 18 batches the resulting state updates
-    await Promise.all(updates.map(u => updateGame(u.id, { queuePosition: u.position })));
+    });
+    if (updates.length > 0) await updateManyGames(updates);
   };
 
   // Clear everything planned for "after today" — removes all queued games EXCEPT
@@ -127,7 +94,7 @@ export function useGameQueue(
       g => g.queuePosition !== undefined && g.status !== 'In Progress'
     );
     if (toClear.length === 0) return;
-    await Promise.all(toClear.map(g => updateGame(g.id, { queuePosition: undefined })));
+    await updateManyGames(toClear.map(g => ({ id: g.id, changes: { queuePosition: undefined } })));
   };
 
   // Check if a game is in the queue
@@ -143,7 +110,7 @@ export function useGameQueue(
     setHideFinished,
     addToQueue,
     removeFromQueue,
-    reorderQueue,
+    setQueueOrder,
     clearUpcoming,
     isInQueue,
   };

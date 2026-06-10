@@ -140,7 +140,7 @@ function getTopAwardBadge(awards: GameAward[]): { label: string; color: string; 
 export default function GameAnalyticsPage() {
   const { user, loading: authLoading } = useAuthContext();
   const { showToast } = useToast();
-  const { games, loading, error, addGame, updateGame, deleteGame, refresh } = useGames(user?.uid ?? null);
+  const { games, loading, error, addGame, updateGame, updateManyGames, deleteGame, refresh } = useGames(user?.uid ?? null);
   const { gamesWithMetrics, summary } = useAnalytics(games);
   const { budgets, setBudget } = useBudget(user?.uid ?? null);
   const { upcomingEntries, addEntry: addPurchaseEntry } = usePurchaseQueue(user?.uid ?? null);
@@ -185,10 +185,10 @@ export default function GameAnalyticsPage() {
     setHideFinished,
     addToQueue,
     removeFromQueue,
-    reorderQueue,
+    setQueueOrder,
     clearUpcoming,
     isInQueue,
-  } = useGameQueue(games, updateGame);
+  } = useGameQueue(games, updateManyGames);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingGame, setEditingGame] = useState<GameWithMetrics | null>(null);
   const [playLogGame, setPlayLogGame] = useState<GameWithMetrics | null>(null);
@@ -1320,12 +1320,15 @@ export default function GameAnalyticsPage() {
 
           {tabMode === 'up-next' && (
             <UpNextTab
+              userId={user?.uid ?? null}
               queuedGames={queuedGames.map(game => {
                 const gameWithMetrics = gamesWithMetrics.find(g => g.id === game.id);
                 return gameWithMetrics || game as GameWithMetrics;
               })}
               availableGames={availableGames}
               allGames={games}
+              upcomingEntries={upcomingEntries}
+              onGoToEstimator={() => setTabMode('estimator')}
               hideFinished={hideFinished}
               onToggleHideFinished={() => setHideFinished(!hideFinished)}
               onAddToQueue={async (gameId) => {
@@ -1344,9 +1347,9 @@ export default function GameAnalyticsPage() {
                   showToast(`Failed to remove game: ${(e as Error).message}`, 'error');
                 }
               }}
-              onReorderQueue={async (gameId, newPosition) => {
+              onReorderQueue={async (orderedIds) => {
                 try {
-                  await reorderQueue(gameId, newPosition);
+                  await setQueueOrder(orderedIds);
                 } catch (e) {
                   showToast(`Failed to reorder queue: ${(e as Error).message}`, 'error');
                 }

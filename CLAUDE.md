@@ -2590,6 +2590,19 @@ fortune-fade           — Gentle fade-in for daily fortune cookie
 
 ## Changelog
 
+### 2026-06-10 (v2.6.0)
+- **Up Next ⇄ Timeline Estimator synergy + queue bug fixes** (branch `claude/timeline-upnext-synergy-plan-rrdfyo`)
+- **Queue persistence fixes**:
+  - Firebase `update()` now translates an explicit `undefined` field to Firestore's `deleteField()` sentinel (`lib/storage.ts` `prepareFirestoreUpdate`). Previously `queuePosition: undefined` was stripped before `updateDoc`, so removing a game from the queue silently no-op'd for logged-in users and the game reappeared on reload.
+  - Added `updateMany()` to `GameRepository` (Firebase `writeBatch`, localStorage single read-modify-write) + `updateManyGames()` in `useGames`. Queue add/remove/reorder/clear now persist as **one batch** — fixes the localStorage clobber where parallel `update()` calls each rewrote the whole array from a stale snapshot (last write won, dropping position shifts / resurrecting removed games).
+  - `useGameQueue.reorderQueue` replaced with `setQueueOrder(orderedIds)`: drag-and-drop renumbers the whole queue from the **displayed** order, fixing the display-index vs stored-`queuePosition` mismatch caused by floating finished games to the bottom.
+  - Queue card remove/log buttons are always visible (dropped desktop-hover gate).
+- **Synergy features**:
+  - Inline `QueueTimelineStrip` in Up Next — projected completion dates that re-flow live as you reorder, sharing the Estimator's `buildPlaythroughTimeline` + a shared weekly-pace control persisted to the same `estimator-settings` localStorage key.
+  - Gap banner in Up Next using `detectGap` against tracked Buy Queue releases.
+  - `SuggestedNextRail` — curatable "Suggested next" with Add + full **thumbs up/down tuning**. `getPlayNextRecommendations(games, max, prefs?)` now takes learned preferences (`RecommendationPreferences`): disliked games are hidden, liked boosted, and net signals reweight across **genre / price bracket / length bucket**. Prefs persist per-user in localStorage via `lib/queue-preferences.ts` + `hooks/useQueuePreferences.ts` (device-local planning data, same precedent as estimator settings — no Firestore rule needed).
+  - Cross-link: "Full timeline" from the Up Next strip jumps to the Estimator tab.
+
 ### 2026-02-21 (v2.5.0)
 - Added Immersive Experience & Deep Insights Plan: 10 features across 5 areas
 - Timeline: Weather system (9 conditions based on monthly activity), Plot twist markers (10 twist types for dramatic behavioral shifts), Story arc detection (5-act narrative structure overlay)

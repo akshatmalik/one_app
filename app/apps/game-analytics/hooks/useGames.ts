@@ -54,6 +54,24 @@ export function useGames(userId: string | null) {
     }
   };
 
+  const updateManyGames = async (updates: Array<{ id: string; changes: Partial<Game> }>) => {
+    if (updates.length === 0) return;
+    try {
+      await gameRepository.updateMany(updates);
+      // Optimistic local merge — mirrors the persisted result without a refresh()
+      // (which would flip loading=true and unmount the UI tree).
+      const now = new Date().toISOString();
+      const changeMap = new Map(updates.map(u => [u.id, u.changes]));
+      setGames(prev => prev.map(g => {
+        const changes = changeMap.get(g.id);
+        return changes ? { ...g, ...changes, updatedAt: now } : g;
+      }));
+    } catch (e) {
+      setError(e as Error);
+      throw e;
+    }
+  };
+
   const deleteGame = async (id: string) => {
     try {
       await gameRepository.delete(id);
@@ -70,6 +88,7 @@ export function useGames(userId: string | null) {
     error,
     addGame,
     updateGame,
+    updateManyGames,
     deleteGame,
     refresh,
   };
