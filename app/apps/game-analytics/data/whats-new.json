@@ -3,6 +3,12 @@
     {
       "date": "2026-06-10",
       "area": "Games tab",
+      "title": "See exactly how much money is still waiting to be earned",
+      "body": "Tap ⋮ and choose \"Unlock Value\" to see a ranked list of every paid game where more playtime would still justify what you spent. The menu button shows the live dollar total — e.g. \"Unlock Value — $340\" — so you know at a glance what's recoverable. Each game shows its current cost-per-hour, a progress bar toward the Good-value tier ($3/hr), and the exact hours needed to get there. The Quick Wins filter highlights games that need fewer than 5 more hours to level up. Tap Log Time on any entry to jump straight into a session."
+    },
+    {
+      "date": "2026-06-10",
+      "area": "Games tab",
       "title": "Play Tonight — find your perfect match in seconds",
       "body": "Tap ⋮ then \"Play Tonight\" and tell the app how much time you have — Quick, Standard, Long, or Marathon. It instantly ranks your unfinished games by chemistry, session-length fit, and current momentum, showing your top pick with a highlighted card and a one-line reason, plus four runner-ups. Tap any result to jump straight into the game's detail sheet and log your session."
     },

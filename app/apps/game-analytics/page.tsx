@@ -26,7 +26,7 @@ import { BASELINE_BUY_QUEUE } from './data/baseline-buy-queue';
 import { purchaseQueueRepository } from './lib/purchase-queue-storage';
 import { useAuthContext } from '@/lib/AuthContext';
 import { useToast } from '@/components/Toast';
-import { getROIRating, getWeekStatsForOffset, getGamesPlayedInTimeRange, getCompletionProbability, getGameHealthDot, getRelativeTime, getDaysContext, getSessionMomentum, getValueTrajectory, getGameSmartOneLiner, getFranchiseInfo, getProgressPercent, getShelfLife, parseLocalDate, getCardRarity, getRelationshipStatus, getGameStreak, getHeroNumber, getCardFreshness, getGameSections, getCardBackData, getContextualWhisper, getLibraryRank, getCardMoodPulse, getProgressRingData, getStatPopoverData, getWeekRecapData, getSmartNudges, getGamingCreditScore, getRotationStats, getSpendingForecast, getSpendingByMonth, getShelfLifeExpiry, formatRating, getRatingRank } from './lib/calculations';
+import { getROIRating, getWeekStatsForOffset, getGamesPlayedInTimeRange, getCompletionProbability, getGameHealthDot, getRelativeTime, getDaysContext, getSessionMomentum, getValueTrajectory, getGameSmartOneLiner, getFranchiseInfo, getProgressPercent, getShelfLife, parseLocalDate, getCardRarity, getRelationshipStatus, getGameStreak, getHeroNumber, getCardFreshness, getGameSections, getCardBackData, getContextualWhisper, getLibraryRank, getCardMoodPulse, getProgressRingData, getStatPopoverData, getWeekRecapData, getSmartNudges, getGamingCreditScore, getRotationStats, getSpendingForecast, getSpendingByMonth, getShelfLifeExpiry, formatRating, getRatingRank, getValueRecoveryData } from './lib/calculations';
 import { OnThisDayCard } from './components/OnThisDayCard';
 import { ActivityPulse } from './components/ActivityPulse';
 import { RandomPicker } from './components/RandomPicker';
@@ -53,6 +53,7 @@ import { WhatsNewModal } from './components/WhatsNewModal';
 import { GameReviewChat } from './components/GameReviewChat';
 import { GameCompareModal } from './components/GameCompareModal';
 import { PlayTonightModal } from './components/PlayTonightModal';
+import { UnlockValueModal } from './components/UnlockValueModal';
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist';
@@ -224,6 +225,7 @@ export default function GameAnalyticsPage() {
   const [showErrorLog, setShowErrorLog] = useState(false);
   const [showWhatsNew, setShowWhatsNew] = useState(false);
   const [showPlayTonight, setShowPlayTonight] = useState(false);
+  const [showUnlockValue, setShowUnlockValue] = useState(false);
 
   // Week recap data for header strip
   const weekRecap = useMemo(() => {
@@ -272,6 +274,9 @@ export default function GameAnalyticsPage() {
       .filter(([key]) => key.startsWith(String(year)))
       .reduce((sum, [, val]) => sum + val, 0);
   }, [games]);
+
+  // Value recovery opportunities
+  const valueRecovery = useMemo(() => getValueRecoveryData(games), [games]);
 
   // Spending forecast
   const forecast = useMemo(() => {
@@ -604,6 +609,18 @@ export default function GameAnalyticsPage() {
                           className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white/70 hover:text-white hover:bg-white/5 transition-all"
                         >
                           <Sparkles size={14} /> Random Pick
+                        </button>
+                      )}
+                      {valueRecovery.gameCount > 0 && (
+                        <button
+                          onClick={() => { setShowUnlockValue(true); setShowCommandPalette(false); }}
+                          className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white/70 hover:text-white hover:bg-white/5 transition-all"
+                        >
+                          <TrendingUp size={14} className="text-emerald-400" />
+                          <span>Unlock Value</span>
+                          <span className="ml-auto text-[11px] text-emerald-400 font-semibold">
+                            ${Math.round(valueRecovery.totalStranded)}
+                          </span>
                         </button>
                       )}
                       <button
@@ -1489,6 +1506,19 @@ export default function GameAnalyticsPage() {
           onOpenGame={(game) => {
             setShowPlayTonight(false);
             setDetailGame(game);
+          }}
+        />
+      )}
+
+      {/* Unlock Value Modal */}
+      {showUnlockValue && (
+        <UnlockValueModal
+          games={games}
+          gamesWithMetrics={gamesWithMetrics}
+          onClose={() => setShowUnlockValue(false)}
+          onLogTime={(game) => {
+            setShowUnlockValue(false);
+            setPlayLogGame(game);
           }}
         />
       )}

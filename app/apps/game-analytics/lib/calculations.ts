@@ -14251,3 +14251,155 @@ export function getReviewNudges(games: Game[]): ReviewNudgeSummary {
     recentlyCompletedCount,
   };
 }
+
+// ============================================================
+// Value Recovery — "Unlock Your Value" data
+// ============================================================
+
+export interface ValueRecoveryTarget {
+  game: Game;
+  totalHours: number;
+  price: number;
+  currentCPH: number;
+  currentTier: 'Excellent' | 'Good' | 'Fair' | 'Poor';
+  /** Next better value tier; null when already Excellent */
+  nextTier: 'Excellent' | 'Good' | 'Fair' | null;
+  /** CPH threshold to cross into nextTier */
+  nextTierCPH: number;
+  /** Hours still needed to reach nextTier from currentHours */
+  hoursToNextTier: number;
+  /** Hours still needed to reach Good ($3/hr); 0 if already Good+ */
+  hoursToGood: number;
+  /** Dollar value not yet justified at the $3/hr benchmark */
+  strandedValue: number;
+  /** 0–100: progress from 0 h toward the Good-tier hour target */
+  progressToGood: number;
+  /** True if a session was logged in the last 7 days */
+  recentlyPlayed: boolean;
+  /** True if nextTier is reachable in under 5 hours */
+  quickWin: boolean;
+  /** Hours logged on this game during the current calendar month */
+  hoursThisMonth: number;
+}
+
+export interface ValueRecoveryData {
+  /** Sorted by strandedValue descending */
+  targets: ValueRecoveryTarget[];
+  /** Sum of strandedValue across all targets */
+  totalStranded: number;
+  /** Number of qualifying targets */
+  gameCount: number;
+  /** Number of targets where quickWin is true */
+  quickWinCount: number;
+  /** Total hours logged on targets this calendar month */
+  monthlyHoursOnTargets: number;
+}
+
+/**
+ * Identify paid, non-abandoned games where more playtime would improve
+ * the value tier, sorted by how much money is still "stranded" (i.e.
+ * not yet justified at the $3/hr Good-tier benchmark).
+ */
+export function getValueRecoveryData(games: Game[]): ValueRecoveryData {
+  const now = new Date();
+  const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+
+  const candidates = games.filter(
+    g =>
+      g.status !== 'Wishlist' &&
+      g.status !== 'Abandoned' &&
+      !g.acquiredFree &&
+      (g.price ?? 0) > 0,
+  );
+
+  const targets: ValueRecoveryTarget[] = [];
+
+  for (const game of candidates) {
+    const totalHours = getTotalHours(game);
+    const price = game.price ?? 0;
+    const currentCPH = totalHours > 0 ? price / totalHours : price;
+    const currentTier = getValueRating(currentCPH);
+
+    // No recovery needed for games already at Excellent
+    if (currentTier === 'Excellent') continue;
+
+    // Total hours required to cross each tier boundary
+    const hoursForExcellent = price / 1; // $1/hr
+    const hoursForGood      = price / 3; // $3/hr
+    const hoursForFair      = price / 5; // $5/hr
+
+    const hoursToGood      = Math.max(0, hoursForGood - totalHours);
+    const hoursToExcellent = Math.max(0, hoursForExcellent - totalHours);
+
+    // Money still "unearned" relative to the $3/hr benchmark
+    const strandedValue = Math.max(0, price - totalHours * 3);
+    if (strandedValue <= 0) continue; // already at Good or better
+
+    // Next reachable tier and hours to get there
+    let nextTier:    'Excellent' | 'Good' | 'Fair' | null;
+    let nextTierCPH: number;
+    let hoursToNextTier: number;
+
+    if (currentTier === 'Good') {
+      nextTier        = 'Excellent';
+      nextTierCPH     = 1;
+      hoursToNextTier = hoursToExcellent;
+    } else if (currentTier === 'Fair') {
+      nextTier        = 'Good';
+      nextTierCPH     = 3;
+      hoursToNextTier = hoursToGood;
+    } else { // Poor
+      nextTier        = 'Fair';
+      nextTierCPH     = 5;
+      hoursToNextTier = Math.max(0, hoursForFair - totalHours);
+    }
+
+    // Progress toward the Good-tier target (0 → 100 %)
+    const progressToGood = hoursForGood > 0
+      ? Math.min(100, Math.round((totalHours / hoursForGood) * 100))
+      : 0;
+
+    // Recency check
+    const logs         = game.playLogs ?? [];
+    const lastLogDate  = logs.reduce((acc, l) => (l.date > acc ? l.date : acc), '');
+    const daysSince    = lastLogDate
+      ? Math.floor((now.getTime() - parseLocalDate(lastLogDate).getTime()) / 86_400_000)
+      : Infinity;
+    const recentlyPlayed = daysSince <= 7;
+
+    // Hours logged this calendar month on this game
+    const hoursThisMonth = logs
+      .filter(l => l.date >= monthStart)
+      .reduce((sum, l) => sum + l.hours, 0);
+
+    const quickWin = hoursToNextTier > 0 && hoursToNextTier < 5;
+
+    targets.push({
+      game,
+      totalHours,
+      price,
+      currentCPH,
+      currentTier,
+      nextTier,
+      nextTierCPH,
+      hoursToNextTier,
+      hoursToGood,
+      strandedValue,
+      progressToGood,
+      recentlyPlayed,
+      quickWin,
+      hoursThisMonth,
+    });
+  }
+
+  // Biggest opportunities first
+  targets.sort((a, b) => b.strandedValue - a.strandedValue);
+
+  return {
+    targets,
+    totalStranded:         targets.reduce((s, t) => s + t.strandedValue, 0),
+    gameCount:             targets.length,
+    quickWinCount:         targets.filter(t => t.quickWin).length,
+    monthlyHoursOnTargets: targets.reduce((s, t) => s + t.hoursThisMonth, 0),
+  };
+}

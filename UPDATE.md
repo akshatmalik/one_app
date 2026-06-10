@@ -5,6 +5,17 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-10 18:00 — Games Tab — Unlock Value modal
+
+**Files**: app/apps/game-analytics/lib/calculations.ts, app/apps/game-analytics/components/UnlockValueModal.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Added a new "Unlock Value" modal accessible from the ⋮ command menu, showing how much money across the library hasn't yet been justified by playtime. Each paid, unabandoned game is ranked by "stranded value" — the money not yet earned at the $3/hr Good-tier benchmark — with a visual progress bar, specific hours-to-next-tier targets, and a Log Time shortcut. The menu entry shows the live dollar total (e.g. "Unlock Value — $340") so users immediately know what's waiting. Quick Wins and Active filters help narrow to the fastest or most momentum-driven recovery targets.
+
+FOLLOW-UP: Could add a small "Value Recovery" summary card to the Stats tab InsightsPanel showing progress month-over-month.
+
+---
+
 ## 2026-06-10 12:00 — Games Tab — Play Tonight Smart Recommender
 
 **Files**: app/apps/game-analytics/components/PlayTonightModal.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json
