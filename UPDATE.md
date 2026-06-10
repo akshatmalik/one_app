@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-10 18:00 — Stats Tab — Goals & Challenges System
+
+**Files**: app/apps/game-analytics/components/GoalsPanel.tsx, app/apps/game-analytics/components/StatsView.tsx, app/apps/game-analytics/lib/calculations.ts, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Surfaced the fully-built but completely orphaned GoalsPanel into the Stats tab. The component, hook, and storage layer were all implemented but never imported anywhere. Enhanced the panel with quick date presets (This Week / Month / Quarter / Year), auto-generated titles that update as you pick the goal type and target, and polished visuals with emoji icons on each goal type. Six goal types are tracked automatically from real game data — completions, spending, hours played, genres explored, and backlog games started — while custom goals support manual progress updates. Progress bars animate in and colour-shift from violet → yellow → red as deadlines approach. Completed goals surface an "Archive as Completed" button; overdue goals get "Mark Failed" and "Extend Deadline" options. Also added `calculateGoalCurrentValue` and `getGoalProgressData` as reusable pure functions in calculations.ts.
+
+FOLLOW-UP: Could add a celebrations toast when a goal first hits 100%, and persist a "streak of goals completed" stat in FunStatsPanel.
+
 ## 2026-06-10 12:00 — Games Tab — Play Tonight Smart Recommender
 
 **Files**: app/apps/game-analytics/components/PlayTonightModal.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json

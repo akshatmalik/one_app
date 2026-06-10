@@ -1,4 +1,4 @@
-import { Game, GameStatus, GameMetrics, AnalyticsSummary, TasteProfile, SessionMood } from './types';
+import { Game, GameStatus, GameMetrics, AnalyticsSummary, TasteProfile, SessionMood, GamingGoal } from './types';
 
 /**
  * Parse a YYYY-MM-DD date string as local time instead of UTC.
@@ -14249,5 +14249,169 @@ export function getReviewNudges(games: Game[]): ReviewNudgeSummary {
     reviewedCount,
     reviewableCount: reviewable.length,
     recentlyCompletedCount,
+  };
+}
+
+// ── Goals & Challenges ────────────────────────────────────────────────
+
+/**
+ * Calculate the live current value for a goal from games data.
+ * For 'custom' goals, returns the stored currentValue unchanged since
+ * those are manually tracked.
+ */
+export function calculateGoalCurrentValue(goal: GamingGoal, games: Game[]): number {
+  const startDate = parseLocalDate(goal.startDate);
+  const endDate = parseLocalDate(goal.endDate);
+  const now = new Date();
+  const effectiveEnd = now < endDate ? now : endDate;
+
+  switch (goal.type) {
+    case 'completion':
+      return games.filter(g => {
+        if (g.status !== 'Completed' || !g.endDate) return false;
+        const d = parseLocalDate(g.endDate);
+        return d >= startDate && d <= effectiveEnd;
+      }).length;
+
+    case 'spending':
+      return Math.round(
+        games
+          .filter(g => {
+            if (!g.datePurchased || g.acquiredFree) return false;
+            const d = parseLocalDate(g.datePurchased);
+            return d >= startDate && d <= effectiveEnd;
+          })
+          .reduce((s, g) => s + (g.price || 0), 0) * 100
+      ) / 100;
+
+    case 'hours':
+      return Math.round(
+        games.reduce((total, game) => {
+          const sessionHours = (game.playLogs || [])
+            .filter(log => {
+              const d = parseLocalDate(log.date);
+              return d >= startDate && d <= effectiveEnd;
+            })
+            .reduce((s, l) => s + l.hours, 0);
+          return total + sessionHours;
+        }, 0) * 10
+      ) / 10;
+
+    case 'genre_variety': {
+      const genres = new Set<string>();
+      games.forEach(game => {
+        if (!game.genre) return;
+        const hasSession = (game.playLogs || []).some(log => {
+          const d = parseLocalDate(log.date);
+          return d >= startDate && d <= effectiveEnd;
+        });
+        if (hasSession) genres.add(game.genre);
+      });
+      return genres.size;
+    }
+
+    case 'backlog':
+      return games.filter(g => g.status === 'Not Started').length;
+
+    case 'custom':
+    default:
+      return goal.currentValue;
+  }
+}
+
+export interface GoalProgressData {
+  currentValue: number;
+  targetValue: number;
+  /** 0–100, capped */
+  percent: number;
+  isComplete: boolean;
+  isExpired: boolean;
+  /** spending goals: progress means "budget used", inverse visual */
+  isBudgetGoal: boolean;
+  /** backlog goals: want current count to go DOWN */
+  isBacklogGoal: boolean;
+  daysRemaining: number;
+  urgency: 'low' | 'medium' | 'high' | 'expired';
+  /** e.g. "3/5 games", "$47/$150", "8 hrs/50 hrs" */
+  progressText: string;
+  /** e.g. "23 days left", "Due today", "Expired" */
+  statusLabel: string;
+}
+
+export function getGoalProgressData(goal: GamingGoal, currentValue: number): GoalProgressData {
+  const now = new Date();
+  const endDate = parseLocalDate(goal.endDate);
+  const daysRemaining = Math.max(0, Math.ceil((endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
+  const isExpired = now > endDate && goal.status === 'active';
+  const isBudgetGoal = goal.type === 'spending';
+  const isBacklogGoal = goal.type === 'backlog';
+
+  let percent: number;
+  let isComplete: boolean;
+
+  if (isBacklogGoal) {
+    isComplete = currentValue <= goal.targetValue;
+    // Show fill from 0→100% as backlog shrinks toward target
+    // If you have 20 and target is 5, fill = (20-current)/(20-5)
+    // We approximate with: fill = 1 - max(0, current - target) / max(current, 1)
+    if (isComplete) {
+      percent = 100;
+    } else {
+      const excess = currentValue - goal.targetValue;
+      percent = Math.max(0, Math.round((1 - excess / Math.max(currentValue, 1)) * 100));
+    }
+  } else if (isBudgetGoal) {
+    percent = goal.targetValue > 0 ? Math.min(100, Math.round((currentValue / goal.targetValue) * 100)) : 0;
+    isComplete = goal.status === 'completed';
+  } else {
+    percent = goal.targetValue > 0 ? Math.min(100, Math.round((currentValue / goal.targetValue) * 100)) : 0;
+    isComplete = percent >= 100;
+  }
+
+  let urgency: GoalProgressData['urgency'] = 'low';
+  if (isExpired) urgency = 'expired';
+  else if (daysRemaining <= 3) urgency = 'high';
+  else if (daysRemaining <= 7) urgency = 'medium';
+
+  // Progress text
+  let progressText: string;
+  if (isBudgetGoal) {
+    progressText = `$${currentValue.toFixed(0)} / $${goal.targetValue} spent`;
+  } else if (goal.type === 'hours') {
+    progressText = `${currentValue}h / ${goal.targetValue}h`;
+  } else if (goal.type === 'genre_variety') {
+    progressText = `${currentValue} / ${goal.targetValue} genres`;
+  } else if (isBacklogGoal) {
+    progressText = `${currentValue} games remaining (target: ≤${goal.targetValue})`;
+  } else if (goal.type === 'completion') {
+    progressText = `${currentValue} / ${goal.targetValue} games`;
+  } else {
+    progressText = `${currentValue} / ${goal.targetValue} ${goal.unit}`;
+  }
+
+  // Status label
+  let statusLabel: string;
+  if (goal.status === 'completed') statusLabel = 'Completed!';
+  else if (goal.status === 'failed') statusLabel = 'Expired';
+  else if (isBudgetGoal && percent >= 100) statusLabel = '⚠ Over budget';
+  else if (isBudgetGoal) statusLabel = `$${Math.max(0, goal.targetValue - currentValue).toFixed(0)} left`;
+  else if (isComplete && !isBudgetGoal) statusLabel = 'Complete!';
+  else if (isExpired) statusLabel = 'Expired';
+  else if (daysRemaining === 0) statusLabel = 'Due today';
+  else if (daysRemaining === 1) statusLabel = '1 day left';
+  else statusLabel = `${daysRemaining}d left`;
+
+  return {
+    currentValue,
+    targetValue: goal.targetValue,
+    percent,
+    isComplete,
+    isExpired,
+    isBudgetGoal,
+    isBacklogGoal,
+    daysRemaining,
+    urgency,
+    progressText,
+    statusLabel,
   };
 }

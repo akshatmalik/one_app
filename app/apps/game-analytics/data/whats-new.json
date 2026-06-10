@@ -2,6 +2,12 @@
   "entries": [
     {
       "date": "2026-06-10",
+      "area": "Stats tab",
+      "title": "Set goals and track your progress",
+      "body": "The Stats tab now has a Goals & Challenges section. Create a goal — complete X games, stay under a spending budget, log X hours, explore X genres, or anything custom — pick a time period (this week, month, quarter, or year), and the app tracks your progress automatically from your real gaming data. Progress bars fill as you play, colour-shifting from calm to urgent as the deadline approaches."
+    },
+    {
+      "date": "2026-06-10",
       "area": "Games tab",
       "title": "Play Tonight — find your perfect match in seconds",
       "body": "Tap ⋮ then \"Play Tonight\" and tell the app how much time you have — Quick, Standard, Long, or Marathon. It instantly ranks your unfinished games by chemistry, session-length fit, and current momentum, showing your top pick with a highlighted card and a one-line reason, plus four runner-ups. Tap any result to jump straight into the game's detail sheet and log your session."

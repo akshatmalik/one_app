@@ -66,6 +66,7 @@ import { DiscoverPanel } from './DiscoverPanel';
 import { WeeklyDigest } from './WeeklyDigest';
 import { WhatIfSimulator } from './WhatIfSimulator';
 import { PlayedSummary, BoughtSummary } from './RangeGlance';
+import { GoalsPanel } from './GoalsPanel';
 import clsx from 'clsx';
 
 interface StatsViewProps {
@@ -364,6 +365,9 @@ export function StatsView({ games, summary, budgets = [], onSetBudget, trophies,
         <PlayedSummary games={games} />
         <BoughtSummary games={games} />
       </div>
+
+      {/* Goals & Challenges */}
+      <GoalsPanel games={games} />
 
       {/* Library Health Dashboard */}
       <div className="p-5 bg-gradient-to-br from-white/[0.03] to-white/[0.01] border border-white/10 rounded-2xl">
