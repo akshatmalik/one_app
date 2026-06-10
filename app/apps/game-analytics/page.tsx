@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, CalendarClock, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical, Download, Gift, ShoppingCart, Search, X } from 'lucide-react';
+import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, CalendarClock, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical, Download, Gift, ShoppingCart, Search, X, Moon } from 'lucide-react';
 import { useGames } from './hooks/useGames';
 import { useAnalytics, GameWithMetrics } from './hooks/useAnalytics';
 import { useBudget } from './hooks/useBudget';
@@ -52,6 +52,7 @@ import { ErrorLogPanel, ErrorLogButton } from './components/ErrorLogPanel';
 import { WhatsNewModal } from './components/WhatsNewModal';
 import { GameReviewChat } from './components/GameReviewChat';
 import { GameCompareModal } from './components/GameCompareModal';
+import { PlayTonightModal } from './components/PlayTonightModal';
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist';
@@ -222,6 +223,7 @@ export default function GameAnalyticsPage() {
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showErrorLog, setShowErrorLog] = useState(false);
   const [showWhatsNew, setShowWhatsNew] = useState(false);
+  const [showPlayTonight, setShowPlayTonight] = useState(false);
 
   // Week recap data for header strip
   const weekRecap = useMemo(() => {
@@ -588,6 +590,14 @@ export default function GameAnalyticsPage() {
                   <>
                     <div className="fixed inset-0 z-40" onClick={() => setShowCommandPalette(false)} />
                     <div className="absolute right-0 top-full mt-1 z-50 bg-[#1a1a2e] border border-white/10 rounded-xl shadow-2xl py-1 min-w-[180px]">
+                      {games.filter(g => g.status !== 'Wishlist' && g.status !== 'Completed' && g.status !== 'Abandoned').length > 0 && (
+                        <button
+                          onClick={() => { setShowPlayTonight(true); setShowCommandPalette(false); }}
+                          className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white/70 hover:text-white hover:bg-white/5 transition-all"
+                        >
+                          <Moon size={14} className="text-indigo-400" /> Play Tonight
+                        </button>
+                      )}
                       {games.filter(g => g.status !== 'Wishlist' && g.status !== 'Completed' && g.status !== 'Abandoned').length > 0 && (
                         <button
                           onClick={() => { setShowRandomPicker(true); setShowCommandPalette(false); }}
@@ -1467,6 +1477,19 @@ export default function GameAnalyticsPage() {
         <RandomPicker
           games={games}
           onClose={() => setShowRandomPicker(false)}
+        />
+      )}
+
+      {/* Play Tonight Modal */}
+      {showPlayTonight && (
+        <PlayTonightModal
+          games={games}
+          gamesWithMetrics={gamesWithMetrics}
+          onClose={() => setShowPlayTonight(false)}
+          onOpenGame={(game) => {
+            setShowPlayTonight(false);
+            setDetailGame(game);
+          }}
         />
       )}
 
