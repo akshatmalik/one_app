@@ -442,7 +442,87 @@ export function summarizeAction(action: PendingAction, games: Game[]): string {
   }
 }
 
+// ── Validation & dedup (surfaced as warnings in the confirmation card) ───────
+
+/** Loose name match for duplicate detection: case/space/punctuation-insensitive. */
+function normalizeName(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function findByName(games: Game[], name: string): Game | undefined {
+  const target = normalizeName(name);
+  return games.find(g => normalizeName(g.name) === target);
+}
+
+const ID_ACTIONS: ActionKind[] = [
+  'updateGame', 'setGameStatus', 'logPlaySession', 'addToQueue',
+  'removeFromQueue', 'deleteGame', 'setReview', 'markSpecial',
+];
+
+/**
+ * Non-blocking checks shown to the user before they confirm: duplicate adds,
+ * out-of-range values, missing game references. Returning warnings (not errors)
+ * keeps the user in control — they can drop a flagged item or proceed anyway.
+ */
+export function validateAction(action: PendingAction, games: Game[]): string[] {
+  const warnings: string[] = [];
+
+  if (ID_ACTIONS.includes(action.kind)) {
+    const id = (action.args as { gameId?: string }).gameId;
+    if (id && !games.some(g => g.id === id)) {
+      warnings.push("Couldn't find that game in your library — it may have been deleted.");
+    }
+  }
+
+  switch (action.kind) {
+    case 'addGame': {
+      const dup = findByName(games, action.args.name);
+      if (dup) warnings.push(`"${dup.name}" is already in your library (${dup.status}). This would create a duplicate.`);
+      if (action.args.rating !== undefined && (action.args.rating < 0 || action.args.rating > 10)) {
+        warnings.push(`Rating ${action.args.rating} is out of range — it'll be clamped to 1–10.`);
+      }
+      if (action.args.price !== undefined && action.args.price < 0) warnings.push('Negative price will be treated as $0.');
+      if (action.args.hours !== undefined && action.args.hours < 0) warnings.push('Negative hours will be treated as 0.');
+      break;
+    }
+    case 'addGames': {
+      for (const g of action.args.games) {
+        const dup = findByName(games, g.name);
+        if (dup) warnings.push(`"${g.name}" is already in your library (${dup.status}).`);
+      }
+      break;
+    }
+    case 'updateGame': {
+      const r = action.args.updates.rating;
+      if (r !== undefined && (r < 0 || r > 10)) warnings.push(`Rating ${r} is out of range — it'll be clamped to 1–10.`);
+      const p = action.args.updates.price;
+      if (p !== undefined && p < 0) warnings.push('Negative price will be treated as $0.');
+      break;
+    }
+    case 'logPlaySession':
+      if (action.args.hours <= 0) warnings.push('Session hours should be greater than 0.');
+      break;
+    case 'setBudget':
+      if (action.args.amount < 0) warnings.push('Budget cannot be negative.');
+      break;
+    default:
+      break;
+  }
+
+  return warnings;
+}
+
 // ── Execute a confirmed action ───────────────────────────────────────────────
+
+/** Clamp a rating into the app's 1–10 scale (0/undefined left as-is for "unrated"). */
+function clampRating(r: number | undefined): number | undefined {
+  if (r === undefined) return undefined;
+  if (r === 0) return 0; // 0 = explicitly unrated
+  return Math.min(10, Math.max(1, r));
+}
+
+const nonNeg = (n: number | undefined): number | undefined =>
+  n === undefined ? undefined : Math.max(0, n);
 
 function todayISO(): string {
   const d = new Date();
@@ -463,14 +543,22 @@ export async function executeAction(
   executors: AgentExecutors,
   games: Game[],
 ): Promise<string> {
+  // Hard guard: actions on an existing game must reference a real id.
+  if (ID_ACTIONS.includes(action.kind)) {
+    const id = (action.args as { gameId?: string }).gameId;
+    if (!id || !games.some(g => g.id === id)) {
+      throw new Error("That game isn't in your library anymore.");
+    }
+  }
+
   switch (action.kind) {
     case 'addGame': {
       const a = action.args;
       await executors.addGame({
         name: a.name,
-        price: a.price ?? 0,
-        hours: a.hours ?? 0,
-        rating: a.rating ?? 0,
+        price: nonNeg(a.price) ?? 0,
+        hours: nonNeg(a.hours) ?? 0,
+        rating: clampRating(a.rating) ?? 0,
         status: a.status ?? 'Not Started',
         platform: a.platform,
         genre: a.genre,
@@ -518,9 +606,14 @@ export async function executeAction(
       }
       return `Added: ${results.join('; ')}.`;
     }
-    case 'updateGame':
-      await executors.updateGame(action.args.gameId, action.args.updates);
+    case 'updateGame': {
+      const updates = { ...action.args.updates };
+      if (updates.rating !== undefined) updates.rating = clampRating(updates.rating);
+      if (updates.price !== undefined) updates.price = nonNeg(updates.price);
+      if (updates.hours !== undefined) updates.hours = nonNeg(updates.hours);
+      await executors.updateGame(action.args.gameId, updates);
       return `Updated "${nameOf(games, action.args.gameId)}".`;
+    }
     case 'setGameStatus': {
       const { gameId, status } = action.args;
       const game = games.find(g => g.id === gameId);
@@ -534,7 +627,8 @@ export async function executeAction(
       const { gameId, hours, date, notes, mood, vibe } = action.args;
       const game = games.find(g => g.id === gameId);
       const logDate = date ?? todayISO();
-      const newLog: PlayLog = { id: genId(), date: logDate, hours, notes, mood, vibe };
+      const safeHours = Math.max(0, hours);
+      const newLog: PlayLog = { id: genId(), date: logDate, hours: safeHours, notes, mood, vibe };
       const existing = game?.playLogs ?? [];
       const updates: Partial<Game> = { playLogs: [...existing, newLog] };
       // Auto-start a backlog game on its first session, mirroring the manual flow.

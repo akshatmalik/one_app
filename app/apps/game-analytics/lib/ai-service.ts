@@ -905,6 +905,7 @@ ACTION RULES:
 - To act on an existing game (update, log a session, change status, queue, delete, review, mark special), FIRST call findGames to resolve the game's id, then call the write tool with that id.
 - For games the user is "interested in" but doesn't own yet, FIRST call lookupGames to fetch real release dates and thumbnails, THEN call addGames. Default unreleased/TBA games to the "queue" destination and already-released games to "wishlist", unless the user specifies otherwise. If they say "both", use "both".
 - For a game the user already owns/played, use addGame (not addGames).
+- Avoid duplicates: before adding any game, call findGames to check it isn't already tracked. If it already exists and the user wants to change something about it, use updateGame/setGameStatus/logPlaySession on the existing game instead of adding a new copy. Only add a duplicate if the user explicitly insists.
 - You may propose multiple write actions in one turn when the user asks for several things — they will be confirmed together.
 - The app shows the user a confirmation card for every write action and runs it only if they approve. Do NOT ask "should I?" in prose — just call the tool; the confirmation UI handles approval. After an action runs you receive its result; then give a brief, friendly confirmation.
 - Never invent release dates, ratings, or metadata — only use values returned by lookupGames or findGames.

@@ -7,6 +7,7 @@ import {
   PendingAction,
   InterestedDestination,
   summarizeAction,
+  validateAction,
   isDestructive,
 } from '../lib/ai-actions';
 
@@ -98,6 +99,14 @@ export function AIActionCard({ actions, games, isLoading, onConfirm, onCancel, o
                   </button>
                 )}
               </div>
+
+              {/* Non-blocking warnings: duplicates, out-of-range values, missing refs */}
+              {validateAction(action, games).map((warning, wi) => (
+                <div key={wi} className="flex items-start gap-1.5 mt-1.5 text-[11px] text-amber-300/90">
+                  <AlertTriangle size={12} className="shrink-0 mt-0.5" />
+                  <span className="leading-snug">{warning}</span>
+                </div>
+              ))}
 
               {/* Per-game destination editing for the interested-games batch */}
               {action.kind === 'addGames' && (
