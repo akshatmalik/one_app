@@ -5,6 +5,17 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-10 12:00 — Session Timer — Live play-session tracker
+
+**Files**: app/apps/game-analytics/hooks/useSessionTimer.ts, app/apps/game-analytics/components/SessionTimer.tsx, app/apps/game-analytics/page.tsx
+**Risk**: not risky
+
+Added a live session timer that turns the app into an active gaming companion. Tap the new ▶ button on any "Now Playing" card to start a real-time stopwatch — the timer persists across tab refreshes via localStorage, so closing and reopening the app resumes counting. A sticky bottom bar shows the active game's thumbnail, name, and live HH:MM:SS counter with pause/resume and stop controls. Stopping opens a compact log dialog where you can adjust hours (pre-filled from elapsed time), pick a session mood (🔥👍😐💪), and add optional notes — then log with one tap.
+
+FOLLOW-UP: Could extend the timer button to PosterCard for non-In-Progress games (auto-sets status to "In Progress" on first timed session). Could also add a persistent "timer active" indicator in the page header for awareness across all tabs.
+
+---
+
 ## 2026-06-01 06:00 — Game Detail — Head-to-Head Game Comparison
 
 **Files**: app/apps/game-analytics/components/GameCompareModal.tsx, app/apps/game-analytics/components/GameBottomSheet.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical, Download, Gift, ShoppingCart, Search, X } from 'lucide-react';
+import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical, Download, Gift, ShoppingCart, Search, X, Play } from 'lucide-react';
 import { useGames } from './hooks/useGames';
 import { useAnalytics, GameWithMetrics } from './hooks/useAnalytics';
 import { useBudget } from './hooks/useBudget';
@@ -15,7 +15,7 @@ import { TimelineView } from './components/TimelineView';
 import { StatsView } from './components/StatsView';
 import { AIChatTab } from './components/AIChatTab';
 import { UpNextTab } from './components/UpNextTab';
-import { Game, GameStatus, PlayLog, GameRanking, GameAward, AwardPeriodType, GameTier, TierAssignmentMap, ReviewMessage } from './lib/types';
+import { Game, GameStatus, PlayLog, GameRanking, GameAward, AwardPeriodType, GameTier, TierAssignmentMap, ReviewMessage, SessionMood } from './lib/types';
 import { useTierAssignments } from './hooks/useTierAssignments';
 import { gameRepository } from './lib/storage';
 import { useRankings } from './hooks/useRankings';
@@ -49,6 +49,8 @@ import { ErrorLogPanel, ErrorLogButton } from './components/ErrorLogPanel';
 import { WhatsNewModal } from './components/WhatsNewModal';
 import { GameReviewChat } from './components/GameReviewChat';
 import { GameCompareModal } from './components/GameCompareModal';
+import { useSessionTimer } from './hooks/useSessionTimer';
+import { SessionTimer } from './components/SessionTimer';
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist';
@@ -289,6 +291,57 @@ export default function GameAnalyticsPage() {
     monthAgo.setMonth(monthAgo.getMonth() - 1);
     return getGamesPlayedInTimeRange(games, monthAgo, now);
   }, [games]);
+
+  // ── Live Session Timer ────────────────────────────────────────
+  const {
+    session: activeTimer,
+    elapsedSeconds: timerElapsed,
+    isPaused: timerPaused,
+    isActive: timerActive,
+    startSession: startTimer,
+    pauseSession: pauseTimer,
+    resumeSession: resumeTimer,
+    cancelSession: cancelTimer,
+  } = useSessionTimer();
+
+  const handleStartTimer = useCallback((gameId: string, gameName: string, thumbnail?: string) => {
+    if (timerActive && activeTimer) {
+      const ok = window.confirm(`Replace timer for "${activeTimer.gameName}" with "${gameName}"?`);
+      if (!ok) return;
+      cancelTimer();
+    }
+    startTimer(gameId, gameName, thumbnail);
+    showToast(`Timer started for ${gameName}`, 'success');
+  }, [timerActive, activeTimer, cancelTimer, startTimer, showToast]);
+
+  const handleTimerStop = useCallback(async (hours: number, mood?: SessionMood, notes?: string) => {
+    const gameId = activeTimer?.gameId;
+    cancelTimer();
+    if (!gameId) return;
+    const game = gamesWithMetrics.find(g => g.id === gameId);
+    if (!game) return;
+    const now = new Date();
+    const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const newLog: PlayLog = {
+      id: `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+      date: dateStr,
+      hours,
+      ...(mood ? { mood } : {}),
+      ...(notes ? { notes } : {}),
+    };
+    const existingLogs = game.playLogs || [];
+    const updates: Partial<Game> = { playLogs: [...existingLogs, newLog] };
+    if (game.status === 'Not Started' && existingLogs.length === 0) {
+      updates.status = 'In Progress';
+      updates.startDate = dateStr;
+    }
+    try {
+      await updateGame(game.id, updates);
+      showToast(`Logged ${hours}h for ${game.name}`, 'success');
+    } catch {
+      showToast('Failed to save session', 'error');
+    }
+  }, [activeTimer, cancelTimer, gamesWithMetrics, updateGame, showToast]);
 
   const handleAddGame = async (gameData: Omit<Game, 'id' | 'userId' | 'createdAt' | 'updatedAt'>) => {
     try {
@@ -935,7 +988,7 @@ export default function GameAnalyticsPage() {
       )}
 
       {/* Main Content */}
-      <div className="flex-1 px-6 py-6">
+      <div className={clsx('flex-1 px-6 py-6', timerActive && 'pb-24')}>
         <div className="max-w-6xl mx-auto">
           {/* On This Day */}
           {games.length > 0 && <OnThisDayCard games={games} />}
@@ -1220,6 +1273,8 @@ export default function GameAnalyticsPage() {
                   eloByGameId={eloByGameId}
                   tierAssignments={allTimeTiers}
                   eloTierRanks={eloTierRanks}
+                  onStartSession={handleStartTimer}
+                  activeTimerGameId={activeTimer?.gameId}
                 />
               )}
             </>
@@ -1561,6 +1616,19 @@ export default function GameAnalyticsPage() {
           onClose={() => setReviewChatGame(null)}
         />
       )}
+
+      {/* Live Session Timer — fixed bottom bar */}
+      {timerActive && activeTimer && (
+        <SessionTimer
+          session={activeTimer}
+          elapsedSeconds={timerElapsed}
+          isPaused={timerPaused}
+          onPause={pauseTimer}
+          onResume={resumeTimer}
+          onStop={handleTimerStop}
+          onCancel={cancelTimer}
+        />
+      )}
     </div>
   );
 }
@@ -1647,6 +1715,8 @@ interface GameCardListProps {
   eloByGameId?: Map<string, GameRanking>;
   tierAssignments?: TierAssignmentMap;
   eloTierRanks?: Map<string, { tier: GameTier; rank: number }>;
+  onStartSession?: (gameId: string, gameName: string, thumbnail?: string) => void;
+  activeTimerGameId?: string;
 }
 
 function GameCardList({
@@ -1667,6 +1737,8 @@ function GameCardList({
   eloByGameId = new Map(),
   tierAssignments = {},
   eloTierRanks = new Map(),
+  onStartSession,
+  activeTimerGameId,
 }: GameCardListProps) {
   const sections = useMemo(() => groupBySection ? getGameSections(allGames) : [], [allGames, groupBySection]);
 
@@ -1746,7 +1818,7 @@ function GameCardList({
             <div className="space-y-3">
               {nowPlayingGames.map(g => (
                 <div key={g.id} className={`game-card-animate${enteringCards.has(g.id) ? ' game-card-enter' : ''}`}>
-                  <NowPlayingCard game={g} allGames={allGames} onClick={() => onCardClick(g)} onQuickLog={(h) => onQuickLog(g, h)} sortBy={sortBy} tintColor={gameColors.get(g.id)} eloRanking={eloByGameId.get(g.id)} gameTier={tierAssignments[g.id] as GameTier | undefined} eloTierRank={eloTierRanks.get(g.id)} />
+                  <NowPlayingCard game={g} allGames={allGames} onClick={() => onCardClick(g)} onQuickLog={(h) => onQuickLog(g, h)} sortBy={sortBy} tintColor={gameColors.get(g.id)} eloRanking={eloByGameId.get(g.id)} gameTier={tierAssignments[g.id] as GameTier | undefined} eloTierRank={eloTierRanks.get(g.id)} onStartSession={onStartSession ? () => onStartSession(g.id, g.name, g.thumbnail) : undefined} isTimerActive={activeTimerGameId === g.id} />
                 </div>
               ))}
             </div>
@@ -1789,7 +1861,7 @@ function GameCardList({
           <div className="space-y-3">
             {nowPlayingGames.map(g => (
               <div key={g.id} className={`game-card-animate${enteringCards.has(g.id) ? ' game-card-enter' : ''}`}>
-                <NowPlayingCard game={g} allGames={allGames} onClick={() => onCardClick(g)} onQuickLog={(h) => onQuickLog(g, h)} eloRanking={eloByGameId.get(g.id)} gameTier={tierAssignments[g.id] as GameTier | undefined} />
+                <NowPlayingCard game={g} allGames={allGames} onClick={() => onCardClick(g)} onQuickLog={(h) => onQuickLog(g, h)} eloRanking={eloByGameId.get(g.id)} gameTier={tierAssignments[g.id] as GameTier | undefined} onStartSession={onStartSession ? () => onStartSession(g.id, g.name, g.thumbnail) : undefined} isTimerActive={activeTimerGameId === g.id} />
               </div>
             ))}
           </div>
@@ -1819,7 +1891,7 @@ function SectionIcon({ id }: { id: string }) {
 
 // --- Now Playing Card ---
 
-function NowPlayingCard({ game, allGames, onClick, onQuickLog, sortBy = 'hours', tintColor, eloRanking, gameTier, eloTierRank }: {
+function NowPlayingCard({ game, allGames, onClick, onQuickLog, sortBy = 'hours', tintColor, eloRanking, gameTier, eloTierRank, onStartSession, isTimerActive = false }: {
   game: GameWithMetrics;
   allGames: Game[];
   onClick: () => void;
@@ -1829,6 +1901,8 @@ function NowPlayingCard({ game, allGames, onClick, onQuickLog, sortBy = 'hours',
   eloRanking?: GameRanking;
   gameTier?: GameTier;
   eloTierRank?: { tier: GameTier; rank: number };
+  onStartSession?: () => void;
+  isTimerActive?: boolean;
 }) {
   const [isFlipped, setIsFlipped] = useState(false);
   const [checkInHours, setCheckInHours] = useState(1);
@@ -2053,6 +2127,25 @@ function NowPlayingCard({ game, allGames, onClick, onQuickLog, sortBy = 'hours',
             >
               {checkInDone ? <><Check size={11} /> Done!</> : <><Clock size={11} /> Check In</>}
             </button>
+            {/* Live timer start button */}
+            {onStartSession && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onStartSession(); }}
+                title={isTimerActive ? 'Timer running' : 'Start live timer'}
+                className={clsx(
+                  'w-7 h-7 flex items-center justify-center rounded-lg text-sm active:scale-90 transition-all shrink-0',
+                  isTimerActive
+                    ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20'
+                    : 'bg-white/5 text-white/30 hover:text-emerald-400 hover:bg-emerald-500/5 border border-transparent',
+                )}
+              >
+                {isTimerActive ? (
+                  <span className="text-[10px] font-bold">⏱</span>
+                ) : (
+                  <Play size={10} fill="currentColor" />
+                )}
+              </button>
+            )}
           </div>
 
           {/* Mood pulse strip */}

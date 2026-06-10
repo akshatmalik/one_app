@@ -1,6 +1,12 @@
 {
   "entries": [
     {
+      "date": "2026-06-10",
+      "area": "Session Timer",
+      "title": "Track your sessions live — tap ▶ and just play",
+      "body": "Tap the new ▶ button on any active game card to start a real-time stopwatch. A bar at the bottom of the screen shows the live timer, your game's thumbnail, and pause/stop controls. When you're done, tap Stop — the session hours are pre-filled from the timer, you pick a mood and add optional notes, then log in one tap. The timer even survives closing and reopening the tab."
+    },
+    {
       "date": "2026-06-01",
       "area": "Game detail",
       "title": "Compare any two games head to head",
