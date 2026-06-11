@@ -23,6 +23,16 @@ const TIERS: { id: SubscriptionTier; label: string; blurb: string }[] = [
   { id: 'Premium', label: 'Premium', blurb: 'Everything + Classics' },
 ];
 
+// How far back a backfill can reach (in months). Larger spans mean more
+// grounded AI searches (one per month), so they take longer.
+const BACKFILL_OPTIONS = [3, 6, 12, 24, 36, 60];
+
+function backfillLabel(months: number): string {
+  if (months < 12) return `last ${months} mo`;
+  const years = months / 12;
+  return `last ${years} ${years === 1 ? 'yr' : 'yrs'}`;
+}
+
 export function SubscriptionDropPanel({ games, userId, onAddGame, onAddToQueue }: SubscriptionDropPanelProps) {
   const sub = useSubscriptionGames({ userId, games, onAddGame, onAddToQueue });
   const [backfillMonths, setBackfillMonths] = useState(6);
@@ -160,7 +170,7 @@ export function SubscriptionDropPanel({ games, userId, onAddGame, onAddToQueue }
               disabled={syncing}
               className="bg-white/5 border border-white/10 rounded-lg text-[11px] text-white/70 px-2 py-2 outline-none [color-scheme:dark]"
             >
-              {[3, 6, 12].map(n => <option key={n} value={n}>last {n} mo</option>)}
+              {BACKFILL_OPTIONS.map(n => <option key={n} value={n}>{backfillLabel(n)}</option>)}
             </select>
             <button
               onClick={() => sub.backfill(backfillMonths)}
@@ -177,6 +187,13 @@ export function SubscriptionDropPanel({ games, userId, onAddGame, onAddToQueue }
             </button>
           </div>
         </div>
+
+        {/* Heads-up for long backfills */}
+        {!syncing && backfillMonths >= 24 && (
+          <p className="text-[10px] text-white/30">
+            Backfilling {backfillLabel(backfillMonths).replace('last ', '')} runs {backfillMonths} searches — it&apos;ll take a few minutes.
+          </p>
+        )}
 
         {/* Progress */}
         {syncing && (
