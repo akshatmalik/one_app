@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Sparkles, Loader2, Bookmark, Eye, EyeOff, Undo2, Trash2,
-  AlertTriangle, X, ChevronDown, ChevronUp, Clock, Rocket, Compass, Calendar,
+  AlertTriangle, X, ChevronDown, ChevronUp, Clock, Rocket, Compass, Calendar, Gift,
 } from 'lucide-react';
 import { Game, GameRecommendation, RecommendationCategory } from '../lib/types';
 import { useRecommendations } from '../hooks/useRecommendations';
@@ -11,9 +11,10 @@ import { TasteProfilePanel } from './TasteProfilePanel';
 import { RecommendationCard } from './RecommendationCard';
 import { AskAboutGame } from './AskAboutGame';
 import { RecommendationChat } from './RecommendationChat';
+import { SubscriptionDropPanel } from './SubscriptionDropPanel';
 import clsx from 'clsx';
 
-type DiscoverSection = 'coming-soon' | 'for-you' | 'interested';
+type DiscoverSection = 'coming-soon' | 'for-you' | 'interested' | 'ps-plus';
 
 const CATEGORY_SECTION_TITLES: Record<RecommendationCategory, string> = {
   'because-you-loved': 'Because You Loved',
@@ -35,9 +36,13 @@ interface DiscoverTabProps {
   games: Game[];
   userId: string | null;
   onAddGame: (data: Omit<Game, 'id' | 'userId' | 'createdAt' | 'updatedAt'>) => Promise<Game>;
+  onAddToQueue?: (gameId: string) => Promise<void>;
+  onUpdateGame?: (id: string, updates: Partial<Game>) => Promise<Game>;
+  /** Increment to jump the user straight to the PS Plus section (from the nudge banner). */
+  focusPsPlusSignal?: number;
 }
 
-export function DiscoverTab({ games, userId, onAddGame }: DiscoverTabProps) {
+export function DiscoverTab({ games, userId, onAddGame, onAddToQueue, onUpdateGame, focusPsPlusSignal }: DiscoverTabProps) {
   const {
     suggested,
     interested,
@@ -87,6 +92,11 @@ export function DiscoverTab({ games, userId, onAddGame }: DiscoverTabProps) {
     setErrorDismissed(false);
     setErrorExpanded(false);
   }
+
+  // Jump to the PS Plus section when the nudge banner asks us to.
+  useEffect(() => {
+    if (focusPsPlusSignal) setSection('ps-plus');
+  }, [focusPsPlusSignal]);
 
   const handleGenerate = useCallback(() => {
     generate(userPrompt || undefined);
@@ -294,6 +304,18 @@ export function DiscoverTab({ games, userId, onAddGame }: DiscoverTabProps) {
           {totalInterested > 0 && (
             <span className="text-[10px] opacity-60">({totalInterested})</span>
           )}
+        </button>
+        <button
+          onClick={() => setSection('ps-plus')}
+          className={clsx(
+            'flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-md text-xs font-medium transition-all',
+            section === 'ps-plus'
+              ? 'bg-indigo-500/10 text-indigo-300 border border-indigo-500/20'
+              : 'text-white/40 hover:text-white/60'
+          )}
+        >
+          <Gift size={12} />
+          PS Plus
         </button>
       </div>
 
@@ -550,6 +572,17 @@ export function DiscoverTab({ games, userId, onAddGame }: DiscoverTabProps) {
             </div>
           )}
         </div>
+      )}
+
+      {/* ── PS Plus Free Games Tab ─────────────────────────── */}
+      {section === 'ps-plus' && (
+        <SubscriptionDropPanel
+          games={games}
+          userId={userId}
+          onAddGame={onAddGame}
+          onAddToQueue={onAddToQueue || (async () => {})}
+          onUpdateGame={onUpdateGame || (async (_id, _u) => ({} as Game))}
+        />
       )}
 
       {/* Dismissed section (always visible at bottom, any tab) */}

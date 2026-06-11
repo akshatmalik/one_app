@@ -86,27 +86,29 @@ export function useRecommendations(userId: string | null, games: Game[]) {
 
   useEffect(() => { refresh(); }, [refresh, userId]);
 
-  // Derived lists — released recommendations
+  // Derived lists — released recommendations.
+  // Subscription drops (PS Plus) are owned by the PS Plus panel, not the
+  // general recommender, so they're excluded from every list here.
   const suggested = useMemo(() =>
-    recommendations.filter(r => r.status === 'suggested' && !r.isUpcoming),
+    recommendations.filter(r => r.status === 'suggested' && !r.isUpcoming && !r.subscriptionService),
     [recommendations]
   );
   const interested = useMemo(() =>
-    recommendations.filter(r => r.status === 'interested'),
+    recommendations.filter(r => r.status === 'interested' && !r.subscriptionService),
     [recommendations]
   );
   const dismissed = useMemo(() =>
-    recommendations.filter(r => r.status === 'dismissed'),
+    recommendations.filter(r => r.status === 'dismissed' && !r.subscriptionService),
     [recommendations]
   );
   const watching = useMemo(() =>
-    recommendations.filter(r => r.status === 'watching'),
+    recommendations.filter(r => r.status === 'watching' && !r.subscriptionService),
     [recommendations]
   );
 
   // Derived lists — upcoming recommendations
   const upcomingSuggested = useMemo(() =>
-    recommendations.filter(r => r.isUpcoming && (r.status === 'suggested' || r.status === 'watching')),
+    recommendations.filter(r => r.isUpcoming && !r.subscriptionService && (r.status === 'suggested' || r.status === 'watching')),
     [recommendations]
   );
   const upcomingThisMonth = useMemo(() =>
