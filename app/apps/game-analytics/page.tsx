@@ -44,6 +44,7 @@ import { ExportPanel } from './components/ExportPanel';
 import { YearlyWrapped } from './components/YearlyWrapped';
 import { FortuneCookie } from './components/FortuneCookie';
 import { SubscriptionSyncBanner } from './components/SubscriptionSyncBanner';
+import { loadSubscriptionSettings, hasNewDrop } from './lib/subscription-settings';
 import { ReviewNudgeBanner } from './components/ReviewNudgeBanner';
 import { AwardsHub } from './components/AwardsHub';
 import { useTrophies } from './hooks/useTrophies';
@@ -197,6 +198,11 @@ export default function GameAnalyticsPage() {
   const [tabMode, setTabMode] = useState<TabMode>('games');
   // Bump to jump Discover straight to the PS Plus section (from the nudge banner).
   const [discoverFocusSignal, setDiscoverFocusSignal] = useState(0);
+  // Whether to show a "new PS Plus drop" dot on the Discover tab.
+  const [psPlusNewDrop, setPsPlusNewDrop] = useState(false);
+  useEffect(() => {
+    setPsPlusNewDrop(hasNewDrop(loadSubscriptionSettings(user?.uid ?? '')));
+  }, [user?.uid, tabMode, games.length]);
   const [sortBy, setSortBy] = useState<'name' | 'price' | 'hours' | 'rating' | 'costPerHour' | 'dateAdded' | 'recentlyPlayed'>('recentlyPlayed');
   const [showRandomPicker, setShowRandomPicker] = useState(false);
   const [showBulkWishlist, setShowBulkWishlist] = useState(false);
@@ -1037,13 +1043,16 @@ export default function GameAnalyticsPage() {
                     onClick={() => setTabMode(tab.id)}
                     title={tab.title}
                     className={clsx(
-                      'flex-1 flex items-center justify-center py-2.5 rounded-lg transition-all',
+                      'relative flex-1 flex items-center justify-center py-2.5 rounded-lg transition-all',
                       tabMode === tab.id
                         ? 'bg-white/10 text-white'
                         : 'bg-white/[0.02] text-white/40 hover:text-white/60'
                     )}
                   >
                     {tab.icon}
+                    {tab.id === 'discover' && psPlusNewDrop && (
+                      <span className="absolute top-1.5 right-1/2 translate-x-3 w-1.5 h-1.5 rounded-full bg-indigo-400" />
+                    )}
                   </button>
                 ))}
                 <button onClick={() => setShowExport(true)} title="Export data"
@@ -1392,6 +1401,7 @@ export default function GameAnalyticsPage() {
               userId={user?.uid ?? null}
               onAddGame={addGame}
               onAddToQueue={addToQueue}
+              onUpdateGame={updateGame}
               focusPsPlusSignal={discoverFocusSignal}
             />
           )}

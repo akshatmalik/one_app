@@ -37,11 +37,12 @@ interface DiscoverTabProps {
   userId: string | null;
   onAddGame: (data: Omit<Game, 'id' | 'userId' | 'createdAt' | 'updatedAt'>) => Promise<Game>;
   onAddToQueue?: (gameId: string) => Promise<void>;
+  onUpdateGame?: (id: string, updates: Partial<Game>) => Promise<Game>;
   /** Increment to jump the user straight to the PS Plus section (from the nudge banner). */
   focusPsPlusSignal?: number;
 }
 
-export function DiscoverTab({ games, userId, onAddGame, onAddToQueue, focusPsPlusSignal }: DiscoverTabProps) {
+export function DiscoverTab({ games, userId, onAddGame, onAddToQueue, onUpdateGame, focusPsPlusSignal }: DiscoverTabProps) {
   const {
     suggested,
     interested,
@@ -580,6 +581,7 @@ export function DiscoverTab({ games, userId, onAddGame, onAddToQueue, focusPsPlu
           userId={userId}
           onAddGame={onAddGame}
           onAddToQueue={onAddToQueue || (async () => {})}
+          onUpdateGame={onUpdateGame || (async (_id, _u) => ({} as Game))}
         />
       )}
 

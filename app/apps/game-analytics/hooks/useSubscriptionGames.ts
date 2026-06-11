@@ -6,7 +6,7 @@ import { recommendationRepository } from '../lib/recommendation-storage';
 import { searchRAWGGame } from '../lib/rawg-api';
 import { buildTasteProfile } from '../lib/calculations';
 import { scoreUpcomingGames } from '../lib/ai-recommendation-service';
-import { fetchMonthlyDrops, MonthlyDropResult } from '../lib/subscription-games-service';
+import { fetchMonthlyDrops, getCachedDrops, MonthlyDropResult, SubscriptionGameItem } from '../lib/subscription-games-service';
 import {
   SubscriptionSettings,
   loadSubscriptionSettings,
@@ -15,6 +15,7 @@ import {
   latestAvailableMonth,
   recentMonths,
   hasNewDrop as computeHasNewDrop,
+  SUBSCRIPTION_ANNUAL_COST,
 } from '../lib/subscription-settings';
 
 const SERVICE = 'PS Plus' as const;
@@ -36,9 +37,10 @@ interface UseSubscriptionGamesArgs {
   games: Game[];
   onAddGame: (data: Omit<Game, 'id' | 'userId' | 'createdAt' | 'updatedAt'>) => Promise<Game>;
   onAddToQueue: (gameId: string) => Promise<void>;
+  onUpdateGame: (id: string, updates: Partial<Game>) => Promise<Game>;
 }
 
-export function useSubscriptionGames({ userId, games, onAddGame, onAddToQueue }: UseSubscriptionGamesArgs) {
+export function useSubscriptionGames({ userId, games, onAddGame, onAddToQueue, onUpdateGame }: UseSubscriptionGamesArgs) {
   const [settings, setSettings] = useState<SubscriptionSettings>(() => loadSubscriptionSettings(userId || ''));
   const [recs, setRecs] = useState<GameRecommendation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -57,6 +59,13 @@ export function useSubscriptionGames({ userId, games, onAddGame, onAddToQueue }:
     recommendationRepository.setUserId(userId || '');
     setSettings(loadSubscriptionSettings(userId || ''));
   }, [userId]);
+
+  // Restore the latest cached lineup (citation, sources, leaving-soon) on mount
+  // so that info survives reloads without re-running the search.
+  useEffect(() => {
+    const cached = getCachedDrops(settings.psPlusTier, latestAvailableMonth());
+    if (cached) setLastResult(cached);
+  }, [settings.psPlusTier]);
 
   const refresh = useCallback(async () => {
     try {
@@ -299,6 +308,31 @@ export function useSubscriptionGames({ userId, games, onAddGame, onAddToQueue }:
     }
   }, [recs, addToUpNext]);
 
+  // Bulk: claim every still-available Monthly (Essential) game into Up Next.
+  const claimAllMonthly = useCallback(async () => {
+    const monthly = recs.filter(r => r.status === 'suggested' && r.subscriptionBucket === 'monthly');
+    for (const rec of monthly) {
+      // eslint-disable-next-line no-await-in-loop
+      await addToUpNext(rec);
+    }
+  }, [recs, addToUpNext]);
+
+  // Retroactively tag a game you already own as a free PS Plus claim, crediting
+  // the savings. `rec` is the matching drop we found for it.
+  const reclaim = useCallback(async (gameId: string, rec: GameRecommendation) => {
+    const game = gamesRef.current.find(g => g.id === gameId);
+    try {
+      await onUpdateGame(gameId, {
+        acquiredFree: true,
+        subscriptionSource: SERVICE,
+        originalPrice: game?.originalPrice || rec.estimatedPrice,
+      });
+      await updateStatus(rec.id, 'played');
+    } catch (e) {
+      setError(e instanceof Error ? e : new Error(String(e)));
+    }
+  }, [onUpdateGame, updateStatus]);
+
   // ── Derived views ────────────────────────────────────────────────────────────
   const available = useMemo(() => recs.filter(r => r.status === 'suggested'), [recs]);
   const monthlyAvailable = useMemo(() => available.filter(r => r.subscriptionBucket === 'monthly'), [available]);
@@ -320,11 +354,62 @@ export function useSubscriptionGames({ userId, games, onAddGame, onAddToQueue }:
   // Value of games actually claimed via PS Plus (from the real library).
   const claimedValue = useMemo(() => {
     const claimed = games.filter(g => g.acquiredFree && g.subscriptionSource === SERVICE);
+    const yr = String(new Date().getFullYear());
+    const thisYear = claimed.filter(g => (g.datePurchased || '').slice(0, 4) === yr);
     return {
       count: claimed.length,
       value: claimed.reduce((s, g) => s + (g.originalPrice || 0), 0),
+      thisYearCount: thisYear.length,
+      thisYearValue: thisYear.reduce((s, g) => s + (g.originalPrice || 0), 0),
     };
   }, [games]);
+
+  // ROI: is the sub paying for itself this year?
+  const annualCost = SUBSCRIPTION_ANNUAL_COST[settings.psPlusTier];
+  const roiMultiple = annualCost > 0 ? claimedValue.thisYearValue / annualCost : 0;
+
+  // The single best match for the latest drop — the "Pick of the Month".
+  const pickOfMonth = useMemo(() => {
+    const latest = latestAvailableMonth();
+    const pool = available.filter(r => r.catalogMonth === latest);
+    const ranked = (pool.length ? pool : available).slice().sort((a, b) => (b.hypeScore || 0) - (a.hypeScore || 0));
+    return ranked[0] || null;
+  }, [available]);
+
+  // One-line, taste-aware read on the latest drop.
+  const dropInsight = useMemo(() => {
+    const latest = latestAvailableMonth();
+    const pool = available.filter(r => r.catalogMonth === latest);
+    if (pool.length === 0) return null;
+    const top = new Set(tasteProfile.topGenres.map(g => g.toLowerCase()));
+    const matches = pool.filter(r => r.genre && top.has(r.genre.toLowerCase())).length;
+    const counts: Record<string, number> = {};
+    for (const r of pool) if (r.genre) counts[r.genre] = (counts[r.genre] || 0) + 1;
+    const dom = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
+    return { dominantGenre: dom ? dom[0] : null, matches, total: pool.length };
+  }, [available, tasteProfile]);
+
+  // Games you OWN that are leaving the catalog this month — play before they go.
+  const leavingSoon = useMemo(() => {
+    const leaving = lastResult?.leaving || [];
+    if (leaving.length === 0) return { owned: [] as Array<{ item: SubscriptionGameItem; game: Game }>, total: 0 };
+    const ownedMap = new Map(games.filter(g => g.status !== 'Wishlist').map(g => [g.name.toLowerCase(), g]));
+    const owned = leaving
+      .map(item => ({ item, game: ownedMap.get(item.name.toLowerCase()) }))
+      .filter((x): x is { item: SubscriptionGameItem; game: Game } => !!x.game);
+    return { owned, total: leaving.length };
+  }, [lastResult, games]);
+
+  // Games already in your library that were actually PS Plus freebies we found,
+  // but aren't tagged as free yet — offer to reclaim the savings.
+  const reclaimable = useMemo(() => {
+    const recByName = new Map<string, GameRecommendation>();
+    for (const r of recs) if (!recByName.has(r.gameName.toLowerCase())) recByName.set(r.gameName.toLowerCase(), r);
+    return games
+      .filter(g => g.status !== 'Wishlist' && !(g.acquiredFree && g.subscriptionSource === SERVICE))
+      .map(g => ({ game: g, rec: recByName.get(g.name.toLowerCase()) }))
+      .filter((x): x is { game: Game; rec: GameRecommendation } => !!x.rec);
+  }, [games, recs]);
 
   const newDrop = useMemo(() => computeHasNewDrop(settings), [settings]);
 
@@ -349,6 +434,12 @@ export function useSubscriptionGames({ userId, games, onAddGame, onAddToQueue }:
     dismissed,
     months,
     claimedValue,
+    annualCost,
+    roiMultiple,
+    pickOfMonth,
+    dropInsight,
+    leavingSoon,
+    reclaimable,
     newDrop,
     latestMonth: latestAvailableMonth(),
     currentMonth: monthKey(),
@@ -363,6 +454,8 @@ export function useSubscriptionGames({ userId, games, onAddGame, onAddToQueue }:
     addToWishlist,
     addAsPlayed,
     addAllTopPicksToUpNext,
+    claimAllMonthly,
+    reclaim,
     refresh,
   };
 }

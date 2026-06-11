@@ -41,6 +41,7 @@ export interface SubscriptionSource {
 export interface MonthlyDropResult {
   month: string;                 // 'YYYY-MM'
   games: SubscriptionGameItem[];
+  leaving: SubscriptionGameItem[];     // games rotating OUT of the catalog this month
   primarySource?: SubscriptionSource;  // best post to cite
   sources: SubscriptionSource[];       // all grounding sources surfaced
 }
@@ -119,6 +120,11 @@ function saveDropsToCache(tier: SubscriptionTier, month: string, result: Monthly
   }
 }
 
+/** Read a cached lineup without searching (used to restore state on mount). */
+export function getCachedDrops(tier: SubscriptionTier, month: string): MonthlyDropResult | null {
+  return getDropsFromCache(tier, month);
+}
+
 /** Wipe cached lineups (e.g. to force a fresh search). */
 export function clearDropsCache(): void {
   if (typeof window === 'undefined') return;
@@ -161,10 +167,11 @@ export async function fetchMonthlyDrops(
 
   const tierAsk =
     tier === 'Essential'
-      ? `List the PS Plus MONTHLY GAMES for ${label} (the "Monthly Games" every PS Plus member can claim). Put these in "monthly".`
-      : `List BOTH:
+      ? `List the PS Plus MONTHLY GAMES for ${label} (the "Monthly Games" every PS Plus member can claim). Put these in "monthly". Leave "catalog" and "leaving" empty.`
+      : `List:
 1. The PS Plus MONTHLY GAMES for ${label} (claim-to-keep Monthly Games every member gets) — put in "monthly".
-2. The games ADDED to the PlayStation Plus Game Catalog (the ${tier} tier library) in ${label} — put in "catalog".`;
+2. The games ADDED to the PlayStation Plus Game Catalog (the ${tier} tier library) in ${label} — put in "catalog".
+3. The games LEAVING / being REMOVED from the PlayStation Plus Game Catalog in ${label}, if announced — put in "leaving".`;
 
   const prompt = `Search the web for the PlayStation Plus lineup for ${label}. Use authoritative, up-to-date sources (PlayStation Blog, Push Square, IGN).
 
@@ -177,7 +184,8 @@ Only include games actually confirmed for ${label}. Do not invent titles. If you
 Respond with ONLY this JSON, nothing else:
 {
   "monthly": [ { "name": "Game", "genre": "Genre", "platform": "PS5", "estimatedPrice": 59.99 } ],
-  "catalog": [ { "name": "Game", "genre": "Genre", "platform": "PS5", "estimatedPrice": 39.99 } ]
+  "catalog": [ { "name": "Game", "genre": "Genre", "platform": "PS5", "estimatedPrice": 39.99 } ],
+  "leaving": [ { "name": "Game", "genre": "Genre", "platform": "PS5", "estimatedPrice": 19.99 } ]
 }`;
 
   const result = await model.generateContent(prompt);
@@ -186,14 +194,14 @@ Respond with ONLY this JSON, nothing else:
 
   const jsonMatch = text.match(/\{[\s\S]*\}/);
   if (!jsonMatch) {
-    return { month, games: [], sources, primarySource: pickPrimarySource(sources) };
+    return { month, games: [], leaving: [], sources, primarySource: pickPrimarySource(sources) };
   }
 
-  let parsed: { monthly?: unknown[]; catalog?: unknown[] };
+  let parsed: { monthly?: unknown[]; catalog?: unknown[]; leaving?: unknown[] };
   try {
     parsed = JSON.parse(jsonMatch[0]);
   } catch {
-    return { month, games: [], sources, primarySource: pickPrimarySource(sources) };
+    return { month, games: [], leaving: [], sources, primarySource: pickPrimarySource(sources) };
   }
 
   const toItems = (arr: unknown[] | undefined, bucket: SubscriptionBucket): SubscriptionGameItem[] => {
@@ -218,10 +226,12 @@ Respond with ONLY this JSON, nothing else:
   const monthly = toItems(parsed.monthly, 'monthly');
   const monthlyNames = new Set(monthly.map(g => g.name.toLowerCase()));
   const catalog = toItems(parsed.catalog, 'catalog').filter(g => !monthlyNames.has(g.name.toLowerCase()));
+  const leaving = toItems(parsed.leaving, 'catalog');
 
   const dropResult: MonthlyDropResult = {
     month,
     games: [...monthly, ...catalog],
+    leaving,
     sources,
     primarySource: pickPrimarySource(sources),
   };

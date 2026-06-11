@@ -97,12 +97,30 @@ export function recentMonths(count: number, upTo: string = monthKey()): string[]
 }
 
 /** Date of the first Tuesday of a month — when PS Plus monthly games typically refresh. */
-function firstTuesday(year: number, monthIndex0: number): Date {
+export function firstTuesday(year: number, monthIndex0: number): Date {
   const d = new Date(year, monthIndex0, 1);
   // getDay(): 0=Sun..6=Sat. Tuesday = 2.
   const offset = (2 - d.getDay() + 7) % 7;
   return new Date(year, monthIndex0, 1 + offset);
 }
+
+/**
+ * When a month's Monthly (Essential) games stop being claimable — the first
+ * Tuesday of the FOLLOWING month, when the next batch replaces them.
+ */
+export function monthlyClaimDeadline(key: string): Date {
+  const next = shiftMonth(key, 1);
+  const [y, m] = next.split('-').map(Number);
+  return firstTuesday(y, m - 1);
+}
+
+// Approximate US annual subscription cost per tier — used for the "is it paying
+// for itself?" ROI readout.
+export const SUBSCRIPTION_ANNUAL_COST: Record<SubscriptionTier, number> = {
+  Essential: 80,
+  Extra: 135,
+  Premium: 160,
+};
 
 /**
  * The latest month whose PS Plus drop should be "out" as of `today`. PS Plus
