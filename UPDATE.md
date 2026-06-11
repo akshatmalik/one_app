@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-11 12:00 — Games Tab — Weekly Gaming Challenges
+
+**Files**: app/apps/game-analytics/lib/calculations.ts, app/apps/game-analytics/components/WeeklyChallengesPanel.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Added a Weekly Gaming Challenges panel at the top of the Games tab. Each week, three personalized challenges auto-generate (Bronze/Silver/Gold tier) and track progress live from play log data — no manual input required. Challenges cover sessions, hours, variety, reviving neglected games, marathon sessions, and completions; the selection rotates weekly using a deterministic ISO-week seed and adapts to library state. The panel is collapsible (state persisted in localStorage), shows a per-challenge progress bar and sub-label, and shifts to a gold celebration state when all three are complete. Gives players a concrete reason to log sessions every day.
+
+FOLLOW-UP: Could add a streak counter tracking consecutive weeks where all 3 challenges were completed, and surface that streak in the header stats.
+
 ## 2026-06-10 12:00 — Games Tab — Play Tonight Smart Recommender
 
 **Files**: app/apps/game-analytics/components/PlayTonightModal.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json

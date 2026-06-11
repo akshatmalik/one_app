@@ -51,6 +51,7 @@ import { TrophyToast } from './components/TrophyToast';
 import { ErrorLogPanel, ErrorLogButton } from './components/ErrorLogPanel';
 import { WhatsNewModal } from './components/WhatsNewModal';
 import { GameReviewChat } from './components/GameReviewChat';
+import { WeeklyChallengesPanel } from './components/WeeklyChallengesPanel';
 import { GameCompareModal } from './components/GameCompareModal';
 import { PlayTonightModal } from './components/PlayTonightModal';
 import clsx from 'clsx';
@@ -1191,6 +1192,9 @@ export default function GameAnalyticsPage() {
           {/* Tab Content */}
           {tabMode === 'games' && (
             <>
+              {/* Weekly Challenges */}
+              {games.length > 0 && <WeeklyChallengesPanel games={games} />}
+
               {games.length === 0 ? (
                 <div className="text-center py-16">
                   <Gamepad2 size={48} className="mx-auto mb-4 text-white/10" />

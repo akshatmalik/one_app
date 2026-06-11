@@ -14310,3 +14310,299 @@ export function getReviewNudges(games: Game[]): ReviewNudgeSummary {
     recentlyCompletedCount,
   };
 }
+
+// ── Weekly Challenges ────────────────────────────────────────────────────────
+
+export type ChallengeTier = 'bronze' | 'silver' | 'gold';
+export type ChallengeType =
+  | 'sessions'
+  | 'hours'
+  | 'variety'
+  | 'neglected'
+  | 'longSession'
+  | 'completion'
+  | 'backlog';
+
+export interface WeeklyChallenge {
+  id: string;
+  tier: ChallengeTier;
+  type: ChallengeType;
+  title: string;
+  description: string;
+  target: number;
+  weekKey: string;
+}
+
+export interface WeeklyChallengeProgressData {
+  challenge: WeeklyChallenge;
+  current: number;
+  completed: boolean;
+  percentage: number;
+  progressLabel: string;
+}
+
+function getISOWeekKey(date: Date): string {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  const weekNum = Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+  return `${d.getUTCFullYear()}-W${String(weekNum).padStart(2, '0')}`;
+}
+
+function getWeekBoundsLocal(date: Date): { start: Date; end: Date } {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  const start = new Date(d);
+  start.setDate(d.getDate() + diff);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 7);
+  return { start, end };
+}
+
+function isGameNeglected(game: Game, daysThreshold: number, weekStart: Date): boolean {
+  const logs = game.playLogs ?? [];
+  if (logs.length === 0) return false;
+  const threshold = new Date(weekStart.getTime() - daysThreshold * 86400000);
+  const hasOldLog = logs.some(l => parseLocalDate(l.date) < threshold);
+  if (!hasOldLog) return false;
+  const hasRecentLog = logs.some(l => {
+    const d = parseLocalDate(l.date);
+    return d >= threshold && d < weekStart;
+  });
+  return !hasRecentLog;
+}
+
+interface WeeklyChallengeTemplate {
+  type: ChallengeType;
+  title: string;
+  description: string;
+  target: number;
+  applicable: (games: Game[], weekStart: Date) => boolean;
+}
+
+const BRONZE_CHALLENGE_POOL: WeeklyChallengeTemplate[] = [
+  {
+    type: 'sessions',
+    title: 'Log 3 gaming sessions',
+    description: 'Play any game 3 times this week',
+    target: 3,
+    applicable: () => true,
+  },
+  {
+    type: 'hours',
+    title: 'Game for 5 hours',
+    description: 'Accumulate 5 total hours of play this week',
+    target: 5,
+    applicable: () => true,
+  },
+  {
+    type: 'variety',
+    title: 'Play 2 different games',
+    description: 'Log sessions on at least 2 different games',
+    target: 2,
+    applicable: (games) => games.filter(g => g.status !== 'Wishlist').length >= 2,
+  },
+];
+
+const SILVER_CHALLENGE_POOL: WeeklyChallengeTemplate[] = [
+  {
+    type: 'sessions',
+    title: 'Log 5 gaming sessions',
+    description: 'Play any game 5 times this week',
+    target: 5,
+    applicable: () => true,
+  },
+  {
+    type: 'hours',
+    title: 'Game for 10 hours',
+    description: 'Accumulate 10 total hours of play this week',
+    target: 10,
+    applicable: () => true,
+  },
+  {
+    type: 'neglected',
+    title: 'Revive a forgotten game',
+    description: "Play a game you haven't touched in 30+ days",
+    target: 1,
+    applicable: (games, weekStart) =>
+      games.some(g => g.status !== 'Wishlist' && isGameNeglected(g, 30, weekStart)),
+  },
+  {
+    type: 'variety',
+    title: 'Play 3 different games',
+    description: 'Log sessions on at least 3 different games',
+    target: 3,
+    applicable: (games) => games.filter(g => g.status !== 'Wishlist').length >= 3,
+  },
+  {
+    type: 'longSession',
+    title: 'Play a 3-hour session',
+    description: 'Log a single session of 3 hours or more',
+    target: 3,
+    applicable: () => true,
+  },
+];
+
+const GOLD_CHALLENGE_POOL: WeeklyChallengeTemplate[] = [
+  {
+    type: 'completion',
+    title: 'Complete a game',
+    description: 'Finish any game this week',
+    target: 1,
+    applicable: (games) => games.some(g => g.status === 'In Progress'),
+  },
+  {
+    type: 'hours',
+    title: 'Game for 15 hours',
+    description: 'Accumulate 15 total hours of play this week',
+    target: 15,
+    applicable: () => true,
+  },
+  {
+    type: 'variety',
+    title: 'Play 4 different games',
+    description: 'Log sessions on at least 4 different games',
+    target: 4,
+    applicable: (games) => games.filter(g => g.status !== 'Wishlist').length >= 4,
+  },
+  {
+    type: 'longSession',
+    title: 'Play a 4+ hour marathon',
+    description: 'Log a single marathon session of 4 hours or more',
+    target: 4,
+    applicable: () => true,
+  },
+  {
+    type: 'sessions',
+    title: 'Game every day this week',
+    description: 'Log 7 sessions across the week',
+    target: 7,
+    applicable: () => true,
+  },
+];
+
+/** Returns this week's 3 challenges (Bronze / Silver / Gold), deterministic per ISO week. */
+export function generateWeeklyChallenges(games: Game[]): WeeklyChallenge[] {
+  const now = new Date();
+  const weekKey = getISOWeekKey(now);
+  const { start: weekStart } = getWeekBoundsLocal(now);
+
+  // Numeric seed derived from "YYYYWW"
+  const [yearStr, wkStr] = weekKey.split('-W');
+  const seed = parseInt(yearStr, 10) * 100 + parseInt(wkStr, 10);
+
+  const ownedGames = games.filter(g => g.status !== 'Wishlist');
+
+  function pick(pool: WeeklyChallengeTemplate[], offset: number): WeeklyChallengeTemplate {
+    const applicable = pool.filter(t => t.applicable(ownedGames, weekStart));
+    const src = applicable.length > 0 ? applicable : pool;
+    return src[(seed + offset) % src.length];
+  }
+
+  const bronze = pick(BRONZE_CHALLENGE_POOL, 0);
+  const silver = pick(SILVER_CHALLENGE_POOL, 1);
+  const gold   = pick(GOLD_CHALLENGE_POOL, 2);
+
+  return [
+    { id: `bronze-${weekKey}`, tier: 'bronze', type: bronze.type, title: bronze.title, description: bronze.description, target: bronze.target, weekKey },
+    { id: `silver-${weekKey}`, tier: 'silver', type: silver.type, title: silver.title, description: silver.description, target: silver.target, weekKey },
+    { id: `gold-${weekKey}`,   tier: 'gold',   type: gold.type,   title: gold.title,   description: gold.description,   target: gold.target,   weekKey },
+  ];
+}
+
+/** Calculates real-time progress for a single weekly challenge. */
+export function getWeeklyChallengeProgress(
+  challenge: WeeklyChallenge,
+  games: Game[],
+): WeeklyChallengeProgressData {
+  const { start: weekStart, end: weekEnd } = getWeekBoundsLocal(new Date());
+
+  type LogEntry = NonNullable<Game['playLogs']>[0] & { gameId: string; game: Game };
+
+  const allLogs: LogEntry[] = games.flatMap(g =>
+    (g.playLogs ?? []).map(l => ({ ...l, gameId: g.id, game: g })),
+  );
+
+  const weekLogs = allLogs.filter(l => {
+    const d = parseLocalDate(l.date);
+    return d >= weekStart && d < weekEnd;
+  });
+
+  let current = 0;
+  let progressLabel = '';
+
+  switch (challenge.type) {
+    case 'sessions':
+      current = weekLogs.length;
+      progressLabel = `${current} of ${challenge.target} sessions`;
+      break;
+
+    case 'hours': {
+      const raw = weekLogs.reduce((s, l) => s + l.hours, 0);
+      current = parseFloat(raw.toFixed(1));
+      progressLabel = `${current} of ${challenge.target} hours`;
+      break;
+    }
+
+    case 'variety': {
+      const unique = new Set(weekLogs.map(l => l.gameId));
+      current = unique.size;
+      progressLabel = `${current} of ${challenge.target} games`;
+      break;
+    }
+
+    case 'neglected': {
+      const revived = weekLogs.some(l => isGameNeglected(l.game, 30, weekStart));
+      current = revived ? 1 : 0;
+      progressLabel = revived
+        ? 'A forgotten game is back!'
+        : 'Play a game idle for 30+ days';
+      break;
+    }
+
+    case 'longSession': {
+      const maxHrs = weekLogs.length > 0 ? Math.max(...weekLogs.map(l => l.hours)) : 0;
+      current = parseFloat(maxHrs.toFixed(1));
+      progressLabel = current > 0
+        ? `Best session: ${current}h`
+        : 'No sessions logged yet';
+      break;
+    }
+
+    case 'completion': {
+      const completed = games.filter(g => {
+        if (!g.endDate) return false;
+        const d = parseLocalDate(g.endDate);
+        return d >= weekStart && d < weekEnd;
+      }).length;
+      current = completed;
+      progressLabel = `${current} of ${challenge.target} completions`;
+      break;
+    }
+
+    case 'backlog': {
+      const started = games.filter(g => {
+        if (!g.startDate) return false;
+        const d = parseLocalDate(g.startDate);
+        return d >= weekStart && d < weekEnd;
+      }).length;
+      current = started;
+      progressLabel = `${current} of ${challenge.target} games started`;
+      break;
+    }
+  }
+
+  const percentage = challenge.target > 0
+    ? Math.min(100, (current / challenge.target) * 100)
+    : 0;
+
+  return {
+    challenge,
+    current,
+    completed: percentage >= 100,
+    percentage,
+    progressLabel,
+  };
+}
