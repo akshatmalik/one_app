@@ -51,6 +51,7 @@ import {
 } from 'lucide-react';
 import { Game, GameStatus, AnalyticsSummary, BudgetSettings } from '../lib/types';
 import { calculateSummary, getCumulativeSpending, getHoursByMonth, getSpendingByMonth, parseLocalDate, getLibraryHealth, getRatingTierBands, getCloseRatingGroups, getRatingDistributionFine, formatRating } from '../lib/calculations';
+import { SessionMoodPanel } from './SessionMoodPanel';
 import { GameWithMetrics } from '../hooks/useAnalytics';
 import { PeriodStatsPanel } from './PeriodStatsPanel';
 import { FunStatsPanel } from './FunStatsPanel';
@@ -992,6 +993,9 @@ export function StatsView({ games, summary, budgets = [], onSetBudget, trophies,
 
       {/* Fun Stats Panel */}
       <FunStatsPanel games={games} />
+
+      {/* Session Mood Intelligence */}
+      <SessionMoodPanel games={games} />
 
       {/* Deep Insights Panel (Phase 1 Enhancements) */}
       <InsightsPanel

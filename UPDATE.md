@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-11 06:00 — Stats Tab — Session Mood Intelligence Panel
+
+**Files**: app/apps/game-analytics/lib/calculations.ts, app/apps/game-analytics/components/SessionMoodPanel.tsx, app/apps/game-analytics/components/StatsView.tsx, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Added a new "Session Mood Intelligence" panel in the Stats tab that surfaces the mood and vibe data users tag on their play sessions — data that was being stored but never visualised anywhere. The panel shows overall mood distribution (Great/Good/Meh/Grind) with bar charts, session counts and average lengths per mood, the three happiest and grindiest games by tagged-session rate, vibe breakdown (wind-down, competitive, exploration, etc.), and three context insight cards (best-rated mood, longest session mood, top game for Great sessions). Users without tagged data see a compelling empty state explaining how to start tagging, with a preview of all four mood options. Two new pure calculation functions were added: `getVibeStats()` for vibe-level aggregation and `getPerGameMoodStats()` for per-game mood breakdowns.
+
+FOLLOW-UP: Could add a per-game mood chart inside the bottom sheet detail panel, or a time-series showing mood trends over the last 30 days.
+
 ## 2026-06-10 12:00 — Games Tab — Play Tonight Smart Recommender
 
 **Files**: app/apps/game-analytics/components/PlayTonightModal.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json

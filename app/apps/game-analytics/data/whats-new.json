@@ -1,6 +1,12 @@
 {
   "entries": [
     {
+      "date": "2026-06-11",
+      "area": "Stats tab",
+      "title": "See how every session actually feels",
+      "body": "The new Session Mood Intelligence panel in the Stats tab visualises the mood tags you add when logging sessions. See your overall Great / Good / Meh / Grind split with bar charts, discover which games give you the happiest sessions versus which ones feel like a grind, and explore your gaming vibe profile (wind-down, competitive, exploration, and more). Start tagging your sessions with a mood today — the more you tag, the richer the insights get."
+    },
+    {
       "date": "2026-06-10",
       "area": "Games tab",
       "title": "Play Tonight — find your perfect match in seconds",

@@ -1,4 +1,4 @@
-import { Game, GameStatus, GameMetrics, AnalyticsSummary, TasteProfile, SessionMood } from './types';
+import { Game, GameStatus, GameMetrics, AnalyticsSummary, TasteProfile, SessionMood, SessionVibe } from './types';
 
 /**
  * Parse a YYYY-MM-DD date string as local time instead of UTC.
@@ -14309,4 +14309,133 @@ export function getReviewNudges(games: Game[]): ReviewNudgeSummary {
     reviewableCount: reviewable.length,
     recentlyCompletedCount,
   };
+}
+
+// ============================================================
+// Session Vibe & Mood Panel — extended analytics
+// ============================================================
+
+const VIBE_META: Record<string, { label: string; emoji: string; color: string }> = {
+  'wind-down':          { label: 'Wind-down',          emoji: '🌙', color: '#818cf8' },
+  'competitive':        { label: 'Competitive',        emoji: '⚔️', color: '#f87171' },
+  'exploration':        { label: 'Exploration',        emoji: '🗺️', color: '#34d399' },
+  'story':              { label: 'Story mode',          emoji: '📖', color: '#a78bfa' },
+  'achievement-hunting':{ label: 'Achievement hunting', emoji: '🏆', color: '#fbbf24' },
+  'social':             { label: 'Social',             emoji: '👥', color: '#60a5fa' },
+};
+
+export interface VibeEntry {
+  vibe: SessionVibe;
+  label: string;
+  emoji: string;
+  color: string;
+  count: number;
+  percent: number;
+  avgHours: number;
+}
+
+export interface VibeStats {
+  vibeDistribution: VibeEntry[];
+  totalTaggedWithVibe: number;
+  totalSessions: number;
+  dominantVibe: SessionVibe | null;
+}
+
+export function getVibeStats(games: Game[]): VibeStats {
+  const owned = games.filter(g => g.status !== 'Wishlist');
+  let totalSessions = 0;
+  let totalTaggedWithVibe = 0;
+  const vibeData: Record<string, { count: number; totalHours: number }> = {};
+
+  owned.forEach(game => {
+    game.playLogs?.forEach(log => {
+      totalSessions++;
+      if (log.vibe) {
+        totalTaggedWithVibe++;
+        if (!vibeData[log.vibe]) vibeData[log.vibe] = { count: 0, totalHours: 0 };
+        vibeData[log.vibe].count++;
+        vibeData[log.vibe].totalHours += log.hours;
+      }
+    });
+  });
+
+  const vibeDistribution: VibeEntry[] = Object.entries(vibeData)
+    .map(([vibe, data]) => {
+      const meta = VIBE_META[vibe] ?? { label: vibe, emoji: '🎮', color: '#9ca3af' };
+      return {
+        vibe: vibe as SessionVibe,
+        label: meta.label,
+        emoji: meta.emoji,
+        color: meta.color,
+        count: data.count,
+        percent: totalTaggedWithVibe > 0 ? Math.round((data.count / totalTaggedWithVibe) * 100) : 0,
+        avgHours: data.count > 0 ? Math.round((data.totalHours / data.count) * 10) / 10 : 0,
+      };
+    })
+    .sort((a, b) => b.count - a.count);
+
+  return {
+    vibeDistribution,
+    totalTaggedWithVibe,
+    totalSessions,
+    dominantVibe: vibeDistribution[0]?.vibe ?? null,
+  };
+}
+
+export interface GameMoodStat {
+  gameId: string;
+  gameName: string;
+  thumbnail?: string;
+  totalSessions: number;
+  taggedSessions: number;
+  greatCount: number;
+  goodCount: number;
+  mehCount: number;
+  grindCount: number;
+  positiveRate: number;
+  greatRate: number;
+  grindRate: number;
+  dominantMood: SessionMood | null;
+}
+
+export function getPerGameMoodStats(games: Game[]): GameMoodStat[] {
+  const results: GameMoodStat[] = [];
+
+  games
+    .filter(g => g.status !== 'Wishlist')
+    .forEach(game => {
+      const logs = game.playLogs ?? [];
+      const taggedLogs = logs.filter(l => l.mood);
+      const taggedSessions = taggedLogs.length;
+      if (taggedSessions === 0) return;
+
+      const greatCount = taggedLogs.filter(l => l.mood === 'great').length;
+      const goodCount  = taggedLogs.filter(l => l.mood === 'good').length;
+      const mehCount   = taggedLogs.filter(l => l.mood === 'meh').length;
+      const grindCount = taggedLogs.filter(l => l.mood === 'grind').length;
+
+      const moodArr: [string, number][] = [
+        ['great', greatCount], ['good', goodCount],
+        ['meh', mehCount], ['grind', grindCount],
+      ];
+      const dominantMood = (moodArr.slice().sort((a, b) => b[1] - a[1])[0]?.[0] ?? null) as SessionMood | null;
+
+      results.push({
+        gameId: game.id,
+        gameName: game.name,
+        thumbnail: game.thumbnail,
+        totalSessions: logs.length,
+        taggedSessions,
+        greatCount,
+        goodCount,
+        mehCount,
+        grindCount,
+        positiveRate: (greatCount + goodCount) / taggedSessions,
+        greatRate: greatCount / taggedSessions,
+        grindRate: grindCount / taggedSessions,
+        dominantMood,
+      });
+    });
+
+  return results.sort((a, b) => b.taggedSessions - a.taggedSessions);
 }
