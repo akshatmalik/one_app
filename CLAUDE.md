@@ -2590,6 +2590,16 @@ fortune-fade           — Gentle fade-in for daily fortune cookie
 
 ## Changelog
 
+### 2026-06-11 (v2.7.0)
+- **PS Plus monthly free games → Discover** (branch `claude/ps-plus-monthly-games-y5kis5`)
+- **AI web search with citations**: `lib/subscription-games-service.ts` uses Gemini Google Search grounding (same pattern as `ai-recommendation-service`) to find the real PlayStation Plus lineup for a given month + tier, and extracts the grounding sources so the UI shows "Powered by: <post> ↗". Personalization reuses `scoreUpcomingGames` (hype score + reason); strong matches (>=8) flagged `isTopPick`.
+- **Tiers configurable**: Essential (monthly games only) / Extra / Premium (monthly + Game Catalog additions, split into `subscriptionBucket: 'monthly' | 'catalog'`). Default Extra.
+- **Local settings store**: `lib/subscription-settings.ts` — device-local (localStorage, no Firestore rule), same precedent as estimator settings. Holds `psPlusEnabled`, `psPlusTier`, `lastSyncedMonth`, `backfillStartMonth`, `dismissedMonths`, plus month helpers (`latestAvailableMonth` honors the PS Plus first-Tuesday refresh, `hasNewDrop`).
+- **Data model**: extended `GameRecommendation` with `subscriptionService`, `subscriptionTier`, `subscriptionBucket`, `catalogMonth`, `sourceUrl`, `sourceTitle`, `isTopPick`, `estimatedPrice`. Reuses the existing `gameRecommendations` collection (no new collection/rule). Subscription drops are filtered out of the normal Discover "For You" lists in `useRecommendations`.
+- **Bootstrap + everyday**: `hooks/useSubscriptionGames.ts` — `syncLatest()` pulls the current available month; `backfill(n)` pulls the last 3/6/12 months in one deduped pass; `SubscriptionSyncBanner` nudges in the page header when a new month's drop is out (never auto-adds).
+- **Triage (nothing auto-added)**: per-game Up Next / Wishlist / Played-with-rating / Dismiss; "Add all top picks to Up Next" bulk action. Added games are tagged `acquiredFree`, `subscriptionSource: 'PS Plus'`, `originalPrice` from the AI estimate, `datePurchased` = drop month → flow into Timeline acquisition events, Up Next, and the savings stat. Panel header shows total PS Plus value claimed.
+- **Files**: new `lib/subscription-settings.ts`, `lib/subscription-games-service.ts`, `hooks/useSubscriptionGames.ts`, `components/SubscriptionDropPanel.tsx`, `components/SubscriptionSyncBanner.tsx`; new "PS Plus" sub-tab in `DiscoverTab.tsx`; wired into `page.tsx`.
+
 ### 2026-06-10 (v2.6.0)
 - **Up Next ⇄ Timeline Estimator synergy + queue bug fixes** (branch `claude/timeline-upnext-synergy-plan-rrdfyo`)
 - **Queue persistence fixes**:

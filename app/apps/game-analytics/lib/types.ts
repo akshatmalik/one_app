@@ -19,6 +19,15 @@ export type PurchaseSource = 'Steam' | 'PlayStation' | 'Xbox' | 'Nintendo' | 'Ep
 
 export type SubscriptionSource = 'PS Plus' | 'Game Pass' | 'Epic Free' | 'Prime Gaming' | 'Humble Choice' | 'Other';
 
+// PS Plus tiers. Essential = the monthly games everyone gets. Extra adds the
+// Game Catalog (hundreds of games, refreshed monthly). Premium adds Classics.
+export type SubscriptionTier = 'Essential' | 'Extra' | 'Premium';
+
+// Which kind of drop a subscription recommendation belongs to.
+//   'monthly' — the headline monthly games (Essential, claim-to-keep)
+//   'catalog' — titles added to the Extra/Premium Game Catalog that month
+export type SubscriptionBucket = 'monthly' | 'catalog';
+
 export type SessionMood = 'great' | 'good' | 'meh' | 'grind';
 export type SessionContext = 'solo' | 'co-op' | 'online' | 'couch-co-op' | 'stream';
 export type SessionVibe = 'wind-down' | 'competitive' | 'exploration' | 'story' | 'achievement-hunting' | 'social';
@@ -206,6 +215,17 @@ export interface GameRecommendation {
   hypeScore?: number;         // 1-10 AI-generated match score for upcoming games
   recommendationCategory?: RecommendationCategory; // Category for released game recommendations
   categoryContext?: string;   // e.g. "Because You Loved Elden Ring" — the specific game/context
+
+  // ── Subscription free-games (PS Plus monthly games + Extra/Premium catalog) ──
+  subscriptionService?: SubscriptionSource;          // e.g. 'PS Plus' — marks this as a subscription drop
+  subscriptionTier?: SubscriptionTier;               // Essential | Extra | Premium
+  subscriptionBucket?: SubscriptionBucket;           // 'monthly' (Essential games) | 'catalog' (Extra/Premium adds)
+  catalogMonth?: string;                             // 'YYYY-MM' the drop belongs to
+  sourceUrl?: string;                                // The post/page the AI search used to power this
+  sourceTitle?: string;                              // Human-readable title of that source
+  isTopPick?: boolean;                               // Personalization flagged this as a strong match for you
+  estimatedPrice?: number;                           // Approx MSRP — drives "value claimed" savings
+
   suggestedAt: string;
   respondedAt?: string;
   createdAt: string;

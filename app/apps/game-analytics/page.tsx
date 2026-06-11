@@ -43,6 +43,7 @@ import { ProgressRing } from './components/ProgressRing';
 import { ExportPanel } from './components/ExportPanel';
 import { YearlyWrapped } from './components/YearlyWrapped';
 import { FortuneCookie } from './components/FortuneCookie';
+import { SubscriptionSyncBanner } from './components/SubscriptionSyncBanner';
 import { ReviewNudgeBanner } from './components/ReviewNudgeBanner';
 import { AwardsHub } from './components/AwardsHub';
 import { useTrophies } from './hooks/useTrophies';
@@ -194,6 +195,8 @@ export default function GameAnalyticsPage() {
   const [playLogGame, setPlayLogGame] = useState<GameWithMetrics | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('all');
   const [tabMode, setTabMode] = useState<TabMode>('games');
+  // Bump to jump Discover straight to the PS Plus section (from the nudge banner).
+  const [discoverFocusSignal, setDiscoverFocusSignal] = useState(0);
   const [sortBy, setSortBy] = useState<'name' | 'price' | 'hours' | 'rating' | 'costPerHour' | 'dateAdded' | 'recentlyPlayed'>('recentlyPlayed');
   const [showRandomPicker, setShowRandomPicker] = useState(false);
   const [showBulkWishlist, setShowBulkWishlist] = useState(false);
@@ -971,6 +974,13 @@ export default function GameAnalyticsPage() {
           {/* Daily Fortune Cookie */}
           {games.length > 0 && <div className="mb-4"><FortuneCookie games={games} /></div>}
 
+          {/* New month's PS Plus games nudge */}
+          <SubscriptionSyncBanner
+            userId={user?.uid ?? null}
+            recheckKey={tabMode}
+            onOpen={() => { setTabMode('discover'); setDiscoverFocusSignal(s => s + 1); }}
+          />
+
           {/* Gentle nudge to review finished games — leads into the review chat */}
           {games.length > 0 && (
             <ReviewNudgeBanner
@@ -1381,6 +1391,8 @@ export default function GameAnalyticsPage() {
               games={games}
               userId={user?.uid ?? null}
               onAddGame={addGame}
+              onAddToQueue={addToQueue}
+              focusPsPlusSignal={discoverFocusSignal}
             />
           )}
 
