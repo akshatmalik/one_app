@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-11 06:00 — Stats Tab — Weekly Challenges + Goals System
+
+**Files**: app/apps/game-analytics/lib/calculations.ts, app/apps/game-analytics/components/WeeklyChallengesPanel.tsx, app/apps/game-analytics/components/StatsView.tsx, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Added five data-driven Weekly Challenges at the top of the Stats tab — Daily Gamer (play 3 days), 5-Hour Week, Variety Pack (play 2 genres), The Return (go back to a neglected game), and Closer (finish a game or log a 2-hour session). All challenges are computed live from your existing play log data, reset automatically every Monday, and include a per-week dot progress strip so you can see at a glance how close you are to a perfect week. Also surfaced the fully-built Gaming Goals panel (which existed in the codebase but was never shown to users) directly beneath the challenges, giving users a persistent place to set and track personal goals like "complete 5 games this month" or "stay under $200 this year."
+
+FOLLOW-UP: Could add a "perfect week" confetti celebration when all 5 challenges complete, or surface the active goal count as a small badge in the header stats.
+
 ## 2026-06-10 12:00 — Games Tab — Play Tonight Smart Recommender
 
 **Files**: app/apps/game-analytics/components/PlayTonightModal.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json

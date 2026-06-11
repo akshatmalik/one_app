@@ -14310,3 +14310,172 @@ export function getReviewNudges(games: Game[]): ReviewNudgeSummary {
     recentlyCompletedCount,
   };
 }
+
+// ── Weekly Challenges ─────────────────────────────────────────────────────────
+
+export interface WeeklyChallenge {
+  id: string;
+  title: string;
+  description: string;
+  icon: string;
+  current: number;
+  target: number;
+  unit: string;
+  completed: boolean;
+  category: 'activity' | 'variety' | 'exploration' | 'completion';
+  hint?: string;
+}
+
+/**
+ * Compute 5 weekly challenges from game data.
+ * Challenges are purely derived from existing play logs — no storage required.
+ * The week runs Monday–Sunday; progress resets automatically each week.
+ */
+export function getWeeklyChallenges(games: Game[]): WeeklyChallenge[] {
+  const now = new Date();
+  // Monday = day 0 of the week for this calculation
+  const dayOfWeek = now.getDay(); // 0=Sun, 1=Mon … 6=Sat
+  const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+
+  const weekStart = new Date(now);
+  weekStart.setDate(now.getDate() - daysFromMonday);
+  weekStart.setHours(0, 0, 0, 0);
+
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekStart.getDate() + 6);
+  weekEnd.setHours(23, 59, 59, 999);
+
+  const ownedGames = games.filter(g => g.status !== 'Wishlist');
+
+  // Aggregate this-week stats in a single pass
+  const daysWithSessions = new Set<string>();
+  let weekTotalHours = 0;
+  const gamesPlayedThisWeek = new Set<string>();
+  let maxSingleSession = 0;
+  let returnPlays = 0; // games played this week that had a 14+ day gap before
+
+  for (const game of ownedGames) {
+    const logs = game.playLogs ?? [];
+    const thisWeekLogs = logs.filter(log => {
+      const d = parseLocalDate(log.date);
+      return d >= weekStart && d <= weekEnd;
+    });
+
+    if (thisWeekLogs.length === 0) continue;
+
+    gamesPlayedThisWeek.add(game.id);
+    for (const log of thisWeekLogs) {
+      daysWithSessions.add(log.date.slice(0, 10));
+      weekTotalHours += log.hours;
+      if (log.hours > maxSingleSession) maxSingleSession = log.hours;
+    }
+
+    // "Return" = previous session was 14+ days before this week
+    const previousLogs = logs.filter(log => parseLocalDate(log.date) < weekStart);
+    if (previousLogs.length > 0) {
+      const lastPrev = previousLogs.sort((a, b) => b.date.localeCompare(a.date))[0];
+      const gapMs = weekStart.getTime() - parseLocalDate(lastPrev.date).getTime();
+      const gapDays = Math.floor(gapMs / (1000 * 60 * 60 * 24));
+      if (gapDays >= 14) returnPlays++;
+    }
+  }
+
+  const genresPlayedThisWeek = new Set(
+    ownedGames
+      .filter(g => g.genre && gamesPlayedThisWeek.has(g.id))
+      .map(g => g.genre!)
+  );
+
+  const firstGenre = [...genresPlayedThisWeek][0] ?? '';
+
+  const completedThisWeek = ownedGames.filter(g => {
+    if (g.status !== 'Completed' || !g.endDate) return false;
+    const d = parseLocalDate(g.endDate);
+    return d >= weekStart && d <= weekEnd;
+  });
+
+  const closerDone = completedThisWeek.length > 0 || maxSingleSession >= 2;
+
+  return [
+    {
+      id: 'daily-gamer',
+      title: 'Daily Gamer',
+      description: 'Play on at least 3 different days this week',
+      icon: '📅',
+      current: Math.min(daysWithSessions.size, 3),
+      target: 3,
+      unit: 'days',
+      completed: daysWithSessions.size >= 3,
+      category: 'activity',
+      hint:
+        daysWithSessions.size === 0
+          ? 'Log your first session to get started'
+          : daysWithSessions.size === 1
+            ? '2 more days to go'
+            : daysWithSessions.size === 2
+              ? 'One more day and you\'re done!'
+              : undefined,
+    },
+    {
+      id: 'five-hour-week',
+      title: '5-Hour Week',
+      description: 'Log at least 5 hours of gaming this week',
+      icon: '⏱️',
+      current: Math.min(Math.round(weekTotalHours * 10) / 10, 5),
+      target: 5,
+      unit: 'hr',
+      completed: weekTotalHours >= 5,
+      category: 'activity',
+      hint:
+        weekTotalHours > 0 && weekTotalHours < 5
+          ? `${(5 - weekTotalHours).toFixed(1)}h to go`
+          : weekTotalHours === 0
+            ? 'Any session counts toward this'
+            : undefined,
+    },
+    {
+      id: 'variety-pack',
+      title: 'Variety Pack',
+      description: 'Play games from 2 different genres this week',
+      icon: '🎲',
+      current: Math.min(genresPlayedThisWeek.size, 2),
+      target: 2,
+      unit: 'genres',
+      completed: genresPlayedThisWeek.size >= 2,
+      category: 'variety',
+      hint:
+        genresPlayedThisWeek.size === 0
+          ? 'Start any game to begin'
+          : genresPlayedThisWeek.size === 1 && firstGenre
+            ? `Playing ${firstGenre} — try something different`
+            : undefined,
+    },
+    {
+      id: 'the-return',
+      title: 'The Return',
+      description: 'Go back to a game you haven\'t played in 2+ weeks',
+      icon: '🔙',
+      current: Math.min(returnPlays, 1),
+      target: 1,
+      unit: 'comeback',
+      completed: returnPlays >= 1,
+      category: 'exploration',
+      hint: returnPlays === 0 ? 'Revisit a game that\'s been sitting idle' : undefined,
+    },
+    {
+      id: 'closer',
+      title: 'Closer',
+      description: 'Complete a game or have a 2h+ single session',
+      icon: '🏁',
+      current: closerDone ? 1 : 0,
+      target: 1,
+      unit: 'achievement',
+      completed: closerDone,
+      category: 'completion',
+      hint:
+        !closerDone
+          ? 'Finish something or go deep on one game'
+          : undefined,
+    },
+  ];
+}
