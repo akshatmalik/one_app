@@ -14310,3 +14310,190 @@ export function getReviewNudges(games: Game[]): ReviewNudgeSummary {
     recentlyCompletedCount,
   };
 }
+
+// ============================================================
+// Smart Goal Suggestions — data-driven goal recommendations
+// ============================================================
+
+export interface GoalSuggestion {
+  id: string;
+  title: string;
+  description: string;
+  type: 'completion' | 'spending' | 'hours' | 'genre_variety' | 'backlog' | 'custom';
+  targetValue: number;
+  unit: string;
+  endDate: string;
+  context: string;
+  icon: string;
+  priority: number;
+}
+
+export function getSmartGoalSuggestions(games: Game[]): GoalSuggestion[] {
+  const owned = games.filter(g => g.status !== 'Wishlist');
+  if (owned.length < 3) return [];
+
+  const now = new Date();
+  const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  const endOfQuarter = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3 + 3, 0);
+  const endOfYear = new Date(now.getFullYear(), 11, 31);
+
+  const fmtDate = (d: Date): string =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+  const suggestions: GoalSuggestion[] = [];
+
+  // 1. Backlog Buster — lots of unstarted games
+  const notStarted = owned.filter(g => g.status === 'Not Started');
+  if (notStarted.length >= 4) {
+    const target = Math.min(notStarted.length, 5);
+    suggestions.push({
+      id: 'backlog-buster',
+      title: `Start ${target} Backlog Games`,
+      description: `Kick off ${target} of your ${notStarted.length} unstarted games before they gather more dust`,
+      type: 'backlog',
+      targetValue: target,
+      unit: 'games',
+      endDate: fmtDate(endOfQuarter),
+      context: `${notStarted.length} unstarted games in your library`,
+      icon: '🗄️',
+      priority: 80,
+    });
+  }
+
+  // 2. Completion Quest — complete the next game
+  const completedCount = owned.filter(g => g.status === 'Completed').length;
+  const inProgress = owned.filter(g => g.status === 'In Progress');
+  if (inProgress.length > 0) {
+    // Pick the most recently played in-progress game
+    const activeGame = inProgress
+      .map(g => {
+        const lastLog = (g.playLogs || [])[0];
+        return { game: g, lastPlayed: lastLog ? parseLocalDate(lastLog.date).getTime() : 0 };
+      })
+      .sort((a, b) => b.lastPlayed - a.lastPlayed)[0]?.game ?? inProgress[0];
+
+    suggestions.push({
+      id: 'completion-quest',
+      title: `Complete ${completedCount + 1} Games`,
+      description: `Finish ${activeGame.name} and push your completions to ${completedCount + 1}`,
+      type: 'completion',
+      targetValue: completedCount + 1,
+      unit: 'games',
+      endDate: fmtDate(endOfMonth),
+      context: `${activeGame.name} is in progress — finish it`,
+      icon: '🏆',
+      priority: 85,
+    });
+  }
+
+  // 3. Spending Guard — formalize a budget if they're spending a lot
+  const thisYear = now.getFullYear();
+  const thisYearSpend = owned
+    .filter(g => g.datePurchased?.startsWith(String(thisYear)))
+    .reduce((s, g) => s + g.price, 0);
+  const monthsElapsed = now.getMonth() + 1;
+  const projectedAnnual = monthsElapsed > 0 ? (thisYearSpend / monthsElapsed) * 12 : 0;
+  if (thisYearSpend > 30 && projectedAnnual > 60) {
+    const roundedBudget = Math.ceil(projectedAnnual / 25) * 25;
+    suggestions.push({
+      id: 'spending-guard',
+      title: `$${roundedBudget} Spending Cap for ${thisYear}`,
+      description: `You're projected to spend ~$${Math.round(projectedAnnual)} this year — set a formal limit`,
+      type: 'spending',
+      targetValue: roundedBudget,
+      unit: 'dollars',
+      endDate: fmtDate(endOfYear),
+      context: `On pace for ~$${Math.round(projectedAnnual)} this year`,
+      icon: '💰',
+      priority: 70,
+    });
+  }
+
+  // 4. Hours Milestone — hit the next round number
+  const totalHrs = owned.reduce((s, g) => s + getTotalHours(g), 0);
+  const milestones = [25, 50, 100, 150, 200, 250, 300, 500, 750, 1000, 1500, 2000];
+  const nextMilestone = milestones.find(m => m > totalHrs && m - totalHrs <= 120);
+  if (nextMilestone) {
+    suggestions.push({
+      id: 'hours-milestone',
+      title: `Hit ${nextMilestone} Total Hours`,
+      description: `You're at ${Math.round(totalHrs)}h — only ${Math.round(nextMilestone - totalHrs)}h away`,
+      type: 'hours',
+      targetValue: nextMilestone,
+      unit: 'hours',
+      endDate: fmtDate(endOfQuarter),
+      context: `${Math.round(nextMilestone - totalHrs)}h to the next milestone`,
+      icon: '⏱️',
+      priority: 65,
+    });
+  }
+
+  // 5. Genre Explorer — stuck in one genre
+  const genreCounts = owned.reduce((acc, g) => {
+    if (g.genre) acc[g.genre] = (acc[g.genre] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+  const uniqueGenres = Object.keys(genreCounts).length;
+  const topGenreEntry = Object.entries(genreCounts).sort((a, b) => b[1] - a[1])[0];
+  if (topGenreEntry && uniqueGenres < 4 && owned.length >= 5) {
+    const [topGenre, topCount] = topGenreEntry;
+    const pct = Math.round((topCount / owned.length) * 100);
+    suggestions.push({
+      id: 'genre-explorer',
+      title: 'Explore 2 New Genres',
+      description: `${pct}% of your library is ${topGenre} — branch out this quarter`,
+      type: 'genre_variety',
+      targetValue: uniqueGenres + 2,
+      unit: 'genres',
+      endDate: fmtDate(endOfQuarter),
+      context: `${pct}% of your library is ${topGenre}`,
+      icon: '🎯',
+      priority: 55,
+    });
+  }
+
+  // 6. Century Club — close to 100 hrs on one game
+  const almostCentury = owned
+    .filter(g => { const h = getTotalHours(g); return h >= 65 && h < 100; })
+    .sort((a, b) => getTotalHours(b) - getTotalHours(a))[0];
+  if (almostCentury) {
+    const hoursIn = Math.round(getTotalHours(almostCentury));
+    suggestions.push({
+      id: `century-${almostCentury.id}`,
+      title: `${almostCentury.name}: Century Club`,
+      description: `${100 - hoursIn} more hours and ${almostCentury.name} hits 100h`,
+      type: 'hours',
+      targetValue: 100,
+      unit: 'hours',
+      endDate: fmtDate(endOfQuarter),
+      context: `${almostCentury.name} is at ${hoursIn}h`,
+      icon: '💯',
+      priority: 75,
+    });
+  }
+
+  // 7. Gaming Streak — maintain a streak
+  const streak = getCurrentGamingStreak(games);
+  const longestStreak = getLongestGamingStreak(games);
+  if (longestStreak >= 3 || streak >= 2) {
+    const targetStreak = streak > 0 ? Math.max(7, Math.ceil(streak * 1.5)) : 7;
+    suggestions.push({
+      id: 'streak-goal',
+      title: `${targetStreak}-Day Gaming Streak`,
+      description: streak > 0
+        ? `You're on ${streak} days — can you extend it to ${targetStreak}?`
+        : `Your best is ${longestStreak} days — set a new record`,
+      type: 'custom',
+      targetValue: targetStreak,
+      unit: 'days',
+      endDate: fmtDate(new Date(Date.now() + targetStreak * 24 * 60 * 60 * 1000)),
+      context: streak > 0 ? `Current streak: ${streak} days` : `Best streak: ${longestStreak} days`,
+      icon: '🔥',
+      priority: 60,
+    });
+  }
+
+  return suggestions
+    .sort((a, b) => b.priority - a.priority)
+    .slice(0, 5);
+}

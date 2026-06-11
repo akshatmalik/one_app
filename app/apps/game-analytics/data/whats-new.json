@@ -1,6 +1,12 @@
 {
   "entries": [
     {
+      "date": "2026-06-11",
+      "area": "Stats tab",
+      "title": "Set gaming goals — with smart suggestions from your library",
+      "body": "The Stats tab now has a Gaming Goals section where you can set targets and track your progress automatically. Create goals for completions, spending limits, hours played, genre variety, backlog clearing, or anything custom. The app analyses your library and suggests up to 5 data-driven goals you can add with one tap — things like \"Start 5 backlog games this quarter\" or \"You're 12 hours from Elden Ring's Century Club.\" Progress is calculated live from your game data every time you open the tab."
+    },
+    {
       "date": "2026-06-10",
       "area": "Games tab",
       "title": "Play Tonight — find your perfect match in seconds",

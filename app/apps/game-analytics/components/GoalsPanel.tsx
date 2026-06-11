@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { Target, Trophy, Plus, Trash2, Edit3, Check, Clock, ChevronDown, ChevronUp, X, Gamepad2, DollarSign, Flame, Layers, Sparkles } from 'lucide-react';
+import { Target, Trophy, Plus, Trash2, Edit3, Check, Clock, ChevronDown, ChevronUp, X, Gamepad2, DollarSign, Flame, Layers, Sparkles, Lightbulb, ChevronRight } from 'lucide-react';
 import { Game, GamingGoal, GoalType, GoalStatus } from '../lib/types';
-import { getTotalHours, parseLocalDate } from '../lib/calculations';
+import { getTotalHours, parseLocalDate, getSmartGoalSuggestions, GoalSuggestion } from '../lib/calculations';
 import { useGoals } from '../hooks/useGoals';
 import { useAuthContext } from '@/lib/AuthContext';
 import clsx from 'clsx';
@@ -111,6 +111,42 @@ export function GoalsPanel({ games }: { games: Game[] }) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingGoalId, setEditingGoalId] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(true);
+  const [dismissedSuggestions, setDismissedSuggestions] = useState<Set<string>>(() => {
+    if (typeof window === 'undefined') return new Set();
+    try {
+      const raw = localStorage.getItem('ga-dismissed-goal-suggestions');
+      return new Set(raw ? JSON.parse(raw) : []);
+    } catch { return new Set(); }
+  });
+
+  const suggestions = useMemo(() => getSmartGoalSuggestions(games), [games]);
+  const visibleSuggestions = useMemo(
+    () => suggestions.filter(s => !dismissedSuggestions.has(s.id)),
+    [suggestions, dismissedSuggestions]
+  );
+
+  const dismissSuggestion = (id: string) => {
+    const next = new Set(dismissedSuggestions);
+    next.add(id);
+    setDismissedSuggestions(next);
+    try {
+      localStorage.setItem('ga-dismissed-goal-suggestions', JSON.stringify([...next]));
+    } catch {}
+  };
+
+  const applysuggestion = (suggestion: GoalSuggestion) => {
+    setFormTitle(suggestion.title);
+    setFormDescription(suggestion.description);
+    setFormType(suggestion.type);
+    setFormTarget(String(suggestion.targetValue));
+    setFormUnit(suggestion.unit);
+    setFormEndDate(suggestion.endDate);
+    setFormCurrentValue('0');
+    setEditingGoalId(null);
+    setShowAddForm(true);
+    dismissSuggestion(suggestion.id);
+  };
 
   // Form state
   const [formTitle, setFormTitle] = useState('');
@@ -266,6 +302,53 @@ export function GoalsPanel({ games }: { games: Game[] }) {
           </button>
         )}
       </div>
+
+      {/* Smart Suggestions */}
+      {!showAddForm && visibleSuggestions.length > 0 && (
+        <div className="mb-4">
+          <button
+            onClick={() => setShowSuggestions(v => !v)}
+            className="flex items-center gap-2 text-xs text-white/40 hover:text-white/60 transition-colors mb-2 w-full text-left"
+          >
+            <Lightbulb size={12} className="text-yellow-400/70" />
+            <span>Suggested Goals ({visibleSuggestions.length})</span>
+            {showSuggestions ? <ChevronUp size={11} className="ml-auto" /> : <ChevronDown size={11} className="ml-auto" />}
+          </button>
+          {showSuggestions && (
+            <div className="space-y-2">
+              {visibleSuggestions.map(suggestion => (
+                <div
+                  key={suggestion.id}
+                  className="flex items-center gap-3 p-3 bg-white/[0.02] border border-white/5 rounded-xl hover:border-white/10 transition-all group"
+                >
+                  <span className="text-xl shrink-0">{suggestion.icon}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-medium text-white/70 truncate">{suggestion.title}</div>
+                    <div className="text-[10px] text-white/30 truncate">{suggestion.context}</div>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      onClick={() => applysuggestion(suggestion)}
+                      className="flex items-center gap-1 px-2.5 py-1.5 bg-cyan-500/15 text-cyan-400 hover:bg-cyan-500/25 rounded-lg text-[10px] font-medium transition-all"
+                      title="Use this suggestion"
+                    >
+                      <Plus size={10} />
+                      Add
+                    </button>
+                    <button
+                      onClick={() => dismissSuggestion(suggestion.id)}
+                      className="p-1.5 text-white/15 hover:text-white/40 transition-colors"
+                      title="Dismiss suggestion"
+                    >
+                      <X size={11} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Add/Edit Form */}
       {showAddForm && (

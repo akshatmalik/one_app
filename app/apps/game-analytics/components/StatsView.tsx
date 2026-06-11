@@ -66,6 +66,7 @@ import { DiscoverPanel } from './DiscoverPanel';
 import { WeeklyDigest } from './WeeklyDigest';
 import { WhatIfSimulator } from './WhatIfSimulator';
 import { PlayedSummary, BoughtSummary } from './RangeGlance';
+import { GoalsPanel } from './GoalsPanel';
 import clsx from 'clsx';
 
 interface StatsViewProps {
@@ -986,6 +987,9 @@ export function StatsView({ games, summary, budgets = [], onSetBudget, trophies,
 
       {/* Weekly Digest / Gaming Journal */}
       <WeeklyDigest games={games} />
+
+      {/* Gaming Goals & Challenges */}
+      <GoalsPanel games={games} />
 
       {/* Gaming Activity Heatmap */}
       <GamingHeatmap games={games} />
