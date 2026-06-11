@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import {
-  Gift, Loader2, Sparkles, Flame, Check, Heart, X, ListPlus,
+  Gift, Loader2, Sparkles, Flame, Check, Heart, X, ListPlus, Bookmark,
   ExternalLink, ChevronDown, ChevronUp, AlertTriangle, Undo2, PiggyBank,
 } from 'lucide-react';
 import { Game, GameRecommendation, SubscriptionTier } from '../lib/types';
@@ -288,7 +288,7 @@ export function SubscriptionDropPanel({ games, userId, onAddGame, onAddToQueue }
               <span key={rec.id} className="text-[11px] text-white/45 bg-white/[0.04] rounded-lg px-2.5 py-1.5">
                 {rec.gameName}
                 <span className="text-white/20 ml-1">
-                  {rec.status === 'interested' ? '· Up Next' : rec.status === 'wishlisted' ? '· Wishlist' : '· saved'}
+                  {rec.status === 'interested' ? '· Up Next' : rec.status === 'wishlisted' ? '· Wishlist' : '· Someday'}
                 </span>
               </span>
             ))}
@@ -454,9 +454,14 @@ function SubscriptionGameCard({
               title="Add to library and Up Next queue">
               <ListPlus size={12} /> Up Next
             </button>
+            <button onClick={() => sub.saveForLater(rec.id)}
+              className="flex items-center justify-center gap-1 py-2 px-2.5 rounded-lg bg-cyan-500/10 text-cyan-300/70 text-xs font-medium hover:bg-cyan-500/20 transition-colors"
+              title="Save for later — keep it here as a maybe, don't add to library">
+              <Bookmark size={12} />
+            </button>
             <button onClick={() => sub.addToWishlist(rec)}
               className="flex items-center justify-center gap-1 py-2 px-2.5 rounded-lg bg-purple-500/10 text-purple-400/70 text-xs font-medium hover:bg-purple-500/20 transition-colors"
-              title="Add to wishlist">
+              title="Add to your library Wishlist">
               <Heart size={12} />
             </button>
             <button onClick={() => setShowRating(true)}

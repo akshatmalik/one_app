@@ -79,6 +79,61 @@ function pickPrimarySource(sources: SubscriptionSource[]): SubscriptionSource | 
   return sources[0];
 }
 
+// ── Local cache ───────────────────────────────────────────────────────────
+// A month's PS Plus lineup is final once it's out and never changes, so we
+// cache successful pulls in localStorage and reuse them instead of re-running
+// the grounded search every time the user syncs/backfills. Empty pulls are NOT
+// cached, so "try again" can re-search a month we couldn't confirm.
+const DROPS_CACHE_PREFIX = 'ga-psplus-drops-';
+const DROPS_CACHE_TTL = 365 * 24 * 60 * 60 * 1000; // 1 year (effectively permanent)
+
+interface DropsCacheEntry {
+  result: MonthlyDropResult;
+  timestamp: number;
+}
+
+function dropsCacheKey(tier: SubscriptionTier, month: string): string {
+  return `${DROPS_CACHE_PREFIX}${tier}-${month}`;
+}
+
+function getDropsFromCache(tier: SubscriptionTier, month: string): MonthlyDropResult | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(dropsCacheKey(tier, month));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as DropsCacheEntry;
+    if (Date.now() - parsed.timestamp < DROPS_CACHE_TTL) return parsed.result;
+    localStorage.removeItem(dropsCacheKey(tier, month));
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function saveDropsToCache(tier: SubscriptionTier, month: string, result: MonthlyDropResult): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(dropsCacheKey(tier, month), JSON.stringify({ result, timestamp: Date.now() }));
+  } catch {
+    /* quota / disabled storage — fine, just skip caching */
+  }
+}
+
+/** Wipe cached lineups (e.g. to force a fresh search). */
+export function clearDropsCache(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const keys: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith(DROPS_CACHE_PREFIX)) keys.push(k);
+    }
+    keys.forEach(k => localStorage.removeItem(k));
+  } catch {
+    /* ignore */
+  }
+}
+
 function num(v: unknown): number | undefined {
   if (v === undefined || v === null || v === '') return undefined;
   const n = typeof v === 'number' ? v : parseFloat(String(v));
@@ -93,7 +148,14 @@ function num(v: unknown): number | undefined {
 export async function fetchMonthlyDrops(
   tier: SubscriptionTier,
   month: string,
+  opts?: { force?: boolean },
 ): Promise<MonthlyDropResult> {
+  // Reuse the cached lineup unless a fresh search was explicitly requested.
+  if (!opts?.force) {
+    const cached = getDropsFromCache(tier, month);
+    if (cached) return cached;
+  }
+
   const model = getGroundedModel();
   const label = monthLabel(month);
 
@@ -157,10 +219,15 @@ Respond with ONLY this JSON, nothing else:
   const monthlyNames = new Set(monthly.map(g => g.name.toLowerCase()));
   const catalog = toItems(parsed.catalog, 'catalog').filter(g => !monthlyNames.has(g.name.toLowerCase()));
 
-  return {
+  const dropResult: MonthlyDropResult = {
     month,
     games: [...monthly, ...catalog],
     sources,
     primarySource: pickPrimarySource(sources),
   };
+
+  // Only cache confirmed (non-empty) lineups so empty pulls stay retryable.
+  if (dropResult.games.length > 0) saveDropsToCache(tier, month, dropResult);
+
+  return dropResult;
 }

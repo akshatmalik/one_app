@@ -232,6 +232,9 @@ export function useSubscriptionGames({ userId, games, onAddGame, onAddToQueue }:
 
   const markDismissed = useCallback((id: string) => updateStatus(id, 'dismissed'), [updateStatus]);
   const undoDismiss = useCallback((id: string) => updateStatus(id, 'suggested'), [updateStatus]);
+  // "Save for later" — a no-commitment maybe. Stays in the panel's Saved list
+  // only; nothing is added to the library.
+  const saveForLater = useCallback((id: string) => updateStatus(id, 'watching'), [updateStatus]);
 
   // ── Add to library (tagged as a free PS Plus game) ──────────────────────────
   const buildFreeGame = useCallback((
@@ -355,6 +358,7 @@ export function useSubscriptionGames({ userId, games, onAddGame, onAddToQueue }:
     dismissNudge,
     markDismissed,
     undoDismiss,
+    saveForLater,
     addToUpNext,
     addToWishlist,
     addAsPlayed,
