@@ -54,6 +54,7 @@ import { calculateSummary, getCumulativeSpending, getHoursByMonth, getSpendingBy
 import { GameWithMetrics } from '../hooks/useAnalytics';
 import { PeriodStatsPanel } from './PeriodStatsPanel';
 import { FunStatsPanel } from './FunStatsPanel';
+import { MoodStatsPanel } from './MoodStatsPanel';
 import { AdvancedCharts } from './AdvancedCharts';
 import { GamingHeatmap } from './GamingHeatmap';
 import { ExpandedStatsPanel } from './ExpandedStatsPanel';
@@ -992,6 +993,9 @@ export function StatsView({ games, summary, budgets = [], onSetBudget, trophies,
 
       {/* Fun Stats Panel */}
       <FunStatsPanel games={games} />
+
+      {/* Session Vibes — mood analysis from tagged play sessions */}
+      <MoodStatsPanel games={games} />
 
       {/* Deep Insights Panel (Phase 1 Enhancements) */}
       <InsightsPanel

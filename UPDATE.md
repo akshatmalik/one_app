@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-11 06:00 — Stats Tab — Session Vibes: Mood Analytics Panel
+
+**Files**: app/apps/game-analytics/components/MoodStatsPanel.tsx, app/apps/game-analytics/components/StatsView.tsx, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Added a "Session Vibes" panel to the Stats tab that surfaces `getMoodAnalysis()` data — a complete calculation that existed in calculations.ts but was never displayed anywhere in the UI. The panel shows a Good Vibes Score (percentage of sessions tagged 🔥/👍 vs 😐/💪), a color-coded mood distribution bar, a week-by-week trend chart showing whether session quality is improving or declining, feel-good champions (games where ≥60% of sessions are positive), a grind watch (games where ≥40% of sessions feel like a grind), a "top game per vibe" grid, and a tagging-rate nudge encouraging more session tagging. Empty state gracefully encourages users who haven't tagged any sessions yet.
+
+FOLLOW-UP: Could also surface vibe (wind-down/competitive/exploration/story) and context (solo/co-op/stream) breakdown since those fields are also collected in PlayLog but never visualized.
+
 ## 2026-06-10 12:00 — Games Tab — Play Tonight Smart Recommender
 
 **Files**: app/apps/game-analytics/components/PlayTonightModal.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json
