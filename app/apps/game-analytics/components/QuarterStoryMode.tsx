@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ShareButton } from './ShareButton';
 import { Game } from '../lib/types';
 import { QuarterInReviewData } from '../lib/calculations';
 import { generateQuarterBlurbs, QuarterAIBlurbType, AIBlurbResult } from '../lib/ai-game-service';
@@ -37,6 +38,7 @@ interface QuarterStoryModeProps {
 
 export function QuarterStoryMode({ data, allGames, onClose, quarterTitle, updateGame }: QuarterStoryModeProps) {
   const [currentScreen, setCurrentScreen] = useState(0);
+  const screenCaptureRef = useRef<HTMLDivElement>(null);
   const [direction, setDirection] = useState(0);
   const [aiBlurbs, setAiBlurbs] = useState<Partial<Record<QuarterAIBlurbType, AIBlurbResult>>>({});
   const [isLoadingAI, setIsLoadingAI] = useState(true);
@@ -198,6 +200,11 @@ export function QuarterStoryMode({ data, allGames, onClose, quarterTitle, update
         <X size={24} className="text-white" />
       </button>
 
+      {/* Share current screen */}
+      <div className="absolute top-4 left-4 z-50">
+        <ShareButton targetRef={screenCaptureRef} filename={`quarter-recap-${currentScreen + 1}`} variant="compact" />
+      </div>
+
       {/* Progress dots */}
       <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-1.5 px-4 max-w-[80%] overflow-x-auto">
         {screens.map((_, i) => (
@@ -223,6 +230,7 @@ export function QuarterStoryMode({ data, allGames, onClose, quarterTitle, update
       <div className="h-full w-full cursor-pointer" onClick={guardClick(handleClick)}>
         <AnimatePresence initial={false} custom={direction} mode="wait">
           <motion.div
+            ref={screenCaptureRef}
             key={currentScreen}
             custom={direction}
             {...dragProps}

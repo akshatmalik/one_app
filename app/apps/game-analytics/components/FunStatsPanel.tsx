@@ -4,7 +4,7 @@ import { useState } from 'react';
 import {
   Sparkles, Gem, Frown, Package, Flame, Trophy, Target, TrendingUp, Zap,
   Clock, Heart, Percent, Calendar, Star, Shield, Rocket, Crown,
-  Gamepad2, CheckCircle2, Timer, Skull, Snowflake, Activity, RotateCcw
+  Gamepad2, CheckCircle2, Timer, Skull, Snowflake, Activity, RotateCcw, PauseCircle
 } from 'lucide-react';
 import { Game } from '../lib/types';
 import {
@@ -33,6 +33,7 @@ import {
   getStickyGames,
   getSunkCostGames,
   getDeadZone,
+  getPauseStats,
   getFinishingSprintScore,
   getReturnRate,
   getParallelUniverseImpact,
@@ -80,6 +81,7 @@ export function FunStatsPanel({ games }: FunStatsPanelProps) {
   const stickyGames = getStickyGames(games);
   const sunkCostGames = getSunkCostGames(games);
   const deadZone = getDeadZone(games);
+  const pauseStats = getPauseStats(games);
   const finishingSprint = getFinishingSprintScore(games);
   const returnRate = getReturnRate(games);
 
@@ -575,6 +577,54 @@ export function FunStatsPanel({ games }: FunStatsPanelProps) {
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Pauses — per-game breaks across the library */}
+      {pauseStats.totalPauses > 0 && (
+        <div className="p-4 bg-gradient-to-br from-amber-500/10 to-orange-500/10 border border-amber-500/20 rounded-xl">
+          <div className="flex items-center gap-2 mb-3">
+            <PauseCircle size={16} className="text-amber-400" />
+            <h4 className="text-sm font-medium text-white">Pauses</h4>
+            <span className="text-xs text-white/30">Breaks of {14}+ days between sessions</span>
+          </div>
+          <div className="p-3 bg-white/5 rounded-lg">
+            <div className="grid grid-cols-3 gap-3 text-center text-xs mb-3">
+              <div>
+                <div className="text-2xl font-bold text-amber-300">{pauseStats.totalPauses}</div>
+                <div className="text-white/30">total pauses</div>
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-orange-300">{pauseStats.currentlyPausedCount}</div>
+                <div className="text-white/30">paused now</div>
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-emerald-300">{pauseStats.resumeRate}%</div>
+                <div className="text-white/30">resumed</div>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3 text-center text-xs">
+              {pauseStats.mostPaused && (
+                <div className="p-2 bg-white/5 rounded-lg">
+                  <div className="text-sm font-medium text-amber-200 truncate">{pauseStats.mostPaused.name}</div>
+                  <div className="text-white/30">most paused ({pauseStats.mostPaused.pauseCount}x)</div>
+                </div>
+              )}
+              {pauseStats.longestCurrentPause && (
+                <div className="p-2 bg-white/5 rounded-lg">
+                  <div className="text-sm font-medium text-orange-200 truncate">{pauseStats.longestCurrentPause.name}</div>
+                  <div className="text-white/30">paused {pauseStats.longestCurrentPause.days}d</div>
+                </div>
+              )}
+            </div>
+          </div>
+          <p className="text-xs text-amber-400/70 mt-3 italic">
+            {pauseStats.resumeRate >= 60
+              ? 'You usually come back — most paused games get resumed.'
+              : pauseStats.currentlyPausedCount > 0
+                ? `${pauseStats.currentlyPausedCount} game${pauseStats.currentlyPausedCount === 1 ? '' : 's'} waiting for you to return.`
+                : 'You tend to move on once you step away.'}
+          </p>
         </div>
       )}
 

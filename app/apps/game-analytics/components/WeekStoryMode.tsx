@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { WeekInReviewData, getSharpInsight, getIgnoredGames, getFranchiseCheckIns, getHistoricalEchoes, getMomentumData, getRatingParadox } from '../lib/calculations';
 import { Game } from '../lib/types';
+import { ShareButton } from './ShareButton';
 import { OpeningScreen } from './story-screens/OpeningScreen';
 import { TotalHoursScreen } from './story-screens/TotalHoursScreen';
 import { TopGameScreen } from './story-screens/TopGameScreen';
@@ -50,6 +51,7 @@ interface WeekStoryModeProps {
 
 export function WeekStoryMode({ data, allGames, onClose, prefetchedBlurbs, isLoadingPrefetch, weekTitle, updateGame }: WeekStoryModeProps) {
   const [currentScreen, setCurrentScreen] = useState(0);
+  const screenCaptureRef = useRef<HTMLDivElement>(null);
   const [direction, setDirection] = useState(0);
   const [aiBlurbs, setAiBlurbs] = useState<Partial<Record<AIBlurbType, AIBlurbResult>>>(prefetchedBlurbs || {});
   const [isLoadingAI, setIsLoadingAI] = useState(isLoadingPrefetch ?? true);
@@ -307,6 +309,11 @@ const ignoredGames = useMemo(() => getIgnoredGames(data, allGames), [data, allGa
         <X size={24} className="text-white" />
       </button>
 
+      {/* Share current screen */}
+      <div className="absolute top-4 left-4 z-50">
+        <ShareButton targetRef={screenCaptureRef} filename={`week-recap-${currentScreen + 1}`} variant="compact" />
+      </div>
+
       {/* Progress dots */}
       <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-1.5 px-4 max-w-[80%] overflow-x-auto">
         {screens.map((_, index) => (
@@ -360,6 +367,7 @@ const ignoredGames = useMemo(() => getIgnoredGames(data, allGames), [data, allGa
       >
         <AnimatePresence initial={false} custom={direction} mode="wait">
           <motion.div
+            ref={screenCaptureRef}
             key={currentScreen}
             custom={direction}
             {...dragProps}
