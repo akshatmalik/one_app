@@ -26,7 +26,7 @@ import { BASELINE_BUY_QUEUE } from './data/baseline-buy-queue';
 import { purchaseQueueRepository } from './lib/purchase-queue-storage';
 import { useAuthContext } from '@/lib/AuthContext';
 import { useToast } from '@/components/Toast';
-import { getROIRating, getWeekStatsForOffset, getGamesPlayedInTimeRange, getCompletionProbability, getGameHealthDot, getRelativeTime, getDaysContext, getSessionMomentum, getValueTrajectory, getGameSmartOneLiner, getFranchiseInfo, getProgressPercent, getShelfLife, parseLocalDate, getCardRarity, getRelationshipStatus, getGameStreak, getHeroNumber, getCardFreshness, getGameSections, getCardBackData, getContextualWhisper, getLibraryRank, getCardMoodPulse, getProgressRingData, getStatPopoverData, getWeekRecapData, getSmartNudges, getGamingCreditScore, getRotationStats, getSpendingForecast, getSpendingByMonth, getShelfLifeExpiry, formatRating, getRatingRank } from './lib/calculations';
+import { getROIRating, getWeekStatsForOffset, getGamesPlayedInTimeRange, getCompletionProbability, getGameHealthDot, getRelativeTime, getDaysContext, getSessionMomentum, getValueTrajectory, getGameSmartOneLiner, getFranchiseInfo, getProgressPercent, getShelfLife, parseLocalDate, getCardRarity, getRelationshipStatus, getGameStreak, getHeroNumber, getCardFreshness, getGameSections, getCardBackData, getContextualWhisper, getLibraryRank, getCardMoodPulse, getProgressRingData, getStatPopoverData, getWeekRecapData, getSmartNudges, getGamingCreditScore, getRotationStats, getSpendingForecast, getSpendingByMonth, getShelfLifeExpiry, formatRating, getRatingRank, getYearInReviewFullData } from './lib/calculations';
 import { OnThisDayCard } from './components/OnThisDayCard';
 import { ActivityPulse } from './components/ActivityPulse';
 import { RandomPicker } from './components/RandomPicker';
@@ -41,7 +41,7 @@ import { RatingStars } from './components/RatingStars';
 import { MomentumDots } from './components/MomentumDots';
 import { ProgressRing } from './components/ProgressRing';
 import { ExportPanel } from './components/ExportPanel';
-import { YearlyWrapped } from './components/YearlyWrapped';
+import { YearStoryMode } from './components/YearStoryMode';
 import { FortuneCookie } from './components/FortuneCookie';
 import { SubscriptionSyncBanner } from './components/SubscriptionSyncBanner';
 import { loadSubscriptionSettings, hasNewDrop } from './lib/subscription-settings';
@@ -195,7 +195,16 @@ export default function GameAnalyticsPage() {
   const [editingGame, setEditingGame] = useState<GameWithMetrics | null>(null);
   const [playLogGame, setPlayLogGame] = useState<GameWithMetrics | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('all');
-  const [tabMode, setTabMode] = useState<TabMode>('games');
+  const [tabMode, setTabMode] = useState<TabMode>(() => {
+    // "Continue where you left off" — restore the last viewed tab.
+    if (typeof window === 'undefined') return 'games';
+    const saved = localStorage.getItem('ga-last-tab') as TabMode | null;
+    const valid: TabMode[] = ['games', 'timeline', 'stats', 'ai-coach', 'up-next', 'discover', 'leaderboard', 'buy-queue', 'estimator'];
+    return saved && valid.includes(saved) ? saved : 'games';
+  });
+  useEffect(() => {
+    if (typeof window !== 'undefined') localStorage.setItem('ga-last-tab', tabMode);
+  }, [tabMode]);
   // Bump to jump Discover straight to the PS Plus section (from the nudge banner).
   const [discoverFocusSignal, setDiscoverFocusSignal] = useState(0);
   // Whether to show a "new PS Plus drop" dot on the Discover tab.
@@ -1536,11 +1545,12 @@ export default function GameAnalyticsPage() {
         />
       )}
 
-      {/* Yearly Wrapped */}
+      {/* Yearly Wrapped — unified on the full YearStoryMode (legacy YearlyWrapped removed) */}
       {wrappedYear && (
-        <YearlyWrapped
-          games={games}
-          year={wrappedYear}
+        <YearStoryMode
+          data={getYearInReviewFullData(games, wrappedYear)}
+          allGames={games}
+          updateGame={updateGame}
           onClose={() => setWrappedYear(null)}
         />
       )}
