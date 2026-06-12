@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useRef, useEffect } from 'react';
-import { Clock, ChevronDown, ChevronUp, ListPlus, Check, Heart, Edit3, Trash2, Trophy, Sparkles, Zap, MessageCircle, ArrowLeftRight } from 'lucide-react';
+import { Clock, ChevronDown, ChevronUp, ListPlus, Check, Heart, Edit3, Trash2, Trophy, Sparkles, Zap, MessageCircle, ArrowLeftRight, Share2 } from 'lucide-react';
 import { Game } from '../lib/types';
 import { GameWithMetrics } from '../hooks/useAnalytics';
 import {
@@ -23,6 +23,7 @@ import {
 } from '../lib/calculations';
 import { generateGameInsightPack, GameInsightPack } from '../lib/ai-game-service';
 import { RatingStars } from './RatingStars';
+import { ReviewCard } from './ReviewCard';
 import { GameJourney } from './GameJourney';
 import { QuickCheckIn } from './QuickCheckIn';
 import clsx from 'clsx';
@@ -69,6 +70,7 @@ export function GameBottomSheet({
   const [showAwards, setShowAwards] = useState(false);
   const [showJourney, setShowJourney] = useState(false);
   const [showRecords, setShowRecords] = useState(false);
+  const [showReviewCard, setShowReviewCard] = useState(false);
   const [insightPack, setInsightPack] = useState<GameInsightPack | null>(null);
   const [insightLoading, setInsightLoading] = useState(true);
   const sheetRef = useRef<HTMLDivElement>(null);
@@ -676,11 +678,23 @@ export function GameBottomSheet({
           {/* Static review (from game form) */}
           {game.review && (
             <div className="mx-5 mb-4">
-              <span className="text-sm font-medium text-white/70 block mb-2">Quick Review</span>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium text-white/70">Quick Review</span>
+                <button
+                  onClick={() => setShowReviewCard(true)}
+                  className="inline-flex items-center gap-1 text-xs text-purple-300 hover:text-purple-200 transition-colors"
+                >
+                  <Share2 size={12} /> Share
+                </button>
+              </div>
               <div className="p-4 bg-white/[0.03] rounded-xl border border-white/5">
                 <p className="text-sm text-white/50 leading-relaxed whitespace-pre-wrap">{game.review}</p>
               </div>
             </div>
+          )}
+
+          {showReviewCard && (
+            <ReviewCard game={game} onClose={() => setShowReviewCard(false)} />
           )}
 
           {/* Notes */}
