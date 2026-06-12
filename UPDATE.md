@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-12 00:00 — Stats Tab — Session Mood & Notes Panel
+
+**Files**: app/apps/game-analytics/components/SessionMoodPanel.tsx, app/apps/game-analytics/components/StatsView.tsx, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Added a "Session Vibes" panel to the Stats tab that surfaces mood data for the first time — `getMoodAnalysis()` was fully computed but never displayed anywhere. When users have tagged 3+ sessions with mood (Great/Good/Meh/Grind), the panel shows a colour-coded mood bar, per-mood tiles with session counts and average lengths, the top game for each mood, and a data-driven insight sentence ("Your Grind sessions last 40% longer — you push through even when it isn't fun"). When sessions have notes, a beautiful journal feed shows them in chronological order with the game thumbnail, mood badge, and excerpt. Users with no mood data yet see a friendly preview nudge that explains what they'll unlock.
+
+FOLLOW-UP: Could add a day-of-week mood heatmap (e.g., "Saturday sessions are 2× more likely to be Great") once enough tagged sessions accumulate.
+
 ## 2026-06-10 12:00 — Games Tab — Play Tonight Smart Recommender
 
 **Files**: app/apps/game-analytics/components/PlayTonightModal.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json
