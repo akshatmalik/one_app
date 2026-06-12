@@ -221,6 +221,7 @@ export default function GameAnalyticsPage() {
   const [wrappedYear, setWrappedYear] = useState<number | null>(null);
   const [showGamerCard, setShowGamerCard] = useState(false);
   const [showMeVsMe, setShowMeVsMe] = useState(false);
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [showAwardsHub, setShowAwardsHub] = useState(false);
   const [detailGame, setDetailGame] = useState<GameWithMetrics | null>(null);
   const [reviewChatGame, setReviewChatGame] = useState<GameWithMetrics | null>(null);
@@ -1068,26 +1069,34 @@ export default function GameAnalyticsPage() {
                     )}
                   </button>
                 ))}
-                <button onClick={() => setShowExport(true)} title="Export data"
-                  className="flex-1 flex items-center justify-center py-2.5 rounded-lg bg-white/[0.02] text-white/30 hover:text-white/60 transition-all">
-                  <Download size={16} />
-                </button>
-                <button onClick={() => setWrappedYear(new Date().getFullYear())} title="Yearly Wrapped"
-                  className="flex-1 flex items-center justify-center py-2.5 rounded-lg bg-white/[0.02] text-purple-400/50 hover:text-purple-400 transition-all">
-                  <Gift size={16} />
-                </button>
-                <button onClick={() => setShowAwardsHub(true)} title="Awards Hub"
-                  className="flex-1 flex items-center justify-center py-2.5 rounded-lg bg-white/[0.02] text-amber-400/50 hover:text-amber-400 transition-all">
-                  <Star size={16} />
-                </button>
-                <button onClick={() => setShowGamerCard(true)} title="Gamer Card"
-                  className="flex-1 flex items-center justify-center py-2.5 rounded-lg bg-white/[0.02] text-cyan-400/50 hover:text-cyan-400 transition-all">
-                  <CreditCard size={16} />
-                </button>
-                <button onClick={() => setShowMeVsMe(true)} title="Me vs Me"
-                  className="flex-1 flex items-center justify-center py-2.5 rounded-lg bg-white/[0.02] text-pink-400/50 hover:text-pink-400 transition-all">
-                  <Swords size={16} />
-                </button>
+                {/* Unified "More" menu — share, recaps, and export in one place */}
+                <div className="relative flex-1">
+                  <button onClick={() => setShowMoreMenu(v => !v)} title="More"
+                    className={clsx('w-full flex items-center justify-center py-2.5 rounded-lg transition-all',
+                      showMoreMenu ? 'bg-white/10 text-white' : 'bg-white/[0.02] text-white/40 hover:text-white/60')}>
+                    <MoreVertical size={16} />
+                  </button>
+                  {showMoreMenu && (
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={() => setShowMoreMenu(false)} />
+                      <div className="absolute right-0 top-full mt-1 z-50 w-52 rounded-xl border border-white/10 bg-[#15151c] shadow-xl py-1.5">
+                        {[
+                          { icon: <CreditCard size={15} className="text-cyan-400" />, label: 'Gamer Card', onClick: () => setShowGamerCard(true) },
+                          { icon: <Swords size={15} className="text-pink-400" />, label: 'Me vs Me', onClick: () => setShowMeVsMe(true) },
+                          { icon: <Gift size={15} className="text-purple-400" />, label: 'Yearly Wrapped', onClick: () => setWrappedYear(new Date().getFullYear()) },
+                          { icon: <Star size={15} className="text-amber-400" />, label: 'Awards Hub', onClick: () => setShowAwardsHub(true) },
+                          { icon: <Download size={15} className="text-white/50" />, label: 'Export data', onClick: () => setShowExport(true) },
+                        ].map(item => (
+                          <button key={item.label}
+                            onClick={() => { item.onClick(); setShowMoreMenu(false); }}
+                            className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-white/70 hover:bg-white/5 transition-colors">
+                            {item.icon}{item.label}
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
               </div>
             </div>
 
