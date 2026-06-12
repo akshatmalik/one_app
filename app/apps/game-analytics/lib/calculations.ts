@@ -9193,6 +9193,16 @@ export function getSmartNudges(games: Game[]): SmartNudge[] {
     }
   }
 
+  // Paused games — feed the Pauses stat into nudges (return to keep them alive)
+  const pauses = getPauseStats(games);
+  if (pauses.longestCurrentPause && pauses.longestCurrentPause.days >= 21) {
+    nudges.push({
+      text: `${pauses.longestCurrentPause.name} has been paused ${pauses.longestCurrentPause.days} days — pick it back up?`,
+      type: 'neglect',
+      priority: 68,
+    });
+  }
+
   return nudges.sort((a, b) => b.priority - a.priority);
 }
 
