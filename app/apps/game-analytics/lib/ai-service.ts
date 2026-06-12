@@ -1,28 +1,13 @@
 'use client';
 
-import { getAI, getGenerativeModel, GoogleAIBackend, Schema, FunctionDeclaration, Content } from 'firebase/ai';
-import { initializeApp, getApps } from 'firebase/app';
+import { Schema, FunctionDeclaration, Content } from 'firebase/ai';
+import { getAIModel } from './ai-client';
 import { WeekInReviewData, MonthInReviewData, OscarAward, buildTasteProfile, getTotalHours } from './calculations';
 import { Game, TasteProfile } from './types';
 import { WRITE_FUNCTION_DECLARATIONS, parseFunctionCall, PendingAction } from './ai-actions';
 import { searchRAWGGame } from './rawg-api';
 
-const firebaseConfig = {
-  apiKey: "AIzaSyBS3IVvszDrm_zjjXu8TATgs1H-FlegHtM",
-  authDomain: "oneapp-943e3.firebaseapp.com",
-  projectId: "oneapp-943e3",
-  storageBucket: "oneapp-943e3.firebasestorage.app",
-  messagingSenderId: "1052736128978",
-  appId: "1:1052736128978:web:9d42b47c6a343eac35aa0b",
-};
-
-// Initialize AI service
-function getAIModel() {
-  const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
-  const ai = getAI(app, { backend: new GoogleAIBackend() });
-  // Use Gemini 2.5 Flash model
-  return getGenerativeModel(ai, { model: "gemini-2.5-flash" });
-}
+// Model factory lives in ./ai-client (shared across all AI services).
 
 /**
  * AI Blurb Types - Different contexts for AI-generated insights
@@ -887,10 +872,7 @@ interface AgentResponse {
 }
 
 function getAgentModel(systemInstruction: string) {
-  const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
-  const ai = getAI(app, { backend: new GoogleAIBackend() });
-  return getGenerativeModel(ai, {
-    model: 'gemini-2.5-flash',
+  return getAIModel({
     tools: [{ functionDeclarations: [...READ_FUNCTION_DECLARATIONS, ...WRITE_FUNCTION_DECLARATIONS] }],
     systemInstruction,
   });

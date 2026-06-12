@@ -1,27 +1,6 @@
 'use client';
 
-import { getAI, getGenerativeModel, GoogleAIBackend } from 'firebase/ai';
-import { initializeApp, getApps } from 'firebase/app';
-
-const firebaseConfig = {
-  apiKey: "AIzaSyBS3IVvszDrm_zjjXu8TATgs1H-FlegHtM",
-  authDomain: "oneapp-943e3.firebaseapp.com",
-  projectId: "oneapp-943e3",
-  storageBucket: "oneapp-943e3.firebasestorage.app",
-  messagingSenderId: "1052736128978",
-  appId: "1:1052736128978:web:9d42b47c6a343eac35aa0b",
-};
-
-// Grounded model — uses Google Search so length/price estimates reflect real data
-// (HowLongToBeat figures, current store prices) rather than the model's memory.
-function getGroundedAIModel() {
-  const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
-  const ai = getAI(app, { backend: new GoogleAIBackend() });
-  return getGenerativeModel(ai, {
-    model: "gemini-2.5-flash",
-    tools: [{ googleSearch: {} }],
-  } as Parameters<typeof getGenerativeModel>[1]);
-}
+import { getGroundedAIModel } from './ai-client';
 
 function stripJsonFences(raw: string): string {
   return raw.replace(/^```[a-z]*\n?/i, '').replace(/\n?```$/i, '').trim();
