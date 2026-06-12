@@ -393,45 +393,15 @@ export interface PeriodStats {
 }
 
 export function getPeriodStats(games: Game[], days: number): PeriodStats {
+  // Last N days from now — delegate to the shared range implementation.
   const cutoffDate = new Date();
   cutoffDate.setDate(cutoffDate.getDate() - days);
-
-  const gamesWithRecentActivity: Map<string, { game: Game; hours: number; sessions: number }> = new Map();
-  let totalHours = 0;
-  let totalSessions = 0;
-
-  games.forEach(game => {
-    if (game.playLogs) {
-      game.playLogs.forEach(log => {
-        const logDate = parseLocalDate(log.date);
-        if (logDate >= cutoffDate) {
-          const existing = gamesWithRecentActivity.get(game.id) || { game, hours: 0, sessions: 0 };
-          existing.hours += log.hours;
-          existing.sessions += 1;
-          gamesWithRecentActivity.set(game.id, existing);
-          totalHours += log.hours;
-          totalSessions += 1;
-        }
-      });
-    }
-  });
-
-  const gamesPlayed = Array.from(gamesWithRecentActivity.values()).map(g => g.game);
-  const mostPlayedEntry = Array.from(gamesWithRecentActivity.values())
-    .sort((a, b) => b.hours - a.hours)[0];
-
-  return {
-    gamesPlayed,
-    totalHours,
-    totalSessions,
-    mostPlayedGame: mostPlayedEntry ? { name: mostPlayedEntry.game.name, hours: mostPlayedEntry.hours, thumbnail: mostPlayedEntry.game.thumbnail } : null,
-    averageSessionLength: totalSessions > 0 ? totalHours / totalSessions : 0,
-    uniqueGames: gamesPlayed.length,
-  };
+  return getPeriodStatsForRange(games, cutoffDate, new Date());
 }
 
-// Get stats for a specific date range
-function getPeriodStatsForRange(games: Game[], startDate: Date, endDate: Date): PeriodStats {
+// Get stats for a specific date range (shared core used by getPeriodStats and
+// the period-vs-period comparison UI).
+export function getPeriodStatsForRange(games: Game[], startDate: Date, endDate: Date): PeriodStats {
   const gamesWithActivity: Map<string, { game: Game; hours: number; sessions: number }> = new Map();
   let totalHours = 0;
   let totalSessions = 0;

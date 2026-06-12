@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, CalendarClock, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical, Download, Gift, ShoppingCart, Search, X, Moon, CreditCard } from 'lucide-react';
+import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, CalendarClock, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical, Download, Gift, ShoppingCart, Search, X, Moon, CreditCard, Swords } from 'lucide-react';
 import { useGames } from './hooks/useGames';
 import { useAnalytics, GameWithMetrics } from './hooks/useAnalytics';
 import { useBudget } from './hooks/useBudget';
@@ -43,6 +43,7 @@ import { ProgressRing } from './components/ProgressRing';
 import { ExportPanel } from './components/ExportPanel';
 import { YearStoryMode } from './components/YearStoryMode';
 import { GamerCard } from './components/GamerCard';
+import { MeVsMe } from './components/MeVsMe';
 import { FortuneCookie } from './components/FortuneCookie';
 import { SubscriptionSyncBanner } from './components/SubscriptionSyncBanner';
 import { loadSubscriptionSettings, hasNewDrop } from './lib/subscription-settings';
@@ -219,6 +220,7 @@ export default function GameAnalyticsPage() {
   const [showExport, setShowExport] = useState(false);
   const [wrappedYear, setWrappedYear] = useState<number | null>(null);
   const [showGamerCard, setShowGamerCard] = useState(false);
+  const [showMeVsMe, setShowMeVsMe] = useState(false);
   const [showAwardsHub, setShowAwardsHub] = useState(false);
   const [detailGame, setDetailGame] = useState<GameWithMetrics | null>(null);
   const [reviewChatGame, setReviewChatGame] = useState<GameWithMetrics | null>(null);
@@ -1082,6 +1084,10 @@ export default function GameAnalyticsPage() {
                   className="flex-1 flex items-center justify-center py-2.5 rounded-lg bg-white/[0.02] text-cyan-400/50 hover:text-cyan-400 transition-all">
                   <CreditCard size={16} />
                 </button>
+                <button onClick={() => setShowMeVsMe(true)} title="Me vs Me"
+                  className="flex-1 flex items-center justify-center py-2.5 rounded-lg bg-white/[0.02] text-pink-400/50 hover:text-pink-400 transition-all">
+                  <Swords size={16} />
+                </button>
               </div>
             </div>
 
@@ -1568,6 +1574,11 @@ export default function GameAnalyticsPage() {
           displayName={user?.displayName ?? undefined}
           onClose={() => setShowGamerCard(false)}
         />
+      )}
+
+      {/* Me vs Me period comparison (shareable) */}
+      {showMeVsMe && (
+        <MeVsMe games={games} onClose={() => setShowMeVsMe(false)} />
       )}
 
       {/* Awards Hub */}
