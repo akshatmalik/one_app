@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-12 06:00 — Games Tab — Monthly Challenges
+
+**Files**: app/apps/game-analytics/lib/challenges.ts, app/apps/game-analytics/components/MonthlyChallenges.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Added a Monthly Challenges panel that appears at the top of the Games tab. Three personalised challenges are auto-generated each month from the user's actual library data: push-through hours on the game you've been playing most recently, log a single power session longer than 1.75× your average, and play at least N distinct games (scaled to library size). Progress updates automatically from play logs — no manual tracking needed. The panel is collapsible, remembers its open/closed state in localStorage, and shows completion badges with strikethrough text when each challenge is cleared. New challenges unlock at the start of each calendar month.
+
+FOLLOW-UP: Could add a 4th challenge when the user has old unstarted backlog games ("Dust Off X — it's been waiting 45 days").
+
 ## 2026-06-10 12:00 — Games Tab — Play Tonight Smart Recommender
 
 **Files**: app/apps/game-analytics/components/PlayTonightModal.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json
