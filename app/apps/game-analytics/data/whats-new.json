@@ -1,6 +1,12 @@
 {
   "entries": [
     {
+      "date": "2026-06-12",
+      "area": "Games tab",
+      "title": "Gallery view — see your whole collection at once",
+      "body": "Tap the grid icon in the Games tab to switch to Gallery mode. Your entire library appears as a dense grid of game cover art — rarity-bordered tiles with gold glows for Legendary games, purple for Epic, and freshness fading for games you haven't touched in a while. Tap any tile for a quick stats overlay (rating, cost-per-hour, relationship status), then tap Open to dive into the full detail sheet. Works with Sections mode too."
+    },
+    {
       "date": "2026-06-10",
       "area": "Games tab",
       "title": "Play Tonight — find your perfect match in seconds",

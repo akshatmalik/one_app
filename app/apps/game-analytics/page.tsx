@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, CalendarClock, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical, Download, Gift, ShoppingCart, Search, X, Moon } from 'lucide-react';
+import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, CalendarClock, LayoutGrid, LayoutList, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical, Download, Gift, ShoppingCart, Search, X, Moon } from 'lucide-react';
 import { useGames } from './hooks/useGames';
 import { useAnalytics, GameWithMetrics } from './hooks/useAnalytics';
 import { useBudget } from './hooks/useBudget';
@@ -59,7 +59,7 @@ import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist';
 type TabMode = 'games' | 'timeline' | 'stats' | 'ai-coach' | 'up-next' | 'discover' | 'leaderboard' | 'buy-queue' | 'estimator';
-type CardViewMode = 'poster' | 'compact';
+type CardViewMode = 'poster' | 'compact' | 'gallery';
 
 function getValueColor(rating: string): string {
   switch (rating) {
@@ -401,7 +401,8 @@ export default function GameAnalyticsPage() {
   };
 
   const toggleCardViewMode = () => {
-    const next = cardViewMode === 'poster' ? 'compact' : 'poster';
+    const modes: CardViewMode[] = ['gallery', 'poster', 'compact'];
+    const next = modes[(modes.indexOf(cardViewMode) + 1) % modes.length];
     setCardViewMode(next);
     localStorage.setItem('ga-card-view-mode', next);
   };
@@ -1136,14 +1137,22 @@ export default function GameAnalyticsPage() {
                     <option value="rating">Rating (High to Low)</option>
                     <option value="costPerHour">Value (Best First)</option>
                   </select>
-                  {/* Card view toggle */}
-                  <button
-                    onClick={toggleCardViewMode}
-                    className="px-2 py-1 bg-white/[0.02] border border-white/10 text-white/40 text-[10px] rounded-lg"
-                    title={cardViewMode === 'poster' ? 'Switch to compact' : 'Switch to poster'}
-                  >
-                    {cardViewMode === 'poster' ? 'Compact' : 'Poster'}
-                  </button>
+                  {/* Card view toggle — Gallery / Poster / Compact */}
+                  <div className="flex items-center bg-white/[0.02] border border-white/10 rounded-lg overflow-hidden">
+                    {(['gallery', 'poster', 'compact'] as CardViewMode[]).map((mode) => (
+                      <button
+                        key={mode}
+                        onClick={() => { setCardViewMode(mode); localStorage.setItem('ga-card-view-mode', mode); }}
+                        className={clsx(
+                          'p-1.5 transition-all',
+                          cardViewMode === mode ? 'bg-white/10 text-white/70' : 'text-white/25 hover:text-white/50'
+                        )}
+                        title={mode === 'gallery' ? 'Gallery view' : mode === 'poster' ? 'Poster view' : 'Compact view'}
+                      >
+                        {mode === 'gallery' ? <LayoutGrid size={12} /> : mode === 'poster' ? <LayoutList size={12} /> : <List size={12} />}
+                      </button>
+                    ))}
+                  </div>
                   {/* Group toggle */}
                   <button
                     onClick={toggleGroupBySection}
@@ -1797,6 +1806,59 @@ function GameCardList({
   }, [games]);
 
   const nowPlayingIds = useMemo(() => new Set(nowPlayingGames.map(g => g.id)), [nowPlayingGames]);
+
+  // Gallery view — dense grid of cover thumbnails, renders before all other paths
+  if (cardViewMode === 'gallery') {
+    const GALLERY_GRID = 'grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-2';
+    const renderGalleryCard = (g: GameWithMetrics) => (
+      <GalleryCard
+        key={g.id}
+        game={g}
+        allGames={allGames}
+        onClick={() => onCardClick(g)}
+        tintColor={gameColors.get(g.id)}
+        eloRanking={eloByGameId.get(g.id)}
+        gameTier={tierAssignments[g.id] as GameTier | undefined}
+        eloTierRank={eloTierRanks.get(g.id)}
+      />
+    );
+
+    if (groupBySection && sections.length > 0) {
+      const gameMap = new Map(games.map(g => [g.id, g]));
+      return (
+        <div className="space-y-6">
+          {nowPlayingGames.length > 0 && (
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-2 h-2 rounded-full bg-blue-500 health-pulse-fast" />
+                <span className="text-[10px] font-bold text-white/40 uppercase tracking-wider">Now Playing</span>
+                <span className="text-[10px] text-white/20">{nowPlayingGames.length}</span>
+              </div>
+              <div className={GALLERY_GRID}>{nowPlayingGames.map(renderGalleryCard)}</div>
+            </div>
+          )}
+          {sections.map(section => {
+            const sGames = (section.gameIds.map((id: string) => gameMap.get(id)).filter(Boolean) as GameWithMetrics[]).filter(g => !nowPlayingIds.has(g.id));
+            if (sGames.length === 0) return null;
+            return (
+              <div key={section.id} className="section-enter">
+                <div className="flex items-center gap-3 mb-3">
+                  <SectionIcon id={section.id} />
+                  <div>
+                    <h3 className="text-sm font-bold text-white/80">{section.label}</h3>
+                    <p className="text-[10px] text-white/30">{section.insight}</p>
+                  </div>
+                </div>
+                <div className={GALLERY_GRID}>{sGames.map(renderGalleryCard)}</div>
+              </div>
+            );
+          })}
+        </div>
+      );
+    }
+
+    return <div className={GALLERY_GRID}>{games.map(renderGalleryCard)}</div>;
+  }
 
   const renderCard = (game: GameWithMetrics, idx: number) => {
     const isEntering = enteringCards.has(game.id);
@@ -2529,6 +2591,178 @@ function PosterCardBack({ game, allGames, onFlip, rarity, freshness, relationshi
               </div>
             );
           })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// --- Gallery Card — dense cover-art tile for grid view ---
+
+function GalleryCard({ game, allGames, onClick, tintColor, eloRanking, gameTier, eloTierRank }: {
+  game: GameWithMetrics;
+  allGames: Game[];
+  onClick: () => void;
+  tintColor?: string;
+  eloRanking?: GameRanking;
+  gameTier?: GameTier;
+  eloTierRank?: { tier: GameTier; rank: number };
+}) {
+  const [showOverlay, setShowOverlay] = useState(false);
+  const rarity = getCardRarity(game);
+  const freshness = getCardFreshness(game);
+  const streak = getGameStreak(game);
+  const moodPulse = getCardMoodPulse(game);
+  const relationship = getRelationshipStatus(game, allGames);
+
+  const glowColor = rarity.tier === 'legendary'
+    ? 'rgba(251,191,36,0.35)'
+    : rarity.tier === 'epic'
+    ? 'rgba(168,85,247,0.28)'
+    : rarity.tier === 'rare'
+    ? 'rgba(59,130,246,0.25)'
+    : rarity.tier === 'uncommon'
+    ? 'rgba(34,197,94,0.20)'
+    : undefined;
+
+  return (
+    <div
+      className={clsx(
+        'relative rounded-xl overflow-hidden cursor-pointer select-none border',
+        rarity.borderClass || 'border-white/5',
+      )}
+      style={{
+        aspectRatio: '2 / 3',
+        boxShadow: glowColor ? `0 0 12px 2px ${glowColor}` : undefined,
+      }}
+      onClick={() => setShowOverlay(v => !v)}
+    >
+      {/* Cover image or placeholder */}
+      {game.thumbnail ? (
+        <img
+          src={game.thumbnail}
+          alt={game.name}
+          className="absolute inset-0 w-full h-full object-cover"
+          loading="lazy"
+          style={{
+            filter: `saturate(${freshness.saturation})`,
+            opacity: freshness.opacity,
+          }}
+        />
+      ) : (
+        <div
+          className="absolute inset-0 flex items-center justify-center"
+          style={{
+            background: tintColor
+              ? `linear-gradient(135deg, ${tintColor}50, ${tintColor}20)`
+              : 'linear-gradient(135deg, rgba(139,92,246,0.35), rgba(59,130,246,0.25))',
+          }}
+        >
+          <span className="text-4xl font-black" style={{ color: 'rgba(255,255,255,0.07)' }}>
+            {game.name[0]}
+          </span>
+        </div>
+      )}
+
+      {/* Persistent bottom gradient */}
+      <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/10 to-transparent pointer-events-none" />
+
+      {/* Top badges */}
+      <div className="absolute top-1 left-1 right-1 flex items-start justify-between gap-0.5 pointer-events-none z-10">
+        {streak.isActive && (
+          <span className="text-[7px] px-1 py-0.5 bg-black/70 text-orange-400 rounded font-bold leading-none">
+            🔥{streak.days}
+          </span>
+        )}
+        {rarity.tier !== 'common' && (
+          <span
+            className="ml-auto text-[6px] px-1 py-0.5 bg-black/70 rounded font-bold uppercase tracking-wider leading-none"
+            style={{
+              color: rarity.tier === 'legendary' ? '#fbbf24'
+                : rarity.tier === 'epic' ? '#a855f7'
+                : rarity.tier === 'rare' ? '#3b82f6'
+                : '#22c55e',
+            }}
+          >
+            {rarity.label}
+          </span>
+        )}
+      </div>
+
+      {/* Bottom name + hours */}
+      <div className="absolute bottom-0 left-0 right-0 px-1.5 pb-1 pt-2 pointer-events-none z-10">
+        <p className="text-[8px] font-semibold text-white/90 truncate leading-tight">{game.name}</p>
+        {game.status === 'Wishlist' ? (
+          <p className="text-[7px] text-purple-400/60 leading-tight">Wishlist</p>
+        ) : game.totalHours > 0 ? (
+          <p className="text-[7px] text-white/35 tabular-nums leading-tight">{game.totalHours.toFixed(0)}h</p>
+        ) : null}
+      </div>
+
+      {/* ELO tier badge */}
+      {eloTierRank && (
+        <div className="absolute right-1 bottom-6 pointer-events-none z-10">
+          <span
+            className="text-[6px] px-1 py-0.5 rounded border font-bold"
+            style={{
+              color: TIER_BADGE[eloTierRank.tier].color,
+              backgroundColor: TIER_BADGE[eloTierRank.tier].bg,
+              borderColor: TIER_BADGE[eloTierRank.tier].border,
+            }}
+          >
+            {eloTierRank.tier}
+          </span>
+        </div>
+      )}
+
+      {/* Mood pulse strip */}
+      {moodPulse.level !== 'never' && (
+        <div
+          className="absolute bottom-0 left-0 right-0 h-[2px] pointer-events-none z-10"
+          style={{ backgroundColor: moodPulse.color }}
+        />
+      )}
+
+      {/* Quick-info overlay on tap */}
+      {showOverlay && (
+        <div className="absolute inset-0 z-20 bg-black/85 backdrop-blur-sm flex flex-col p-2">
+          <div className="mb-1">
+            <span className="text-[9px] font-semibold truncate" style={{ color: relationship.color }}>
+              {relationship.label}
+            </span>
+          </div>
+          <p className="text-[11px] font-bold text-white leading-tight mb-1.5 line-clamp-2">{game.name}</p>
+          <div className="flex-1 space-y-0.5 min-h-0">
+            {game.rating > 0 && (
+              <p className="text-[9px] text-white/60 flex items-center gap-1">
+                <RatingStars rating={game.rating} size={7} />
+                <span>{formatRating(game.rating)}</span>
+              </p>
+            )}
+            {game.totalHours > 0 && (
+              <p className="text-[9px] text-white/50">{game.totalHours.toFixed(0)}h played</p>
+            )}
+            {game.price > 0 && game.metrics.costPerHour > 0 && (
+              <p className={clsx('text-[9px] font-medium', getValueColor(game.metrics.valueRating))}>
+                ${game.metrics.costPerHour.toFixed(2)}/hr · {game.metrics.valueRating}
+              </p>
+            )}
+            <p className="text-[8px] text-white/35">{game.status}</p>
+          </div>
+          <div className="flex gap-1 mt-1.5">
+            <button
+              onClick={(e) => { e.stopPropagation(); setShowOverlay(false); onClick(); }}
+              className="flex-1 text-[9px] py-1 bg-purple-600/40 hover:bg-purple-600/60 text-purple-200 rounded font-medium transition-colors"
+            >
+              Open →
+            </button>
+            <button
+              onClick={(e) => { e.stopPropagation(); setShowOverlay(false); }}
+              className="text-[9px] py-1 px-2 bg-white/5 hover:bg-white/10 text-white/40 rounded transition-colors"
+            >
+              ✕
+            </button>
+          </div>
         </div>
       )}
     </div>

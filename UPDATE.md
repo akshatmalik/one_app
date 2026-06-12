@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-12 08:00 — Games Tab — Gallery View (Cover Art Grid)
+
+**Files**: app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Added a third card display mode — Gallery — accessible via a new three-icon toggle (Grid / List / Compact) in the Games tab toolbar. Gallery mode renders every game as a portrait-orientation thumbnail tile in a responsive grid (3 columns on mobile, up to 7 on desktop), letting users see their whole collection at a glance instead of scrolling a vertical list. Each tile shows the game cover with rarity border glows (Legendary = gold, Epic = purple, Rare = blue), freshness desaturation for neglected games, a streak-flame badge, the game name and hours in small text, and a colour-coded mood pulse strip at the bottom. Tapping a tile flips to a quick-info overlay (relationship status, rating, cost-per-hour, value tier) with an "Open →" button to jump directly to the detail sheet. Section grouping also works in gallery mode — section headers stay visible above each mini-grid. The existing Poster and Compact modes are unchanged.
+
+FOLLOW-UP: Could add a "showcase" sort in gallery mode — Legendary games first, then Epic, then Rare — so the most impressive covers dominate the view.
+
 ## 2026-06-10 12:00 — Games Tab — Play Tonight Smart Recommender
 
 **Files**: app/apps/game-analytics/components/PlayTonightModal.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json
