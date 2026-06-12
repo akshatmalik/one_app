@@ -55,6 +55,7 @@ import { WhatsNewModal } from './components/WhatsNewModal';
 import { GameReviewChat } from './components/GameReviewChat';
 import { GameCompareModal } from './components/GameCompareModal';
 import { PlayTonightModal } from './components/PlayTonightModal';
+import { GamingNewspaper } from './components/GamingNewspaper';
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist';
@@ -233,6 +234,7 @@ export default function GameAnalyticsPage() {
   const [showErrorLog, setShowErrorLog] = useState(false);
   const [showWhatsNew, setShowWhatsNew] = useState(false);
   const [showPlayTonight, setShowPlayTonight] = useState(false);
+  const [showNewspaper, setShowNewspaper] = useState(false);
 
   // Week recap data for header strip
   const weekRecap = useMemo(() => {
@@ -605,6 +607,14 @@ export default function GameAnalyticsPage() {
                           className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white/70 hover:text-white hover:bg-white/5 transition-all"
                         >
                           <Moon size={14} className="text-indigo-400" /> Play Tonight
+                        </button>
+                      )}
+                      {games.length >= 3 && (
+                        <button
+                          onClick={() => { setShowNewspaper(true); setShowCommandPalette(false); }}
+                          className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white/70 hover:text-white hover:bg-white/5 transition-all"
+                        >
+                          <span className="text-yellow-400 text-sm">📰</span> Daily Brief
                         </button>
                       )}
                       {games.filter(g => g.status !== 'Wishlist' && g.status !== 'Completed' && g.status !== 'Abandoned').length > 0 && (
@@ -1515,6 +1525,14 @@ export default function GameAnalyticsPage() {
             setShowPlayTonight(false);
             setDetailGame(game);
           }}
+        />
+      )}
+
+      {/* Daily Brief — Gaming Newspaper */}
+      {showNewspaper && (
+        <GamingNewspaper
+          games={games}
+          onClose={() => setShowNewspaper(false)}
         />
       )}
 

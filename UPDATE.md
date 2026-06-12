@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-12 15:30 — Games Tab — Daily Brief: The Gaming Post Newspaper
+
+**Files**: app/apps/game-analytics/components/GamingNewspaper.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Added "The Gaming Post" — a daily newspaper of your gaming life, accessible via ⋮ → Daily Brief. The newspaper presents your data as a proper publication: a breaking-news headline driven by your most dramatic recent event (completion, streak, marathon session, new purchase), a week-in-brief + market-watch two-column section, a personality-driven feature article, an opinion column + box scores + gaming profile three-column spread, and classifieds listing your top backlog pick, worst-value game, and most-invested in-progress title. The sepia/newsprint aesthetic contrasts with the dark app theme, making it feel like a genuine daily publication. Content is 100% data-driven from existing calculations with no AI calls.
+
+FOLLOW-UP: Could add a "save today's edition" screenshot export, or rotate the feature article's narrative focus daily (personality one day, behavioral insight another).
+
 ## 2026-06-10 12:00 — Games Tab — Play Tonight Smart Recommender
 
 **Files**: app/apps/game-analytics/components/PlayTonightModal.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json
