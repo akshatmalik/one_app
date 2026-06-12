@@ -1,6 +1,7 @@
 'use client';
 
 import { getAIModel } from './ai-client';
+import { getCache as getCacheRaw, setCache } from './cache';
 import { Game } from './types';
 import { AIBlurbResult } from './ai-service';
 
@@ -13,31 +14,9 @@ const MONTH_CHAPTER_TITLES_CACHE = 'month-chapter-titles-cache';
 const WEEK_TITLES_CACHE = 'week-titles-cache';
 const CACHE_TTL = 1000 * 60 * 60 * 4; // 4 hours
 
-interface CacheEntry<T> {
-  timestamp: number;
-  data: T;
-}
-
+// Local wrapper so existing call sites keep their (key) signature with our 4h TTL.
 function getCache<T>(key: string): T | null {
-  if (typeof window === 'undefined') return null;
-  try {
-    const raw = localStorage.getItem(key);
-    if (!raw) return null;
-    const entry: CacheEntry<T> = JSON.parse(raw);
-    if (Date.now() - entry.timestamp > CACHE_TTL) return null;
-    return entry.data;
-  } catch {
-    return null;
-  }
-}
-
-function setCache<T>(key: string, data: T): void {
-  if (typeof window === 'undefined') return;
-  try {
-    localStorage.setItem(key, JSON.stringify({ timestamp: Date.now(), data }));
-  } catch {
-    // ignore
-  }
+  return getCacheRaw<T>(key, CACHE_TTL);
 }
 
 /**

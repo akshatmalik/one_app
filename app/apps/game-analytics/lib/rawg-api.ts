@@ -4,6 +4,8 @@
  * API Docs: https://api.rawg.io/docs/
  */
 
+import { getCache, setCache } from './cache';
+
 const RAWG_API_KEY = 'c0fbd2ba77b94fc7b5e0e0b2f029814e';
 const RAWG_API_BASE = 'https://api.rawg.io/api';
 const CACHE_PREFIX = 'rawg_cache_';
@@ -30,60 +32,22 @@ interface RAWGSearchResponse {
   }>;
 }
 
-interface CachedData {
-  data: RAWGGameData | null;
-  timestamp: number;
-}
+const cacheKeyFor = (gameName: string) => `${CACHE_PREFIX}${gameName.toLowerCase().trim()}`;
 
 /**
- * Check if cached data is still valid
- */
-function isCacheValid(cached: CachedData | null): boolean {
-  if (!cached) return false;
-  const age = Date.now() - cached.timestamp;
-  return age < CACHE_EXPIRY;
-}
-
-/**
- * Get cached game data from localStorage
+ * Get cached game data from localStorage (shared TTL cache, 7-day expiry).
  */
 function getFromCache(gameName: string): RAWGGameData | null {
-  if (typeof window === 'undefined') return null;
-
-  try {
-    const cacheKey = `${CACHE_PREFIX}${gameName.toLowerCase().trim()}`;
-    const cached = localStorage.getItem(cacheKey);
-    if (!cached) return null;
-
-    const parsedCache: CachedData = JSON.parse(cached);
-    if (isCacheValid(parsedCache)) {
-      return parsedCache.data;
-    }
-
-    // Clean up expired cache
-    localStorage.removeItem(cacheKey);
-    return null;
-  } catch (e) {
-    console.error('Error reading RAWG cache:', e);
-    return null;
-  }
+  return getCache<RAWGGameData | null>(cacheKeyFor(gameName), CACHE_EXPIRY);
 }
 
 /**
- * Save game data to localStorage cache
+ * Save game data to localStorage cache.
  */
 function saveToCache(gameName: string, data: RAWGGameData | null): void {
-  if (typeof window === 'undefined') return;
-
   try {
-    const cacheKey = `${CACHE_PREFIX}${gameName.toLowerCase().trim()}`;
-    const cacheData: CachedData = {
-      data,
-      timestamp: Date.now(),
-    };
-    localStorage.setItem(cacheKey, JSON.stringify(cacheData));
-  } catch (e) {
-    console.error('Error saving RAWG cache:', e);
+    setCache(cacheKeyFor(gameName), data);
+  } catch {
     // If localStorage is full, try to clear old RAWG caches
     clearOldCaches();
   }
@@ -105,7 +69,7 @@ function clearOldCaches(): void {
         const cached = localStorage.getItem(key);
         if (cached) {
           try {
-            const parsedCache: CachedData = JSON.parse(cached);
+            const parsedCache: { timestamp: number } = JSON.parse(cached);
             if (now - parsedCache.timestamp >= CACHE_EXPIRY) {
               keysToRemove.push(key);
             }
