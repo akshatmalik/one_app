@@ -5,6 +5,17 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-13 06:00 — Stats Tab — Mood Intelligence Panel
+
+**Files**: app/apps/game-analytics/lib/calculations.ts, app/apps/game-analytics/components/MoodIntelligencePanel.tsx, app/apps/game-analytics/components/StatsView.tsx, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Added a Mood Intelligence Panel to the Stats tab that surfaces rich insights from the mood, context, and vibe fields users tag on play sessions. The panel shows a Gaming Wellness Score (0–100) derived from your overall session mood average, a per-mood distribution breakdown, a color-coded day-of-week bar chart (Great/Good/Meh/Grind by average per day), a "Flow State Games" list ranked by best average mood alongside a "Feels Like Work" list for games with the lowest mood, breakdowns by play context (solo/co-op/online) and session vibe (wind-down/exploration/etc.), and a 10-week mood trend line showing whether gaming enjoyment is improving or declining. The panel gracefully degrades when mood data is sparse and shows an inviting empty state for users who haven't tagged sessions yet.
+
+FOLLOW-UP: Could add a "mood heatmap" calendar view layered on the gaming heatmap — coloring each day by avg mood instead of just hours.
+
+---
+
 ## 2026-06-10 12:00 — Games Tab — Play Tonight Smart Recommender
 
 **Files**: app/apps/game-analytics/components/PlayTonightModal.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json

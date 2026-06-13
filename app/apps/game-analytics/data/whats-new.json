@@ -1,6 +1,12 @@
 {
   "entries": [
     {
+      "date": "2026-06-13",
+      "area": "Stats tab",
+      "title": "Mood Intelligence — discover how gaming actually makes you feel",
+      "body": "Head to the Stats tab to find the new Mood Intelligence panel. It turns the mood tags you add when logging sessions into real insights: a Gaming Wellness Score (0–100), a breakdown of how often you're in Great / Good / Meh / Grind mode, a day-of-week chart showing which days you game best, a ranked list of your Flow State games versus the ones that feel like work, and a 10-week mood trend line so you can see if your gaming enjoyment is improving or declining over time."
+    },
+    {
       "date": "2026-06-10",
       "area": "Games tab",
       "title": "Play Tonight — find your perfect match in seconds",

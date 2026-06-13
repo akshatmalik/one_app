@@ -10311,6 +10311,217 @@ export function getMoodAnalysis(games: Game[]): MoodAnalysis {
   };
 }
 
+// ── Mood Intelligence — Extended Analytics ───────────────────────────────────
+// Builds on getMoodAnalysis() with additional breakdowns for MoodIntelligencePanel.
+
+export const MOOD_SCORE_MAP: Record<SessionMood, number> = {
+  great: 4, good: 3, meh: 2, grind: 1,
+};
+
+export const MOOD_COLORS: Record<SessionMood, string> = {
+  great: '#10b981',
+  good: '#3b82f6',
+  meh: '#f59e0b',
+  grind: '#ef4444',
+};
+
+export const MOOD_LABELS: Record<SessionMood, string> = {
+  great: 'Great', good: 'Good', meh: 'Meh', grind: 'Grind',
+};
+
+export interface DayOfWeekMoodData {
+  day: string;
+  shortDay: string;
+  /** 1-4 average; 0 means no data for that day */
+  score: number;
+  count: number;
+}
+
+export interface MoodByGameData {
+  gameId: string;
+  gameName: string;
+  thumbnail?: string;
+  avgScore: number;
+  distribution: Partial<Record<SessionMood, number>>;
+  totalTaggedSessions: number;
+}
+
+export interface MoodWeekTrend {
+  weekLabel: string;
+  score: number;
+  count: number;
+}
+
+export interface ContextMoodData {
+  context: string;
+  label: string;
+  avgScore: number;
+  count: number;
+  icon: string;
+}
+
+export interface VibeMoodData {
+  vibe: string;
+  label: string;
+  avgScore: number;
+  count: number;
+  hours: number;
+}
+
+/** Average mood score by day of week, returned in Mon–Sun order. */
+export function getDayOfWeekMoodPattern(games: Game[]): DayOfWeekMoodData[] {
+  const SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const FULL = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const buckets: { total: number; count: number }[] = Array.from({ length: 7 }, () => ({ total: 0, count: 0 }));
+
+  games.forEach(game => {
+    game.playLogs?.forEach(log => {
+      if (!log.mood) return;
+      const idx = parseLocalDate(log.date).getDay();
+      buckets[idx].total += MOOD_SCORE_MAP[log.mood];
+      buckets[idx].count++;
+    });
+  });
+
+  // Mon-Sun order: indices [1,2,3,4,5,6,0]
+  return [1, 2, 3, 4, 5, 6, 0].map(i => ({
+    day: FULL[i],
+    shortDay: SHORT[i],
+    score: buckets[i].count > 0 ? Math.round((buckets[i].total / buckets[i].count) * 100) / 100 : 0,
+    count: buckets[i].count,
+  }));
+}
+
+/** Weekly average mood score for the last `weekCount` weeks (only weeks with data). */
+export function getMoodTrendByWeek(games: Game[], weekCount = 10): MoodWeekTrend[] {
+  const now = new Date();
+  const mondayOffset = now.getDay() === 0 ? 6 : now.getDay() - 1;
+  const thisMonday = new Date(now);
+  thisMonday.setDate(now.getDate() - mondayOffset);
+  thisMonday.setHours(0, 0, 0, 0);
+
+  const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const result: MoodWeekTrend[] = [];
+
+  for (let i = weekCount - 1; i >= 0; i--) {
+    const start = new Date(thisMonday);
+    start.setDate(thisMonday.getDate() - i * 7);
+    const end = new Date(start);
+    end.setDate(start.getDate() + 6);
+    end.setHours(23, 59, 59, 999);
+
+    let total = 0;
+    let count = 0;
+    games.forEach(game => {
+      game.playLogs?.forEach(log => {
+        if (!log.mood) return;
+        const d = parseLocalDate(log.date);
+        if (d >= start && d <= end) { total += MOOD_SCORE_MAP[log.mood]; count++; }
+      });
+    });
+
+    result.push({
+      weekLabel: `${MONTHS[start.getMonth()]} ${start.getDate()}`,
+      score: count > 0 ? Math.round((total / count) * 100) / 100 : 0,
+      count,
+    });
+  }
+  return result;
+}
+
+/** Per-game average mood score. Only games with ≥2 mood-tagged sessions. */
+export function getMoodByGame(games: Game[]): MoodByGameData[] {
+  const result: MoodByGameData[] = [];
+
+  games
+    .filter(g => g.status !== 'Wishlist')
+    .forEach(game => {
+      const tagged = (game.playLogs ?? []).filter(l => l.mood);
+      if (tagged.length < 2) return;
+
+      const distribution: Partial<Record<SessionMood, number>> = {};
+      let total = 0;
+      tagged.forEach(log => {
+        distribution[log.mood!] = (distribution[log.mood!] ?? 0) + 1;
+        total += MOOD_SCORE_MAP[log.mood!];
+      });
+
+      result.push({
+        gameId: game.id,
+        gameName: game.name,
+        thumbnail: game.thumbnail,
+        avgScore: Math.round((total / tagged.length) * 100) / 100,
+        distribution,
+        totalTaggedSessions: tagged.length,
+      });
+    });
+
+  return result.sort((a, b) => b.avgScore - a.avgScore);
+}
+
+/** Average mood by session context (solo/co-op/online/etc.). */
+export function getContextMoodBreakdown(games: Game[]): ContextMoodData[] {
+  const LABELS: Record<string, string> = {
+    solo: 'Solo', 'co-op': 'Co-op', online: 'Online', 'couch-co-op': 'Couch Co-op', stream: 'Streaming',
+  };
+  const ICONS: Record<string, string> = {
+    solo: '🎮', 'co-op': '👥', online: '🌐', 'couch-co-op': '🛋️', stream: '📺',
+  };
+
+  const data: Record<string, { total: number; count: number }> = {};
+  games.forEach(game => {
+    game.playLogs?.forEach(log => {
+      if (!log.mood || !log.context) return;
+      const k = log.context as string;
+      if (!data[k]) data[k] = { total: 0, count: 0 };
+      data[k].total += MOOD_SCORE_MAP[log.mood];
+      data[k].count++;
+    });
+  });
+
+  return Object.entries(data)
+    .filter(([, d]) => d.count >= 2)
+    .map(([ctx, d]) => ({
+      context: ctx,
+      label: LABELS[ctx] ?? ctx,
+      avgScore: Math.round((d.total / d.count) * 100) / 100,
+      count: d.count,
+      icon: ICONS[ctx] ?? '🎮',
+    }))
+    .sort((a, b) => b.avgScore - a.avgScore);
+}
+
+/** Average mood by session vibe. */
+export function getVibeMoodBreakdown(games: Game[]): VibeMoodData[] {
+  const LABELS: Record<string, string> = {
+    'wind-down': 'Wind-Down', competitive: 'Competitive', exploration: 'Exploration',
+    story: 'Story', 'achievement-hunting': 'Achievements', social: 'Social',
+  };
+
+  const data: Record<string, { total: number; count: number; hours: number }> = {};
+  games.forEach(game => {
+    game.playLogs?.forEach(log => {
+      if (!log.mood || !log.vibe) return;
+      const k = log.vibe as string;
+      if (!data[k]) data[k] = { total: 0, count: 0, hours: 0 };
+      data[k].total += MOOD_SCORE_MAP[log.mood];
+      data[k].count++;
+      data[k].hours += log.hours;
+    });
+  });
+
+  return Object.entries(data)
+    .filter(([, d]) => d.count >= 2)
+    .map(([vibe, d]) => ({
+      vibe,
+      label: LABELS[vibe] ?? vibe,
+      avgScore: Math.round((d.total / d.count) * 100) / 100,
+      count: d.count,
+      hours: Math.round(d.hours * 10) / 10,
+    }))
+    .sort((a, b) => b.avgScore - a.avgScore);
+}
+
 // ============================================================
 // Yearly Wrapped — extended year-in-review for story mode
 // ============================================================
