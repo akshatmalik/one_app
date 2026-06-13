@@ -2,6 +2,7 @@
 
 import { Schema, FunctionDeclaration, Content } from 'firebase/ai';
 import { getAIModel } from './ai-client';
+import { stripJsonFences } from './ai-json';
 import { WeekInReviewData, MonthInReviewData, OscarAward, buildTasteProfile, getTotalHours } from './calculations';
 import { Game, TasteProfile } from './types';
 import { WRITE_FUNCTION_DECLARATIONS, parseFunctionCall, PendingAction } from './ai-actions';
@@ -575,10 +576,6 @@ function historyText(history: ReviewInterviewTurn[]): string {
   return history
     .map(t => `${t.role === 'interviewer' ? 'Interviewer' : 'Player'}: ${t.text}`)
     .join('\n');
-}
-
-function stripJsonFences(raw: string): string {
-  return raw.replace(/^```[a-z]*\n?/i, '').replace(/\n?```$/i, '').trim();
 }
 
 /**

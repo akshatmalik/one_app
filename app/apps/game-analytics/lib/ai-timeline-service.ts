@@ -1,10 +1,7 @@
 'use client';
 
 import { getGroundedAIModel } from './ai-client';
-
-function stripJsonFences(raw: string): string {
-  return raw.replace(/^```[a-z]*\n?/i, '').replace(/\n?```$/i, '').trim();
-}
+import { stripJsonFences } from './ai-json';
 
 export interface GameLengthEstimate {
   hours: number | null;       // estimated hours to finish (main story / "beat the game")
