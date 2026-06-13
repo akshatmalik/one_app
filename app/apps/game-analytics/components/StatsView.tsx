@@ -66,6 +66,7 @@ import { DiscoverPanel } from './DiscoverPanel';
 import { WeeklyDigest } from './WeeklyDigest';
 import { WhatIfSimulator } from './WhatIfSimulator';
 import { PlayedSummary, BoughtSummary } from './RangeGlance';
+import { GoalsPanel } from './GoalsPanel';
 import clsx from 'clsx';
 
 interface StatsViewProps {
@@ -421,6 +422,9 @@ export function StatsView({ games, summary, budgets = [], onSetBudget, trophies,
           Active = played in last 30 days &bull; Dusty = untouched 60+ days (excluding completed/abandoned)
         </p>
       </div>
+
+      {/* Gaming Goals */}
+      <GoalsPanel games={games} />
 
       {/* Time Period Selector & Stats Section */}
       <div className="space-y-4">

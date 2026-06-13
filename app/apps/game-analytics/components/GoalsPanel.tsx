@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react';
 import { Target, Trophy, Plus, Trash2, Edit3, Check, Clock, ChevronDown, ChevronUp, X, Gamepad2, DollarSign, Flame, Layers, Sparkles } from 'lucide-react';
 import { Game, GamingGoal, GoalType, GoalStatus } from '../lib/types';
-import { getTotalHours, parseLocalDate } from '../lib/calculations';
+import { getTotalHours, parseLocalDate, getSmartGoalSuggestions, SmartGoalSuggestion, calculateGoalProgress, getGoalDaysRemaining } from '../lib/calculations';
 import { useGoals } from '../hooks/useGoals';
 import { useAuthContext } from '@/lib/AuthContext';
 import clsx from 'clsx';
@@ -17,81 +17,6 @@ const GOAL_TYPE_CONFIG: Record<GoalType, { label: string; icon: React.ReactNode;
   custom: { label: 'Custom Goal', icon: <Sparkles size={14} />, defaultUnit: '', color: 'cyan' },
 };
 
-function calculateGoalProgress(goal: GamingGoal, games: Game[]): number {
-  const start = parseLocalDate(goal.startDate);
-  const now = new Date();
-
-  // Filter games relevant to the goal period
-  const gamesInPeriod = (filterFn: (g: Game) => boolean) =>
-    games.filter(g => filterFn(g));
-
-  switch (goal.type) {
-    case 'completion': {
-      // Count games completed since startDate
-      return gamesInPeriod(g => {
-        if (g.status !== 'Completed' || !g.endDate) return false;
-        const endDate = parseLocalDate(g.endDate);
-        return endDate >= start && endDate <= now;
-      }).length;
-    }
-    case 'spending': {
-      // Total price of games purchased since startDate
-      return gamesInPeriod(g => {
-        if (g.status === 'Wishlist' || !g.datePurchased) return false;
-        const purchaseDate = parseLocalDate(g.datePurchased);
-        return purchaseDate >= start && purchaseDate <= now;
-      }).reduce((sum, g) => sum + g.price, 0);
-    }
-    case 'hours': {
-      // Total hours logged since startDate
-      return games.reduce((total, g) => {
-        const logHours = (g.playLogs || [])
-          .filter(log => {
-            const logDate = parseLocalDate(log.date);
-            return logDate >= start && logDate <= now;
-          })
-          .reduce((sum, log) => sum + log.hours, 0);
-        return total + logHours;
-      }, 0);
-    }
-    case 'genre_variety': {
-      // Count unique genres played since startDate
-      const genres = new Set<string>();
-      games.forEach(g => {
-        if (!g.genre) return;
-        const hasRecentActivity = (g.playLogs || []).some(log => {
-          const logDate = parseLocalDate(log.date);
-          return logDate >= start && logDate <= now;
-        });
-        if (hasRecentActivity) {
-          genres.add(g.genre);
-        }
-      });
-      return genres.size;
-    }
-    case 'backlog': {
-      // Count of Not Started games (should decrease, so we invert the logic)
-      // Target represents how many to clear; current = games started or completed since startDate that were previously Not Started
-      return gamesInPeriod(g => {
-        if (!g.startDate) return false;
-        const startedDate = parseLocalDate(g.startDate);
-        return startedDate >= start && startedDate <= now;
-      }).length;
-    }
-    case 'custom':
-    default:
-      // Custom goals use manual currentValue
-      return goal.currentValue;
-  }
-}
-
-function getDaysRemaining(endDate: string): number {
-  const end = parseLocalDate(endDate);
-  const now = new Date();
-  now.setHours(0, 0, 0, 0);
-  const diff = end.getTime() - now.getTime();
-  return Math.ceil(diff / (1000 * 60 * 60 * 24));
-}
 
 function getGoalColorClasses(color: string) {
   const map: Record<string, { bg: string; border: string; text: string; progressBg: string; progressBar: string }> = {
@@ -137,10 +62,32 @@ export function GoalsPanel({ games }: { games: Game[] }) {
     return activeGoals.map(goal => {
       const currentValue = calculateGoalProgress(goal, games);
       const percent = goal.targetValue > 0 ? Math.min((currentValue / goal.targetValue) * 100, 100) : 0;
-      const daysRemaining = getDaysRemaining(goal.endDate);
+      const daysRemaining = getGoalDaysRemaining(goal.endDate);
       return { ...goal, calculatedValue: currentValue, percent, daysRemaining };
     });
   }, [activeGoals, games]);
+
+  // Smart goal suggestions (shown when < 3 active goals and form not open)
+  const suggestions = useMemo(() => {
+    if (showAddForm || activeGoals.length >= 3) return [];
+    const activeTypes = activeGoals.map(g => g.type);
+    return getSmartGoalSuggestions(games, activeTypes);
+  }, [games, activeGoals, showAddForm]);
+
+  const prefillFromSuggestion = (s: SmartGoalSuggestion) => {
+    setFormTitle(s.title);
+    setFormDescription(s.description);
+    setFormType(s.type);
+    setFormTarget(s.targetValue.toString());
+    setFormUnit(s.unit);
+    setFormCurrentValue('');
+    setEditingGoalId(null);
+    const now = new Date();
+    setFormStartDate(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`);
+    const end = new Date(now.getTime() + s.daysToDeadline * 24 * 60 * 60 * 1000);
+    setFormEndDate(`${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, '0')}-${String(end.getDate()).padStart(2, '0')}`);
+    setShowAddForm(true);
+  };
 
   const resetForm = () => {
     setFormTitle('');
@@ -408,6 +355,37 @@ export function GoalsPanel({ games }: { games: Game[] }) {
             >
               Cancel
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Smart Goal Suggestions */}
+      {suggestions.length > 0 && !showAddForm && (
+        <div className="mb-4">
+          <div className="flex items-center gap-2 mb-2.5">
+            <Sparkles size={13} className="text-cyan-400/70" />
+            <span className="text-[11px] font-medium text-white/40 uppercase tracking-wider">Suggested for you</span>
+          </div>
+          <div className="space-y-2">
+            {suggestions.map((s, i) => (
+              <div
+                key={i}
+                className="flex items-center gap-3 px-3 py-2.5 bg-white/[0.03] border border-white/[0.06] rounded-xl hover:border-cyan-500/20 hover:bg-cyan-500/[0.04] transition-all group"
+              >
+                <span className="text-lg shrink-0 leading-none">{s.icon}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium text-white/80 truncate">{s.title}</div>
+                  <div className="text-[11px] text-white/30 truncate">{s.rationale}</div>
+                </div>
+                <button
+                  onClick={() => prefillFromSuggestion(s)}
+                  className="shrink-0 flex items-center gap-1 px-2.5 py-1.5 bg-cyan-500/15 text-cyan-400 hover:bg-cyan-500/25 rounded-lg text-[11px] font-medium transition-all opacity-70 group-hover:opacity-100"
+                >
+                  <Plus size={11} />
+                  Set
+                </button>
+              </div>
+            ))}
           </div>
         </div>
       )}

@@ -16,7 +16,7 @@ import { StatsView } from './components/StatsView';
 import { AIChatTab } from './components/AIChatTab';
 import { AgentExecutors } from './lib/ai-actions';
 import { UpNextTab } from './components/UpNextTab';
-import { Game, GameStatus, PlayLog, GameRanking, GameAward, AwardPeriodType, GameTier, TierAssignmentMap, ReviewMessage } from './lib/types';
+import { Game, GameStatus, PlayLog, GameRanking, GameAward, AwardPeriodType, GameTier, TierAssignmentMap, ReviewMessage, GamingGoal } from './lib/types';
 import { useTierAssignments } from './hooks/useTierAssignments';
 import { gameRepository } from './lib/storage';
 import { useRankings } from './hooks/useRankings';
@@ -26,7 +26,7 @@ import { BASELINE_BUY_QUEUE } from './data/baseline-buy-queue';
 import { purchaseQueueRepository } from './lib/purchase-queue-storage';
 import { useAuthContext } from '@/lib/AuthContext';
 import { useToast } from '@/components/Toast';
-import { getROIRating, getWeekStatsForOffset, getGamesPlayedInTimeRange, getCompletionProbability, getGameHealthDot, getRelativeTime, getDaysContext, getSessionMomentum, getValueTrajectory, getGameSmartOneLiner, getFranchiseInfo, getProgressPercent, getShelfLife, parseLocalDate, getCardRarity, getRelationshipStatus, getGameStreak, getHeroNumber, getCardFreshness, getGameSections, getCardBackData, getContextualWhisper, getLibraryRank, getCardMoodPulse, getProgressRingData, getStatPopoverData, getWeekRecapData, getSmartNudges, getGamingCreditScore, getRotationStats, getSpendingForecast, getSpendingByMonth, getShelfLifeExpiry, formatRating, getRatingRank } from './lib/calculations';
+import { getROIRating, getWeekStatsForOffset, getGamesPlayedInTimeRange, getCompletionProbability, getGameHealthDot, getRelativeTime, getDaysContext, getSessionMomentum, getValueTrajectory, getGameSmartOneLiner, getFranchiseInfo, getProgressPercent, getShelfLife, parseLocalDate, getCardRarity, getRelationshipStatus, getGameStreak, getHeroNumber, getCardFreshness, getGameSections, getCardBackData, getContextualWhisper, getLibraryRank, getCardMoodPulse, getProgressRingData, getStatPopoverData, getWeekRecapData, getSmartNudges, getGamingCreditScore, getRotationStats, getSpendingForecast, getSpendingByMonth, getShelfLifeExpiry, formatRating, getRatingRank, calculateGoalProgress, getGoalDaysRemaining } from './lib/calculations';
 import { OnThisDayCard } from './components/OnThisDayCard';
 import { ActivityPulse } from './components/ActivityPulse';
 import { RandomPicker } from './components/RandomPicker';
@@ -48,6 +48,7 @@ import { loadSubscriptionSettings, hasNewDrop } from './lib/subscription-setting
 import { ReviewNudgeBanner } from './components/ReviewNudgeBanner';
 import { AwardsHub } from './components/AwardsHub';
 import { useTrophies } from './hooks/useTrophies';
+import { useGoals } from './hooks/useGoals';
 import { TrophyShowcase } from './components/TrophyShowcase';
 import { TrophyToast } from './components/TrophyToast';
 import { ErrorLogPanel, ErrorLogButton } from './components/ErrorLogPanel';
@@ -152,6 +153,7 @@ export default function GameAnalyticsPage() {
   const { rankings: allTimeRankings } = useRankings(user?.uid ?? null, 'all', 'all');
   const { allTrophies, summary: trophySummary, pinnedTrophies, pinnedIds: pinnedTrophyIds, togglePin: toggleTrophyPin, toastQueue: trophyToastQueue, dismissToast: dismissTrophyToast } = useTrophies(games, user?.uid ?? null);
   const { assignments: allTimeTiers } = useTierAssignments(user?.uid ?? null, 'all');
+  const { goals: activeGoalsList } = useGoals(user?.uid ?? null);
   const eloByGameId = useMemo(() => {
     const map = new Map<string, GameRanking>();
     for (const r of allTimeRankings) map.set(r.gameId, r);
@@ -1000,6 +1002,49 @@ export default function GameAnalyticsPage() {
               }}
             />
           )}
+
+          {/* Active Goals Strip */}
+          {games.length > 0 && (() => {
+            const activeGoals = activeGoalsList.filter(g => g.status === 'active');
+            if (activeGoals.length === 0) return null;
+            // Show most urgent (soonest deadline)
+            const sorted = [...activeGoals].sort((a, b) =>
+              getGoalDaysRemaining(a.endDate) - getGoalDaysRemaining(b.endDate)
+            );
+            const top = sorted[0];
+            const progress = calculateGoalProgress(top, games);
+            const percent = Math.min(100, top.targetValue > 0 ? (progress / top.targetValue) * 100 : 0);
+            const days = getGoalDaysRemaining(top.endDate);
+            const isSpending = top.type === 'spending';
+            const isDone = isSpending ? progress <= top.targetValue : progress >= top.targetValue;
+            const barColor = isDone ? '#10b981' : days < 3 ? '#ef4444' : '#06b6d4';
+            return (
+              <button
+                onClick={() => setTabMode('stats')}
+                className="w-full mb-4 flex items-center gap-3 px-3 py-2.5 bg-white/[0.03] border border-white/[0.07] hover:border-cyan-500/20 hover:bg-cyan-500/[0.04] rounded-xl transition-all text-left group"
+              >
+                <Target size={14} className="text-cyan-400/70 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs font-medium text-white/70 truncate">{top.title}</span>
+                    <span className="text-[10px] text-white/30 shrink-0 ml-2">
+                      {activeGoals.length > 1 && `+${activeGoals.length - 1} more · `}
+                      {days < 0 ? `${Math.abs(days)}d overdue` : days === 0 ? 'due today' : `${days}d left`}
+                    </span>
+                  </div>
+                  <div className="h-1.5 bg-white/[0.06] rounded-full overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all duration-500"
+                      style={{ width: `${isSpending ? Math.min(100, (progress / top.targetValue) * 100) : percent}%`, backgroundColor: barColor }}
+                    />
+                  </div>
+                </div>
+                <span className="text-[10px] text-white/30 shrink-0 group-hover:text-cyan-400/60 transition-colors">
+                  {top.type === 'spending' ? `$${progress.toFixed(0)}/$${top.targetValue}` : `${progress.toFixed(0)}/${top.targetValue}`}
+                </span>
+              </button>
+            );
+          })()}
 
           {/* Tab Navigation */}
           <div className="space-y-4 mb-6">

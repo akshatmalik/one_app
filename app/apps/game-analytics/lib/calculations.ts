@@ -1,4 +1,4 @@
-import { Game, GameStatus, GameMetrics, AnalyticsSummary, TasteProfile, SessionMood } from './types';
+import { Game, GameStatus, GameMetrics, AnalyticsSummary, TasteProfile, SessionMood, GoalType, GamingGoal } from './types';
 
 /**
  * Parse a YYYY-MM-DD date string as local time instead of UTC.
@@ -14309,4 +14309,241 @@ export function getReviewNudges(games: Game[]): ReviewNudgeSummary {
     reviewableCount: reviewable.length,
     recentlyCompletedCount,
   };
+}
+
+// ── Goal Progress Helpers ───────────────────────────────────────────────────
+
+/**
+ * Calculate how far a goal has progressed, based on actual game data.
+ * Returns the raw current value (not a percentage).
+ */
+export function calculateGoalProgress(goal: GamingGoal, games: Game[]): number {
+  const start = parseLocalDate(goal.startDate);
+  const now = new Date();
+
+  const gamesInPeriod = (filterFn: (g: Game) => boolean) => games.filter(g => filterFn(g));
+
+  switch (goal.type) {
+    case 'completion':
+      return gamesInPeriod(g => {
+        if (g.status !== 'Completed' || !g.endDate) return false;
+        const endDate = parseLocalDate(g.endDate);
+        return endDate >= start && endDate <= now;
+      }).length;
+
+    case 'spending':
+      return gamesInPeriod(g => {
+        if (g.status === 'Wishlist' || !g.datePurchased) return false;
+        return parseLocalDate(g.datePurchased) >= start;
+      }).reduce((sum, g) => sum + g.price, 0);
+
+    case 'hours':
+      return games.reduce((total, g) => {
+        const logHours = (g.playLogs || [])
+          .filter(log => parseLocalDate(log.date) >= start && parseLocalDate(log.date) <= now)
+          .reduce((s, log) => s + log.hours, 0);
+        return total + logHours;
+      }, 0);
+
+    case 'genre_variety': {
+      const genres = new Set<string>();
+      games.forEach(g => {
+        if (!g.genre) return;
+        if ((g.playLogs || []).some(log => parseLocalDate(log.date) >= start && parseLocalDate(log.date) <= now)) {
+          genres.add(g.genre);
+        }
+      });
+      return genres.size;
+    }
+
+    case 'backlog':
+      return gamesInPeriod(g => {
+        if (!g.startDate) return false;
+        return parseLocalDate(g.startDate) >= start && parseLocalDate(g.startDate) <= now;
+      }).length;
+
+    case 'custom':
+    default:
+      return goal.currentValue;
+  }
+}
+
+export function getGoalDaysRemaining(endDate: string): number {
+  const end = parseLocalDate(endDate);
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  return Math.ceil((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+// ── Smart Goal Suggestions ──────────────────────────────────────────────────
+
+export interface SmartGoalSuggestion {
+  type: GoalType;
+  title: string;
+  description: string;
+  targetValue: number;
+  unit: string;
+  daysToDeadline: number;
+  icon: string;
+  rationale: string;
+  urgency: 'high' | 'medium' | 'low';
+}
+
+/**
+ * Analyze the user's library and return 3-5 personalized goal suggestions.
+ * `existingGoalTypes` prevents suggesting a type that's already active.
+ */
+export function getSmartGoalSuggestions(games: Game[], existingGoalTypes: GoalType[] = []): SmartGoalSuggestion[] {
+  const suggestions: SmartGoalSuggestion[] = [];
+  const existing = new Set(existingGoalTypes);
+
+  const now = new Date();
+  const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  const daysLeftInMonth = Math.max(1, Math.ceil((endOfMonth.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
+  const endOfNextMonth = new Date(now.getFullYear(), now.getMonth() + 2, 0);
+  const daysToEndOfNextMonth = Math.ceil((endOfNextMonth.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+
+  const ownedGames = games.filter(g => g.status !== 'Wishlist');
+  const completedGames = ownedGames.filter(g => g.status === 'Completed');
+  const inProgressGames = ownedGames.filter(g => g.status === 'In Progress');
+  const notStartedGames = ownedGames.filter(g => g.status === 'Not Started');
+
+  // Recent hours (last 30 days) from play logs
+  const thirtyDaysAgo = new Date(now);
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  let recentHours = 0;
+  const recentGenres = new Set<string>();
+  for (const g of ownedGames) {
+    for (const log of g.playLogs ?? []) {
+      const d = parseLocalDate(log.date);
+      if (d >= thirtyDaysAgo) {
+        recentHours += log.hours;
+        if (g.genre) recentGenres.add(g.genre);
+      }
+    }
+  }
+
+  // Monthly spending (last 30 days)
+  const recentSpending = ownedGames
+    .filter(g => g.datePurchased && parseLocalDate(g.datePurchased) >= thirtyDaysAgo)
+    .reduce((s, g) => s + g.price, 0);
+
+  // All-time genre diversity
+  const allGenres = new Set(ownedGames.filter(g => g.genre).map(g => g.genre!));
+  const completionRate = ownedGames.length > 0 ? completedGames.length / ownedGames.length : 0;
+
+  // Current streak
+  const currentStreak = getCurrentGamingStreak(games);
+
+  // 1. COMPLETION GOAL — when in-progress games exist and completion rate is low
+  if (!existing.has('completion') && inProgressGames.length >= 1) {
+    const target = Math.min(inProgressGames.length, daysLeftInMonth >= 14 ? 2 : 1);
+    suggestions.push({
+      type: 'completion',
+      title: `Finish ${target} game${target > 1 ? 's' : ''} this month`,
+      description: `You have ${inProgressGames.length} game${inProgressGames.length > 1 ? 's' : ''} in progress — close them out`,
+      targetValue: target,
+      unit: 'games',
+      daysToDeadline: daysLeftInMonth,
+      icon: '🏆',
+      rationale: `${completedGames.length} completed so far · ${(completionRate * 100).toFixed(0)}% completion rate`,
+      urgency: completionRate < 0.3 ? 'high' : 'medium',
+    });
+  }
+
+  // 2. HOURS GOAL — push to beat or maintain recent pace
+  if (!existing.has('hours') && recentHours > 0) {
+    // Target ~20% above recent monthly pace, rounded to nearest 5
+    const monthlyPace = recentHours; // already last-30-days
+    const targetHours = Math.max(5, Math.round((monthlyPace * 1.2) / 5) * 5);
+    suggestions.push({
+      type: 'hours',
+      title: `Log ${targetHours} hours this month`,
+      description: `You played ${recentHours.toFixed(0)}h in the last 30 days`,
+      targetValue: targetHours,
+      unit: 'hours',
+      daysToDeadline: daysLeftInMonth,
+      icon: '⏱️',
+      rationale: `Targeting 20% above your recent pace`,
+      urgency: 'low',
+    });
+  } else if (!existing.has('hours') && ownedGames.length > 0) {
+    suggestions.push({
+      type: 'hours',
+      title: 'Log 10 hours this month',
+      description: 'A modest target to build a consistent gaming habit',
+      targetValue: 10,
+      unit: 'hours',
+      daysToDeadline: daysLeftInMonth,
+      icon: '⏱️',
+      rationale: 'Great starting goal for building consistency',
+      urgency: 'low',
+    });
+  }
+
+  // 3. GENRE VARIETY GOAL — when genre diversity is low (< 3 genres recently)
+  if (!existing.has('genre_variety') && allGenres.size >= 3 && recentGenres.size < 2) {
+    suggestions.push({
+      type: 'genre_variety',
+      title: 'Explore 2 different genres',
+      description: 'You\'ve been sticking to familiar territory — branch out',
+      targetValue: 2,
+      unit: 'genres',
+      daysToDeadline: daysToEndOfNextMonth,
+      icon: '🎭',
+      rationale: `Only ${recentGenres.size} genre${recentGenres.size === 1 ? '' : 's'} played recently · ${allGenres.size} in your library`,
+      urgency: 'low',
+    });
+  }
+
+  // 4. BACKLOG GOAL — when backlog is large
+  if (!existing.has('backlog') && notStartedGames.length >= 3) {
+    const target = Math.min(notStartedGames.length, 3);
+    suggestions.push({
+      type: 'backlog',
+      title: `Start ${target} backlog games`,
+      description: `${notStartedGames.length} unplayed games are gathering dust`,
+      targetValue: target,
+      unit: 'games',
+      daysToDeadline: daysToEndOfNextMonth,
+      icon: '📦',
+      rationale: `${notStartedGames.length} unstarted games · chip away at the backlog`,
+      urgency: notStartedGames.length > 10 ? 'high' : 'medium',
+    });
+  }
+
+  // 5. SPENDING LIMIT GOAL — when recent spending is notable
+  if (!existing.has('spending') && recentSpending > 20) {
+    // Suggest a cap 10% below recent pace, rounded to nearest $10
+    const suggestedCap = Math.max(20, Math.round((recentSpending * 0.9) / 10) * 10);
+    suggestions.push({
+      type: 'spending',
+      title: `Keep spending under $${suggestedCap} this month`,
+      description: `You spent $${recentSpending.toFixed(0)} last month`,
+      targetValue: suggestedCap,
+      unit: 'dollars',
+      daysToDeadline: daysLeftInMonth,
+      icon: '💰',
+      rationale: `10% below your recent monthly average`,
+      urgency: recentSpending > 100 ? 'high' : 'medium',
+    });
+  }
+
+  // Always include at least one completion suggestion when no games exist in-progress
+  // but user has owned games — encourage starting
+  if (suggestions.length === 0 && !existing.has('backlog') && notStartedGames.length > 0) {
+    suggestions.push({
+      type: 'backlog',
+      title: 'Start a game from your backlog',
+      description: `Pick any of your ${notStartedGames.length} unplayed game${notStartedGames.length > 1 ? 's' : ''}`,
+      targetValue: 1,
+      unit: 'games',
+      daysToDeadline: daysLeftInMonth,
+      icon: '▶️',
+      rationale: 'The hardest part is starting',
+      urgency: 'medium',
+    });
+  }
+
+  return suggestions.slice(0, 4);
 }
