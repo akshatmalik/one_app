@@ -55,6 +55,7 @@ import { WhatsNewModal } from './components/WhatsNewModal';
 import { GameReviewChat } from './components/GameReviewChat';
 import { GameCompareModal } from './components/GameCompareModal';
 import { PlayTonightModal } from './components/PlayTonightModal';
+import { DailyChallenges } from './components/DailyChallenges';
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist';
@@ -997,6 +998,21 @@ export default function GameAnalyticsPage() {
                   setReviewChatGame(gwm);
                   setTabMode('games');
                 }
+              }}
+            />
+          )}
+
+          {/* Daily Challenges */}
+          {games.length > 0 && (
+            <DailyChallenges
+              games={games}
+              onLogTime={(game) => {
+                const gwm = gamesWithMetrics.find(g => g.id === game.id);
+                if (gwm) handleOpenPlayLog(gwm);
+              }}
+              onOpenDetail={(game) => {
+                const gwm = gamesWithMetrics.find(g => g.id === game.id);
+                if (gwm) setDetailGame(gwm);
               }}
             />
           )}

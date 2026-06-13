@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-13 06:00 — Games Tab — Daily & Weekly Challenges
+
+**Files**: app/apps/game-analytics/lib/challenge-engine.ts, app/apps/game-analytics/components/DailyChallenges.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Added a gamified daily and weekly challenge system that gives users a concrete reason to open the app every day. The challenge engine generates 3 daily challenges + 1 weekly challenge seeded by the current date (same challenges all day, fresh ones tomorrow). Challenge types include: any-session baseline, focus on a specific in-progress game, rescue a neglected title, protect a streak, push a game to the next value tier, rate a recently completed game, try a long-owned unstarted game, complete a game this week, play variety, hit hours targets, and reconnect with high-rated favourites. Progress is computed live from game data — no separate tracking needed. Completing a challenge awards points (10–100 pts) stored in localStorage; all-time totals accumulate across days. The collapsible panel lives between the fortune cookie and the tab bar on the Games tab.
+
+FOLLOW-UP: Could show a subtle "✓" badge on the tab bar when all daily challenges are complete, or animate a confetti burst on the first full-day completion.
+
 ## 2026-06-10 12:00 — Games Tab — Play Tonight Smart Recommender
 
 **Files**: app/apps/game-analytics/components/PlayTonightModal.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json
