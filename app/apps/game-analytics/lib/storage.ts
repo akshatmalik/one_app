@@ -2,7 +2,8 @@
 
 import { v4 as uuidv4 } from 'uuid';
 import { Game, GameRepository } from './types';
-import { getFirebaseDb, isFirebaseConfigured } from '@/lib/firebase';
+import { getFirebaseDb } from '@/lib/firebase';
+import { HybridRepository } from './hybrid-repository';
 import {
   collection,
   doc,
@@ -225,21 +226,9 @@ export class LocalStorageGameRepository implements GameRepository {
 }
 
 // Hybrid Repository - uses Firebase when authenticated, localStorage otherwise
-class HybridGameRepository implements GameRepository {
-  private firebaseRepo = new FirebaseGameRepository();
-  private localRepo = new LocalStorageGameRepository();
-  private useFirebase = false;
-
-  setUserId(userId: string): void {
-    // Only use Firebase for real user IDs, not 'local-user'
-    const isRealUser = !!userId && userId !== 'local-user';
-    this.useFirebase = isRealUser && isFirebaseConfigured();
-    this.firebaseRepo.setUserId(userId);
-    this.localRepo.setUserId(userId || 'local-user');
-  }
-
-  private get repo(): GameRepository {
-    return this.useFirebase ? this.firebaseRepo : this.localRepo;
+class HybridGameRepository extends HybridRepository<GameRepository> implements GameRepository {
+  constructor() {
+    super(new FirebaseGameRepository(), new LocalStorageGameRepository());
   }
 
   getAll(): Promise<Game[]> {
