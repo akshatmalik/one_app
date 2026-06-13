@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-13 06:00 — Game Detail & Analytics — Session Story + Engagement Intelligence
+
+**Files**: app/apps/game-analytics/components/SessionEngagementCard.tsx, app/apps/game-analytics/components/GameBottomSheet.tsx, app/apps/game-analytics/components/AnalyticsPanel.tsx, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Surfaced the never-rendered `getDopamineCurve` calculation across two surfaces. A new "Session Story" card inside each game's detail sheet shows the full session history as an SVG sparkline, classifies the engagement pattern (Honeymoon / Slow Burn / Steady Love / Spike & Crash / Revival) with a data-driven description and advice, and highlights the trend direction. The AnalyticsPanel's Dopamine Curve section is now "Engagement Intelligence" — it shows an "At Risk" alert listing every In Progress game with a fading pattern, a "Rising Strong" section for games with growing engagement, and the pattern-distribution bars are now interactive: tapping any pattern expands a per-game list with mini sparklines so users can see exactly which games belong where.
+
+FOLLOW-UP: Could add a push-style notification when a previously healthy In Progress game flips to a Honeymoon/Spike-Crash pattern after the next session log.
+
 ## 2026-06-10 12:00 — Games Tab — Play Tonight Smart Recommender
 
 **Files**: app/apps/game-analytics/components/PlayTonightModal.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json

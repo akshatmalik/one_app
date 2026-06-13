@@ -25,6 +25,7 @@ import { generateGameInsightPack, GameInsightPack } from '../lib/ai-game-service
 import { RatingStars } from './RatingStars';
 import { GameJourney } from './GameJourney';
 import { QuickCheckIn } from './QuickCheckIn';
+import { SessionEngagementCard } from './SessionEngagementCard';
 import clsx from 'clsx';
 
 interface GameBottomSheetProps {
@@ -598,6 +599,14 @@ export function GameBottomSheet({
                 {showJourney ? <ChevronUp size={15} className="text-white/30" /> : <ChevronDown size={15} className="text-white/30" />}
               </button>
               {showJourney && <GameJourney game={game} />}
+            </div>
+          )}
+
+          {/* Session Story — dopamine curve & engagement pattern */}
+          {game.playLogs && game.playLogs.length >= 3 && (
+            <div className="px-5 pb-4">
+              <span className="text-sm font-medium text-white/70 block mb-3">Session Story</span>
+              <SessionEngagementCard game={game} />
             </div>
           )}
 

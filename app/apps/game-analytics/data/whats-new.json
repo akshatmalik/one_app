@@ -1,6 +1,12 @@
 {
   "entries": [
     {
+      "date": "2026-06-13",
+      "area": "Game detail & Analytics",
+      "title": "See exactly how engaged you are with each game — and get warned when interest is fading",
+      "body": "Open any game you've played 3+ times and you'll now see a \"Session Story\" card: a visual chart of every session's length, your engagement pattern (are you in a Honeymoon phase? a Slow Burn? a Revival?), and a plain-English read on where things stand. In the Stats → Analytics tab, the new Engagement Intelligence section flags which of your In Progress games have declining sessions right now, celebrates the ones where you're getting more invested, and lets you tap any pattern to see which games fit it — all with mini session sparklines."
+    },
+    {
       "date": "2026-06-10",
       "area": "Games tab",
       "title": "Play Tonight — find your perfect match in seconds",

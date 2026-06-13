@@ -8,7 +8,7 @@ import {
 import {
   Brain, Calendar, Skull, Grid3X3, TrendingDown,
   Filter, Ruler, Hourglass, ArrowRightLeft, Activity,
-  AlertTriangle, LayoutGrid, Zap, Link2, Leaf,
+  AlertTriangle, LayoutGrid, Zap, Link2, Leaf, ChevronDown, ChevronUp,
 } from 'lucide-react';
 import { Game } from '../lib/types';
 import {
@@ -21,12 +21,15 @@ import {
   getAttentionSpanSpectrum,
   getReplacementChains,
   getLibraryDopamineProfile,
+  getDopamineCurve,
+  DopaminePattern,
   getGenreFatigue,
   getWeekOfMonthHeatmap,
   getValueVelocity,
   getCrossGenreAffinity,
   getSeasonalGenreDrift,
 } from '../lib/calculations';
+import { SessionEngagementCard } from './SessionEngagementCard';
 import clsx from 'clsx';
 
 interface AnalyticsPanelProps {
@@ -41,6 +44,8 @@ const QUADRANT_COLORS: Record<GenreSatisfactionPoint['quadrant'], string> = {
 };
 
 export function AnalyticsPanel({ games }: AnalyticsPanelProps) {
+  const [expandedPattern, setExpandedPattern] = React.useState<DopaminePattern | null>(null);
+
   const genreMatrix = useMemo(() => getGenreSatisfactionMatrix(games), [games]);
   const patterns = useMemo(() => getPlayPatterns(games), [games]);
   const autopsy = useMemo(() => getAbandonmentAutopsy(games), [games]);
@@ -54,6 +59,41 @@ export function AnalyticsPanel({ games }: AnalyticsPanelProps) {
   const valueVelocity = useMemo(() => getValueVelocity(games), [games]);
   const genreAffinity = useMemo(() => getCrossGenreAffinity(games), [games]);
   const seasonalDrift = useMemo(() => getSeasonalGenreDrift(games), [games]);
+
+  // Per-game engagement data for In Progress games with ≥3 sessions
+  const engagementData = useMemo(() => {
+    const inProgress = games.filter(
+      g => g.status === 'In Progress' && g.playLogs && g.playLogs.length >= 3,
+    );
+    return inProgress.map(g => ({ game: g, curve: getDopamineCurve(g) }));
+  }, [games]);
+
+  const atRiskGames = useMemo(
+    () => engagementData.filter(({ curve }) => curve.pattern === 'honeymoon' || curve.pattern === 'spike_crash'),
+    [engagementData],
+  );
+
+  const risingGames = useMemo(
+    () => engagementData.filter(({ curve }) => curve.pattern === 'slow_burn' || curve.pattern === 'revival'),
+    [engagementData],
+  );
+
+  // Map pattern key → games, for the expandable per-pattern list
+  const gamesByPattern = useMemo(() => {
+    const map: Record<DopaminePattern, Game[]> = {
+      honeymoon: [], slow_burn: [], steady_love: [], spike_crash: [], revival: [],
+    };
+    for (const { game, curve } of engagementData) {
+      map[curve.pattern].push(game);
+    }
+    return map;
+  }, [engagementData]);
+
+  // Pattern key → label mapping for the distribution list
+  const PATTERN_KEYS: Record<string, DopaminePattern> = {
+    'Honeymoon': 'honeymoon', 'Slow Burn': 'slow_burn', 'Steady Love': 'steady_love',
+    'Spike & Crash': 'spike_crash', 'Revival': 'revival',
+  };
 
   const ownedGames = games.filter(g => g.status !== 'Wishlist');
   if (ownedGames.length === 0) return null;
@@ -556,59 +596,141 @@ export function AnalyticsPanel({ games }: AnalyticsPanelProps) {
         </div>
       )}
 
-      {/* Dopamine Curve — Library Profile */}
-      {dopamineProfile.distribution.length > 0 && (
-        <div className="p-4 bg-gradient-to-br from-fuchsia-500/10 to-pink-500/10 border border-fuchsia-500/20 rounded-xl">
-          <h4 className="text-sm font-medium text-white/70 flex items-center gap-2 mb-3">
+      {/* Dopamine Curve — Engagement Intelligence */}
+      {(dopamineProfile.distribution.length > 0 || atRiskGames.length > 0) && (
+        <div className="p-4 bg-gradient-to-br from-fuchsia-500/10 to-pink-500/10 border border-fuchsia-500/20 rounded-xl space-y-4">
+          <h4 className="text-sm font-medium text-white/70 flex items-center gap-2">
             <Activity size={14} className="text-fuchsia-400" />
-            Dopamine Curve
+            Engagement Intelligence
           </h4>
-          <div className="text-center mb-3">
-            <div className="text-lg font-bold text-fuchsia-400">{dopamineProfile.dominantPattern}</div>
-            <div className="text-[10px] text-white/40">Your dominant engagement trajectory</div>
-          </div>
-          {(() => {
-            const total = dopamineProfile.distribution.reduce((s, d) => s + d.count, 0) || 1;
-            const maxCount = Math.max(...dopamineProfile.distribution.map(d => d.count));
-            const patternDescriptions: Record<string, string> = {
-              'Honeymoon': 'Big sessions early, tapering off',
-              'Slow Burn': 'Small sessions growing bigger',
-              'Steady Love': 'Consistent session lengths',
-              'Spike & Crash': 'One massive session then nothing',
-              'Revival': 'Dropped off, then came back strong',
-            };
-            return (
-              <div className="space-y-2">
-                {dopamineProfile.distribution.map(item => (
-                  <div key={item.pattern}>
-                    <div className="flex items-center justify-between mb-1">
-                      <div className="flex items-center gap-1.5">
-                        <span className={clsx(
-                          'text-xs font-medium',
-                          item.pattern === dopamineProfile.dominantPattern ? 'text-fuchsia-400' : 'text-white/60'
-                        )}>
-                          {item.pattern}
-                        </span>
-                        <span className="text-[9px] text-white/30">{patternDescriptions[item.pattern] || ''}</span>
-                      </div>
-                      <span className="text-xs text-white/40">{item.count} ({Math.round((item.count / total) * 100)}%)</span>
-                    </div>
-                    <div className="h-4 bg-white/5 rounded-full overflow-hidden">
-                      <div
-                        className={clsx(
-                          'h-full rounded-full transition-all duration-500',
-                          item.pattern === dopamineProfile.dominantPattern
-                            ? 'bg-fuchsia-500/70'
-                            : 'bg-fuchsia-500/30'
-                        )}
-                        style={{ width: `${maxCount > 0 ? (item.count / maxCount) * 100 : 0}%` }}
-                      />
-                    </div>
-                  </div>
+
+          {/* At-Risk alert — In Progress games with fading sessions */}
+          {atRiskGames.length > 0 && (
+            <div className="p-3 bg-amber-500/8 border border-amber-500/20 rounded-lg">
+              <div className="flex items-center gap-2 mb-2">
+                <AlertTriangle size={12} className="text-amber-400" />
+                <span className="text-xs font-semibold text-amber-400">
+                  Fading Fast — {atRiskGames.length} game{atRiskGames.length > 1 ? 's' : ''}
+                </span>
+              </div>
+              <p className="text-[10px] text-white/40 mb-2">
+                {atRiskGames.length === 1
+                  ? 'This In Progress game has declining session lengths.'
+                  : 'These In Progress games have declining session lengths.'}
+                {' '}Open the game detail to see the full curve.
+              </p>
+              <div className="space-y-1 divide-y divide-white/5">
+                {atRiskGames.map(({ game, curve }) => (
+                  <SessionEngagementCard key={game.id} game={game} compact />
                 ))}
               </div>
-            );
-          })()}
+            </div>
+          )}
+
+          {/* Rising stars — growing engagement */}
+          {risingGames.length > 0 && (
+            <div className="p-3 bg-emerald-500/8 border border-emerald-500/20 rounded-lg">
+              <div className="flex items-center gap-2 mb-2">
+                <TrendingDown size={12} className="text-emerald-400 rotate-180" />
+                <span className="text-xs font-semibold text-emerald-400">
+                  Rising Strong — {risingGames.length} game{risingGames.length > 1 ? 's' : ''}
+                </span>
+              </div>
+              <div className="space-y-1 divide-y divide-white/5">
+                {risingGames.map(({ game, curve }) => (
+                  <SessionEngagementCard key={game.id} game={game} compact />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Library-wide pattern distribution */}
+          {dopamineProfile.distribution.length > 0 && (
+            <div>
+              <div className="text-center mb-3">
+                <div className="text-base font-bold text-fuchsia-400">{dopamineProfile.dominantPattern}</div>
+                <div className="text-[10px] text-white/40">Your dominant engagement trajectory</div>
+              </div>
+              {(() => {
+                const total = dopamineProfile.distribution.reduce((s, d) => s + d.count, 0) || 1;
+                const maxCount = Math.max(...dopamineProfile.distribution.map(d => d.count));
+                const patternDescriptions: Record<string, string> = {
+                  'Honeymoon': 'Big sessions early, tapering off',
+                  'Slow Burn': 'Small sessions growing bigger',
+                  'Steady Love': 'Consistent session lengths',
+                  'Spike & Crash': 'One massive session then nothing',
+                  'Revival': 'Dropped off, then came back strong',
+                };
+                const patternColors: Record<string, string> = {
+                  'Honeymoon': '#f59e0b', 'Slow Burn': '#10b981', 'Steady Love': '#6366f1',
+                  'Spike & Crash': '#ef4444', 'Revival': '#8b5cf6',
+                };
+                return (
+                  <div className="space-y-2">
+                    {dopamineProfile.distribution.map(item => {
+                      const patKey = PATTERN_KEYS[item.pattern];
+                      const isExpanded = expandedPattern === patKey;
+                      const gamesInPattern = patKey ? gamesByPattern[patKey] : [];
+                      const hasGames = gamesInPattern.length > 0;
+                      const color = patternColors[item.pattern] || '#8b5cf6';
+                      return (
+                        <div key={item.pattern}>
+                          <button
+                            className={clsx(
+                              'w-full text-left',
+                              hasGames && 'cursor-pointer',
+                            )}
+                            onClick={() => hasGames && setExpandedPattern(isExpanded ? null : (patKey || null))}
+                            disabled={!hasGames}
+                          >
+                            <div className="flex items-center justify-between mb-1">
+                              <div className="flex items-center gap-1.5">
+                                <span className={clsx(
+                                  'text-xs font-medium',
+                                  item.pattern === dopamineProfile.dominantPattern ? 'text-fuchsia-400' : 'text-white/60',
+                                )}>
+                                  {item.pattern}
+                                </span>
+                                <span className="text-[9px] text-white/30">{patternDescriptions[item.pattern] || ''}</span>
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-xs text-white/40">
+                                  {item.count} ({Math.round((item.count / total) * 100)}%)
+                                </span>
+                                {hasGames && (
+                                  isExpanded
+                                    ? <ChevronUp size={11} className="text-white/30" />
+                                    : <ChevronDown size={11} className="text-white/30" />
+                                )}
+                              </div>
+                            </div>
+                            <div className="h-4 bg-white/5 rounded-full overflow-hidden">
+                              <div
+                                className="h-full rounded-full transition-all duration-500"
+                                style={{
+                                  width: `${maxCount > 0 ? (item.count / maxCount) * 100 : 0}%`,
+                                  backgroundColor: color,
+                                  opacity: item.pattern === dopamineProfile.dominantPattern ? 0.7 : 0.3,
+                                }}
+                              />
+                            </div>
+                          </button>
+                          {/* Expandable per-pattern game list */}
+                          {isExpanded && hasGames && (
+                            <div className="mt-2 pl-2 border-l-2 space-y-0.5" style={{ borderColor: `${color}30` }}>
+                              {gamesInPattern.map(g => (
+                                <SessionEngagementCard key={g.id} game={g} compact />
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+            </div>
+          )}
         </div>
       )}
 
