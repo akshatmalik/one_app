@@ -2496,6 +2496,45 @@ export function getSpendingForecast(games: Game[], year: number, budgetAmount?: 
 }
 
 /**
+ * Canonical game-event model.
+ *
+ * Purchases, starts, completions, abandonments, and play sessions derived from
+ * a game's date fields — the single source of truth for "things that happened"
+ * consumed by the Timeline (and available to recaps / On This Day). Sorted
+ * newest-first.
+ */
+export type GameEventType = 'purchase' | 'start' | 'complete' | 'abandon' | 'play';
+
+export interface GameEvent {
+  id: string;
+  date: string;
+  type: GameEventType;
+  game: Game;
+  hours?: number;
+  notes?: string;
+  price?: number;
+}
+
+export function getGameEvents(games: Game[]): GameEvent[] {
+  const events: GameEvent[] = [];
+  games.forEach(game => {
+    if (game.datePurchased && game.status !== 'Wishlist') {
+      events.push({ id: `purchase-${game.id}`, date: game.datePurchased, type: 'purchase', game, price: game.price });
+    }
+    if (game.startDate) {
+      events.push({ id: `start-${game.id}`, date: game.startDate, type: 'start', game });
+    }
+    if (game.endDate) {
+      events.push({ id: `end-${game.id}`, date: game.endDate, type: game.status === 'Abandoned' ? 'abandon' : 'complete', game });
+    }
+    game.playLogs?.forEach(log => {
+      events.push({ id: `play-${log.id}`, date: log.date, type: 'play', game, hours: log.hours, notes: log.notes });
+    });
+  });
+  return events.sort((a, b) => parseLocalDate(b.date).getTime() - parseLocalDate(a.date).getTime());
+}
+
+/**
  * "On This Day" Retrospective
  * Find gaming events that happened on today's date in previous periods
  */

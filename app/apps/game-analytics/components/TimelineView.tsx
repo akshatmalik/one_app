@@ -13,7 +13,7 @@ import { YearStoryMode } from './YearStoryMode';
 import { AwardsHub } from './AwardsHub';
 import { GameWithMetrics } from '../hooks/useAnalytics';
 import { generateMonthlyRecap, generateYearChapterTitles, generateMonthChapterTitles } from '../lib/ai-game-service';
-import { getQuarterInReviewData, getYearInReviewFullData } from '../lib/calculations';
+import { getQuarterInReviewData, getYearInReviewFullData, getGameEvents, GameEvent } from '../lib/calculations';
 import { RacingBarChart } from './RacingBarChart';
 import { HoursRace } from './HoursRace';
 import { ActivityFeed } from './ActivityFeed';
@@ -34,14 +34,9 @@ interface TimelineViewProps {
   onQuickAddTime?: (gameId: string, playLog: PlayLog) => Promise<void>;
 }
 
-type TimelineEvent = {
-  id: string;
-  date: string;
-  type: 'play' | 'purchase' | 'start' | 'complete' | 'abandon' | 'milestone';
-  game: Game;
-  hours?: number;
-  notes?: string;
-  price?: number;
+// Timeline events = canonical GameEvents plus a timeline-only 'milestone' variant.
+type TimelineEvent = Omit<GameEvent, 'type'> & {
+  type: GameEvent['type'] | 'milestone';
   milestoneTitle?: string;
   milestoneDescription?: string;
   milestoneIcon?: string;
@@ -72,27 +67,11 @@ export function TimelineView({ games, gamesWithMetrics, updateGame, onLogTime, o
     setWeekOffset(offset);
   };
 
-  // Build all events including milestones
+  // Build all events including milestones. Base events come from the shared
+  // getGameEvents() builder; milestones are timeline-specific and layered on top.
   const events = useMemo(() => {
-    const allEvents: TimelineEvent[] = [];
+    const allEvents: TimelineEvent[] = [...getGameEvents(games)];
     const dummyGame = games[0]; // fallback for milestone events
-
-    games.forEach(game => {
-      if (game.datePurchased && game.status !== 'Wishlist') {
-        allEvents.push({ id: `purchase-${game.id}`, date: game.datePurchased, type: 'purchase', game, price: game.price });
-      }
-      if (game.startDate) {
-        allEvents.push({ id: `start-${game.id}`, date: game.startDate, type: 'start', game });
-      }
-      if (game.endDate) {
-        allEvents.push({ id: `end-${game.id}`, date: game.endDate, type: game.status === 'Abandoned' ? 'abandon' : 'complete', game });
-      }
-      if (game.playLogs) {
-        game.playLogs.forEach(log => {
-          allEvents.push({ id: `play-${log.id}`, date: log.date, type: 'play', game, hours: log.hours, notes: log.notes });
-        });
-      }
-    });
 
     // Inject milestones
     if (dummyGame) {
