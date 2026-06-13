@@ -29,6 +29,7 @@ import {
   Pause,
 } from 'lucide-react';
 import { Game } from '../lib/types';
+import { EmptyState } from './EmptyState';
 import {
   getSessionAnalysis,
   getRotationStats,
@@ -575,7 +576,7 @@ export function ExpandedStatsPanel({ games }: ExpandedStatsPanelProps) {
             ))}
           </div>
         ) : (
-          <div className="text-center py-4 text-sm text-white/40">Not enough data yet</div>
+          <EmptyState className="py-4" />
         )}
       </div>
 
@@ -620,7 +621,7 @@ export function ExpandedStatsPanel({ games }: ExpandedStatsPanelProps) {
             </div>
           </>
         ) : (
-          <div className="text-center py-4 text-sm text-white/40">Add purchase dates to see your library age profile</div>
+          <EmptyState className="py-4" message="Add purchase dates to see your library age profile" />
         )}
       </div>
 

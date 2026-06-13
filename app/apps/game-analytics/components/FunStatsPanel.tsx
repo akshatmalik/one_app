@@ -40,6 +40,7 @@ import {
 } from '../lib/calculations';
 import { GameListModal } from './GameListModal';
 import { GameGraveyard } from './GameGraveyard';
+import { StatPanelCard } from './StatPanelCard';
 import clsx from 'clsx';
 
 interface FunStatsPanelProps {
@@ -338,12 +339,12 @@ export function FunStatsPanel({ games }: FunStatsPanelProps) {
 
       {/* Value Champion */}
       {valueChampion && (
-        <div className="p-4 bg-gradient-to-br from-emerald-500/10 to-green-500/10 border border-emerald-500/20 rounded-xl">
-          <div className="flex items-center gap-2 mb-3">
-            <Trophy size={16} className="text-emerald-400" />
-            <h4 className="text-sm font-medium text-white">Value Champion</h4>
-            <span className="text-xs text-white/30">Best $/hour</span>
-          </div>
+        <StatPanelCard
+          icon={<Trophy size={16} className="text-emerald-400" />}
+          title="Value Champion"
+          subtitle="Best $/hour"
+          gradient="from-emerald-500/10 to-green-500/10 border-emerald-500/20"
+        >
           <div className="p-3 bg-white/5 rounded-lg">
             <div className="flex items-center gap-3 mb-2">
               {valueChampion.game.thumbnail && (
@@ -363,7 +364,7 @@ export function FunStatsPanel({ games }: FunStatsPanelProps) {
               <span className="text-2xl font-bold text-emerald-400">${valueChampion.costPerHour.toFixed(2)}/hr</span>
             </div>
           </div>
-        </div>
+        </StatPanelCard>
       )}
 
       {/* Most Invested Franchise */}
@@ -549,12 +550,12 @@ export function FunStatsPanel({ games }: FunStatsPanelProps) {
 
       {/* The Dead Zone */}
       {deadZone.longestDrought > 0 && (
-        <div className="p-4 bg-gradient-to-br from-slate-500/10 to-gray-500/10 border border-slate-500/20 rounded-xl">
-          <div className="flex items-center gap-2 mb-3">
-            <Snowflake size={16} className="text-slate-400" />
-            <h4 className="text-sm font-medium text-white">The Dead Zone</h4>
-            <span className="text-xs text-white/30">Longest gaming drought</span>
-          </div>
+        <StatPanelCard
+          icon={<Snowflake size={16} className="text-slate-400" />}
+          title="The Dead Zone"
+          subtitle="Longest gaming drought"
+          gradient="from-slate-500/10 to-gray-500/10 border-slate-500/20"
+        >
           <div className="p-3 bg-white/5 rounded-lg">
             <div className="text-center mb-3">
               <div className="text-3xl font-bold text-slate-300">{deadZone.longestDrought}</div>
@@ -577,17 +578,17 @@ export function FunStatsPanel({ games }: FunStatsPanelProps) {
               </div>
             )}
           </div>
-        </div>
+        </StatPanelCard>
       )}
 
       {/* Pauses — per-game breaks across the library */}
       {pauseStats.totalPauses > 0 && (
-        <div className="p-4 bg-gradient-to-br from-amber-500/10 to-orange-500/10 border border-amber-500/20 rounded-xl">
-          <div className="flex items-center gap-2 mb-3">
-            <PauseCircle size={16} className="text-amber-400" />
-            <h4 className="text-sm font-medium text-white">Pauses</h4>
-            <span className="text-xs text-white/30">Breaks of {14}+ days between sessions</span>
-          </div>
+        <StatPanelCard
+          icon={<PauseCircle size={16} className="text-amber-400" />}
+          title="Pauses"
+          subtitle="Breaks of 14+ days between sessions"
+          gradient="from-amber-500/10 to-orange-500/10 border-amber-500/20"
+        >
           <div className="p-3 bg-white/5 rounded-lg">
             <div className="grid grid-cols-3 gap-3 text-center text-xs mb-3">
               <div>
@@ -625,17 +626,17 @@ export function FunStatsPanel({ games }: FunStatsPanelProps) {
                 ? `${pauseStats.currentlyPausedCount} game${pauseStats.currentlyPausedCount === 1 ? '' : 's'} waiting for you to return.`
                 : 'You tend to move on once you step away.'}
           </p>
-        </div>
+        </StatPanelCard>
       )}
 
       {/* Finishing Sprint Score */}
       {(finishingSprint.sprintFinishers > 0 || finishingSprint.steadyFinishers > 0) && (
-        <div className="p-4 bg-gradient-to-br from-violet-500/10 to-fuchsia-500/10 border border-violet-500/20 rounded-xl">
-          <div className="flex items-center gap-2 mb-3">
-            <Activity size={16} className="text-violet-400" />
-            <h4 className="text-sm font-medium text-white">Finishing Sprint</h4>
-            <span className="text-xs text-white/30">How you finish games</span>
-          </div>
+        <StatPanelCard
+          icon={<Activity size={16} className="text-violet-400" />}
+          title="Finishing Sprint"
+          subtitle="How you finish games"
+          gradient="from-violet-500/10 to-fuchsia-500/10 border-violet-500/20"
+        >
           <div className="p-3 bg-white/5 rounded-lg">
             <div className="text-center mb-3">
               <div className="text-3xl font-bold text-violet-400">{finishingSprint.avgSprintPercent}%</div>
@@ -657,7 +658,7 @@ export function FunStatsPanel({ games }: FunStatsPanelProps) {
               ? 'You tend to sprint to the finish line!'
               : 'You maintain a steady pace throughout'}
           </p>
-        </div>
+        </StatPanelCard>
       )}
 
       {/* Return Rate / Comeback Analysis */}
