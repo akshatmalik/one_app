@@ -21,6 +21,10 @@ export const DISCOVERABLE_FEATURES: DiscoverableFeature[] = [
   { id: 'the-vault', blurb: 'The Vault in Stats resurfaces owned games gathering dust — rediscover one this week.', tab: 'stats', cta: 'Open Stats' },
   { id: 'buy-next', blurb: 'Wondering what to buy next? Stats shows the kinds of games that earn your highest satisfaction.', tab: 'stats', cta: 'Open Stats' },
   { id: 'taste-twins', blurb: 'Taste Twin Genres in Stats reveals which genres you secretly treat exactly alike.', tab: 'stats', cta: 'Open Stats' },
+  { id: 'genre-goal', blurb: 'Set a Genre Goal in Stats and track how many different genres you play this year.', tab: 'stats', cta: 'Open Stats' },
+  { id: 'pin-favorites', blurb: 'Editing a game lets you Pin it to the top of your list — handy for your current obsession.' },
+  { id: 'gut-verdict', blurb: 'When editing a game, set "Your Gut Verdict" (worth it / regret) to override the value math with how you actually feel.' },
+  { id: 'tags', blurb: 'Add Tags like "co-op" or "comfort" when editing a game, then search by them.' },
 ];
 
 const SEEN_KEY = 'ga-feature-discovery-seen';
