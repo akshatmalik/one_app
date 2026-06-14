@@ -14,6 +14,7 @@ import { PlayLogModal } from './components/PlayLogModal';
 import { TimelineView } from './components/TimelineView';
 import { StatsView } from './components/StatsView';
 import { MoreInsightsPanel } from './components/MoreInsightsPanel';
+import { FunZonePanel } from './components/FunZonePanel';
 import { AIChatTab } from './components/AIChatTab';
 import { AgentExecutors } from './lib/ai-actions';
 import { UpNextTab } from './components/UpNextTab';
@@ -1351,8 +1352,9 @@ export default function GameAnalyticsPage() {
           )}
 
           {tabMode === 'stats' && games.length > 0 && (
-            <div className="mt-4">
+            <div className="mt-4 space-y-4">
               <MoreInsightsPanel games={games} />
+              <FunZonePanel games={games} />
             </div>
           )}
 
