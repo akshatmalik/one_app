@@ -18,6 +18,7 @@ import { FunZonePanel } from './components/FunZonePanel';
 import { AnalyticsExtrasPanel } from './components/AnalyticsExtrasPanel';
 import { TryThisPrompt } from './components/TryThisPrompt';
 import { GenreGoalsCard } from './components/GenreGoalsCard';
+import { ComparePeriodsCard } from './components/ComparePeriodsCard';
 import { AIChatTab } from './components/AIChatTab';
 import { AgentExecutors } from './lib/ai-actions';
 import { UpNextTab } from './components/UpNextTab';
@@ -1363,6 +1364,7 @@ export default function GameAnalyticsPage() {
             <div className="mt-4 space-y-4">
               <MoreInsightsPanel games={games} />
               <GenreGoalsCard games={games} />
+              <ComparePeriodsCard games={games} />
               <AnalyticsExtrasPanel games={games} />
               <FunZonePanel games={games} />
             </div>
