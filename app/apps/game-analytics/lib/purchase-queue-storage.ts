@@ -2,7 +2,8 @@
 
 import { v4 as uuidv4 } from 'uuid';
 import { PurchaseQueueEntry, PurchaseQueueRepository } from './types';
-import { getFirebaseDb, isFirebaseConfigured } from '@/lib/firebase';
+import { getFirebaseDb } from '@/lib/firebase';
+import { HybridRepository } from './hybrid-repository';
 import {
   collection,
   doc,
@@ -128,20 +129,9 @@ class LocalStoragePurchaseQueueRepository implements PurchaseQueueRepository {
 
 // ── Hybrid ────────────────────────────────────────────────────────
 
-class HybridPurchaseQueueRepository implements PurchaseQueueRepository {
-  private firebaseRepo = new FirebasePurchaseQueueRepository();
-  private localRepo = new LocalStoragePurchaseQueueRepository();
-  private useFirebase = false;
-
-  setUserId(userId: string) {
-    const real = !!userId && userId !== 'local-user';
-    this.useFirebase = real && isFirebaseConfigured();
-    this.firebaseRepo.setUserId(userId);
-    this.localRepo.setUserId(userId || 'local-user');
-  }
-
-  private get repo(): PurchaseQueueRepository {
-    return this.useFirebase ? this.firebaseRepo : this.localRepo;
+class HybridPurchaseQueueRepository extends HybridRepository<PurchaseQueueRepository> implements PurchaseQueueRepository {
+  constructor() {
+    super(new FirebasePurchaseQueueRepository(), new LocalStoragePurchaseQueueRepository());
   }
 
   getAll() { return this.repo.getAll(); }

@@ -4,7 +4,7 @@ import { useState } from 'react';
 import {
   Sparkles, Gem, Frown, Package, Flame, Trophy, Target, TrendingUp, Zap,
   Clock, Heart, Percent, Calendar, Star, Shield, Rocket, Crown,
-  Gamepad2, CheckCircle2, Timer, Skull, Snowflake, Activity, RotateCcw
+  Gamepad2, CheckCircle2, Timer, Skull, Snowflake, Activity, RotateCcw, PauseCircle
 } from 'lucide-react';
 import { Game } from '../lib/types';
 import {
@@ -33,12 +33,14 @@ import {
   getStickyGames,
   getSunkCostGames,
   getDeadZone,
+  getPauseStats,
   getFinishingSprintScore,
   getReturnRate,
   getParallelUniverseImpact,
 } from '../lib/calculations';
 import { GameListModal } from './GameListModal';
 import { GameGraveyard } from './GameGraveyard';
+import { StatPanelCard } from './StatPanelCard';
 import clsx from 'clsx';
 
 interface FunStatsPanelProps {
@@ -80,6 +82,7 @@ export function FunStatsPanel({ games }: FunStatsPanelProps) {
   const stickyGames = getStickyGames(games);
   const sunkCostGames = getSunkCostGames(games);
   const deadZone = getDeadZone(games);
+  const pauseStats = getPauseStats(games);
   const finishingSprint = getFinishingSprintScore(games);
   const returnRate = getReturnRate(games);
 
@@ -336,12 +339,12 @@ export function FunStatsPanel({ games }: FunStatsPanelProps) {
 
       {/* Value Champion */}
       {valueChampion && (
-        <div className="p-4 bg-gradient-to-br from-emerald-500/10 to-green-500/10 border border-emerald-500/20 rounded-xl">
-          <div className="flex items-center gap-2 mb-3">
-            <Trophy size={16} className="text-emerald-400" />
-            <h4 className="text-sm font-medium text-white">Value Champion</h4>
-            <span className="text-xs text-white/30">Best $/hour</span>
-          </div>
+        <StatPanelCard
+          icon={<Trophy size={16} className="text-emerald-400" />}
+          title="Value Champion"
+          subtitle="Best $/hour"
+          gradient="from-emerald-500/10 to-green-500/10 border-emerald-500/20"
+        >
           <div className="p-3 bg-white/5 rounded-lg">
             <div className="flex items-center gap-3 mb-2">
               {valueChampion.game.thumbnail && (
@@ -361,7 +364,7 @@ export function FunStatsPanel({ games }: FunStatsPanelProps) {
               <span className="text-2xl font-bold text-emerald-400">${valueChampion.costPerHour.toFixed(2)}/hr</span>
             </div>
           </div>
-        </div>
+        </StatPanelCard>
       )}
 
       {/* Most Invested Franchise */}
@@ -547,12 +550,12 @@ export function FunStatsPanel({ games }: FunStatsPanelProps) {
 
       {/* The Dead Zone */}
       {deadZone.longestDrought > 0 && (
-        <div className="p-4 bg-gradient-to-br from-slate-500/10 to-gray-500/10 border border-slate-500/20 rounded-xl">
-          <div className="flex items-center gap-2 mb-3">
-            <Snowflake size={16} className="text-slate-400" />
-            <h4 className="text-sm font-medium text-white">The Dead Zone</h4>
-            <span className="text-xs text-white/30">Longest gaming drought</span>
-          </div>
+        <StatPanelCard
+          icon={<Snowflake size={16} className="text-slate-400" />}
+          title="The Dead Zone"
+          subtitle="Longest gaming drought"
+          gradient="from-slate-500/10 to-gray-500/10 border-slate-500/20"
+        >
           <div className="p-3 bg-white/5 rounded-lg">
             <div className="text-center mb-3">
               <div className="text-3xl font-bold text-slate-300">{deadZone.longestDrought}</div>
@@ -575,17 +578,65 @@ export function FunStatsPanel({ games }: FunStatsPanelProps) {
               </div>
             )}
           </div>
-        </div>
+        </StatPanelCard>
+      )}
+
+      {/* Pauses — per-game breaks across the library */}
+      {pauseStats.totalPauses > 0 && (
+        <StatPanelCard
+          icon={<PauseCircle size={16} className="text-amber-400" />}
+          title="Pauses"
+          subtitle="Breaks of 14+ days between sessions"
+          gradient="from-amber-500/10 to-orange-500/10 border-amber-500/20"
+        >
+          <div className="p-3 bg-white/5 rounded-lg">
+            <div className="grid grid-cols-3 gap-3 text-center text-xs mb-3">
+              <div>
+                <div className="text-2xl font-bold text-amber-300">{pauseStats.totalPauses}</div>
+                <div className="text-white/30">total pauses</div>
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-orange-300">{pauseStats.currentlyPausedCount}</div>
+                <div className="text-white/30">paused now</div>
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-emerald-300">{pauseStats.resumeRate}%</div>
+                <div className="text-white/30">resumed</div>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3 text-center text-xs">
+              {pauseStats.mostPaused && (
+                <div className="p-2 bg-white/5 rounded-lg">
+                  <div className="text-sm font-medium text-amber-200 truncate">{pauseStats.mostPaused.name}</div>
+                  <div className="text-white/30">most paused ({pauseStats.mostPaused.pauseCount}x)</div>
+                </div>
+              )}
+              {pauseStats.longestCurrentPause && (
+                <div className="p-2 bg-white/5 rounded-lg">
+                  <div className="text-sm font-medium text-orange-200 truncate">{pauseStats.longestCurrentPause.name}</div>
+                  <div className="text-white/30">paused {pauseStats.longestCurrentPause.days}d</div>
+                </div>
+              )}
+            </div>
+          </div>
+          <p className="text-xs text-amber-400/70 mt-3 italic">
+            {pauseStats.resumeRate >= 60
+              ? 'You usually come back — most paused games get resumed.'
+              : pauseStats.currentlyPausedCount > 0
+                ? `${pauseStats.currentlyPausedCount} game${pauseStats.currentlyPausedCount === 1 ? '' : 's'} waiting for you to return.`
+                : 'You tend to move on once you step away.'}
+          </p>
+        </StatPanelCard>
       )}
 
       {/* Finishing Sprint Score */}
       {(finishingSprint.sprintFinishers > 0 || finishingSprint.steadyFinishers > 0) && (
-        <div className="p-4 bg-gradient-to-br from-violet-500/10 to-fuchsia-500/10 border border-violet-500/20 rounded-xl">
-          <div className="flex items-center gap-2 mb-3">
-            <Activity size={16} className="text-violet-400" />
-            <h4 className="text-sm font-medium text-white">Finishing Sprint</h4>
-            <span className="text-xs text-white/30">How you finish games</span>
-          </div>
+        <StatPanelCard
+          icon={<Activity size={16} className="text-violet-400" />}
+          title="Finishing Sprint"
+          subtitle="How you finish games"
+          gradient="from-violet-500/10 to-fuchsia-500/10 border-violet-500/20"
+        >
           <div className="p-3 bg-white/5 rounded-lg">
             <div className="text-center mb-3">
               <div className="text-3xl font-bold text-violet-400">{finishingSprint.avgSprintPercent}%</div>
@@ -607,7 +658,7 @@ export function FunStatsPanel({ games }: FunStatsPanelProps) {
               ? 'You tend to sprint to the finish line!'
               : 'You maintain a steady pace throughout'}
           </p>
-        </div>
+        </StatPanelCard>
       )}
 
       {/* Return Rate / Comeback Analysis */}

@@ -393,45 +393,15 @@ export interface PeriodStats {
 }
 
 export function getPeriodStats(games: Game[], days: number): PeriodStats {
+  // Last N days from now — delegate to the shared range implementation.
   const cutoffDate = new Date();
   cutoffDate.setDate(cutoffDate.getDate() - days);
-
-  const gamesWithRecentActivity: Map<string, { game: Game; hours: number; sessions: number }> = new Map();
-  let totalHours = 0;
-  let totalSessions = 0;
-
-  games.forEach(game => {
-    if (game.playLogs) {
-      game.playLogs.forEach(log => {
-        const logDate = parseLocalDate(log.date);
-        if (logDate >= cutoffDate) {
-          const existing = gamesWithRecentActivity.get(game.id) || { game, hours: 0, sessions: 0 };
-          existing.hours += log.hours;
-          existing.sessions += 1;
-          gamesWithRecentActivity.set(game.id, existing);
-          totalHours += log.hours;
-          totalSessions += 1;
-        }
-      });
-    }
-  });
-
-  const gamesPlayed = Array.from(gamesWithRecentActivity.values()).map(g => g.game);
-  const mostPlayedEntry = Array.from(gamesWithRecentActivity.values())
-    .sort((a, b) => b.hours - a.hours)[0];
-
-  return {
-    gamesPlayed,
-    totalHours,
-    totalSessions,
-    mostPlayedGame: mostPlayedEntry ? { name: mostPlayedEntry.game.name, hours: mostPlayedEntry.hours, thumbnail: mostPlayedEntry.game.thumbnail } : null,
-    averageSessionLength: totalSessions > 0 ? totalHours / totalSessions : 0,
-    uniqueGames: gamesPlayed.length,
-  };
+  return getPeriodStatsForRange(games, cutoffDate, new Date());
 }
 
-// Get stats for a specific date range
-function getPeriodStatsForRange(games: Game[], startDate: Date, endDate: Date): PeriodStats {
+// Get stats for a specific date range (shared core used by getPeriodStats and
+// the period-vs-period comparison UI).
+export function getPeriodStatsForRange(games: Game[], startDate: Date, endDate: Date): PeriodStats {
   const gamesWithActivity: Map<string, { game: Game; hours: number; sessions: number }> = new Map();
   let totalHours = 0;
   let totalSessions = 0;
@@ -2523,6 +2493,45 @@ export function getSpendingForecast(games: Game[], year: number, budgetAmount?: 
   });
 
   return { projectedAnnual, monthlyAvg, currentYearSpent, monthsElapsed, budgetAmount: budget, onTrack, monthlyData };
+}
+
+/**
+ * Canonical game-event model.
+ *
+ * Purchases, starts, completions, abandonments, and play sessions derived from
+ * a game's date fields — the single source of truth for "things that happened"
+ * consumed by the Timeline (and available to recaps / On This Day). Sorted
+ * newest-first.
+ */
+export type GameEventType = 'purchase' | 'start' | 'complete' | 'abandon' | 'play';
+
+export interface GameEvent {
+  id: string;
+  date: string;
+  type: GameEventType;
+  game: Game;
+  hours?: number;
+  notes?: string;
+  price?: number;
+}
+
+export function getGameEvents(games: Game[]): GameEvent[] {
+  const events: GameEvent[] = [];
+  games.forEach(game => {
+    if (game.datePurchased && game.status !== 'Wishlist') {
+      events.push({ id: `purchase-${game.id}`, date: game.datePurchased, type: 'purchase', game, price: game.price });
+    }
+    if (game.startDate) {
+      events.push({ id: `start-${game.id}`, date: game.startDate, type: 'start', game });
+    }
+    if (game.endDate) {
+      events.push({ id: `end-${game.id}`, date: game.endDate, type: game.status === 'Abandoned' ? 'abandon' : 'complete', game });
+    }
+    game.playLogs?.forEach(log => {
+      events.push({ id: `play-${log.id}`, date: log.date, type: 'play', game, hours: log.hours, notes: log.notes });
+    });
+  });
+  return events.sort((a, b) => parseLocalDate(b.date).getTime() - parseLocalDate(a.date).getTime());
 }
 
 /**
@@ -8398,6 +8407,95 @@ export function getDeadZone(games: Game[]): DeadZoneData {
   return { longestDrought: longest, startDate, endDate, whatBrokeIt: breakGame?.name || 'Unknown' };
 }
 
+// --- Pauses: per-game break tracking ---
+// A "pause" is a gap of PAUSE_THRESHOLD_DAYS+ between consecutive sessions of a
+// single game. Complements getDeadZone (library-wide single drought) and
+// getReturnRate (did you come back) with a per-game break story.
+export const PAUSE_THRESHOLD_DAYS = 14;
+
+export interface GamePauses {
+  pauseCount: number;        // number of break gaps in this game's history
+  longestPause: number;      // days of the longest break between sessions
+  totalPausedDays: number;   // sum of all break-gap days
+  currentPauseDays: number;  // days since the last session (0 if completed)
+  isPaused: boolean;         // currently sitting in a pause (active-ish game)
+  resumedCount: number;      // how many of the breaks were followed by a return
+}
+
+export function getGamePauses(game: Game): GamePauses {
+  const empty: GamePauses = {
+    pauseCount: 0, longestPause: 0, totalPausedDays: 0,
+    currentPauseDays: 0, isPaused: false, resumedCount: 0,
+  };
+  if (!game.playLogs || game.playLogs.length === 0) return empty;
+
+  const dates = [...new Set(game.playLogs.map(l => l.date))].sort(
+    (a, b) => parseLocalDate(a).getTime() - parseLocalDate(b).getTime()
+  );
+
+  let pauseCount = 0, longestPause = 0, totalPausedDays = 0, resumedCount = 0;
+  for (let i = 1; i < dates.length; i++) {
+    const gap = (parseLocalDate(dates[i]).getTime() - parseLocalDate(dates[i - 1]).getTime()) / (24 * 60 * 60 * 1000);
+    if (gap >= PAUSE_THRESHOLD_DAYS) {
+      pauseCount++;
+      totalPausedDays += Math.round(gap);
+      longestPause = Math.max(longestPause, Math.round(gap));
+      resumedCount++; // there was a later session, so this break was resumed
+    }
+  }
+
+  // Current pause: days since last session, only meaningful for non-completed games
+  const lastDate = dates[dates.length - 1];
+  const currentPauseDays = Math.round(
+    (Date.now() - parseLocalDate(lastDate).getTime()) / (24 * 60 * 60 * 1000)
+  );
+  const isPaused = game.status !== 'Completed' && game.status !== 'Wishlist'
+    && currentPauseDays >= PAUSE_THRESHOLD_DAYS;
+
+  return { pauseCount, longestPause, totalPausedDays, currentPauseDays, isPaused, resumedCount };
+}
+
+export interface PauseStatsData {
+  totalPauses: number;            // pauses across the whole library
+  currentlyPausedCount: number;   // games sitting in a pause right now
+  avgPauseLength: number;         // average break length in days
+  mostPaused: { name: string; pauseCount: number } | null;
+  longestCurrentPause: { name: string; days: number } | null;
+  resumeRate: number;             // % of pauses that were eventually resumed
+}
+
+export function getPauseStats(games: Game[]): PauseStatsData {
+  const tracked = games.filter(g => g.playLogs && g.playLogs.length >= 2 && g.status !== 'Wishlist');
+  let totalPauses = 0, totalPausedDays = 0, totalResumed = 0, currentlyPausedCount = 0;
+  let mostPaused: { name: string; pauseCount: number } | null = null;
+  let longestCurrentPause: { name: string; days: number } | null = null;
+
+  for (const game of tracked) {
+    const p = getGamePauses(game);
+    totalPauses += p.pauseCount;
+    totalPausedDays += p.totalPausedDays;
+    totalResumed += p.resumedCount;
+    if (p.isPaused) {
+      currentlyPausedCount++;
+      if (!longestCurrentPause || p.currentPauseDays > longestCurrentPause.days) {
+        longestCurrentPause = { name: game.name, days: p.currentPauseDays };
+      }
+    }
+    if (p.pauseCount > 0 && (!mostPaused || p.pauseCount > mostPaused.pauseCount)) {
+      mostPaused = { name: game.name, pauseCount: p.pauseCount };
+    }
+  }
+
+  return {
+    totalPauses,
+    currentlyPausedCount,
+    avgPauseLength: totalPauses > 0 ? Math.round(totalPausedDays / totalPauses) : 0,
+    mostPaused,
+    longestCurrentPause,
+    resumeRate: totalPauses > 0 ? Math.round((totalResumed / totalPauses) * 100) : 0,
+  };
+}
+
 // Stat 21: Library DNA Fingerprint
 export interface LibraryDNAData {
   axes: { label: string; value: number }[];
@@ -9102,6 +9200,16 @@ export function getSmartNudges(games: Game[]): SmartNudge[] {
     if (avgCph < 3.5) {
       nudges.push({ text: `Your library averages $${avgCph.toFixed(2)}/hr — better than movies`, type: 'value', priority: 50 });
     }
+  }
+
+  // Paused games — feed the Pauses stat into nudges (return to keep them alive)
+  const pauses = getPauseStats(games);
+  if (pauses.longestCurrentPause && pauses.longestCurrentPause.days >= 21) {
+    nudges.push({
+      text: `${pauses.longestCurrentPause.name} has been paused ${pauses.longestCurrentPause.days} days — pick it back up?`,
+      type: 'neglect',
+      priority: 68,
+    });
   }
 
   return nudges.sort((a, b) => b.priority - a.priority);

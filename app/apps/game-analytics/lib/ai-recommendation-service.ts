@@ -1,35 +1,9 @@
 'use client';
 
-import { getAI, getGenerativeModel, GoogleAIBackend } from 'firebase/ai';
-import { initializeApp, getApps } from 'firebase/app';
+import { getAIModel, getGroundedAIModel } from './ai-client';
 import { TasteProfile, GameRecommendation, Game, RecommendationCategory } from './types';
 import { getTotalHours } from './calculations';
 import { RAWGGameData, batchFetchRAWGData } from './rawg-api';
-
-const firebaseConfig = {
-  apiKey: "AIzaSyBS3IVvszDrm_zjjXu8TATgs1H-FlegHtM",
-  authDomain: "oneapp-943e3.firebaseapp.com",
-  projectId: "oneapp-943e3",
-  storageBucket: "oneapp-943e3.firebasestorage.app",
-  messagingSenderId: "1052736128978",
-  appId: "1:1052736128978:web:9d42b47c6a343eac35aa0b",
-};
-
-function getAIModel() {
-  const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
-  const ai = getAI(app, { backend: new GoogleAIBackend() });
-  return getGenerativeModel(ai, { model: "gemini-2.5-flash" });
-}
-
-// Grounded model — uses Google Search to verify real games and find current releases
-function getGroundedAIModel() {
-  const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
-  const ai = getAI(app, { backend: new GoogleAIBackend() });
-  return getGenerativeModel(ai, {
-    model: "gemini-2.5-flash",
-    tools: [{ googleSearch: {} }],
-  } as Parameters<typeof getGenerativeModel>[1]);
-}
 
 // After AI generates game names, batch-fetch RAWG data (thumbnail, metacritic, rating) and attach
 async function enrichWithRAWGData<T extends AIRecommendation>(recommendations: T[]): Promise<T[]> {

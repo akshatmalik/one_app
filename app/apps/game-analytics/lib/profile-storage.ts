@@ -1,7 +1,8 @@
 'use client';
 
 import { TasteProfile } from './types';
-import { getFirebaseDb, isFirebaseConfigured } from '@/lib/firebase';
+import { getFirebaseDb } from '@/lib/firebase';
+import { HybridRepository } from './hybrid-repository';
 import { doc, getDoc, setDoc, updateDoc, deleteField } from 'firebase/firestore';
 
 const STORAGE_KEY = 'game-analytics-taste-overrides';
@@ -85,20 +86,9 @@ class LocalStorageProfileRepository implements ProfileRepository {
 }
 
 // Hybrid — uses Firebase when authenticated, localStorage otherwise
-class HybridProfileRepository implements ProfileRepository {
-  private firebaseRepo = new FirebaseProfileRepository();
-  private localRepo = new LocalStorageProfileRepository();
-  private useFirebase = false;
-
-  setUserId(userId: string): void {
-    const isRealUser = !!userId && userId !== 'local-user';
-    this.useFirebase = isRealUser && isFirebaseConfigured();
-    this.firebaseRepo.setUserId(userId);
-    this.localRepo.setUserId(userId || 'local-user');
-  }
-
-  private get repo(): ProfileRepository {
-    return this.useFirebase ? this.firebaseRepo : this.localRepo;
+class HybridProfileRepository extends HybridRepository<ProfileRepository> implements ProfileRepository {
+  constructor() {
+    super(new FirebaseProfileRepository(), new LocalStorageProfileRepository());
   }
 
   load() { return this.repo.load(); }

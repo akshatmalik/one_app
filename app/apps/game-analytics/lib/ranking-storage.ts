@@ -2,7 +2,8 @@
 
 import { v4 as uuidv4 } from 'uuid';
 import { GameRanking, RatingBattle, RankingPeriod, RankingRepository, BattleRepository } from './types';
-import { getFirebaseDb, isFirebaseConfigured } from '@/lib/firebase';
+import { getFirebaseDb } from '@/lib/firebase';
+import { HybridRepository } from './hybrid-repository';
 import {
   collection,
   doc,
@@ -169,19 +170,10 @@ class LocalStorageRankingRepository implements RankingRepository {
 
 // Hybrid ─────────────────────────────────────────────────────────────
 
-class HybridRankingRepository implements RankingRepository {
-  private fb = new FirebaseRankingRepository();
-  private ls = new LocalStorageRankingRepository();
-  private useFirebase = false;
-
-  setUserId(userId: string) {
-    const real = !!userId && userId !== 'local-user';
-    this.useFirebase = real && isFirebaseConfigured();
-    this.fb.setUserId(userId);
-    this.ls.setUserId(userId || 'local-user');
+class HybridRankingRepository extends HybridRepository<RankingRepository> implements RankingRepository {
+  constructor() {
+    super(new FirebaseRankingRepository(), new LocalStorageRankingRepository());
   }
-
-  private get repo(): RankingRepository { return this.useFirebase ? this.fb : this.ls; }
 
   getForPeriod(period: RankingPeriod, periodKey: string) { return this.repo.getForPeriod(period, periodKey); }
   upsert(data: Omit<GameRanking, 'id' | 'userId' | 'createdAt' | 'updatedAt'>) { return this.repo.upsert(data); }
@@ -309,19 +301,10 @@ class LocalStorageBattleRepository implements BattleRepository {
 
 // Hybrid ─────────────────────────────────────────────────────────────
 
-class HybridBattleRepository implements BattleRepository {
-  private fb = new FirebaseBattleRepository();
-  private ls = new LocalStorageBattleRepository();
-  private useFirebase = false;
-
-  setUserId(userId: string) {
-    const real = !!userId && userId !== 'local-user';
-    this.useFirebase = real && isFirebaseConfigured();
-    this.fb.setUserId(userId);
-    this.ls.setUserId(userId || 'local-user');
+class HybridBattleRepository extends HybridRepository<BattleRepository> implements BattleRepository {
+  constructor() {
+    super(new FirebaseBattleRepository(), new LocalStorageBattleRepository());
   }
-
-  private get repo(): BattleRepository { return this.useFirebase ? this.fb : this.ls; }
 
   getForPeriod(period: RankingPeriod, periodKey: string) { return this.repo.getForPeriod(period, periodKey); }
   getPairHistory(id1: string, id2: string) { return this.repo.getPairHistory(id1, id2); }

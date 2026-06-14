@@ -2,7 +2,8 @@
 
 import { v4 as uuidv4 } from 'uuid';
 import { GameRecommendation, RecommendationRepository } from './types';
-import { getFirebaseDb, isFirebaseConfigured } from '@/lib/firebase';
+import { getFirebaseDb } from '@/lib/firebase';
+import { HybridRepository } from './hybrid-repository';
 import {
   collection,
   doc,
@@ -130,20 +131,9 @@ class LocalStorageRecommendationRepository implements RecommendationRepository {
 }
 
 // Hybrid Repository — Firebase when authenticated, localStorage otherwise
-class HybridRecommendationRepository implements RecommendationRepository {
-  private firebaseRepo = new FirebaseRecommendationRepository();
-  private localRepo = new LocalStorageRecommendationRepository();
-  private useFirebase = false;
-
-  setUserId(userId: string): void {
-    const isRealUser = !!userId && userId !== 'local-user';
-    this.useFirebase = isRealUser && isFirebaseConfigured();
-    this.firebaseRepo.setUserId(userId);
-    this.localRepo.setUserId(userId || 'local-user');
-  }
-
-  private get repo(): RecommendationRepository {
-    return this.useFirebase ? this.firebaseRepo : this.localRepo;
+class HybridRecommendationRepository extends HybridRepository<RecommendationRepository> implements RecommendationRepository {
+  constructor() {
+    super(new FirebaseRecommendationRepository(), new LocalStorageRecommendationRepository());
   }
 
   getAll() { return this.repo.getAll(); }

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, CalendarClock, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical, Download, Gift, ShoppingCart, Search, X, Moon } from 'lucide-react';
+import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, CalendarClock, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical, Download, Gift, ShoppingCart, Search, X, Moon, CreditCard, Swords } from 'lucide-react';
 import { useGames } from './hooks/useGames';
 import { useAnalytics, GameWithMetrics } from './hooks/useAnalytics';
 import { useBudget } from './hooks/useBudget';
@@ -26,7 +26,7 @@ import { BASELINE_BUY_QUEUE } from './data/baseline-buy-queue';
 import { purchaseQueueRepository } from './lib/purchase-queue-storage';
 import { useAuthContext } from '@/lib/AuthContext';
 import { useToast } from '@/components/Toast';
-import { getROIRating, getWeekStatsForOffset, getGamesPlayedInTimeRange, getCompletionProbability, getGameHealthDot, getRelativeTime, getDaysContext, getSessionMomentum, getValueTrajectory, getGameSmartOneLiner, getFranchiseInfo, getProgressPercent, getShelfLife, parseLocalDate, getCardRarity, getRelationshipStatus, getGameStreak, getHeroNumber, getCardFreshness, getGameSections, getCardBackData, getContextualWhisper, getLibraryRank, getCardMoodPulse, getProgressRingData, getStatPopoverData, getWeekRecapData, getSmartNudges, getGamingCreditScore, getRotationStats, getSpendingForecast, getSpendingByMonth, getShelfLifeExpiry, formatRating, getRatingRank } from './lib/calculations';
+import { getROIRating, getWeekStatsForOffset, getGamesPlayedInTimeRange, getCompletionProbability, getGameHealthDot, getRelativeTime, getDaysContext, getSessionMomentum, getValueTrajectory, getGameSmartOneLiner, getFranchiseInfo, getProgressPercent, getShelfLife, parseLocalDate, getCardRarity, getRelationshipStatus, getGameStreak, getHeroNumber, getCardFreshness, getGameSections, getCardBackData, getContextualWhisper, getLibraryRank, getCardMoodPulse, getProgressRingData, getStatPopoverData, getWeekRecapData, getSmartNudges, getGamingCreditScore, getRotationStats, getSpendingForecast, getSpendingByMonth, getShelfLifeExpiry, formatRating, getRatingRank, getYearInReviewFullData } from './lib/calculations';
 import { OnThisDayCard } from './components/OnThisDayCard';
 import { ActivityPulse } from './components/ActivityPulse';
 import { RandomPicker } from './components/RandomPicker';
@@ -41,7 +41,9 @@ import { RatingStars } from './components/RatingStars';
 import { MomentumDots } from './components/MomentumDots';
 import { ProgressRing } from './components/ProgressRing';
 import { ExportPanel } from './components/ExportPanel';
-import { YearlyWrapped } from './components/YearlyWrapped';
+import { YearStoryMode } from './components/YearStoryMode';
+import { GamerCard } from './components/GamerCard';
+import { MeVsMe } from './components/MeVsMe';
 import { FortuneCookie } from './components/FortuneCookie';
 import { SubscriptionSyncBanner } from './components/SubscriptionSyncBanner';
 import { loadSubscriptionSettings, hasNewDrop } from './lib/subscription-settings';
@@ -195,7 +197,16 @@ export default function GameAnalyticsPage() {
   const [editingGame, setEditingGame] = useState<GameWithMetrics | null>(null);
   const [playLogGame, setPlayLogGame] = useState<GameWithMetrics | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('all');
-  const [tabMode, setTabMode] = useState<TabMode>('games');
+  const [tabMode, setTabMode] = useState<TabMode>(() => {
+    // "Continue where you left off" — restore the last viewed tab.
+    if (typeof window === 'undefined') return 'games';
+    const saved = localStorage.getItem('ga-last-tab') as TabMode | null;
+    const valid: TabMode[] = ['games', 'timeline', 'stats', 'ai-coach', 'up-next', 'discover', 'leaderboard', 'buy-queue', 'estimator'];
+    return saved && valid.includes(saved) ? saved : 'games';
+  });
+  useEffect(() => {
+    if (typeof window !== 'undefined') localStorage.setItem('ga-last-tab', tabMode);
+  }, [tabMode]);
   // Bump to jump Discover straight to the PS Plus section (from the nudge banner).
   const [discoverFocusSignal, setDiscoverFocusSignal] = useState(0);
   // Whether to show a "new PS Plus drop" dot on the Discover tab.
@@ -208,6 +219,9 @@ export default function GameAnalyticsPage() {
   const [showBulkWishlist, setShowBulkWishlist] = useState(false);
   const [showExport, setShowExport] = useState(false);
   const [wrappedYear, setWrappedYear] = useState<number | null>(null);
+  const [showGamerCard, setShowGamerCard] = useState(false);
+  const [showMeVsMe, setShowMeVsMe] = useState(false);
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [showAwardsHub, setShowAwardsHub] = useState(false);
   const [detailGame, setDetailGame] = useState<GameWithMetrics | null>(null);
   const [reviewChatGame, setReviewChatGame] = useState<GameWithMetrics | null>(null);
@@ -1055,18 +1069,34 @@ export default function GameAnalyticsPage() {
                     )}
                   </button>
                 ))}
-                <button onClick={() => setShowExport(true)} title="Export data"
-                  className="flex-1 flex items-center justify-center py-2.5 rounded-lg bg-white/[0.02] text-white/30 hover:text-white/60 transition-all">
-                  <Download size={16} />
-                </button>
-                <button onClick={() => setWrappedYear(new Date().getFullYear())} title="Yearly Wrapped"
-                  className="flex-1 flex items-center justify-center py-2.5 rounded-lg bg-white/[0.02] text-purple-400/50 hover:text-purple-400 transition-all">
-                  <Gift size={16} />
-                </button>
-                <button onClick={() => setShowAwardsHub(true)} title="Awards Hub"
-                  className="flex-1 flex items-center justify-center py-2.5 rounded-lg bg-white/[0.02] text-amber-400/50 hover:text-amber-400 transition-all">
-                  <Star size={16} />
-                </button>
+                {/* Unified "More" menu — share, recaps, and export in one place */}
+                <div className="relative flex-1">
+                  <button onClick={() => setShowMoreMenu(v => !v)} title="More"
+                    className={clsx('w-full flex items-center justify-center py-2.5 rounded-lg transition-all',
+                      showMoreMenu ? 'bg-white/10 text-white' : 'bg-white/[0.02] text-white/40 hover:text-white/60')}>
+                    <MoreVertical size={16} />
+                  </button>
+                  {showMoreMenu && (
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={() => setShowMoreMenu(false)} />
+                      <div className="absolute right-0 top-full mt-1 z-50 w-52 rounded-xl border border-white/10 bg-[#15151c] shadow-xl py-1.5">
+                        {[
+                          { icon: <CreditCard size={15} className="text-cyan-400" />, label: 'Gamer Card', onClick: () => setShowGamerCard(true) },
+                          { icon: <Swords size={15} className="text-pink-400" />, label: 'Me vs Me', onClick: () => setShowMeVsMe(true) },
+                          { icon: <Gift size={15} className="text-purple-400" />, label: 'Yearly Wrapped', onClick: () => setWrappedYear(new Date().getFullYear()) },
+                          { icon: <Star size={15} className="text-amber-400" />, label: 'Awards Hub', onClick: () => setShowAwardsHub(true) },
+                          { icon: <Download size={15} className="text-white/50" />, label: 'Export data', onClick: () => setShowExport(true) },
+                        ].map(item => (
+                          <button key={item.label}
+                            onClick={() => { item.onClick(); setShowMoreMenu(false); }}
+                            className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-white/70 hover:bg-white/5 transition-colors">
+                            {item.icon}{item.label}
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -1536,13 +1566,28 @@ export default function GameAnalyticsPage() {
         />
       )}
 
-      {/* Yearly Wrapped */}
+      {/* Yearly Wrapped — unified on the full YearStoryMode (legacy YearlyWrapped removed) */}
       {wrappedYear && (
-        <YearlyWrapped
-          games={games}
-          year={wrappedYear}
+        <YearStoryMode
+          data={getYearInReviewFullData(games, wrappedYear)}
+          allGames={games}
+          updateGame={updateGame}
           onClose={() => setWrappedYear(null)}
         />
+      )}
+
+      {/* Gamer Identity Card (shareable) */}
+      {showGamerCard && (
+        <GamerCard
+          games={games}
+          displayName={user?.displayName ?? undefined}
+          onClose={() => setShowGamerCard(false)}
+        />
+      )}
+
+      {/* Me vs Me period comparison (shareable) */}
+      {showMeVsMe && (
+        <MeVsMe games={games} onClose={() => setShowMeVsMe(false)} />
       )}
 
       {/* Awards Hub */}

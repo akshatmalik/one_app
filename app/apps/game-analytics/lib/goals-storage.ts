@@ -2,7 +2,8 @@
 
 import { v4 as uuidv4 } from 'uuid';
 import { GamingGoal } from './types';
-import { getFirebaseDb, isFirebaseConfigured } from '@/lib/firebase';
+import { getFirebaseDb } from '@/lib/firebase';
+import { HybridRepository } from './hybrid-repository';
 import {
   collection,
   doc,
@@ -155,20 +156,9 @@ class LocalStorageGoalRepository implements GoalRepository {
 }
 
 // Hybrid Repository
-class HybridGoalRepository implements GoalRepository {
-  private firebaseRepo = new FirebaseGoalRepository();
-  private localRepo = new LocalStorageGoalRepository();
-  private useFirebase = false;
-
-  setUserId(userId: string): void {
-    const isRealUser = !!userId && userId !== 'local-user';
-    this.useFirebase = isRealUser && isFirebaseConfigured();
-    this.firebaseRepo.setUserId(userId);
-    this.localRepo.setUserId(userId || 'local-user');
-  }
-
-  private get repo(): GoalRepository {
-    return this.useFirebase ? this.firebaseRepo : this.localRepo;
+class HybridGoalRepository extends HybridRepository<GoalRepository> implements GoalRepository {
+  constructor() {
+    super(new FirebaseGoalRepository(), new LocalStorageGoalRepository());
   }
 
   getAll(): Promise<GamingGoal[]> {

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ShareButton } from './ShareButton';
 import { MonthInReviewData, getMonthGrade, getMonthHotTake, getMonthMoodArc } from '../lib/calculations';
 import { Game } from '../lib/types';
 import { generateMonthBlurbs, MonthAIBlurbType, AIBlurbResult } from '../lib/ai-service';
@@ -43,6 +44,7 @@ interface MonthStoryModeProps {
 
 export function MonthStoryMode({ data, allGames, onClose, monthTitle, updateGame }: MonthStoryModeProps) {
   const [currentScreen, setCurrentScreen] = useState(0);
+  const screenCaptureRef = useRef<HTMLDivElement>(null);
   const [direction, setDirection] = useState(0);
   const [aiBlurbs, setAiBlurbs] = useState<Partial<Record<MonthAIBlurbType, AIBlurbResult>>>({});
   const [isLoadingAI, setIsLoadingAI] = useState(true);
@@ -263,6 +265,11 @@ export function MonthStoryMode({ data, allGames, onClose, monthTitle, updateGame
         <X size={24} className="text-white" />
       </button>
 
+      {/* Share current screen */}
+      <div className="absolute top-4 left-4 z-50">
+        <ShareButton targetRef={screenCaptureRef} filename={`month-recap-${currentScreen + 1}`} variant="compact" />
+      </div>
+
       {/* Progress dots */}
       <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-1.5 px-4 max-w-[80%] overflow-x-auto">
         {screens.map((_, index) => (
@@ -312,6 +319,7 @@ export function MonthStoryMode({ data, allGames, onClose, monthTitle, updateGame
       <div className="h-full w-full cursor-pointer" onClick={guardClick(handleClick)}>
         <AnimatePresence initial={false} custom={direction} mode="wait">
           <motion.div
+            ref={screenCaptureRef}
             key={currentScreen}
             custom={direction}
             {...dragProps}
