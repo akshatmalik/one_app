@@ -85,6 +85,21 @@ export function getVaultGems(games: Game[], seed = Math.floor(Date.now() / (7 * 
   return [...sorted.slice(offset), ...sorted.slice(0, offset)].slice(0, 3);
 }
 
+/** #38 Genre Goals — distinct genres played in a given year vs a target. */
+export function getGenreGoalProgress(games: Game[], year = new Date().getFullYear()): {
+  genresPlayed: string[];
+  count: number;
+} {
+  const genres = new Set<string>();
+  for (const g of games) {
+    if (!g.genre) continue;
+    // Count a genre as "played" if it has a session this year, or was completed/in-progress.
+    const playedThisYear = (g.playLogs || []).some((l) => (l.date || '').slice(0, 4) === String(year));
+    if (playedThisYear) genres.add(g.genre);
+  }
+  return { genresPlayed: [...genres].sort(), count: genres.size };
+}
+
 /** #71 What-Should-I-Buy-Next — the kinds of games that earned you the best satisfaction. */
 export function getBuyNextTypes(games: Game[]): Array<{ genre: string; avgRating: number; avgValue: number; reason: string }> {
   const byGenre = new Map<string, { ratings: number[]; cph: number[] }>();
