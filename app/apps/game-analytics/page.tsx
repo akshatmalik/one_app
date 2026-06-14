@@ -22,6 +22,7 @@ import { ComparePeriodsCard } from './components/ComparePeriodsCard';
 import { AICompanionPanel } from './components/AICompanionPanel';
 import { QuickAddPasteModal } from './components/QuickAddPasteModal';
 import { SavedFiltersBar } from './components/SavedFiltersBar';
+import { ProgressionPanel } from './components/ProgressionPanel';
 import { AIChatTab } from './components/AIChatTab';
 import { AgentExecutors } from './lib/ai-actions';
 import { UpNextTab } from './components/UpNextTab';
@@ -1386,6 +1387,7 @@ export default function GameAnalyticsPage() {
 
           {tabMode === 'stats' && games.length > 0 && (
             <div className="mt-4 space-y-4">
+              <ProgressionPanel games={games} />
               <MoreInsightsPanel games={games} />
               <GenreGoalsCard games={games} />
               <ComparePeriodsCard games={games} />
