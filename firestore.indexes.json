@@ -37,6 +37,14 @@
         { "fieldPath": "userId", "order": "ASCENDING" },
         { "fieldPath": "winnerId", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "gameRecommendations",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

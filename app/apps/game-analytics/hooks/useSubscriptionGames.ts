@@ -73,6 +73,9 @@ export function useSubscriptionGames({ userId, games, onAddGame, onAddToQueue, o
       const all = await recommendationRepository.getAll();
       setRecs(all.filter(r => r.subscriptionService === SERVICE));
     } catch (e) {
+      // Don't let a load failure masquerade as "no data" — that's exactly what
+      // made backfilled drops look lost and forced a re-sync every visit.
+      console.error('[PS Plus] Failed to load saved recommendations:', e);
       setError(e instanceof Error ? e : new Error(String(e)));
     } finally {
       setLoading(false);
