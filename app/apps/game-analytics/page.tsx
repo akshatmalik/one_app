@@ -19,6 +19,7 @@ import { AnalyticsExtrasPanel } from './components/AnalyticsExtrasPanel';
 import { TryThisPrompt } from './components/TryThisPrompt';
 import { GenreGoalsCard } from './components/GenreGoalsCard';
 import { ComparePeriodsCard } from './components/ComparePeriodsCard';
+import { AICompanionPanel } from './components/AICompanionPanel';
 import { AIChatTab } from './components/AIChatTab';
 import { AgentExecutors } from './lib/ai-actions';
 import { UpNextTab } from './components/UpNextTab';
@@ -1366,6 +1367,7 @@ export default function GameAnalyticsPage() {
               <GenreGoalsCard games={games} />
               <ComparePeriodsCard games={games} />
               <AnalyticsExtrasPanel games={games} />
+              <AICompanionPanel games={games} />
               <FunZonePanel games={games} />
             </div>
           )}
