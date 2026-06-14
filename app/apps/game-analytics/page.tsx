@@ -577,7 +577,7 @@ export default function GameAnalyticsPage() {
       <div className="px-6 pt-8 pb-6 border-b border-white/5">
         <div className="max-w-6xl mx-auto">
           {/* Title Row — Dynamic */}
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-start justify-between gap-3 mb-4">
             <div className="min-w-0 flex-1">
               <h1 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">
                 {games.length > 0 ? (
@@ -651,6 +651,20 @@ export default function GameAnalyticsPage() {
                       >
                         <Heart size={14} /> Bulk Wishlist
                       </button>
+                      <button
+                        onClick={() => { setShowQuickAdd(true); setShowCommandPalette(false); }}
+                        className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white/70 hover:text-white hover:bg-white/5 transition-all"
+                      >
+                        <ClipboardList size={14} className="text-purple-400" /> Quick Add (Paste)
+                      </button>
+                      {games.filter(g => g.status === 'Not Started' || g.status === 'In Progress').length >= 2 && (
+                        <button
+                          onClick={() => { setShowBracket(true); setShowCommandPalette(false); }}
+                          className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white/70 hover:text-white hover:bg-white/5 transition-all"
+                        >
+                          <Swords size={14} className="text-orange-400" /> Backlog Bracket
+                        </button>
+                      )}
                       {games.length === 0 && (
                         <button
                           onClick={() => { handleSeedData(); setShowCommandPalette(false); }}
@@ -672,24 +686,6 @@ export default function GameAnalyticsPage() {
               >
                 <Sparkles size={14} />
                 <span className="hidden sm:inline text-[12px]">What&apos;s New</span>
-              </button>
-              <button
-                onClick={() => setShowQuickAdd(true)}
-                className="flex items-center gap-1.5 px-2.5 py-2 bg-white/5 text-white/60 hover:text-white/80 rounded-lg transition-all text-sm"
-                title="Quick add by paste"
-                aria-label="Quick add by paste"
-              >
-                <ClipboardList size={14} />
-                <span className="hidden sm:inline text-[12px]">Paste</span>
-              </button>
-              <button
-                onClick={() => setShowBracket(true)}
-                className="flex items-center gap-1.5 px-2.5 py-2 bg-white/5 text-white/60 hover:text-white/80 rounded-lg transition-all text-sm"
-                title="Backlog bracket — settle what to play next"
-                aria-label="Backlog bracket"
-              >
-                <Swords size={14} />
-                <span className="hidden sm:inline text-[12px]">Bracket</span>
               </button>
               <button
                 onClick={() => setIsFormOpen(true)}
