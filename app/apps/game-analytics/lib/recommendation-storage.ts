@@ -13,7 +13,6 @@ import {
   deleteDoc,
   query,
   where,
-  orderBy,
 } from 'firebase/firestore';
 
 const STORAGE_KEY = 'game-analytics-recommendations';
@@ -46,9 +45,17 @@ class FirebaseRecommendationRepository implements RecommendationRepository {
 
   async getAll(): Promise<GameRecommendation[]> {
     if (!this.userId) return [];
-    const q = query(this.col, where('userId', '==', this.userId), orderBy('createdAt', 'desc'));
+    // Filter by userId only — do NOT add orderBy('createdAt') here. Combining an
+    // equality filter with an orderBy on a different field needs a composite
+    // Firestore index for `gameRecommendations`, which isn't deployed; without
+    // it the read throws and the caller silently ends up with an empty list
+    // (so backfilled PS Plus drops + triage decisions appeared lost on reload).
+    // Sort newest-first client-side instead — no index required.
+    const q = query(this.col, where('userId', '==', this.userId));
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(d => d.data() as GameRecommendation);
+    return snapshot.docs
+      .map(d => d.data() as GameRecommendation)
+      .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
   }
 
   async create(data: Omit<GameRecommendation, 'id' | 'userId' | 'createdAt' | 'updatedAt'>): Promise<GameRecommendation> {
