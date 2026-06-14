@@ -526,10 +526,13 @@ export default function GameAnalyticsPage() {
         (g.genre && g.genre.toLowerCase().includes(q)) ||
         (g.platform && g.platform.toLowerCase().includes(q)) ||
         (g.franchise && g.franchise.toLowerCase().includes(q)) ||
-        (g.notes && g.notes.toLowerCase().includes(q))
+        (g.notes && g.notes.toLowerCase().includes(q)) ||
+        (g.tags && g.tags.some(t => t.toLowerCase().includes(q)))
       );
     })
     .sort((a, b) => {
+      // Pinned games (#13) always float to the top, regardless of sort.
+      if (!!a.pinned !== !!b.pinned) return a.pinned ? -1 : 1;
       switch (sortBy) {
         case 'name':
           return a.name.localeCompare(b.name);

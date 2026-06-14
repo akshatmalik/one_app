@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { ChevronDown, X, Tag, DollarSign, Calendar, MessageSquare, Sparkles, Loader2 } from 'lucide-react';
+import { ChevronDown, X, Tag, DollarSign, Calendar, MessageSquare, Sparkles, Loader2, Pin } from 'lucide-react';
 import { Game, GameStatus, PurchaseSource, SubscriptionSource } from '../lib/types';
 import { calculateCostPerHour, getValueRating, formatRating, getTotalHours } from '../lib/calculations';
 import { lookupGameLength } from '../lib/ai-timeline-service';
@@ -128,6 +128,8 @@ export function GameForm({ onSubmit, onClose, initialGame, allGames = [], existi
     isSpecial: initialGame?.isSpecial || false,
     tags: initialGame?.tags?.join(', ') || '',
     replayability: initialGame?.replayability !== undefined ? initialGame.replayability.toString() : '',
+    pinned: initialGame?.pinned || false,
+    valueOverride: (initialGame?.valueOverride || '') as 'worth' | 'regret' | '',
   });
 
   // Drag-to-dismiss
@@ -210,6 +212,8 @@ export function GameForm({ onSubmit, onClose, initialGame, allGames = [], existi
           ? formData.tags.split(',').map((t) => t.trim()).filter(Boolean)
           : undefined,
         replayability: formData.replayability ? parseFloat(formData.replayability) : undefined,
+        pinned: formData.pinned || undefined,
+        valueOverride: formData.valueOverride || undefined,
       });
       onClose();
     } finally {
@@ -744,6 +748,56 @@ export function GameForm({ onSubmit, onClose, initialGame, allGames = [], existi
                     formData.isSpecial ? 'left-5' : 'left-0.5'
                   )} />
                 </button>
+              </div>
+
+              {/* Pin to Top Toggle (#13) */}
+              <div className="flex items-center justify-between p-3 bg-white/[0.02] rounded-xl">
+                <div className="flex items-center gap-2">
+                  <Pin size={14} className={clsx(formData.pinned ? 'text-purple-400' : 'text-white/30')} />
+                  <div>
+                    <div className="text-sm text-white/80">Pin to Top</div>
+                    <div className="text-[10px] text-white/40">Keep this game at the top of your list</div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, pinned: !formData.pinned })}
+                  className={clsx(
+                    'w-11 h-6 rounded-full transition-all relative',
+                    formData.pinned ? 'bg-purple-500' : 'bg-white/10'
+                  )}
+                >
+                  <div className={clsx(
+                    'w-5 h-5 rounded-full bg-white absolute top-0.5 transition-all',
+                    formData.pinned ? 'left-5' : 'left-0.5'
+                  )} />
+                </button>
+              </div>
+
+              {/* Value Override (#56) */}
+              <div className="p-3 bg-white/[0.02] rounded-xl">
+                <div className="text-sm text-white/80 mb-2">Your Gut Verdict</div>
+                <div className="flex gap-2">
+                  {([
+                    { v: '', label: 'Auto' },
+                    { v: 'worth', label: '👍 Worth it' },
+                    { v: 'regret', label: '👎 Regret' },
+                  ] as const).map(opt => (
+                    <button
+                      key={opt.v}
+                      type="button"
+                      onClick={() => setFormData({ ...formData, valueOverride: opt.v })}
+                      className={clsx(
+                        'flex-1 px-2 py-2 rounded-lg text-xs font-medium transition-all',
+                        formData.valueOverride === opt.v
+                          ? 'bg-purple-500/30 text-white border border-purple-400/40'
+                          : 'bg-white/[0.03] text-white/50 border border-transparent hover:bg-white/[0.06]'
+                      )}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
               </div>
             </Section>
           </div>
