@@ -16,7 +16,7 @@ import { StatsView } from './components/StatsView';
 import { AIChatTab } from './components/AIChatTab';
 import { AgentExecutors } from './lib/ai-actions';
 import { UpNextTab } from './components/UpNextTab';
-import { Game, GameStatus, PlayLog, GameRanking, GameAward, AwardPeriodType, GameTier, TierAssignmentMap, ReviewMessage } from './lib/types';
+import { Game, GameStatus, PlayLog, GameRanking, GameAward, AwardPeriodType, GameTier, TierAssignmentMap, ReviewMessage, SessionMood } from './lib/types';
 import { useTierAssignments } from './hooks/useTierAssignments';
 import { gameRepository } from './lib/storage';
 import { useRankings } from './hooks/useRankings';
@@ -55,6 +55,8 @@ import { WhatsNewModal } from './components/WhatsNewModal';
 import { GameReviewChat } from './components/GameReviewChat';
 import { GameCompareModal } from './components/GameCompareModal';
 import { PlayTonightModal } from './components/PlayTonightModal';
+import { useLiveSession } from './hooks/useLiveSession';
+import { LiveSessionTracker } from './components/LiveSessionTracker';
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist';
@@ -152,6 +154,7 @@ export default function GameAnalyticsPage() {
   const { rankings: allTimeRankings } = useRankings(user?.uid ?? null, 'all', 'all');
   const { allTrophies, summary: trophySummary, pinnedTrophies, pinnedIds: pinnedTrophyIds, togglePin: toggleTrophyPin, toastQueue: trophyToastQueue, dismissToast: dismissTrophyToast } = useTrophies(games, user?.uid ?? null);
   const { assignments: allTimeTiers } = useTierAssignments(user?.uid ?? null, 'all');
+  const { session: liveSession, elapsedSeconds: liveSessionElapsed, startSession: startLiveSession, clearSession: clearLiveSession } = useLiveSession(user?.uid ?? null);
   const eloByGameId = useMemo(() => {
     const map = new Map<string, GameRanking>();
     for (const r of allTimeRankings) map.set(r.gameId, r);
@@ -398,6 +401,30 @@ export default function GameAnalyticsPage() {
 
     await updateGame(game.id, updates);
     showToast(`Logged ${hours}h`, 'success');
+  };
+
+  const handleLiveSessionStop = async (hours: number, mood?: SessionMood, notes?: string) => {
+    if (!liveSession) return;
+    const game = games.find(g => g.id === liveSession.gameId);
+    if (!game) { clearLiveSession(); return; }
+    const now = new Date();
+    const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const newLog: PlayLog = {
+      id: `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+      date: dateStr,
+      hours,
+      notes: notes || undefined,
+      mood,
+    };
+    const existingLogs = game.playLogs || [];
+    const updates: Partial<Game> = { playLogs: [...existingLogs, newLog] };
+    if (game.status === 'Not Started' && existingLogs.length === 0) {
+      updates.status = 'In Progress';
+      updates.startDate = dateStr;
+    }
+    await updateGame(game.id, updates);
+    clearLiveSession();
+    showToast(`Logged ${hours.toFixed(2)}h for ${liveSession.gameName}`, 'success');
   };
 
   const toggleCardViewMode = () => {
@@ -1623,6 +1650,14 @@ export default function GameAnalyticsPage() {
             setDetailGame(null);
           }}
           isInQueue={isInQueue(detailGame.id)}
+          onStartSession={() => {
+            if (liveSession) return; // don't start if one is already running
+            startLiveSession(detailGame);
+            setDetailGame(null);
+            showToast(`Live session started for ${detailGame.name}`, 'success');
+          }}
+          isLiveSession={liveSession?.gameId === detailGame.id}
+          liveSessionElapsed={liveSession?.gameId === detailGame.id ? liveSessionElapsed : 0}
         />
       )}
 
@@ -1650,6 +1685,14 @@ export default function GameAnalyticsPage() {
           onClose={() => setReviewChatGame(null)}
         />
       )}
+
+      {/* Live Session Tracker — floating pill + stop sheet */}
+      <LiveSessionTracker
+        session={liveSession}
+        elapsedSeconds={liveSessionElapsed}
+        onStop={handleLiveSessionStop}
+        onDiscard={clearLiveSession}
+      />
     </div>
   );
 }

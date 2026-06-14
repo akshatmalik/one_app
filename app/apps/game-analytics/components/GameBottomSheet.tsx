@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useRef, useEffect } from 'react';
-import { Clock, ChevronDown, ChevronUp, ListPlus, Check, Heart, Edit3, Trash2, Trophy, Sparkles, Zap, MessageCircle, ArrowLeftRight } from 'lucide-react';
+import { Clock, ChevronDown, ChevronUp, ListPlus, Check, Heart, Edit3, Trash2, Trophy, Sparkles, Zap, MessageCircle, ArrowLeftRight, Play, Square } from 'lucide-react';
 import { Game } from '../lib/types';
 import { GameWithMetrics } from '../hooks/useAnalytics';
 import {
@@ -40,6 +40,9 @@ interface GameBottomSheetProps {
   onOpenReviewChat: () => void;
   onCompare: () => void;
   isInQueue: boolean;
+  onStartSession?: () => void;
+  isLiveSession?: boolean;
+  liveSessionElapsed?: number;
 }
 
 function getValueColor(rating: string): string {
@@ -50,6 +53,14 @@ function getValueColor(rating: string): string {
     case 'Poor': return 'text-red-400';
     default: return 'text-white/50';
   }
+}
+
+function formatLiveElapsed(seconds: number): string {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
 export function GameBottomSheet({
@@ -65,6 +76,9 @@ export function GameBottomSheet({
   onOpenReviewChat,
   onCompare,
   isInQueue,
+  onStartSession,
+  isLiveSession = false,
+  liveSessionElapsed = 0,
 }: GameBottomSheetProps) {
   const [showAwards, setShowAwards] = useState(false);
   const [showJourney, setShowJourney] = useState(false);
@@ -703,6 +717,30 @@ export function GameBottomSheet({
 
         {/* Sticky Actions Bar */}
         <div className="absolute bottom-0 left-0 right-0 bg-[#0e0e16]/95 backdrop-blur-md border-t border-white/5 p-3 flex items-center gap-2">
+          {/* Live Session button — only for playable statuses */}
+          {onStartSession && game.status !== 'Completed' && game.status !== 'Wishlist' && game.status !== 'Abandoned' && (
+            <button
+              onClick={onStartSession}
+              className={clsx(
+                'flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg text-xs font-bold transition-all shrink-0',
+                isLiveSession
+                  ? 'bg-red-500/15 text-red-400 border border-red-500/20'
+                  : 'bg-emerald-600/20 text-emerald-400 active:bg-emerald-600/30 border border-emerald-500/15'
+              )}
+            >
+              {isLiveSession ? (
+                <>
+                  <Square size={11} fill="currentColor" />
+                  <span className="font-mono tabular-nums">{formatLiveElapsed(liveSessionElapsed)}</span>
+                </>
+              ) : (
+                <>
+                  <Play size={11} fill="currentColor" />
+                  Live
+                </>
+              )}
+            </button>
+          )}
           <button
             onClick={() => onLogTime()}
             className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 bg-blue-600/20 active:bg-blue-600/30 text-blue-400 rounded-lg text-xs font-medium transition-all"

@@ -1,6 +1,12 @@
 {
   "entries": [
     {
+      "date": "2026-06-14",
+      "area": "Game detail",
+      "title": "Live Session Timer — track play time as you play",
+      "body": "Open any game's detail sheet and tap the new ▶ Live button to start a live timer. Play your game, come back, and a floating pill shows exactly how long you've been playing. Tap Stop and you get a quick sheet to pick your mood (Great, Good, Meh, or Grind) and add a note — then log the exact hours in one tap. No more estimating how long you played."
+    },
+    {
       "date": "2026-06-10",
       "area": "Games tab",
       "title": "Play Tonight — find your perfect match in seconds",

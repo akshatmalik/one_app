@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-14 06:00 — Game Detail — Live Session Timer
+
+**Files**: app/apps/game-analytics/hooks/useLiveSession.ts, app/apps/game-analytics/components/LiveSessionTracker.tsx, app/apps/game-analytics/components/GameBottomSheet.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Added a Live Session Timer so you can track your play time in real time instead of estimating hours retroactively. Tap the new **▶ Live** button in any game's detail sheet to start a timer — the start time is saved to localStorage so it survives app switches and refreshes. A floating pill shows the game's thumbnail and the ticking elapsed time; tapping **Stop** opens a sheet where you can pick a mood (Great / Good / Meh / Grind), add a quick note, then log the exact hours with one tap. The session is logged as a PlayLog with all the usual mood tagging included.
+
+FOLLOW-UP: Could add a "Start Session" shortcut directly on the Now Playing pinned cards to avoid needing to open the detail sheet.
+
 ## 2026-06-10 12:00 — Games Tab — Play Tonight Smart Recommender
 
 **Files**: app/apps/game-analytics/components/PlayTonightModal.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json
