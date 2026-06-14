@@ -77,6 +77,18 @@ export interface Game {
   awards?: GameAward[]; // User-given awards across all tiers
   isSpecial?: boolean; // Exceptional games the user loved despite any flaws
   queuePosition?: number; // Position in "Up Next" queue (1 = next to play, 2 = after that, etc.)
+
+  // ── NewIdeas100-June2026 additive fields (all optional, non-breaking) ──
+  tags?: string[];                 // #14 Free-form tags ("co-op", "comfort", "rage-quit")
+  pinned?: boolean;                // #13 Pin to top regardless of sort
+  replayability?: number;          // #16 "Would replay" score 1-10
+  platinum?: boolean;              // #17 Full 100% / platinum completion
+  completionPercent?: number;      // #17/#53 Manual completion progress 0-100
+  valueOverride?: 'worth' | 'regret'; // #56 Manual gut-feel value override
+  deadline?: string;               // #74 "Beat the clock" finish-by date (ISO)
+  lastCheckpoint?: { date: string; note: string; image?: string }; // #54 Where-I-left-off bookmark
+  deletedAt?: string;              // #10 Soft-delete (trash bin) timestamp
+
   createdAt: string;
   updatedAt: string;
 }

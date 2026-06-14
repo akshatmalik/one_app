@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, CalendarClock, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical, Download, Gift, ShoppingCart, Search, X, Moon, CreditCard, Swords } from 'lucide-react';
+import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, CalendarClock, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical, Download, Gift, ShoppingCart, Search, X, Moon, CreditCard, Swords, ClipboardList } from 'lucide-react';
 import { useGames } from './hooks/useGames';
 import { useAnalytics, GameWithMetrics } from './hooks/useAnalytics';
 import { useBudget } from './hooks/useBudget';
@@ -13,6 +13,17 @@ import { GameForm } from './components/GameForm';
 import { PlayLogModal } from './components/PlayLogModal';
 import { TimelineView } from './components/TimelineView';
 import { StatsView } from './components/StatsView';
+import { MoreInsightsPanel } from './components/MoreInsightsPanel';
+import { FunZonePanel } from './components/FunZonePanel';
+import { AnalyticsExtrasPanel } from './components/AnalyticsExtrasPanel';
+import { TryThisPrompt } from './components/TryThisPrompt';
+import { GenreGoalsCard } from './components/GenreGoalsCard';
+import { ComparePeriodsCard } from './components/ComparePeriodsCard';
+import { AICompanionPanel } from './components/AICompanionPanel';
+import { QuickAddPasteModal } from './components/QuickAddPasteModal';
+import { SavedFiltersBar } from './components/SavedFiltersBar';
+import { ProgressionPanel } from './components/ProgressionPanel';
+import { BacklogBracketModal } from './components/BacklogBracketModal';
 import { AIChatTab } from './components/AIChatTab';
 import { AgentExecutors } from './lib/ai-actions';
 import { UpNextTab } from './components/UpNextTab';
@@ -246,6 +257,8 @@ export default function GameAnalyticsPage() {
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showErrorLog, setShowErrorLog] = useState(false);
   const [showWhatsNew, setShowWhatsNew] = useState(false);
+  const [showQuickAdd, setShowQuickAdd] = useState(false);
+  const [showBracket, setShowBracket] = useState(false);
   const [showPlayTonight, setShowPlayTonight] = useState(false);
 
   // Week recap data for header strip
@@ -522,10 +535,13 @@ export default function GameAnalyticsPage() {
         (g.genre && g.genre.toLowerCase().includes(q)) ||
         (g.platform && g.platform.toLowerCase().includes(q)) ||
         (g.franchise && g.franchise.toLowerCase().includes(q)) ||
-        (g.notes && g.notes.toLowerCase().includes(q))
+        (g.notes && g.notes.toLowerCase().includes(q)) ||
+        (g.tags && g.tags.some(t => t.toLowerCase().includes(q)))
       );
     })
     .sort((a, b) => {
+      // Pinned games (#13) always float to the top, regardless of sort.
+      if (!!a.pinned !== !!b.pinned) return a.pinned ? -1 : 1;
       switch (sortBy) {
         case 'name':
           return a.name.localeCompare(b.name);
@@ -561,7 +577,7 @@ export default function GameAnalyticsPage() {
       <div className="px-6 pt-8 pb-6 border-b border-white/5">
         <div className="max-w-6xl mx-auto">
           {/* Title Row — Dynamic */}
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-start justify-between gap-3 mb-4">
             <div className="min-w-0 flex-1">
               <h1 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">
                 {games.length > 0 ? (
@@ -635,6 +651,20 @@ export default function GameAnalyticsPage() {
                       >
                         <Heart size={14} /> Bulk Wishlist
                       </button>
+                      <button
+                        onClick={() => { setShowQuickAdd(true); setShowCommandPalette(false); }}
+                        className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white/70 hover:text-white hover:bg-white/5 transition-all"
+                      >
+                        <ClipboardList size={14} className="text-purple-400" /> Quick Add (Paste)
+                      </button>
+                      {games.filter(g => g.status === 'Not Started' || g.status === 'In Progress').length >= 2 && (
+                        <button
+                          onClick={() => { setShowBracket(true); setShowCommandPalette(false); }}
+                          className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white/70 hover:text-white hover:bg-white/5 transition-all"
+                        >
+                          <Swords size={14} className="text-orange-400" /> Backlog Bracket
+                        </button>
+                      )}
                       {games.length === 0 && (
                         <button
                           onClick={() => { handleSeedData(); setShowCommandPalette(false); }}
@@ -1103,6 +1133,19 @@ export default function GameAnalyticsPage() {
             {/* View Mode Filter & Sort (only for games tab) */}
             {tabMode === 'games' && (
               <div className="flex flex-col gap-3">
+                {/* "Try This" feature discovery prompt (#101) */}
+                {games.length > 0 && <TryThisPrompt onNavigate={(tab) => setTabMode(tab as typeof tabMode)} />}
+                {/* Saved Filters / Smart Lists (#15) */}
+                {games.length > 0 && (
+                  <SavedFiltersBar
+                    current={{ viewMode, sortBy, searchQuery }}
+                    onApply={(f) => {
+                      setViewMode(f.viewMode as ViewMode);
+                      setSortBy(f.sortBy as typeof sortBy);
+                      setSearchQuery(f.searchQuery);
+                    }}
+                  />
+                )}
                 {/* Search bar */}
                 {games.length > 0 && (
                   <div className="space-y-1">
@@ -1349,6 +1392,18 @@ export default function GameAnalyticsPage() {
             />
           )}
 
+          {tabMode === 'stats' && games.length > 0 && (
+            <div className="mt-4 space-y-4">
+              <ProgressionPanel games={games} />
+              <MoreInsightsPanel games={games} />
+              <GenreGoalsCard games={games} />
+              <ComparePeriodsCard games={games} />
+              <AnalyticsExtrasPanel games={games} />
+              <AICompanionPanel games={games} />
+              <FunZonePanel games={games} />
+            </div>
+          )}
+
           {tabMode === 'stats' && games.length === 0 && (
             <div className="text-center py-16">
               <BarChart3 size={48} className="mx-auto mb-4 text-white/10" />
@@ -1515,6 +1570,41 @@ export default function GameAnalyticsPage() {
           initialGame={editingGame || undefined}
           allGames={games}
           existingFranchises={Array.from(new Set(games.map(g => g.franchise).filter(Boolean) as string[]))}
+        />
+      )}
+
+      {/* Backlog Bracket Modal (#68) */}
+      {showBracket && (
+        <BacklogBracketModal
+          games={games}
+          onClose={() => setShowBracket(false)}
+          onChampion={async (g) => {
+            try {
+              await addToQueue(g.id);
+              showToast(`${g.name} added to Up Next`, 'success');
+            } catch (e) {
+              showToast(`Failed: ${(e as Error).message}`, 'error');
+            }
+          }}
+        />
+      )}
+
+      {/* Quick Add by Paste Modal (#8) */}
+      {showQuickAdd && (
+        <QuickAddPasteModal
+          onClose={() => setShowQuickAdd(false)}
+          onAdd={async (names) => {
+            for (const name of names) {
+              await addGame({
+                name,
+                price: 0,
+                hours: 0,
+                rating: 0,
+                status: 'Not Started',
+              });
+            }
+            showToast(`Added ${names.length} game${names.length !== 1 ? 's' : ''}`, 'success');
+          }}
         />
       )}
 
