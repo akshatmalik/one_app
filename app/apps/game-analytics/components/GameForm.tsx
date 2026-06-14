@@ -130,6 +130,7 @@ export function GameForm({ onSubmit, onClose, initialGame, allGames = [], existi
     replayability: initialGame?.replayability !== undefined ? initialGame.replayability.toString() : '',
     pinned: initialGame?.pinned || false,
     valueOverride: (initialGame?.valueOverride || '') as 'worth' | 'regret' | '',
+    deadline: initialGame?.deadline || '',
   });
 
   // Drag-to-dismiss
@@ -214,6 +215,7 @@ export function GameForm({ onSubmit, onClose, initialGame, allGames = [], existi
         replayability: formData.replayability ? parseFloat(formData.replayability) : undefined,
         pinned: formData.pinned || undefined,
         valueOverride: formData.valueOverride || undefined,
+        deadline: formData.deadline || undefined,
       });
       onClose();
     } finally {
@@ -772,6 +774,18 @@ export function GameForm({ onSubmit, onClose, initialGame, allGames = [], existi
                     formData.pinned ? 'left-5' : 'left-0.5'
                   )} />
                 </button>
+              </div>
+
+              {/* Beat the Clock deadline (#74) */}
+              <div>
+                <label className="block text-xs font-medium text-white/50 mb-1.5">Finish-by Deadline</label>
+                <input
+                  type="date"
+                  value={formData.deadline}
+                  onChange={e => setFormData({ ...formData, deadline: e.target.value })}
+                  className="w-full px-3 py-2.5 bg-white/[0.03] border border-white/5 text-white rounded-xl text-sm focus:outline-none focus:bg-white/[0.05] focus:border-white/10 transition-all"
+                />
+                <p className="mt-1 text-[10px] text-white/30">e.g. finish before the sequel drops</p>
               </div>
 
               {/* Value Override (#56) */}

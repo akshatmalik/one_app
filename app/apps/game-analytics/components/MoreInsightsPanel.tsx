@@ -7,8 +7,9 @@ import {
   getStatOfTheDay,
   getRealWorldUnits,
   getTasteTwinGenres,
+  getDeadlineGames,
 } from '../lib/idea-stats';
-import { Trophy, Wallet, Sparkles, Coffee, Heart } from 'lucide-react';
+import { Trophy, Wallet, Sparkles, Coffee, Heart, Clock } from 'lucide-react';
 
 interface MoreInsightsPanelProps {
   games: Game[];
@@ -21,9 +22,35 @@ export function MoreInsightsPanel({ games }: MoreInsightsPanelProps) {
   const sotd = getStatOfTheDay(games);
   const realWorld = getRealWorldUnits(games);
   const twins = getTasteTwinGenres(games);
+  const deadlines = getDeadlineGames(games);
 
   return (
     <div className="space-y-4">
+      {/* Beat the Clock deadlines (#74) */}
+      {deadlines.length > 0 && (
+        <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
+          <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-white/80">
+            <Clock size={16} className="text-orange-400" /> Beat the Clock
+          </div>
+          <div className="space-y-1.5">
+            {deadlines.map((d) => (
+              <div key={d.name} className="flex items-center justify-between text-sm">
+                <span className="truncate pr-2 text-white/80">{d.name}</span>
+                <span className="flex items-center gap-2 text-xs">
+                  <span className={d.daysLeft < 0 ? 'text-red-400' : 'text-white/50'}>
+                    {d.daysLeft < 0 ? `${-d.daysLeft}d overdue` : `${d.daysLeft}d left`}
+                  </span>
+                  {d.onTrack !== null && (
+                    <span className={d.onTrack ? 'text-emerald-400' : 'text-red-400'}>
+                      {d.onTrack ? 'on track' : 'behind'}
+                    </span>
+                  )}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       {/* Stat of the Day (#24) */}
       {sotd && (
         <div className="rounded-xl border border-white/10 bg-gradient-to-br from-purple-500/10 to-blue-500/10 p-4">

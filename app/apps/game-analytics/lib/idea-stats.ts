@@ -217,6 +217,28 @@ export function getTasteTwinGenres(games: Game[]): Array<{ a: string; b: string;
   return pairs.sort((x, y) => y.similarity - x.similarity).slice(0, 5);
 }
 
+/** #74 Beat the Clock — games with a finish-by deadline and whether you're on track. */
+export function getDeadlineGames(games: Game[]): Array<{
+  name: string;
+  deadline: string;
+  daysLeft: number;
+  onTrack: boolean | null;
+}> {
+  const now = Date.now();
+  return games
+    .filter((g) => g.deadline && g.status !== 'Completed' && g.status !== 'Wishlist')
+    .map((g) => {
+      const daysLeft = Math.ceil((new Date(g.deadline!).getTime() - now) / 86400_000);
+      const eta = getCompletionETA(g, games);
+      // On track if the ETA lands before the deadline.
+      let onTrack: boolean | null = null;
+      if (eta && eta.etaDate) onTrack = new Date(eta.etaDate).getTime() <= new Date(g.deadline!).getTime();
+      else if (eta && eta.weeksRemaining === Infinity) onTrack = false;
+      return { name: g.name, deadline: g.deadline!, daysLeft, onTrack };
+    })
+    .sort((a, b) => a.daysLeft - b.daysLeft);
+}
+
 /** #55 Completion Confidence — non-AI heuristic 0-100 that you'll finish a game. */
 export function getCompletionConfidence(game: Game, allGames: Game[]): { score: number; label: string } | null {
   if (game.status !== 'In Progress') return null;
