@@ -21,6 +21,7 @@ import { GenreGoalsCard } from './components/GenreGoalsCard';
 import { ComparePeriodsCard } from './components/ComparePeriodsCard';
 import { AICompanionPanel } from './components/AICompanionPanel';
 import { QuickAddPasteModal } from './components/QuickAddPasteModal';
+import { SavedFiltersBar } from './components/SavedFiltersBar';
 import { AIChatTab } from './components/AIChatTab';
 import { AgentExecutors } from './lib/ai-actions';
 import { UpNextTab } from './components/UpNextTab';
@@ -1126,6 +1127,17 @@ export default function GameAnalyticsPage() {
               <div className="flex flex-col gap-3">
                 {/* "Try This" feature discovery prompt (#101) */}
                 {games.length > 0 && <TryThisPrompt onNavigate={(tab) => setTabMode(tab as typeof tabMode)} />}
+                {/* Saved Filters / Smart Lists (#15) */}
+                {games.length > 0 && (
+                  <SavedFiltersBar
+                    current={{ viewMode, sortBy, searchQuery }}
+                    onApply={(f) => {
+                      setViewMode(f.viewMode as ViewMode);
+                      setSortBy(f.sortBy as typeof sortBy);
+                      setSearchQuery(f.searchQuery);
+                    }}
+                  />
+                )}
                 {/* Search bar */}
                 {games.length > 0 && (
                   <div className="space-y-1">
