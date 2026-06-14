@@ -25,6 +25,10 @@ export const DISCOVERABLE_FEATURES: DiscoverableFeature[] = [
   { id: 'pin-favorites', blurb: 'Editing a game lets you Pin it to the top of your list — handy for your current obsession.' },
   { id: 'gut-verdict', blurb: 'When editing a game, set "Your Gut Verdict" (worth it / regret) to override the value math with how you actually feel.' },
   { id: 'tags', blurb: 'Add Tags like "co-op" or "comfort" when editing a game, then search by them.' },
+  { id: 'quick-add', blurb: 'In a hurry? Hit "Paste" up top to add a whole list of games at once, one per line.' },
+  { id: 'compare-periods', blurb: 'Compare Periods in Stats pits this month vs last (or year vs year) with up/down arrows.', tab: 'stats', cta: 'Open Stats' },
+  { id: 'ai-companion', blurb: 'The AI Companion in Stats will roast your library, read your gaming horoscope, and forecast tonight’s session.', tab: 'stats', cta: 'Open Stats' },
+  { id: 'beat-the-clock', blurb: 'Set a finish-by Deadline when editing a game — Stats shows whether you’re on track to beat it.', tab: 'stats', cta: 'Open Stats' },
 ];
 
 const SEEN_KEY = 'ga-feature-discovery-seen';
