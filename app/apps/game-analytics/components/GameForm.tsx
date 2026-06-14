@@ -126,6 +126,8 @@ export function GameForm({ onSubmit, onClose, initialGame, allGames = [], existi
     endDate: initialGame?.endDate || '',
     playLogs: initialGame?.playLogs || [],
     isSpecial: initialGame?.isSpecial || false,
+    tags: initialGame?.tags?.join(', ') || '',
+    replayability: initialGame?.replayability !== undefined ? initialGame.replayability.toString() : '',
   });
 
   // Drag-to-dismiss
@@ -204,6 +206,10 @@ export function GameForm({ onSubmit, onClose, initialGame, allGames = [], existi
         startDate: formData.startDate || undefined,
         endDate: formData.endDate || undefined,
         isSpecial: formData.isSpecial || undefined,
+        tags: formData.tags
+          ? formData.tags.split(',').map((t) => t.trim()).filter(Boolean)
+          : undefined,
+        replayability: formData.replayability ? parseFloat(formData.replayability) : undefined,
       });
       onClose();
     } finally {
@@ -687,6 +693,32 @@ export function GameForm({ onSubmit, onClose, initialGame, allGames = [], existi
                   className="w-full px-3 py-2.5 bg-white/[0.03] border border-white/5 text-white rounded-xl text-sm focus:outline-none focus:bg-white/[0.05] focus:border-white/10 transition-all resize-none placeholder:text-white/30"
                   rows={3}
                   placeholder="What did you love? What could be better?"
+                />
+              </div>
+
+              {/* Tags (#14) */}
+              <div>
+                <label className="block text-xs font-medium text-white/50 mb-1.5">Tags</label>
+                <input
+                  type="text"
+                  value={formData.tags}
+                  onChange={e => setFormData({ ...formData, tags: e.target.value })}
+                  className="w-full px-3 py-2.5 bg-white/[0.03] border border-white/5 text-white rounded-xl text-sm focus:outline-none focus:bg-white/[0.05] focus:border-white/10 transition-all placeholder:text-white/30"
+                  placeholder="comma-separated, e.g. co-op, comfort, rage-quit"
+                />
+              </div>
+
+              {/* Replayability (#16) */}
+              <div>
+                <label className="block text-xs font-medium text-white/50 mb-1.5">Replayability (1–10)</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={10}
+                  value={formData.replayability}
+                  onChange={e => setFormData({ ...formData, replayability: e.target.value })}
+                  className="w-full px-3 py-2.5 bg-white/[0.03] border border-white/5 text-white rounded-xl text-sm focus:outline-none focus:bg-white/[0.05] focus:border-white/10 transition-all placeholder:text-white/30"
+                  placeholder="Would you replay it?"
                 />
               </div>
 
