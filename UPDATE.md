@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-14 12:00 — More Menu — Gaming Chronicle
+
+**Files**: app/apps/game-analytics/components/ChronicleModal.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Added a full-screen "Gaming Chronicle" accessible from the ⋮ More menu. The Chronicle unifies five previously orphaned visualization components (FilmstripTimeline, GenreEpochs, HoursRace, ActivityFeed, StorySoFar) into a single immersive experience: a hero lifetime stats card with background art, monthly film-strip of snapshots, a stacked area chart of genre evolution over time, an opt-in animated hours race, a chronological activity feed of every session and purchase, and the AI-generated chapter-by-chapter narrative. Together they tell the story of how your gaming identity grew.
+
+FOLLOW-UP: Could add a "Share" button on the hero card (screenshot export similar to GamerCard), or surface the Chronicle from the Stats tab as a prominent entry point.
+
 ## 2026-06-10 12:00 — Games Tab — Play Tonight Smart Recommender
 
 **Files**: app/apps/game-analytics/components/PlayTonightModal.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json

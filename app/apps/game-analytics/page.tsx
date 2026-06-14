@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, CalendarClock, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical, Download, Gift, ShoppingCart, Search, X, Moon, CreditCard, Swords } from 'lucide-react';
+import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, CalendarClock, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical, Download, Gift, ShoppingCart, Search, X, Moon, CreditCard, Swords, BookOpen } from 'lucide-react';
 import { useGames } from './hooks/useGames';
 import { useAnalytics, GameWithMetrics } from './hooks/useAnalytics';
 import { useBudget } from './hooks/useBudget';
@@ -57,6 +57,7 @@ import { WhatsNewModal } from './components/WhatsNewModal';
 import { GameReviewChat } from './components/GameReviewChat';
 import { GameCompareModal } from './components/GameCompareModal';
 import { PlayTonightModal } from './components/PlayTonightModal';
+import { ChronicleModal } from './components/ChronicleModal';
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist';
@@ -247,6 +248,7 @@ export default function GameAnalyticsPage() {
   const [showErrorLog, setShowErrorLog] = useState(false);
   const [showWhatsNew, setShowWhatsNew] = useState(false);
   const [showPlayTonight, setShowPlayTonight] = useState(false);
+  const [showChronicle, setShowChronicle] = useState(false);
 
   // Week recap data for header strip
   const weekRecap = useMemo(() => {
@@ -1081,6 +1083,7 @@ export default function GameAnalyticsPage() {
                       <div className="fixed inset-0 z-40" onClick={() => setShowMoreMenu(false)} />
                       <div className="absolute right-0 top-full mt-1 z-50 w-52 rounded-xl border border-white/10 bg-[#15151c] shadow-xl py-1.5">
                         {[
+                          { icon: <BookOpen size={15} className="text-emerald-400" />, label: 'Gaming Chronicle', onClick: () => setShowChronicle(true) },
                           { icon: <CreditCard size={15} className="text-cyan-400" />, label: 'Gamer Card', onClick: () => setShowGamerCard(true) },
                           { icon: <Swords size={15} className="text-pink-400" />, label: 'Me vs Me', onClick: () => setShowMeVsMe(true) },
                           { icon: <Gift size={15} className="text-purple-400" />, label: 'Yearly Wrapped', onClick: () => setWrappedYear(new Date().getFullYear()) },
@@ -1693,6 +1696,14 @@ export default function GameAnalyticsPage() {
             }
           }}
           onClose={() => setReviewChatGame(null)}
+        />
+      )}
+
+      {/* Gaming Chronicle — immersive full-screen history view */}
+      {showChronicle && (
+        <ChronicleModal
+          games={games}
+          onClose={() => setShowChronicle(false)}
         />
       )}
     </div>
