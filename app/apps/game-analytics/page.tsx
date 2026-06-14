@@ -57,6 +57,8 @@ import { WhatsNewModal } from './components/WhatsNewModal';
 import { GameReviewChat } from './components/GameReviewChat';
 import { GameCompareModal } from './components/GameCompareModal';
 import { PlayTonightModal } from './components/PlayTonightModal';
+import { DailyChallengesCard } from './components/DailyChallengesCard';
+import { GoalsPanel } from './components/GoalsPanel';
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist';
@@ -247,6 +249,7 @@ export default function GameAnalyticsPage() {
   const [showErrorLog, setShowErrorLog] = useState(false);
   const [showWhatsNew, setShowWhatsNew] = useState(false);
   const [showPlayTonight, setShowPlayTonight] = useState(false);
+  const [showGoals, setShowGoals] = useState(false);
 
   // Week recap data for header strip
   const weekRecap = useMemo(() => {
@@ -994,6 +997,18 @@ export default function GameAnalyticsPage() {
           {/* Daily Fortune Cookie */}
           {games.length > 0 && <div className="mb-4"><FortuneCookie games={games} /></div>}
 
+          {/* Daily Challenges */}
+          {games.length > 0 && (
+            <DailyChallengesCard
+              games={games}
+              userId={user?.uid ?? null}
+              onOpenGame={(gameId) => {
+                const gwm = gamesWithMetrics.find(g => g.id === gameId);
+                if (gwm) setDetailGame(gwm);
+              }}
+            />
+          )}
+
           {/* New month's PS Plus games nudge */}
           <SubscriptionSyncBanner
             userId={user?.uid ?? null}
@@ -1085,6 +1100,7 @@ export default function GameAnalyticsPage() {
                           { icon: <Swords size={15} className="text-pink-400" />, label: 'Me vs Me', onClick: () => setShowMeVsMe(true) },
                           { icon: <Gift size={15} className="text-purple-400" />, label: 'Yearly Wrapped', onClick: () => setWrappedYear(new Date().getFullYear()) },
                           { icon: <Star size={15} className="text-amber-400" />, label: 'Awards Hub', onClick: () => setShowAwardsHub(true) },
+                          { icon: <Target size={15} className="text-emerald-400" />, label: 'My Goals', onClick: () => setShowGoals(true) },
                           { icon: <Download size={15} className="text-white/50" />, label: 'Export data', onClick: () => setShowExport(true) },
                         ].map(item => (
                           <button key={item.label}
@@ -1599,6 +1615,27 @@ export default function GameAnalyticsPage() {
           onAwardGiven={handleAwardGiven}
           onClose={() => setShowAwardsHub(false)}
         />
+      )}
+
+      {/* Goals Panel Modal */}
+      {showGoals && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowGoals(false)} />
+          <div className="relative z-10 w-full sm:max-w-lg max-h-[90dvh] overflow-y-auto rounded-t-2xl sm:rounded-2xl bg-[#0f0f1a] border border-white/10 shadow-2xl">
+            <div className="sticky top-0 z-10 flex items-center justify-between px-5 pt-5 pb-3 bg-[#0f0f1a] border-b border-white/5">
+              <h2 className="text-base font-bold text-white">Gaming Goals</h2>
+              <button
+                onClick={() => setShowGoals(false)}
+                className="p-1.5 rounded-lg text-white/40 hover:text-white/80 hover:bg-white/5 transition-all"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="p-4">
+              <GoalsPanel games={games} />
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Bulk Wishlist Modal */}

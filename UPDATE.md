@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-14 00:00 — Games Tab — Daily Challenges + Goals System
+
+**Files**: app/apps/game-analytics/lib/daily-challenges.ts, app/apps/game-analytics/components/DailyChallengesCard.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Added a daily challenges system to the Games tab: three auto-generated, data-driven challenges appear each day (seeded by date so they stay consistent all day and refresh each morning). Challenges are personalized — they reference specific games you own, like "Keep your 5-day streak alive" or "Revisit The Witcher 3 — 35 days since your last session." A progress bar and completion checkboxes make it satisfying to work through; completing at least one challenge per day builds a separate "challenge streak" shown with a flame badge. Also surfaced the previously-hidden GoalsPanel (fully built but inaccessible) via a new "My Goals" entry in the ⋮ More menu, where users can set completion, spending, hours, backlog, and genre variety goals with auto-tracked progress.
+
+FOLLOW-UP: Could add XP points accumulation across days with milestone rewards, or sync challenge streaks to Firestore for cross-device persistence.
+
 ## 2026-06-10 12:00 — Games Tab — Play Tonight Smart Recommender
 
 **Files**: app/apps/game-analytics/components/PlayTonightModal.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json
