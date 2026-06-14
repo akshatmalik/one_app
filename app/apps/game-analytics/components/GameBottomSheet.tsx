@@ -25,6 +25,7 @@ import { generateGameInsightPack, GameInsightPack } from '../lib/ai-game-service
 import { RatingStars } from './RatingStars';
 import { ReviewCard } from './ReviewCard';
 import { GameJourney } from './GameJourney';
+import { ValueJourneyChart } from './ValueJourneyChart';
 import { QuickCheckIn } from './QuickCheckIn';
 import clsx from 'clsx';
 
@@ -69,6 +70,7 @@ export function GameBottomSheet({
 }: GameBottomSheetProps) {
   const [showAwards, setShowAwards] = useState(false);
   const [showJourney, setShowJourney] = useState(false);
+  const [showValueJourney, setShowValueJourney] = useState(false);
   const [showRecords, setShowRecords] = useState(false);
   const [showReviewCard, setShowReviewCard] = useState(false);
   const [insightPack, setInsightPack] = useState<GameInsightPack | null>(null);
@@ -600,6 +602,23 @@ export function GameBottomSheet({
                 {showJourney ? <ChevronUp size={15} className="text-white/30" /> : <ChevronDown size={15} className="text-white/30" />}
               </button>
               {showJourney && <GameJourney game={game} />}
+            </div>
+          )}
+
+          {/* Value Journey Chart */}
+          {game.price > 0 && game.playLogs && game.playLogs.length >= 2 && (
+            <div className="px-5 pb-4">
+              <button
+                onClick={() => setShowValueJourney(v => !v)}
+                className="w-full flex items-center gap-2 mb-3"
+              >
+                <span className="text-sm font-medium text-white/70">Value Journey</span>
+                <span className="text-[10px] px-1.5 py-0.5 bg-emerald-500/10 text-emerald-400 rounded-full font-bold ml-auto">
+                  ${game.metrics.costPerHour.toFixed(2)}/hr now
+                </span>
+                {showValueJourney ? <ChevronUp size={15} className="text-white/30" /> : <ChevronDown size={15} className="text-white/30" />}
+              </button>
+              {showValueJourney && <ValueJourneyChart game={game} />}
             </div>
           )}
 

@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import {
   Shield, Clock, DollarSign, TrendingUp, TrendingDown, AlertTriangle,
   Skull, Tag, BarChart3, Target, Percent, Zap, Star, Gauge, PieChart,
-  Receipt, Activity, ArrowUpDown, LineChart as LineChartIcon, Award, Layers,
+  Receipt, Activity, ArrowUpDown, LineChart as LineChartIcon, Award, Layers, CheckCircle2, Trophy,
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -28,6 +28,7 @@ import {
   getMoneyEfficiencyTrend,
   getRatingConfidence,
   getParetoAnalysis,
+  calculateMetrics,
 } from '../lib/calculations';
 import clsx from 'clsx';
 
@@ -56,6 +57,36 @@ export function InsightsPanel({ games, totalHours, avgCostPerHour, budgets = [] 
   const moneyEfficiency = useMemo(() => getMoneyEfficiencyTrend(games), [games]);
   const ratingConfidence = useMemo(() => getRatingConfidence(games), [games]);
   const paretoAnalysis = useMemo(() => getParetoAnalysis(games), [games]);
+
+  // Value Race data — which games have won, which are still racing to Good value
+  const valueRaceData = useMemo(() => {
+    const paidOwned = games.filter(g =>
+      g.status !== 'Wishlist' && g.price > 0 && getTotalHours(g) > 0
+    );
+    if (paidOwned.length < 3) return null;
+
+    const withMetrics = paidOwned.map(g => {
+      const hours = getTotalHours(g);
+      const cph = g.price / hours;
+      const metrics = calculateMetrics(g);
+      return { g, hours, cph, valueRating: metrics.valueRating };
+    }).sort((a, b) => a.cph - b.cph);
+
+    // Champions: already at Excellent or Good value
+    const champions = withMetrics.filter(x => x.cph <= 3).slice(0, 5);
+
+    // Racing: In Progress / Not Started games that haven't hit Good value yet
+    const racing = withMetrics
+      .filter(x => x.cph > 3 && (x.g.status === 'In Progress' || x.g.status === 'Not Started'))
+      .map(x => ({
+        ...x,
+        hoursToGood: Math.max(1, Math.ceil(x.g.price / 3) - x.hours),
+      }))
+      .sort((a, b) => a.hoursToGood - b.hoursToGood)
+      .slice(0, 4);
+
+    return { champions, racing };
+  }, [games]);
 
   const ownedGames = games.filter(g => g.status !== 'Wishlist');
   if (ownedGames.length === 0) return null;
@@ -792,6 +823,109 @@ export function InsightsPanel({ games, totalHours, avgCostPerHour, budgets = [] 
           <div className="mt-2 text-[10px] text-white/20 text-center">
             Cumulative % of total gaming hours
           </div>
+        </div>
+      )}
+
+      {/* Value Race — who's winning, who's still racing */}
+      {valueRaceData && (valueRaceData.champions.length > 0 || valueRaceData.racing.length > 0) && (
+        <div className="p-4 bg-gradient-to-br from-emerald-500/8 to-teal-500/8 border border-emerald-500/15 rounded-xl">
+          <h4 className="text-sm font-medium text-white/70 flex items-center gap-2 mb-4">
+            <TrendingDown size={14} className="text-emerald-400" />
+            Value Race
+          </h4>
+
+          {/* Champions — games that hit Good or Excellent value */}
+          {valueRaceData.champions.length > 0 && (
+            <div className="mb-3">
+              <div className="text-[10px] font-semibold text-white/30 uppercase tracking-wider mb-2 flex items-center gap-1">
+                <Trophy size={10} className="text-amber-400" /> Crossed the finish line
+              </div>
+              <div className="space-y-2">
+                {valueRaceData.champions.map(({ g, cph, valueRating }, i) => {
+                  const isExcellent = cph <= 1;
+                  const color = isExcellent ? '#10b981' : '#3b82f6';
+                  const labelColor = isExcellent ? 'text-emerald-400' : 'text-blue-400';
+                  const bgColor = isExcellent ? 'bg-emerald-500/10' : 'bg-blue-500/10';
+                  return (
+                    <div key={g.id} className="flex items-center gap-2">
+                      <div
+                        className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0"
+                        style={{ backgroundColor: `${color}20`, color }}
+                      >
+                        {i + 1}
+                      </div>
+                      {g.thumbnail ? (
+                        <img src={g.thumbnail} alt="" className="w-6 h-6 rounded object-cover shrink-0" />
+                      ) : (
+                        <div className="w-6 h-6 rounded bg-white/5 shrink-0" />
+                      )}
+                      <span className="flex-1 text-xs text-white/70 truncate">{g.name}</span>
+                      <span className={`text-xs font-bold shrink-0 px-1.5 py-0.5 rounded ${bgColor} ${labelColor}`}>
+                        ${cph.toFixed(2)}/hr
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Divider */}
+          {valueRaceData.champions.length > 0 && valueRaceData.racing.length > 0 && (
+            <div className="border-t border-white/5 mb-3" />
+          )}
+
+          {/* Still racing — how many more hours to hit Good value */}
+          {valueRaceData.racing.length > 0 && (
+            <div>
+              <div className="text-[10px] font-semibold text-white/30 uppercase tracking-wider mb-2 flex items-center gap-1">
+                <Zap size={10} className="text-yellow-400" /> Still racing to Good value ($3/hr)
+              </div>
+              <div className="space-y-2">
+                {valueRaceData.racing.map(({ g, cph, hoursToGood }) => {
+                  // Progress: how far along to reaching $3/hr
+                  // At purchase: 0 hours, progress = 0. At $3/hr: progress = 100%
+                  const targetHours = Math.ceil(g.price / 3);
+                  const currentHours = getTotalHours(g);
+                  const progress = Math.min(100, Math.round((currentHours / targetHours) * 100));
+                  return (
+                    <div key={g.id}>
+                      <div className="flex items-center gap-2 mb-1">
+                        {g.thumbnail ? (
+                          <img src={g.thumbnail} alt="" className="w-5 h-5 rounded object-cover shrink-0" />
+                        ) : (
+                          <div className="w-5 h-5 rounded bg-white/5 shrink-0" />
+                        )}
+                        <span className="flex-1 text-xs text-white/60 truncate">{g.name}</span>
+                        <span className="text-[10px] text-white/30 shrink-0">
+                          {hoursToGood}h left
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 h-1.5 bg-white/5 rounded-full overflow-hidden">
+                          <div
+                            className="h-full rounded-full transition-all"
+                            style={{
+                              width: `${progress}%`,
+                              background: progress >= 75
+                                ? 'linear-gradient(90deg, #3b82f6, #10b981)'
+                                : 'linear-gradient(90deg, #6366f1, #3b82f6)',
+                            }}
+                          />
+                        </div>
+                        <span className="text-[9px] text-white/25 w-8 text-right shrink-0">
+                          {progress}%
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="mt-2 text-[10px] text-white/20">
+                Based on $3/hr threshold for Good value
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-14 20:00 — Value Intelligence — Per-Game Value Journey Chart + Library Value Race
+
+**Files**: app/apps/game-analytics/components/ValueJourneyChart.tsx, app/apps/game-analytics/components/GameBottomSheet.tsx, app/apps/game-analytics/components/InsightsPanel.tsx, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Added a "Value Journey" visualization inside the game detail bottom sheet: an AreaChart showing cost-per-hour declining over accumulated playtime, with reference lines at $1 (Excellent), $3 (Good), and $5 (Fair). Displays milestone badges for every tier the game crossed ("Excellent at 18h"), and a forward-looking prediction ("4 more hours to Good Value"). The chart surfaces `getValueOverTime()` which was fully implemented in calculations.ts but never rendered anywhere. Also added a "Value Race" leaderboard in the Insights panel showing which paid games have crossed into Good/Excellent territory, plus which in-progress games are closest to the $3/hr finish line with a live progress bar.
+
+FOLLOW-UP: Could add a library-wide multi-game overlay chart showing the top 5 games' value curves simultaneously, like a literal race to the $1/hr threshold.
+
 ## 2026-06-10 12:00 — Games Tab — Play Tonight Smart Recommender
 
 **Files**: app/apps/game-analytics/components/PlayTonightModal.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json

@@ -1,6 +1,12 @@
 {
   "entries": [
     {
+      "date": "2026-06-14",
+      "area": "Game detail",
+      "title": "Watch your game earn its price — the Value Journey chart",
+      "body": "Open any game's detail sheet and tap \"Value Journey\" to see a live chart of how your cost-per-hour has fallen with every session. See exactly when the game crossed into Good or Excellent value territory, get a forward prediction like \"4 more hours to hit $3/hr\", and track your start vs. now cost improvement. The Stats tab's Deep Insights section now also shows a Value Race leaderboard: which games have crossed the finish line, and which in-progress games are closest to earning their keep."
+    },
+    {
       "date": "2026-06-10",
       "area": "Games tab",
       "title": "Play Tonight — find your perfect match in seconds",
