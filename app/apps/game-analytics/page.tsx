@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, CalendarClock, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical, Download, Gift, ShoppingCart, Search, X, Moon, CreditCard, Swords } from 'lucide-react';
+import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, CalendarClock, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical, Download, Gift, ShoppingCart, Search, X, Moon, CreditCard, Swords, ClipboardList } from 'lucide-react';
 import { useGames } from './hooks/useGames';
 import { useAnalytics, GameWithMetrics } from './hooks/useAnalytics';
 import { useBudget } from './hooks/useBudget';
@@ -20,6 +20,7 @@ import { TryThisPrompt } from './components/TryThisPrompt';
 import { GenreGoalsCard } from './components/GenreGoalsCard';
 import { ComparePeriodsCard } from './components/ComparePeriodsCard';
 import { AICompanionPanel } from './components/AICompanionPanel';
+import { QuickAddPasteModal } from './components/QuickAddPasteModal';
 import { AIChatTab } from './components/AIChatTab';
 import { AgentExecutors } from './lib/ai-actions';
 import { UpNextTab } from './components/UpNextTab';
@@ -253,6 +254,7 @@ export default function GameAnalyticsPage() {
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showErrorLog, setShowErrorLog] = useState(false);
   const [showWhatsNew, setShowWhatsNew] = useState(false);
+  const [showQuickAdd, setShowQuickAdd] = useState(false);
   const [showPlayTonight, setShowPlayTonight] = useState(false);
 
   // Week recap data for header strip
@@ -666,6 +668,15 @@ export default function GameAnalyticsPage() {
               >
                 <Sparkles size={14} />
                 <span className="hidden sm:inline text-[12px]">What&apos;s New</span>
+              </button>
+              <button
+                onClick={() => setShowQuickAdd(true)}
+                className="flex items-center gap-1.5 px-2.5 py-2 bg-white/5 text-white/60 hover:text-white/80 rounded-lg transition-all text-sm"
+                title="Quick add by paste"
+                aria-label="Quick add by paste"
+              >
+                <ClipboardList size={14} />
+                <span className="hidden sm:inline text-[12px]">Paste</span>
               </button>
               <button
                 onClick={() => setIsFormOpen(true)}
@@ -1538,6 +1549,25 @@ export default function GameAnalyticsPage() {
           initialGame={editingGame || undefined}
           allGames={games}
           existingFranchises={Array.from(new Set(games.map(g => g.franchise).filter(Boolean) as string[]))}
+        />
+      )}
+
+      {/* Quick Add by Paste Modal (#8) */}
+      {showQuickAdd && (
+        <QuickAddPasteModal
+          onClose={() => setShowQuickAdd(false)}
+          onAdd={async (names) => {
+            for (const name of names) {
+              await addGame({
+                name,
+                price: 0,
+                hours: 0,
+                rating: 0,
+                status: 'Not Started',
+              });
+            }
+            showToast(`Added ${names.length} game${names.length !== 1 ? 's' : ''}`, 'success');
+          }}
         />
       )}
 
