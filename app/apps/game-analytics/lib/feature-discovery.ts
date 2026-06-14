@@ -29,6 +29,9 @@ export const DISCOVERABLE_FEATURES: DiscoverableFeature[] = [
   { id: 'compare-periods', blurb: 'Compare Periods in Stats pits this month vs last (or year vs year) with up/down arrows.', tab: 'stats', cta: 'Open Stats' },
   { id: 'ai-companion', blurb: 'The AI Companion in Stats will roast your library, read your gaming horoscope, and forecast tonight’s session.', tab: 'stats', cta: 'Open Stats' },
   { id: 'beat-the-clock', blurb: 'Set a finish-by Deadline when editing a game — Stats shows whether you’re on track to beat it.', tab: 'stats', cta: 'Open Stats' },
+  { id: 'saved-filters', blurb: 'Found a filter+sort combo you like? Hit "Save view" on the Games tab to keep it one tap away.' },
+  { id: 'progression', blurb: 'Stats now shows your Gamer Level, XP, and weekly Quests — level up by playing and finishing games.', tab: 'stats', cta: 'Open Stats' },
+  { id: 'bracket', blurb: 'Can’t decide what to play? Tap "Bracket" to run a knockout tournament across your backlog.' },
 ];
 
 const SEEN_KEY = 'ga-feature-discovery-seen';
