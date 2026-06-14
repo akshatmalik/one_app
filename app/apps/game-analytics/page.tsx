@@ -57,6 +57,7 @@ import { WhatsNewModal } from './components/WhatsNewModal';
 import { GameReviewChat } from './components/GameReviewChat';
 import { GameCompareModal } from './components/GameCompareModal';
 import { PlayTonightModal } from './components/PlayTonightModal';
+import { SessionSummaryModal, SessionSummaryData } from './components/SessionSummaryModal';
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist';
@@ -247,6 +248,7 @@ export default function GameAnalyticsPage() {
   const [showErrorLog, setShowErrorLog] = useState(false);
   const [showWhatsNew, setShowWhatsNew] = useState(false);
   const [showPlayTonight, setShowPlayTonight] = useState(false);
+  const [sessionSummary, setSessionSummary] = useState<SessionSummaryData | null>(null);
 
   // Week recap data for header strip
   const weekRecap = useMemo(() => {
@@ -374,6 +376,10 @@ export default function GameAnalyticsPage() {
                           (!playLogGame.playLogs || playLogGame.playLogs.length === 0) &&
                           playLogs.length > 0;
 
+    // Snapshot pre-save state so the summary modal can compute the delta
+    const previousLogs = playLogGame.playLogs || [];
+    const summaryGame = { ...playLogGame } as Game;
+
     const updates: Partial<Game> = {
       playLogs,
     };
@@ -391,7 +397,17 @@ export default function GameAnalyticsPage() {
 
     await updateGame(playLogGame.id, updates);
     setPlayLogGame(null);
-    showToast(isFirstSession ? 'Game started! Sessions saved' : 'Play sessions saved', 'success');
+
+    // Calculate added hours to decide whether to show summary
+    const prevLogHours = previousLogs.reduce((s, l) => s + l.hours, 0);
+    const newLogHours = playLogs.reduce((s, l) => s + l.hours, 0);
+    const addedHours = Math.max(0, newLogHours - prevLogHours);
+
+    if (addedHours > 0) {
+      setSessionSummary({ game: summaryGame, previousLogs, newLogs: playLogs, isFirstSession });
+    } else {
+      showToast('Sessions updated', 'success');
+    }
   };
 
   const handleQuickLog = async (game: GameWithMetrics, hours: number) => {
@@ -403,15 +419,17 @@ export default function GameAnalyticsPage() {
       hours,
     };
     const existingLogs = game.playLogs || [];
-    const updates: Partial<Game> = { playLogs: [...existingLogs, newLog] };
+    const newLogs = [...existingLogs, newLog];
+    const isFirstSession = game.status === 'Not Started' && existingLogs.length === 0;
+    const updates: Partial<Game> = { playLogs: newLogs };
 
-    if (game.status === 'Not Started' && existingLogs.length === 0) {
+    if (isFirstSession) {
       updates.status = 'In Progress';
       updates.startDate = dateStr;
     }
 
     await updateGame(game.id, updates);
-    showToast(`Logged ${hours}h`, 'success');
+    setSessionSummary({ game, previousLogs: existingLogs, newLogs, isFirstSession });
   };
 
   const toggleCardViewMode = () => {
@@ -1693,6 +1711,15 @@ export default function GameAnalyticsPage() {
             }
           }}
           onClose={() => setReviewChatGame(null)}
+        />
+      )}
+
+      {/* Session Summary — post-log celebration overlay */}
+      {sessionSummary && (
+        <SessionSummaryModal
+          data={sessionSummary}
+          allGames={games}
+          onClose={() => setSessionSummary(null)}
         />
       )}
     </div>

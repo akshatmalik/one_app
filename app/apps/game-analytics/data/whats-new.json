@@ -1,6 +1,12 @@
 {
   "entries": [
     {
+      "date": "2026-06-14",
+      "area": "Session logging",
+      "title": "Every session now gets a celebration moment",
+      "body": "After you log a play session — whether through the full log modal or a quick check-in — a summary slides up from the bottom showing exactly what changed: hours added, your updated cost-per-hour, any milestones you just hit (5h, 10h, 25h, 50h, 100h…), a gaming streak update, and how far you are from the next milestone. Makes logging feel rewarding instead of just administrative."
+    },
+    {
       "date": "2026-06-10",
       "area": "Games tab",
       "title": "Play Tonight — find your perfect match in seconds",

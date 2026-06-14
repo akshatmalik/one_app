@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-14 06:00 — Session Logging — Post-Session Celebration Overlay
+
+**Files**: app/apps/game-analytics/components/SessionSummaryModal.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Added a `SessionSummaryModal` that slides up from the bottom after every play session is logged — whether through the full PlayLogModal or the quick check-in button. The modal shows the hours added, updated cost-per-hour with before/after comparison, milestone badges for hours thresholds crossed (5h, 10h, 25h, 50h, 100h, 200h, 500h), value-tier-crossing badges (e.g. "Crossed to Good value!"), gaming streak, and a progress bar toward the next milestone. Auto-dismisses after 9 seconds; tapping X closes immediately. Both `handleSavePlayLogs` and `handleQuickLog` in page.tsx now snapshot pre-save state and trigger the modal when hours are actually added.
+
+FOLLOW-UP: Could also trigger the summary after bulk session imports, and could incorporate the mood tag from the logged session to personalize the celebration message.
+
 ## 2026-06-10 12:00 — Games Tab — Play Tonight Smart Recommender
 
 **Files**: app/apps/game-analytics/components/PlayTonightModal.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json
