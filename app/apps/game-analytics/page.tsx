@@ -16,6 +16,7 @@ import { StatsView } from './components/StatsView';
 import { MoreInsightsPanel } from './components/MoreInsightsPanel';
 import { FunZonePanel } from './components/FunZonePanel';
 import { AnalyticsExtrasPanel } from './components/AnalyticsExtrasPanel';
+import { TryThisPrompt } from './components/TryThisPrompt';
 import { AIChatTab } from './components/AIChatTab';
 import { AgentExecutors } from './lib/ai-actions';
 import { UpNextTab } from './components/UpNextTab';
@@ -1106,6 +1107,8 @@ export default function GameAnalyticsPage() {
             {/* View Mode Filter & Sort (only for games tab) */}
             {tabMode === 'games' && (
               <div className="flex flex-col gap-3">
+                {/* "Try This" feature discovery prompt (#101) */}
+                {games.length > 0 && <TryThisPrompt onNavigate={(tab) => setTabMode(tab as typeof tabMode)} />}
                 {/* Search bar */}
                 {games.length > 0 && (
                   <div className="space-y-1">

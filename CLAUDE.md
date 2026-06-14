@@ -893,6 +893,15 @@ Test these scenarios:
    - Linting passes
    - Functionality works in browser
 
+6. **Ship a discovery blurb (standing rule — NewIdeas100 #102)**:
+   - No user-facing feature is "done" until it includes a short, friendly blurb
+     prompting the user to try it.
+   - For the Game Analytics app, register that blurb in
+     `app/apps/game-analytics/lib/feature-discovery.ts` (`DISCOVERABLE_FEATURES`),
+     so the "Try This" prompt (#101) can surface it. Include the `tab` to
+     deep-link to and a `cta` label when relevant.
+   - This guarantees the app never grows features nobody can find.
+
 ### Working with the Hub Model
 
 **The hub (`app/page.tsx`)** shows all mini-apps. To add a new app:
