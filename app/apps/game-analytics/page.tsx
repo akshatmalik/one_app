@@ -23,6 +23,7 @@ import { AICompanionPanel } from './components/AICompanionPanel';
 import { QuickAddPasteModal } from './components/QuickAddPasteModal';
 import { SavedFiltersBar } from './components/SavedFiltersBar';
 import { ProgressionPanel } from './components/ProgressionPanel';
+import { BacklogBracketModal } from './components/BacklogBracketModal';
 import { AIChatTab } from './components/AIChatTab';
 import { AgentExecutors } from './lib/ai-actions';
 import { UpNextTab } from './components/UpNextTab';
@@ -257,6 +258,7 @@ export default function GameAnalyticsPage() {
   const [showErrorLog, setShowErrorLog] = useState(false);
   const [showWhatsNew, setShowWhatsNew] = useState(false);
   const [showQuickAdd, setShowQuickAdd] = useState(false);
+  const [showBracket, setShowBracket] = useState(false);
   const [showPlayTonight, setShowPlayTonight] = useState(false);
 
   // Week recap data for header strip
@@ -679,6 +681,15 @@ export default function GameAnalyticsPage() {
               >
                 <ClipboardList size={14} />
                 <span className="hidden sm:inline text-[12px]">Paste</span>
+              </button>
+              <button
+                onClick={() => setShowBracket(true)}
+                className="flex items-center gap-1.5 px-2.5 py-2 bg-white/5 text-white/60 hover:text-white/80 rounded-lg transition-all text-sm"
+                title="Backlog bracket — settle what to play next"
+                aria-label="Backlog bracket"
+              >
+                <Swords size={14} />
+                <span className="hidden sm:inline text-[12px]">Bracket</span>
               </button>
               <button
                 onClick={() => setIsFormOpen(true)}
@@ -1563,6 +1574,22 @@ export default function GameAnalyticsPage() {
           initialGame={editingGame || undefined}
           allGames={games}
           existingFranchises={Array.from(new Set(games.map(g => g.franchise).filter(Boolean) as string[]))}
+        />
+      )}
+
+      {/* Backlog Bracket Modal (#68) */}
+      {showBracket && (
+        <BacklogBracketModal
+          games={games}
+          onClose={() => setShowBracket(false)}
+          onChampion={async (g) => {
+            try {
+              await addToQueue(g.id);
+              showToast(`${g.name} added to Up Next`, 'success');
+            } catch (e) {
+              showToast(`Failed: ${(e as Error).message}`, 'error');
+            }
+          }}
         />
       )}
 
