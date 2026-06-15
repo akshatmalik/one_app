@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-15 06:00 — Stats Tab — Gaming Goals with Smart Suggestions
+
+**Files**: app/apps/game-analytics/lib/calculations.ts, app/apps/game-analytics/components/GoalsPanel.tsx, app/apps/game-analytics/components/StatsView.tsx, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Surfaced the fully-built but previously orphaned GoalsPanel into the Stats tab, and extended it with two new features. First, `getSmartGoalSuggestions()` analyses the library and returns up to 5 personalised goal recommendations — flagging if you haven't finished a game recently, if your spending is above average, if you're stuck in one genre, or if your backlog is piling up. Second, a "Quick Start" preset grid lets you create common goals (20h this month, finish 2 games, under $60) in one tap. Active goals now show circular progress rings, per-goal on-track/at-risk status, and a header summary ("2/3 on track"). The Goals panel sits at the top of the Stats tab so it's the first thing you see.
+
+FOLLOW-UP: Could add goal completion celebrations (confetti toast) and surface a "goals on track" mini-badge on the Stats tab button in the main nav.
+
 ## 2026-06-10 12:00 — Games Tab — Play Tonight Smart Recommender
 
 **Files**: app/apps/game-analytics/components/PlayTonightModal.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json

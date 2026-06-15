@@ -1,6 +1,12 @@
 {
   "entries": [
     {
+      "date": "2026-06-15",
+      "area": "Stats tab",
+      "title": "Set gaming goals and track your progress",
+      "body": "The Stats tab now has a Gaming Goals section at the top. Set targets like \"complete 3 games this month\", \"play 20 hours\", or \"spend under $50\" — and watch your progress update automatically as you log sessions and add games. The app also suggests personalised goals based on your library: if you haven't finished a game recently, or your backlog is growing, it'll nudge you toward a goal that fits. Quick-start presets let you create the most common goals in one tap."
+    },
+    {
       "date": "2026-06-10",
       "area": "Games tab",
       "title": "Play Tonight — find your perfect match in seconds",

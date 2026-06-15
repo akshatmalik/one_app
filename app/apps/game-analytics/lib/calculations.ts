@@ -14392,6 +14392,201 @@ function buildNudge(game: Game): ReviewNudge | null {
   return null;
 }
 
+// ============================================================
+// Smart Goal Suggestions
+// ============================================================
+
+export interface SmartGoalSuggestion {
+  id: string;
+  title: string;
+  description: string;
+  type: 'completion' | 'spending' | 'hours' | 'genre_variety' | 'backlog' | 'custom';
+  targetValue: number;
+  unit: string;
+  reason: string;
+  emoji: string;
+  urgency: 'high' | 'medium' | 'low';
+  /** ISO YYYY-MM-DD for start (today) */
+  startDate: string;
+  /** ISO YYYY-MM-DD for end (end of month or year) */
+  endDate: string;
+}
+
+function toISODate(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/**
+ * Analyse the user's library and return up to 5 personalised goal suggestions.
+ * Each suggestion is driven entirely by real data — never random.
+ */
+export function getSmartGoalSuggestions(games: Game[]): SmartGoalSuggestion[] {
+  const now = new Date();
+  const todayStr = toISODate(now);
+
+  const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  const endOfMonthStr = toISODate(endOfMonth);
+
+  const endOfYear = new Date(now.getFullYear(), 11, 31);
+  const endOfYearStr = toISODate(endOfYear);
+
+  const owned = games.filter(g => g.status !== 'Wishlist');
+  if (owned.length === 0) return [];
+
+  const suggestions: SmartGoalSuggestion[] = [];
+
+  // --- 1. Completion goal ---
+  // Suggest finishing a game if the user hasn't completed one recently.
+  const thirtyDaysAgo = new Date(now); thirtyDaysAgo.setDate(now.getDate() - 30);
+  const recentCompletions = owned.filter(g => {
+    if (g.status !== 'Completed' || !g.endDate) return false;
+    return parseLocalDate(g.endDate) >= thirtyDaysAgo;
+  }).length;
+  const inProgressGames = owned.filter(g => g.status === 'In Progress');
+  if (recentCompletions === 0 && inProgressGames.length > 0) {
+    suggestions.push({
+      id: 'completion-month',
+      title: 'Finish a game this month',
+      description: `You have ${inProgressGames.length} game${inProgressGames.length !== 1 ? 's' : ''} in progress — pick one and see it through.`,
+      type: 'completion',
+      targetValue: 1,
+      unit: 'game',
+      reason: `No completions in the last 30 days despite ${inProgressGames.length} active game${inProgressGames.length !== 1 ? 's' : ''}`,
+      emoji: '🏆',
+      urgency: 'high',
+      startDate: todayStr,
+      endDate: endOfMonthStr,
+    });
+  } else if (recentCompletions >= 1 && inProgressGames.length > 1) {
+    suggestions.push({
+      id: 'completion-push',
+      title: `Complete ${Math.min(recentCompletions + 1, 3)} games this month`,
+      description: 'You\'re on a roll. Can you add one more completion this month?',
+      type: 'completion',
+      targetValue: recentCompletions + 1,
+      unit: 'games',
+      reason: `You completed ${recentCompletions} game${recentCompletions !== 1 ? 's' : ''} recently — stretch goal`,
+      emoji: '🏆',
+      urgency: 'medium',
+      startDate: todayStr,
+      endDate: endOfMonthStr,
+    });
+  }
+
+  // --- 2. Hours goal ---
+  // Suggest a slightly higher hours target than last month's average.
+  const hoursByMonth = getHoursByMonth(games);
+  const monthKeys = Object.keys(hoursByMonth).sort();
+  const recentMonthHours = monthKeys
+    .slice(-3)
+    .map(k => hoursByMonth[k] ?? 0)
+    .filter(h => h > 0);
+  if (recentMonthHours.length > 0) {
+    const avgHours = recentMonthHours.reduce((s, h) => s + h, 0) / recentMonthHours.length;
+    const targetHours = Math.round(avgHours * 1.1 / 5) * 5; // round to nearest 5, 10% boost
+    if (targetHours > 0) {
+      const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+      const currentMonthHours = hoursByMonth[currentMonthKey] ?? 0;
+      const alreadyHasHoursGoal = suggestions.some(s => s.type === 'hours');
+      if (!alreadyHasHoursGoal) {
+        suggestions.push({
+          id: 'hours-month',
+          title: `Play ${targetHours}h this month`,
+          description: `Your average is ${avgHours.toFixed(0)}h/month. A ${(targetHours - avgHours).toFixed(0)}h stretch goal.`,
+          type: 'hours',
+          targetValue: targetHours,
+          unit: 'hours',
+          reason: `Based on your ${avgHours.toFixed(0)}h monthly average (${currentMonthHours.toFixed(0)}h so far this month)`,
+          emoji: '⏱️',
+          urgency: currentMonthHours < targetHours * 0.4 && now.getDate() > 15 ? 'high' : 'medium',
+          startDate: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`,
+          endDate: endOfMonthStr,
+        });
+      }
+    }
+  }
+
+  // --- 3. Spending limit ---
+  // Suggest a monthly spending cap based on their average.
+  const spendingByMonth = getSpendingByMonth(games);
+  const spendMonthKeys = Object.keys(spendingByMonth).sort();
+  const recentMonthSpend = spendMonthKeys
+    .slice(-6)
+    .map(k => spendingByMonth[k] ?? 0)
+    .filter(s => s > 0);
+  if (recentMonthSpend.length >= 2) {
+    const avgMonthlySpend = recentMonthSpend.reduce((s, m) => s + m, 0) / recentMonthSpend.length;
+    const capTarget = Math.round(avgMonthlySpend * 0.85 / 5) * 5;
+    if (capTarget > 0) {
+      suggestions.push({
+        id: 'spending-cap',
+        title: `Spend under $${capTarget} this month`,
+        description: `Your average is $${avgMonthlySpend.toFixed(0)}/month. A modest savings challenge.`,
+        type: 'spending',
+        targetValue: capTarget,
+        unit: 'dollars',
+        reason: `You average $${avgMonthlySpend.toFixed(0)}/month — a 15% reduction target`,
+        emoji: '💰',
+        urgency: 'low',
+        startDate: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`,
+        endDate: endOfMonthStr,
+      });
+    }
+  }
+
+  // --- 4. Genre diversity ---
+  // Suggest exploring a new genre if heavily concentrated in one.
+  const genrePlays: Record<string, number> = {};
+  owned.forEach(g => {
+    if (!g.genre) return;
+    const hrs = getTotalHours(g);
+    genrePlays[g.genre] = (genrePlays[g.genre] || 0) + hrs;
+  });
+  const totalGenreHours = Object.values(genrePlays).reduce((s, h) => s + h, 0);
+  const topGenreEntry = Object.entries(genrePlays).sort((a, b) => b[1] - a[1])[0];
+  if (topGenreEntry && totalGenreHours > 0) {
+    const topPercent = (topGenreEntry[1] / totalGenreHours) * 100;
+    const uniqueGenres = Object.keys(genrePlays).length;
+    if (topPercent > 60 && uniqueGenres < 5) {
+      suggestions.push({
+        id: 'genre-diversity',
+        title: `Try 2 new genres this year`,
+        description: `${topPercent.toFixed(0)}% of your hours are ${topGenreEntry[0]}. Expand your horizons.`,
+        type: 'genre_variety',
+        targetValue: uniqueGenres + 2,
+        unit: 'genres',
+        reason: `${topPercent.toFixed(0)}% of hours concentrated in ${topGenreEntry[0]}`,
+        emoji: '🌐',
+        urgency: 'low',
+        startDate: `${now.getFullYear()}-01-01`,
+        endDate: endOfYearStr,
+      });
+    }
+  }
+
+  // --- 5. Backlog clearance ---
+  // Suggest starting games if the backlog is growing faster than play.
+  const notStarted = owned.filter(g => g.status === 'Not Started').length;
+  if (notStarted >= 5) {
+    const target = Math.min(Math.ceil(notStarted * 0.3), 4);
+    suggestions.push({
+      id: 'backlog-start',
+      title: `Start ${target} backlog games`,
+      description: `You have ${notStarted} unstarted games. Give ${target} of them a first session.`,
+      type: 'backlog',
+      targetValue: target,
+      unit: 'games',
+      reason: `${notStarted} unstarted games in library`,
+      emoji: '📦',
+      urgency: notStarted >= 10 ? 'high' : 'medium',
+      startDate: todayStr,
+      endDate: endOfMonthStr,
+    });
+  }
+
+  return suggestions.slice(0, 5);
+}
+
 /**
  * Build the prioritized list of games that deserve a review and a few
  * progress counters so the UI can frame it as a gentle, finishable task.
