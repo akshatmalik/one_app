@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, CalendarClock, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical, Download, Gift, ShoppingCart, Search, X, Moon, CreditCard, Swords } from 'lucide-react';
+import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, CalendarClock, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical, Download, Gift, ShoppingCart, Search, X, Moon, CreditCard, Swords, Timer } from 'lucide-react';
 import { useGames } from './hooks/useGames';
 import { useAnalytics, GameWithMetrics } from './hooks/useAnalytics';
 import { useBudget } from './hooks/useBudget';
@@ -57,6 +57,9 @@ import { WhatsNewModal } from './components/WhatsNewModal';
 import { GameReviewChat } from './components/GameReviewChat';
 import { GameCompareModal } from './components/GameCompareModal';
 import { PlayTonightModal } from './components/PlayTonightModal';
+import { useActiveSession } from './hooks/useActiveSession';
+import { ActiveSessionBanner } from './components/ActiveSessionBanner';
+import { EndSessionModal } from './components/EndSessionModal';
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist';
@@ -247,6 +250,51 @@ export default function GameAnalyticsPage() {
   const [showErrorLog, setShowErrorLog] = useState(false);
   const [showWhatsNew, setShowWhatsNew] = useState(false);
   const [showPlayTonight, setShowPlayTonight] = useState(false);
+
+  // Live session timer
+  const { session: activeSession, elapsedSeconds, startSession, endSession, cancelSession } = useActiveSession();
+  const [endSessionData, setEndSessionData] = useState<{ gameId: string; gameName: string; gameThumbnail?: string; rawSeconds: number } | null>(null);
+
+  const handleStartSession = useCallback((game: Game) => {
+    startSession(game.id, game.name, game.thumbnail);
+    showToast(`Timer started for ${game.name}`, 'success');
+  }, [startSession, showToast]);
+
+  const handleEndSessionStart = useCallback(() => {
+    const result = endSession();
+    if (result) {
+      setEndSessionData({
+        gameId: result.session.gameId,
+        gameName: result.session.gameName,
+        gameThumbnail: result.session.gameThumbnail,
+        rawSeconds: result.rawSeconds,
+      });
+    }
+  }, [endSession]);
+
+  const handleEndSessionSave = useCallback(async (hours: number, mood?: import('./lib/types').SessionMood) => {
+    if (!endSessionData) return;
+    const gameToLog = gamesWithMetrics.find(g => g.id === endSessionData.gameId);
+    if (gameToLog) {
+      const now = new Date();
+      const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      const newLog: import('./lib/types').PlayLog = {
+        id: `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+        date: dateStr,
+        hours,
+        mood,
+      };
+      const existingLogs = gameToLog.playLogs || [];
+      const updates: Partial<Game> = { playLogs: [...existingLogs, newLog] };
+      if (gameToLog.status === 'Not Started' && existingLogs.length === 0) {
+        updates.status = 'In Progress';
+        updates.startDate = dateStr;
+      }
+      await updateGame(gameToLog.id, updates);
+      showToast(`Logged ${hours}h for ${endSessionData.gameName}`, 'success');
+    }
+    setEndSessionData(null);
+  }, [endSessionData, gamesWithMetrics, updateGame, showToast]);
 
   // Week recap data for header strip
   const weekRecap = useMemo(() => {
@@ -1015,6 +1063,17 @@ export default function GameAnalyticsPage() {
             />
           )}
 
+          {/* Live Session Banner — shown above tabs when a timer is running */}
+          {activeSession && (
+            <ActiveSessionBanner
+              gameName={activeSession.gameName}
+              gameThumbnail={activeSession.gameThumbnail}
+              elapsedSeconds={elapsedSeconds}
+              onEnd={handleEndSessionStart}
+              onCancel={cancelSession}
+            />
+          )}
+
           {/* Tab Navigation */}
           <div className="space-y-4 mb-6">
             {/* Tabs - Two icon-only rows */}
@@ -1292,6 +1351,8 @@ export default function GameAnalyticsPage() {
                   }}
                   onDelete={(game) => handleDelete(game.id, game.name)}
                   isInQueue={isInQueue}
+                  onStartSession={handleStartSession}
+                  hasActiveSession={!!activeSession}
                   sortBy={sortBy}
                   gameColors={gameColors}
                   gameQuips={gameQuips}
@@ -1667,7 +1728,23 @@ export default function GameAnalyticsPage() {
             setCompareGame(detailGame);
             setDetailGame(null);
           }}
+          onStartSession={() => {
+            handleStartSession(detailGame);
+            setDetailGame(null);
+          }}
           isInQueue={isInQueue(detailGame.id)}
+          hasActiveSession={!!activeSession}
+        />
+      )}
+
+      {/* End Session Modal — shown after stopping a live timer */}
+      {endSessionData && (
+        <EndSessionModal
+          gameName={endSessionData.gameName}
+          gameThumbnail={endSessionData.gameThumbnail}
+          elapsedSeconds={endSessionData.rawSeconds}
+          onSave={handleEndSessionSave}
+          onCancel={() => setEndSessionData(null)}
         />
       )}
 
@@ -1775,6 +1852,8 @@ interface GameCardListProps {
   onToggleSpecial: (game: GameWithMetrics) => void;
   onDelete: (game: GameWithMetrics) => void;
   isInQueue: (id: string) => boolean;
+  onStartSession?: (game: GameWithMetrics) => void;
+  hasActiveSession?: boolean;
   sortBy?: string;
   gameColors: Map<string, string>;
   gameQuips?: Record<string, { quip: string }>;
@@ -1795,6 +1874,8 @@ function GameCardList({
   onToggleSpecial,
   onDelete,
   isInQueue,
+  onStartSession,
+  hasActiveSession = false,
   sortBy = 'hours',
   gameColors,
   gameQuips = {},
@@ -1880,7 +1961,7 @@ function GameCardList({
             <div className="space-y-3">
               {nowPlayingGames.map(g => (
                 <div key={g.id} className={`game-card-animate${enteringCards.has(g.id) ? ' game-card-enter' : ''}`}>
-                  <NowPlayingCard game={g} allGames={allGames} onClick={() => onCardClick(g)} onQuickLog={(h) => onQuickLog(g, h)} sortBy={sortBy} tintColor={gameColors.get(g.id)} eloRanking={eloByGameId.get(g.id)} gameTier={tierAssignments[g.id] as GameTier | undefined} eloTierRank={eloTierRanks.get(g.id)} />
+                  <NowPlayingCard game={g} allGames={allGames} onClick={() => onCardClick(g)} onQuickLog={(h) => onQuickLog(g, h)} onStartSession={onStartSession ? () => onStartSession(g) : undefined} hasActiveSession={hasActiveSession} sortBy={sortBy} tintColor={gameColors.get(g.id)} eloRanking={eloByGameId.get(g.id)} gameTier={tierAssignments[g.id] as GameTier | undefined} eloTierRank={eloTierRanks.get(g.id)} />
                 </div>
               ))}
             </div>
@@ -1923,7 +2004,7 @@ function GameCardList({
           <div className="space-y-3">
             {nowPlayingGames.map(g => (
               <div key={g.id} className={`game-card-animate${enteringCards.has(g.id) ? ' game-card-enter' : ''}`}>
-                <NowPlayingCard game={g} allGames={allGames} onClick={() => onCardClick(g)} onQuickLog={(h) => onQuickLog(g, h)} eloRanking={eloByGameId.get(g.id)} gameTier={tierAssignments[g.id] as GameTier | undefined} />
+                <NowPlayingCard game={g} allGames={allGames} onClick={() => onCardClick(g)} onQuickLog={(h) => onQuickLog(g, h)} onStartSession={onStartSession ? () => onStartSession(g) : undefined} hasActiveSession={hasActiveSession} eloRanking={eloByGameId.get(g.id)} gameTier={tierAssignments[g.id] as GameTier | undefined} />
               </div>
             ))}
           </div>
@@ -1953,11 +2034,13 @@ function SectionIcon({ id }: { id: string }) {
 
 // --- Now Playing Card ---
 
-function NowPlayingCard({ game, allGames, onClick, onQuickLog, sortBy = 'hours', tintColor, eloRanking, gameTier, eloTierRank }: {
+function NowPlayingCard({ game, allGames, onClick, onQuickLog, onStartSession, hasActiveSession, sortBy = 'hours', tintColor, eloRanking, gameTier, eloTierRank }: {
   game: GameWithMetrics;
   allGames: Game[];
   onClick: () => void;
   onQuickLog: (hours: number) => void;
+  onStartSession?: () => void;
+  hasActiveSession?: boolean;
   sortBy?: string;
   tintColor?: string;
   eloRanking?: GameRanking;
@@ -2162,6 +2245,21 @@ function NowPlayingCard({ game, allGames, onClick, onQuickLog, sortBy = 'hours',
 
           {/* Check-in stepper */}
           <div className="px-3 pb-2.5 pt-1 flex items-center gap-1.5">
+            {/* Timer start — only show when no session is active */}
+            {onStartSession && (
+              <button
+                onClick={(e) => { e.stopPropagation(); if (!hasActiveSession) onStartSession(); }}
+                title={hasActiveSession ? 'Session running' : 'Start timer'}
+                className={clsx(
+                  'w-7 h-7 flex items-center justify-center rounded-lg text-xs transition-all shrink-0',
+                  hasActiveSession
+                    ? 'bg-white/5 text-white/15 cursor-not-allowed'
+                    : 'bg-emerald-500/15 text-emerald-400 active:bg-emerald-500/25 border border-emerald-500/20'
+                )}
+              >
+                <Timer size={12} />
+              </button>
+            )}
             <button
               onClick={(e) => { e.stopPropagation(); setCheckInHours(h => Math.max(0.5, Math.round((h - 0.5) * 10) / 10)); }}
               className="w-7 h-7 flex items-center justify-center rounded-lg bg-white/5 text-white/40 text-sm font-bold active:bg-white/10 transition-all shrink-0"

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useRef, useEffect } from 'react';
-import { Clock, ChevronDown, ChevronUp, ListPlus, Check, Heart, Edit3, Trash2, Trophy, Sparkles, Zap, MessageCircle, ArrowLeftRight, Share2 } from 'lucide-react';
+import { Clock, ChevronDown, ChevronUp, ListPlus, Check, Heart, Edit3, Trash2, Trophy, Sparkles, Zap, MessageCircle, ArrowLeftRight, Share2, Timer } from 'lucide-react';
 import { Game } from '../lib/types';
 import { GameWithMetrics } from '../hooks/useAnalytics';
 import {
@@ -40,7 +40,9 @@ interface GameBottomSheetProps {
   onToggleSpecial: () => void;
   onOpenReviewChat: () => void;
   onCompare: () => void;
+  onStartSession?: () => void;
   isInQueue: boolean;
+  hasActiveSession?: boolean;
 }
 
 function getValueColor(rating: string): string {
@@ -65,7 +67,9 @@ export function GameBottomSheet({
   onToggleSpecial,
   onOpenReviewChat,
   onCompare,
+  onStartSession,
   isInQueue,
+  hasActiveSession = false,
 }: GameBottomSheetProps) {
   const [showAwards, setShowAwards] = useState(false);
   const [showJourney, setShowJourney] = useState(false);
@@ -717,6 +721,22 @@ export function GameBottomSheet({
 
         {/* Sticky Actions Bar */}
         <div className="absolute bottom-0 left-0 right-0 bg-[#0e0e16]/95 backdrop-blur-md border-t border-white/5 p-3 flex items-center gap-2">
+          {/* Start Session timer — only shown when game is owned/playable and no conflicting active session */}
+          {onStartSession && game.status !== 'Wishlist' && (
+            <button
+              onClick={onStartSession}
+              title={hasActiveSession ? 'A session is already running — end it first' : 'Start a timed session'}
+              disabled={hasActiveSession}
+              className={clsx(
+                'px-2.5 py-2.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 flex-shrink-0',
+                hasActiveSession
+                  ? 'bg-white/5 text-white/20 cursor-not-allowed'
+                  : 'bg-emerald-500/15 text-emerald-400 active:bg-emerald-500/25 border border-emerald-500/20'
+              )}
+            >
+              <Timer size={14} />
+            </button>
+          )}
           <button
             onClick={() => onLogTime()}
             className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 bg-blue-600/20 active:bg-blue-600/30 text-blue-400 rounded-lg text-xs font-medium transition-all"

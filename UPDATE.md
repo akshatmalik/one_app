@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-15 06:00 — Games Tab — Live Session Timer
+
+**Files**: app/apps/game-analytics/hooks/useActiveSession.ts, app/apps/game-analytics/components/ActiveSessionBanner.tsx, app/apps/game-analytics/components/EndSessionModal.tsx, app/apps/game-analytics/components/GameBottomSheet.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Start a live timer on any game — from the detail sheet or the Now Playing card — and watch it count up in a green banner above the tab bar. The timer persists across page refreshes (stored in localStorage under `ga-active-session`) and is automatically discarded if left running over 24 hours. Tap End to open a bottom-sheet modal pre-filled with your exact duration rounded to the nearest 0.1h; adjust with a slider if needed, optionally pick a session mood (Great / Good / Meh / Grind), then tap "Log Xh". The logged entry goes straight into the game's play history with mood attached. Tap X to cancel without logging.
+
+FOLLOW-UP: Could add a notification/Service Worker ping after 3 hours to remind the user they have a timer running.
+
 ## 2026-06-10 12:00 — Games Tab — Play Tonight Smart Recommender
 
 **Files**: app/apps/game-analytics/components/PlayTonightModal.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json

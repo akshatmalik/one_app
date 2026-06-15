@@ -1,6 +1,12 @@
 {
   "entries": [
     {
+      "date": "2026-06-15",
+      "area": "Games tab",
+      "title": "Live session timer — track your play in real time",
+      "body": "Tap the timer icon on any game's detail sheet (or the Now Playing card) to start a live session. A green banner appears above the tabs and counts up the whole time you're playing — even if you leave the page and come back. When you're done, tap End and you'll get a pre-filled log with your exact session length and a one-tap mood picker (Great, Good, Meh, or Grind). Adjust the hours if needed, then tap Log to save it to your history."
+    },
+    {
       "date": "2026-06-10",
       "area": "Games tab",
       "title": "Play Tonight — find your perfect match in seconds",
