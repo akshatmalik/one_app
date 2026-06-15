@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-15 00:00 — Stats Tab — Gaming Goals with Smart Suggestions
+
+**Files**: app/apps/game-analytics/components/GoalsPanel.tsx, app/apps/game-analytics/components/StatsView.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Wired up the fully-built but previously inaccessible GoalsPanel into two surfaces: the Stats tab (as a panel section above the Weekly Digest) and a dedicated Goals modal reachable from the ⋮ More menu. Enhanced the empty state with smart data-driven goal suggestions — the app auto-proposes 2–3 personalized goals (completion count, hours milestones, backlog busting, genre variety) based on the user's current library state and pace, so setting a first goal takes one tap instead of manual configuration.
+
+FOLLOW-UP: Could add a compact "Goals Progress Strip" in the Games tab header showing active goals' progress bars, so users see goal status without switching tabs.
+
 ## 2026-06-10 12:00 — Games Tab — Play Tonight Smart Recommender
 
 **Files**: app/apps/game-analytics/components/PlayTonightModal.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json

@@ -17,6 +17,96 @@ const GOAL_TYPE_CONFIG: Record<GoalType, { label: string; icon: React.ReactNode;
   custom: { label: 'Custom Goal', icon: <Sparkles size={14} />, defaultUnit: '', color: 'cyan' },
 };
 
+type SuggestedGoal = {
+  title: string;
+  description: string;
+  type: GoalType;
+  target: number;
+  unit: string;
+  endDate: string;
+};
+
+function buildSuggestions(games: Game[]): SuggestedGoal[] {
+  const now = new Date();
+  const year = now.getFullYear();
+  const monthsElapsed = now.getMonth() + 1;
+  const monthsRemaining = 12 - now.getMonth();
+  const yearEnd = `${year}-12-31`;
+  const threeMonthsOut = new Date(now);
+  threeMonthsOut.setMonth(threeMonthsOut.getMonth() + 3);
+  const threeMonths = threeMonthsOut.toISOString().slice(0, 10);
+
+  const suggestions: SuggestedGoal[] = [];
+
+  const completedThisYear = games.filter(
+    g => g.status === 'Completed' && g.endDate?.startsWith(String(year))
+  );
+  const notStarted = games.filter(g => g.status === 'Not Started');
+  const totalHours = games.reduce((s, g) => s + getTotalHours(g), 0);
+  const uniqueGenres = new Set(
+    games.filter(g => g.genre && g.status !== 'Wishlist').map(g => g.genre!)
+  );
+
+  // 1. Completion goal based on current pace
+  if (monthsRemaining >= 2 && games.length >= 3) {
+    const pace = completedThisYear.length / Math.max(monthsElapsed, 1);
+    const projected = completedThisYear.length + Math.round(pace * monthsRemaining);
+    const target = Math.max(projected + 2, completedThisYear.length + 3, 5);
+    suggestions.push({
+      title: `Complete ${target} games in ${year}`,
+      description: `You've finished ${completedThisYear.length} game${completedThisYear.length !== 1 ? 's' : ''} this year — ${target - completedThisYear.length} more to go!`,
+      type: 'completion',
+      target,
+      unit: 'games',
+      endDate: yearEnd,
+    });
+  }
+
+  // 2. Hours milestone
+  const nextMilestone =
+    totalHours < 50 ? 50 :
+    totalHours < 100 ? 100 :
+    totalHours < 250 ? 250 :
+    totalHours < 500 ? 500 :
+    (Math.floor(totalHours / 100) + 1) * 100;
+  suggestions.push({
+    title: `Reach ${nextMilestone} total hours`,
+    description: `You're at ${Math.round(totalHours)}h — ${Math.round(nextMilestone - totalHours)} hours to the next milestone.`,
+    type: 'hours',
+    target: nextMilestone,
+    unit: 'hours',
+    endDate: yearEnd,
+  });
+
+  // 3. Backlog busting
+  if (notStarted.length >= 3) {
+    const target = Math.min(5, notStarted.length);
+    suggestions.push({
+      title: `Start ${target} unplayed games`,
+      description: `You have ${notStarted.length} games sitting untouched — give ${target} a chance.`,
+      type: 'backlog',
+      target,
+      unit: 'games',
+      endDate: threeMonths,
+    });
+  }
+
+  // 4. Genre variety (only when collection is genre-narrow)
+  if (uniqueGenres.size > 0 && uniqueGenres.size < 4 && games.length >= 5) {
+    const target = uniqueGenres.size + 2;
+    suggestions.push({
+      title: `Try ${target} different genres`,
+      description: `You've explored ${uniqueGenres.size} genre${uniqueGenres.size !== 1 ? 's' : ''} so far — time to branch out!`,
+      type: 'genre_variety',
+      target,
+      unit: 'genres',
+      endDate: threeMonths,
+    });
+  }
+
+  return suggestions.slice(0, 3);
+}
+
 function calculateGoalProgress(goal: GamingGoal, games: Game[]): number {
   const start = parseLocalDate(goal.startDate);
   const now = new Date();
@@ -141,6 +231,26 @@ export function GoalsPanel({ games }: { games: Game[] }) {
       return { ...goal, calculatedValue: currentValue, percent, daysRemaining };
     });
   }, [activeGoals, games]);
+
+  // Smart suggestions — only shown when there are no active goals
+  const suggestions = useMemo(
+    () => (activeGoals.length === 0 ? buildSuggestions(games) : []),
+    [games, activeGoals.length]
+  );
+
+  const handleSuggestion = (s: SuggestedGoal) => {
+    setFormTitle(s.title);
+    setFormDescription(s.description);
+    setFormType(s.type);
+    setFormTarget(String(s.target));
+    setFormUnit(s.unit);
+    setFormEndDate(s.endDate);
+    const d = new Date();
+    setFormStartDate(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`);
+    setFormCurrentValue('');
+    setEditingGoalId(null);
+    setShowAddForm(true);
+  };
 
   const resetForm = () => {
     setFormTitle('');
@@ -562,10 +672,36 @@ export function GoalsPanel({ games }: { games: Game[] }) {
           })}
         </div>
       ) : !showAddForm ? (
-        <div className="text-center py-8">
-          <Target size={32} className="mx-auto mb-3 text-white/10" />
-          <p className="text-white/30 text-sm">No active goals</p>
-          <p className="text-white/20 text-xs mt-1">Set a goal to track your gaming progress</p>
+        <div className="py-2">
+          <div className="text-center py-4">
+            <Target size={28} className="mx-auto mb-2 text-white/10" />
+            <p className="text-white/30 text-sm">No active goals</p>
+            <p className="text-white/20 text-xs mt-1">Set a goal to track your gaming progress</p>
+          </div>
+
+          {suggestions.length > 0 && (
+            <div className="mt-1">
+              <p className="text-[10px] text-white/20 uppercase tracking-widest text-center mb-3">Suggestions based on your library</p>
+              <div className="space-y-2">
+                {suggestions.map((s, i) => (
+                  <button
+                    key={i}
+                    onClick={() => handleSuggestion(s)}
+                    className="w-full flex items-start gap-3 p-3 bg-white/[0.03] hover:bg-white/[0.06] border border-white/5 hover:border-cyan-500/20 rounded-xl text-left transition-all group"
+                  >
+                    <span className="text-white/25 group-hover:text-cyan-400 mt-0.5 transition-colors shrink-0">
+                      {GOAL_TYPE_CONFIG[s.type].icon}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm text-white/60 font-medium group-hover:text-white/80 transition-colors leading-tight">{s.title}</p>
+                      <p className="text-xs text-white/25 mt-0.5 leading-snug">{s.description}</p>
+                    </div>
+                    <span className="text-[10px] text-white/20 group-hover:text-cyan-400 font-medium shrink-0 mt-1 transition-colors whitespace-nowrap">Start →</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       ) : null}
 

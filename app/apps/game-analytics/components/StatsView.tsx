@@ -64,6 +64,7 @@ import { TrophyRoomV2 } from './TrophyRoomV2';
 import { TrophyProgress, TrophyScoreSummary } from '../lib/trophy-calculations';
 import { DiscoverPanel } from './DiscoverPanel';
 import { WeeklyDigest } from './WeeklyDigest';
+import { GoalsPanel } from './GoalsPanel';
 import { WhatIfSimulator } from './WhatIfSimulator';
 import { PlayedSummary, BoughtSummary } from './RangeGlance';
 import clsx from 'clsx';
@@ -983,6 +984,9 @@ export function StatsView({ games, summary, budgets = [], onSetBudget, trophies,
 
       {/* Period Stats Panel (This Week / This Month) */}
       <PeriodStatsPanel games={games} />
+
+      {/* Gaming Goals */}
+      <GoalsPanel games={games} />
 
       {/* Weekly Digest / Gaming Journal */}
       <WeeklyDigest games={games} />
