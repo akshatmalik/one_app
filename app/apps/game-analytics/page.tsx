@@ -45,6 +45,7 @@ import { YearStoryMode } from './components/YearStoryMode';
 import { GamerCard } from './components/GamerCard';
 import { MeVsMe } from './components/MeVsMe';
 import { FortuneCookie } from './components/FortuneCookie';
+import { DailyChallengeCard } from './components/DailyChallengeCard';
 import { SubscriptionSyncBanner } from './components/SubscriptionSyncBanner';
 import { loadSubscriptionSettings, hasNewDrop } from './lib/subscription-settings';
 import { ReviewNudgeBanner } from './components/ReviewNudgeBanner';
@@ -993,6 +994,19 @@ export default function GameAnalyticsPage() {
 
           {/* Daily Fortune Cookie */}
           {games.length > 0 && <div className="mb-4"><FortuneCookie games={games} /></div>}
+
+          {/* Daily Challenge */}
+          {games.length > 0 && (
+            <DailyChallengeCard
+              games={games}
+              userId={user?.uid ?? undefined}
+              onTabChange={(tab) => setTabMode(tab as TabMode)}
+              onOpenGameId={(id) => {
+                const gwm = gamesWithMetrics.find(g => g.id === id);
+                if (gwm) setDetailGame(gwm);
+              }}
+            />
+          )}
 
           {/* New month's PS Plus games nudge */}
           <SubscriptionSyncBanner

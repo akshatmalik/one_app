@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-15 06:00 — Games Tab — Daily Challenge System
+
+**Files**: app/apps/game-analytics/components/DailyChallengeCard.tsx, app/apps/game-analytics/lib/calculations.ts, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Added a Daily Challenge card that appears above the Games tab content each day. A new challenge is seeded from the date and the user's library state — types rotate across logging sessions (30 min / 2 hrs / 3 hrs / any), rating unrated games, writing reviews, reviving neglected games, exploring the discover tab, checking the queue, and reviewing stats. Session-logging challenges auto-complete the moment the user's play logs cross the hour threshold; others complete via an explicit CTA button or manual "Done". A 7-day history strip and streak counter (🔥 N-day) give the gamification loop momentum and a reason to open the app every single day.
+
+FOLLOW-UP: Could add a weekly "boss challenge" (e.g. complete 3 challenges this week) with a richer reward, and a 30-day history view so users can see their long-term completion rate.
+
 ## 2026-06-10 12:00 — Games Tab — Play Tonight Smart Recommender
 
 **Files**: app/apps/game-analytics/components/PlayTonightModal.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json

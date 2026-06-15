@@ -14418,3 +14418,254 @@ export function getReviewNudges(games: Game[]): ReviewNudgeSummary {
     recentlyCompletedCount,
   };
 }
+
+// ==========================================
+// DAILY CHALLENGE SYSTEM
+// ==========================================
+
+export type DailyChallengeType =
+  | 'log-any'
+  | 'log-30min'
+  | 'log-2hrs'
+  | 'log-3hrs'
+  | 'rate-unrated'
+  | 'visit-discover'
+  | 'visit-up-next'
+  | 'revive-neglected'
+  | 'visit-stats'
+  | 'review-completed';
+
+export interface DailyChallenge {
+  type: DailyChallengeType;
+  title: string;
+  description: string;
+  icon: string;
+  cta: string;
+  ctaTab?: string;
+  xp: number;
+  autoDetect?: {
+    kind: 'hours-today';
+    minHours: number;
+  };
+  targetGameId?: string;
+  targetGameName?: string;
+  targetGameThumbnail?: string;
+}
+
+function _dcDateSeed(dateStr: string): number {
+  let hash = 0;
+  for (let i = 0; i < dateStr.length; i++) {
+    const char = dateStr.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash;
+  }
+  return Math.abs(hash);
+}
+
+/**
+ * Returns a deterministic daily challenge for the given date (or today).
+ * The challenge is seeded by the date so it stays consistent all day,
+ * and is weighted based on the user's current library state.
+ */
+export function getDailyChallenge(games: Game[], date?: string): DailyChallenge {
+  const dateStr = date ?? (() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  })();
+  const seed = _dcDateSeed(dateStr);
+
+  const ownedGames = games.filter(g => g.status !== 'Wishlist');
+  const unratedGames = ownedGames.filter(g => !g.rating || g.rating === 0);
+  const completedUnreviewed = ownedGames.filter(g => g.status === 'Completed' && !g.review && !g.notes);
+  const queueGames = ownedGames.filter(g => g.queuePosition !== undefined && g.queuePosition !== null);
+
+  const now = new Date();
+  const neglectedGames = ownedGames.filter(g => {
+    if (g.status !== 'In Progress') return false;
+    if (!g.playLogs || g.playLogs.length === 0) return false;
+    // playLogs sorted most-recent-first by convention
+    const sortedLogs = [...g.playLogs].sort((a, b) => b.date.localeCompare(a.date));
+    const lastDate = parseLocalDate(sortedLogs[0].date);
+    return (now.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24) >= 30;
+  });
+
+  type Candidate = { challenge: DailyChallenge; weight: number };
+  const pool: Candidate[] = [];
+
+  // ── Session logging challenges (always available) ──
+  pool.push({
+    weight: 30,
+    challenge: {
+      type: 'log-any',
+      title: 'Log a Gaming Session',
+      description: 'Keep your data fresh — record any play session today, no matter how brief.',
+      icon: '🎮',
+      cta: 'Log a Session',
+      xp: 50,
+      autoDetect: { kind: 'hours-today', minHours: 0.01 },
+    },
+  });
+  pool.push({
+    weight: 22,
+    challenge: {
+      type: 'log-30min',
+      title: 'Play for 30+ Minutes',
+      description: 'Even a quick session counts. Get at least half an hour of gaming in today.',
+      icon: '⏱️',
+      cta: 'Start Playing',
+      xp: 60,
+      autoDetect: { kind: 'hours-today', minHours: 0.5 },
+    },
+  });
+  pool.push({
+    weight: 16,
+    challenge: {
+      type: 'log-2hrs',
+      title: 'Go Deep — 2+ Hours',
+      description: 'Settle in and really commit. Aim for a solid 2-hour session today.',
+      icon: '🔥',
+      cta: 'Get in the Zone',
+      xp: 80,
+      autoDetect: { kind: 'hours-today', minHours: 2 },
+    },
+  });
+  pool.push({
+    weight: 10,
+    challenge: {
+      type: 'log-3hrs',
+      title: 'Marathon Day — 3+ Hours',
+      description: 'Make it a proper gaming day. Log 3 or more hours across any sessions today.',
+      icon: '⚡',
+      cta: 'Go Marathon',
+      xp: 100,
+      autoDetect: { kind: 'hours-today', minHours: 3 },
+    },
+  });
+
+  // ── Rate an unrated game ──
+  if (unratedGames.length > 0) {
+    const pick = unratedGames[seed % unratedGames.length];
+    pool.push({
+      weight: 25,
+      challenge: {
+        type: 'rate-unrated',
+        title: 'Rate a Game',
+        description: `You have ${unratedGames.length} unrated game${unratedGames.length > 1 ? 's' : ''}. Give "${pick.name}" a score — it takes seconds.`,
+        icon: '⭐',
+        cta: 'Open Game',
+        xp: 40,
+        targetGameId: pick.id,
+        targetGameName: pick.name,
+        targetGameThumbnail: pick.thumbnail,
+      },
+    });
+  }
+
+  // ── Discover new games ──
+  pool.push({
+    weight: 14,
+    challenge: {
+      type: 'visit-discover',
+      title: 'Discover Something New',
+      description: 'Browse your personalized recommendations — you might find your next obsession.',
+      icon: '🧭',
+      cta: 'Explore',
+      ctaTab: 'discover',
+      xp: 35,
+    },
+  });
+
+  // ── Up Next queue ──
+  if (queueGames.length > 0) {
+    pool.push({
+      weight: 18,
+      challenge: {
+        type: 'visit-up-next',
+        title: 'Tend to Your Queue',
+        description: `You have ${queueGames.length} game${queueGames.length > 1 ? 's' : ''} lined up. Review and reorder your priorities.`,
+        icon: '📋',
+        cta: 'Open Queue',
+        ctaTab: 'up-next',
+        xp: 30,
+      },
+    });
+  }
+
+  // ── Revive a neglected game ──
+  if (neglectedGames.length > 0) {
+    const pick = neglectedGames[seed % neglectedGames.length];
+    const sortedLogs = [...(pick.playLogs || [])].sort((a, b) => b.date.localeCompare(a.date));
+    const daysSince = sortedLogs.length
+      ? Math.floor((now.getTime() - parseLocalDate(sortedLogs[0].date).getTime()) / (1000 * 60 * 60 * 24))
+      : 0;
+    pool.push({
+      weight: 22,
+      challenge: {
+        type: 'revive-neglected',
+        title: 'Revive a Forgotten Game',
+        description: `"${pick.name}" hasn't seen a session in ${daysSince} days. Give it another chance today.`,
+        icon: '💫',
+        cta: 'Find It',
+        xp: 65,
+        targetGameId: pick.id,
+        targetGameName: pick.name,
+        targetGameThumbnail: pick.thumbnail,
+      },
+    });
+  }
+
+  // ── Check stats ──
+  pool.push({
+    weight: 12,
+    challenge: {
+      type: 'visit-stats',
+      title: 'Check Your Gaming Stats',
+      description: 'Spend a minute reviewing your analytics — see what the numbers say about your habits.',
+      icon: '📊',
+      cta: 'View Stats',
+      ctaTab: 'stats',
+      xp: 25,
+    },
+  });
+
+  // ── Write a game review ──
+  if (completedUnreviewed.length > 0) {
+    const pick = completedUnreviewed[seed % completedUnreviewed.length];
+    pool.push({
+      weight: 20,
+      challenge: {
+        type: 'review-completed',
+        title: 'Write a Game Review',
+        description: `You completed "${pick.name}" but haven't written your thoughts. Capture your verdict before the memory fades.`,
+        icon: '✍️',
+        cta: 'Open Game',
+        xp: 55,
+        targetGameId: pick.id,
+        targetGameName: pick.name,
+        targetGameThumbnail: pick.thumbnail,
+      },
+    });
+  }
+
+  // Weighted deterministic pick
+  const totalWeight = pool.reduce((s, c) => s + c.weight, 0);
+  let remaining = seed % totalWeight;
+  for (const c of pool) {
+    remaining -= c.weight;
+    if (remaining <= 0) return c.challenge;
+  }
+  return pool[0].challenge;
+}
+
+/** Compute how many total hours were logged today across all games. */
+export function getTodayHoursLogged(games: Game[]): number {
+  const now = new Date();
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  let total = 0;
+  for (const game of games) {
+    for (const log of game.playLogs || []) {
+      if (log.date === today) total += log.hours;
+    }
+  }
+  return total;
+}

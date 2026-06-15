@@ -1,6 +1,12 @@
 {
   "entries": [
     {
+      "date": "2026-06-15",
+      "area": "Games tab",
+      "title": "Daily Challenge — a new mission every day",
+      "body": "A Daily Challenge card now appears each time you open the app. Every day you get a fresh mission tailored to your library — log a session, rate a game, revive a forgotten game, explore recommendations, and more. Complete it and watch your streak grow. Session challenges auto-complete the moment your play data crosses the target; everything else is one tap. Come back tomorrow for a new one."
+    },
+    {
       "date": "2026-06-10",
       "area": "Games tab",
       "title": "Play Tonight — find your perfect match in seconds",
