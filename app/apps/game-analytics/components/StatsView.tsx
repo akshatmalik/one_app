@@ -54,6 +54,7 @@ import { calculateSummary, getCumulativeSpending, getHoursByMonth, getSpendingBy
 import { GameWithMetrics } from '../hooks/useAnalytics';
 import { PeriodStatsPanel } from './PeriodStatsPanel';
 import { FunStatsPanel } from './FunStatsPanel';
+import { ValueUnlock } from './ValueUnlock';
 import { AdvancedCharts } from './AdvancedCharts';
 import { GamingHeatmap } from './GamingHeatmap';
 import { ExpandedStatsPanel } from './ExpandedStatsPanel';
@@ -983,6 +984,9 @@ export function StatsView({ games, summary, budgets = [], onSetBudget, trophies,
 
       {/* Period Stats Panel (This Week / This Month) */}
       <PeriodStatsPanel games={games} />
+
+      {/* Value Unlock — forward-looking value tier progress tracker */}
+      <ValueUnlock games={games} />
 
       {/* Weekly Digest / Gaming Journal */}
       <WeeklyDigest games={games} />

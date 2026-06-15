@@ -14418,3 +14418,171 @@ export function getReviewNudges(games: Game[]): ReviewNudgeSummary {
     recentlyCompletedCount,
   };
 }
+
+// ============================================================
+// Value Unlock — forward-looking value tier progress tracker
+// ============================================================
+
+export type ValueTier = 'Excellent' | 'Good' | 'Fair' | 'Poor' | 'Unplayed';
+
+/** Thresholds in $/hr — keep in sync with getValueRating() */
+const VALUE_TIER_THRESHOLDS = { Excellent: 1, Good: 3, Fair: 5 } as const;
+
+export interface ValueUnlockItem {
+  game: Game;
+  price: number;
+  currentHours: number;
+  currentCph: number;
+  currentTier: ValueTier;
+  hoursToExcellent: number | null;
+  hoursToGood: number | null;
+  hoursToFair: number | null;
+  nextTierName: ValueTier | null;
+  hoursToNextTier: number | null;
+  isQuickWin: boolean;
+  /** 0-100: how far into the current tier range we are (closer to 100 = almost next tier) */
+  progressPercent: number;
+  /** Projected $/hr after playing hoursToNextTier more hours */
+  projectedCph: number | null;
+}
+
+export interface ValueUnlockSummary {
+  items: ValueUnlockItem[];
+  quickWins: ValueUnlockItem[];
+  alreadyExcellent: ValueUnlockItem[];
+  inProgress: ValueUnlockItem[];
+  totalQuickWinHours: number;
+  currentLibraryCph: number;
+  projectedLibraryCph: number;
+  /** How many $/hr would drop from library average if all quick wins are played */
+  libraryImprovement: number;
+}
+
+function cphAfterHours(price: number, hours: number): number {
+  return hours > 0 ? price / hours : Infinity;
+}
+
+function hoursToReachThreshold(price: number, currentHours: number, threshold: number): number | null {
+  const needed = price / threshold; // hours at which price/hours = threshold
+  const extra = Math.ceil((needed - currentHours) * 10) / 10;
+  return extra > 0 ? extra : null;
+}
+
+function tierProgress(price: number, currentHours: number, tier: ValueTier): number {
+  const cph = cphAfterHours(price, currentHours);
+  if (tier === 'Excellent') return 100;
+  if (tier === 'Unplayed') return 0;
+
+  // Map current cph position within the tier range to 0-100
+  const ranges: Record<string, [number, number]> = {
+    Poor:      [Infinity, 5],
+    Fair:      [5, 3],
+    Good:      [3, 1],
+    Excellent: [1, 0],
+  };
+  const [upper, lower] = ranges[tier] ?? [5, 3];
+  const range = upper === Infinity ? 20 : upper - lower; // cap Poor range at 20 for display
+  const cappedCph = Math.min(cph, upper);
+  return Math.round(((upper - cappedCph) / range) * 100);
+}
+
+export function getValueUnlockData(games: Game[]): ValueUnlockSummary {
+  const eligible = games.filter(
+    g => g.status !== 'Wishlist' && g.price > 0
+  );
+
+  const items: ValueUnlockItem[] = eligible.map(game => {
+    const price = game.price;
+    const currentHours = getTotalHours(game);
+    const currentCph = currentHours > 0 ? price / currentHours : Infinity;
+
+    const currentTier: ValueTier =
+      currentHours === 0 ? 'Unplayed'
+        : currentCph <= VALUE_TIER_THRESHOLDS.Excellent ? 'Excellent'
+          : currentCph <= VALUE_TIER_THRESHOLDS.Good ? 'Good'
+            : currentCph <= VALUE_TIER_THRESHOLDS.Fair ? 'Fair'
+              : 'Poor';
+
+    const hoursToExcellent = currentTier !== 'Excellent' && currentTier !== 'Unplayed'
+      ? hoursToReachThreshold(price, currentHours, VALUE_TIER_THRESHOLDS.Excellent)
+      : currentTier === 'Unplayed' ? Math.ceil(price / VALUE_TIER_THRESHOLDS.Excellent * 10) / 10
+        : null;
+
+    const hoursToGood =
+      currentTier === 'Poor' ? hoursToReachThreshold(price, currentHours, VALUE_TIER_THRESHOLDS.Good)
+        : currentTier === 'Unplayed' ? Math.ceil(price / VALUE_TIER_THRESHOLDS.Good * 10) / 10
+          : null;
+
+    const hoursToFair =
+      currentTier === 'Poor' ? hoursToReachThreshold(price, currentHours, VALUE_TIER_THRESHOLDS.Fair) : null;
+
+    const nextTierName: ValueTier | null =
+      currentTier === 'Excellent' ? null
+        : currentTier === 'Good' ? 'Excellent'
+          : currentTier === 'Fair' ? 'Good'
+            : currentTier === 'Poor' ? 'Fair'
+              : 'Fair'; // Unplayed → first tier to hit is Fair
+
+    const hoursToNextTier =
+      nextTierName === 'Excellent' ? hoursToExcellent
+        : nextTierName === 'Good' ? hoursToGood
+          : nextTierName === 'Fair' ? hoursToFair
+            : null;
+
+    const isQuickWin = hoursToNextTier !== null && hoursToNextTier <= 3;
+
+    const progressPercent = currentTier === 'Unplayed' ? 0 : tierProgress(price, currentHours, currentTier);
+
+    const projectedCph = hoursToNextTier !== null
+      ? cphAfterHours(price, currentHours + hoursToNextTier)
+      : null;
+
+    return {
+      game,
+      price,
+      currentHours,
+      currentCph: currentHours > 0 ? Math.round(currentCph * 100) / 100 : 0,
+      currentTier,
+      hoursToExcellent,
+      hoursToGood,
+      hoursToFair,
+      nextTierName,
+      hoursToNextTier,
+      isQuickWin,
+      progressPercent,
+      projectedCph: projectedCph !== null ? Math.round(projectedCph * 100) / 100 : null,
+    };
+  });
+
+  const alreadyExcellent = items.filter(i => i.currentTier === 'Excellent');
+  const notExcellent = items.filter(i => i.currentTier !== 'Excellent');
+  const quickWins = notExcellent
+    .filter(i => i.isQuickWin)
+    .sort((a, b) => (a.hoursToNextTier ?? 99) - (b.hoursToNextTier ?? 99));
+  const inProgress = notExcellent
+    .filter(i => !i.isQuickWin && i.hoursToNextTier !== null)
+    .sort((a, b) => (a.hoursToNextTier ?? 99) - (b.hoursToNextTier ?? 99));
+
+  const totalQuickWinHours = quickWins.reduce((s, i) => s + (i.hoursToNextTier ?? 0), 0);
+
+  // Library-level value stats (only games with hours played)
+  const playedPaid = items.filter(i => i.currentHours > 0 && i.price > 0);
+  const totalSpent = playedPaid.reduce((s, i) => s + i.price, 0);
+  const totalHoursPlayed = playedPaid.reduce((s, i) => s + i.currentHours, 0);
+  const currentLibraryCph = totalHoursPlayed > 0 ? totalSpent / totalHoursPlayed : 0;
+
+  // Projected cph if all quick wins are played
+  const totalProjectedHours = totalHoursPlayed + totalQuickWinHours;
+  const projectedLibraryCph = totalProjectedHours > 0 ? totalSpent / totalProjectedHours : currentLibraryCph;
+
+  return {
+    items,
+    quickWins,
+    alreadyExcellent,
+    inProgress,
+    totalQuickWinHours: Math.round(totalQuickWinHours * 10) / 10,
+    currentLibraryCph: Math.round(currentLibraryCph * 100) / 100,
+    projectedLibraryCph: Math.round(projectedLibraryCph * 100) / 100,
+    libraryImprovement: Math.round((currentLibraryCph - projectedLibraryCph) * 100) / 100,
+  };
+}

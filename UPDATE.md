@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-15 06:00 — Stats Tab — Value Unlock tracker
+
+**Files**: app/apps/game-analytics/lib/calculations.ts, app/apps/game-analytics/components/ValueUnlock.tsx, app/apps/game-analytics/components/StatsView.tsx, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Added a forward-looking "Value Unlock" panel near the top of the Stats tab. For each owned, paid game that hasn't yet reached Excellent tier, it calculates exactly how many more hours of play are needed to hit the next value tier (Excellent ≤$1/hr, Good ≤$3/hr, Fair ≤$5/hr), ranks them by "quickest wins" (games within 3 hours of upgrading), and shows a hero card projecting how much the library's average $/hr would improve if you played those quick wins. Excellent-tier games are celebrated in a compact trophy shelf at the bottom. The calculation is pure and additive — `getValueUnlockData()` in calculations.ts with no side effects.
+
+FOLLOW-UP: Could add a one-tap "Play Tonight" shortcut on each quick-win card that pre-selects that game in the PlayTonight modal.
+
 ## 2026-06-10 12:00 — Games Tab — Play Tonight Smart Recommender
 
 **Files**: app/apps/game-analytics/components/PlayTonightModal.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json

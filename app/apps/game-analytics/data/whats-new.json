@@ -1,6 +1,12 @@
 {
   "entries": [
     {
+      "date": "2026-06-15",
+      "area": "Stats tab",
+      "title": "Value Unlock — see exactly how many hours to your next value upgrade",
+      "body": "A new Value Unlock panel in the Stats tab shows every game in your library that hasn't hit Excellent value yet, with a precise hour count to reach the next tier. 'Quick Wins' (under 3 hours away) are highlighted at the top — tap one and you know exactly which game gives you the most value per session tonight. A hero card shows how much your library's average cost-per-hour would drop if you played all your quick wins."
+    },
+    {
       "date": "2026-06-10",
       "area": "Games tab",
       "title": "Play Tonight — find your perfect match in seconds",
