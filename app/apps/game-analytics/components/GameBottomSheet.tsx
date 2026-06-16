@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useRef, useEffect } from 'react';
-import { Clock, ChevronDown, ChevronUp, ListPlus, Check, Heart, Edit3, Trash2, Trophy, Sparkles, Zap, MessageCircle, ArrowLeftRight, Share2 } from 'lucide-react';
+import { Clock, ChevronDown, ChevronUp, ListPlus, Check, Heart, Edit3, Trash2, Trophy, Sparkles, Zap, MessageCircle, ArrowLeftRight, Share2, Timer } from 'lucide-react';
 import { Game } from '../lib/types';
 import { GameWithMetrics } from '../hooks/useAnalytics';
 import {
@@ -41,6 +41,8 @@ interface GameBottomSheetProps {
   onOpenReviewChat: () => void;
   onCompare: () => void;
   isInQueue: boolean;
+  onStartTimer?: () => void;
+  activeSessionGameId?: string;
 }
 
 function getValueColor(rating: string): string {
@@ -66,7 +68,10 @@ export function GameBottomSheet({
   onOpenReviewChat,
   onCompare,
   isInQueue,
+  onStartTimer,
+  activeSessionGameId,
 }: GameBottomSheetProps) {
+  const isTimingThis = activeSessionGameId === game.id;
   const [showAwards, setShowAwards] = useState(false);
   const [showJourney, setShowJourney] = useState(false);
   const [showRecords, setShowRecords] = useState(false);
@@ -495,9 +500,37 @@ export function GameBottomSheet({
             </div>
           )}
 
-          {/* Quick Check-In */}
+          {/* Quick Check-In + Session Timer */}
           {game.status !== 'Completed' && game.status !== 'Wishlist' && game.status !== 'Abandoned' && (
-            <div className="px-5 pb-4">
+            <div className="px-5 pb-4 space-y-2">
+              {/* Live session timer button */}
+              {onStartTimer && (
+                isTimingThis ? (
+                  <div className="flex items-center gap-3 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                    <span className="relative flex-none w-3 h-3">
+                      <span className="absolute inset-0 rounded-full bg-emerald-400 animate-ping opacity-60" />
+                      <span className="relative block w-3 h-3 rounded-full bg-emerald-400" />
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-bold text-emerald-400">Session timer running</p>
+                      <p className="text-[10px] text-emerald-400/60">Check the bottom of the screen to pause or stop</p>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    onClick={onStartTimer}
+                    className="w-full flex items-center gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/5 active:bg-emerald-500/10 active:border-emerald-500/20 transition-all text-left"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center flex-none">
+                      <Timer size={16} className="text-white/40" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold text-white/80">Start session timer</p>
+                      <p className="text-[10px] text-white/30">Auto-log when you stop — no manual hour entry</p>
+                    </div>
+                  </button>
+                )
+              )}
               <QuickCheckIn
                 game={game}
                 onLogTime={(hours) => onLogTime(hours)}

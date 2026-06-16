@@ -1,6 +1,12 @@
 {
   "entries": [
     {
+      "date": "2026-06-16",
+      "area": "Session tracking",
+      "title": "Start a live timer — hours log themselves",
+      "body": "Open any game, tap \"Start session timer\" (or \"Time it\" on a card), then go play. A live timer ticks at the bottom of the screen showing your elapsed time with a pulsing green dot. When you're done, tap Stop, pick a mood (🔥 / 👍 / 😐 / 💪), add an optional note, and your session is logged automatically — no guessing how long you played. Pause mid-session and resume any time. The timer survives page refreshes too."
+    },
+    {
       "date": "2026-06-10",
       "area": "Games tab",
       "title": "Play Tonight — find your perfect match in seconds",
