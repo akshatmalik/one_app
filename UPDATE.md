@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-16 12:00 — Stats Tab — Session Log journal panel
+
+**Files**: app/apps/game-analytics/components/SessionLogPanel.tsx, app/apps/game-analytics/components/StatsView.tsx, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Added a Session Log panel to the Stats tab that surfaces every individual play session as a beautiful, browsable journal. Sessions are grouped by day with a header showing daily totals and a flame indicator for big gaming days (4+ hrs). Each session card shows the game thumbnail, hours played, mood rating, notes preview, platform, and a relative-length bar. The panel includes a 4-stat summary (sessions, total hours, avg length, best day), a period picker (7d / 30d / 90d / all time), and expandable filters for game, mood, and text search. Hidden for users with no play logs; renders nothing if `playLogs[]` are empty across all games.
+
+FOLLOW-UP: Could add a sparkline chart showing session frequency trend (busier weeks vs quiet weeks) and a "log a session" quick-add button directly in the panel header.
+
 ## 2026-06-10 12:00 — Games Tab — Play Tonight Smart Recommender
 
 **Files**: app/apps/game-analytics/components/PlayTonightModal.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json

@@ -1,6 +1,12 @@
 {
   "entries": [
     {
+      "date": "2026-06-16",
+      "area": "Stats tab",
+      "title": "Your complete session history, finally in one place",
+      "body": "The new Session Log in the Stats tab shows every play session you've ever logged, grouped by day. See your total hours, average session length, and best gaming day at a glance. Filter by time period, game, mood, or search your notes. Big gaming days (4+ hours) get a flame indicator. It's the journal your sessions deserve."
+    },
+    {
       "date": "2026-06-10",
       "area": "Games tab",
       "title": "Play Tonight — find your perfect match in seconds",
