@@ -26,7 +26,7 @@ import { BASELINE_BUY_QUEUE } from './data/baseline-buy-queue';
 import { purchaseQueueRepository } from './lib/purchase-queue-storage';
 import { useAuthContext } from '@/lib/AuthContext';
 import { useToast } from '@/components/Toast';
-import { getROIRating, getWeekStatsForOffset, getGamesPlayedInTimeRange, getCompletionProbability, getGameHealthDot, getRelativeTime, getDaysContext, getSessionMomentum, getValueTrajectory, getGameSmartOneLiner, getFranchiseInfo, getProgressPercent, getShelfLife, parseLocalDate, getCardRarity, getRelationshipStatus, getGameStreak, getHeroNumber, getCardFreshness, getGameSections, getCardBackData, getContextualWhisper, getLibraryRank, getCardMoodPulse, getProgressRingData, getStatPopoverData, getWeekRecapData, getSmartNudges, getGamingCreditScore, getRotationStats, getSpendingForecast, getSpendingByMonth, getShelfLifeExpiry, formatRating, getRatingRank, getYearInReviewFullData } from './lib/calculations';
+import { getROIRating, getWeekStatsForOffset, getGamesPlayedInTimeRange, getCompletionProbability, getGameHealthDot, getRelativeTime, getDaysContext, getSessionMomentum, getValueTrajectory, getGameSmartOneLiner, getFranchiseInfo, getProgressPercent, getShelfLife, parseLocalDate, getCardRarity, getRelationshipStatus, getGameStreak, getHeroNumber, getCardFreshness, getGameSections, getCardBackData, getContextualWhisper, getLibraryRank, getCardMoodPulse, getProgressRingData, getStatPopoverData, getWeekRecapData, getSmartNudges, getGamingCreditScore, getRotationStats, getSpendingForecast, getSpendingByMonth, getShelfLifeExpiry, formatRating, getRatingRank, getYearInReviewFullData, getTotalHours, getCurrentGamingStreak, getNextMilestone, getValueRating } from './lib/calculations';
 import { OnThisDayCard } from './components/OnThisDayCard';
 import { ActivityPulse } from './components/ActivityPulse';
 import { RandomPicker } from './components/RandomPicker';
@@ -57,6 +57,7 @@ import { WhatsNewModal } from './components/WhatsNewModal';
 import { GameReviewChat } from './components/GameReviewChat';
 import { GameCompareModal } from './components/GameCompareModal';
 import { PlayTonightModal } from './components/PlayTonightModal';
+import { SessionDebriefModal, SessionDebriefData } from './components/SessionDebriefModal';
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist';
@@ -247,6 +248,7 @@ export default function GameAnalyticsPage() {
   const [showErrorLog, setShowErrorLog] = useState(false);
   const [showWhatsNew, setShowWhatsNew] = useState(false);
   const [showPlayTonight, setShowPlayTonight] = useState(false);
+  const [sessionDebrief, setSessionDebrief] = useState<SessionDebriefData | null>(null);
 
   // Week recap data for header strip
   const weekRecap = useMemo(() => {
@@ -366,6 +368,68 @@ export default function GameAnalyticsPage() {
     setPlayLogGame(game);
   };
 
+  // Compute session debrief data (before committing the update to storage)
+  const computeSessionDebrief = (game: GameWithMetrics, addedHours: number): SessionDebriefData => {
+    const now = new Date();
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
+    const hoursBefore = game.totalHours;
+    const hoursAfter = hoursBefore + addedHours;
+
+    const hasCost = game.price > 0 && !game.acquiredFree;
+    const cphBefore = hasCost && hoursBefore > 0 ? game.price / hoursBefore : 0;
+    const cphAfter = hasCost && hoursAfter > 0 ? game.price / hoursAfter : 0;
+
+    const ratingBefore = game.metrics.valueRating;
+    const ratingAfter = hasCost ? getValueRating(cphAfter) : 'Excellent';
+
+    const tierOrder = ['Excellent', 'Good', 'Fair', 'Poor'];
+    const tierImproved = hasCost && tierOrder.indexOf(ratingAfter) < tierOrder.indexOf(ratingBefore);
+
+    // Game-specific streak — simulate adding today's session
+    const simulatedLogs = [...(game.playLogs || []), { id: 'tmp', date: todayStr, hours: addedHours }];
+    const simulatedGame: Game = { ...game, playLogs: simulatedLogs };
+    const gameStreakData = getGameStreak(simulatedGame);
+
+    // Library streak — if today already has a session, streak stays the same
+    const alreadyPlayedToday = games.some(g => g.playLogs?.some(l => l.date === todayStr));
+    const libStreak = getCurrentGamingStreak(games);
+    const libraryStreak = alreadyPlayedToday ? libStreak : libStreak + 1;
+
+    // Next milestone with simulated hours
+    const nextMilestone = getNextMilestone({ ...game, playLogs: simulatedLogs } as Game, games);
+
+    // Check if this session crossed a milestone
+    const HOUR_MILESTONES = [5, 10, 20, 30, 50, 100, 200, 500];
+    const crossed = HOUR_MILESTONES.find(m => hoursBefore < m && hoursAfter >= m);
+    const milestoneAchieved = crossed === 100
+      ? '🏆 Century Club! 100 hours played!'
+      : crossed
+      ? `${crossed}h milestone reached!`
+      : null;
+
+    return {
+      gameName: game.name,
+      gameThumbnail: game.thumbnail,
+      sessionHours: addedHours,
+      totalHoursBefore: hoursBefore,
+      totalHoursAfter: hoursAfter,
+      hasCost,
+      costPerHourBefore: cphBefore,
+      costPerHourAfter: cphAfter,
+      valueRatingBefore: ratingBefore,
+      valueRatingAfter: ratingAfter,
+      valueTierImproved: tierImproved,
+      newTierLabel: tierImproved ? `${ratingAfter} Value` : null,
+      gameStreak: gameStreakData.days,
+      libraryStreak,
+      nextMilestone: nextMilestone
+        ? { description: nextMilestone.description, remaining: nextMilestone.remaining, progressPercent: nextMilestone.progressPercent }
+        : null,
+      milestoneAchieved,
+    };
+  };
+
   const handleSavePlayLogs = async (playLogs: PlayLog[]) => {
     if (!playLogGame) return;
 
@@ -373,6 +437,12 @@ export default function GameAnalyticsPage() {
     const isFirstSession = playLogGame.status === 'Not Started' &&
                           (!playLogGame.playLogs || playLogGame.playLogs.length === 0) &&
                           playLogs.length > 0;
+
+    // Compute debrief data BEFORE updating: find net new hours added
+    const oldHours = (playLogGame.playLogs || []).reduce((s, l) => s + l.hours, 0);
+    const newHours = playLogs.reduce((s, l) => s + l.hours, 0);
+    const addedHours = Math.max(0, newHours - oldHours);
+    const debriefData = addedHours > 0 ? computeSessionDebrief(playLogGame, addedHours) : null;
 
     const updates: Partial<Game> = {
       playLogs,
@@ -392,9 +462,13 @@ export default function GameAnalyticsPage() {
     await updateGame(playLogGame.id, updates);
     setPlayLogGame(null);
     showToast(isFirstSession ? 'Game started! Sessions saved' : 'Play sessions saved', 'success');
+    if (debriefData) setSessionDebrief(debriefData);
   };
 
   const handleQuickLog = async (game: GameWithMetrics, hours: number) => {
+    // Compute debrief before committing the update
+    const debriefData = computeSessionDebrief(game, hours);
+
     const now = new Date();
     const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
     const newLog: PlayLog = {
@@ -412,6 +486,7 @@ export default function GameAnalyticsPage() {
 
     await updateGame(game.id, updates);
     showToast(`Logged ${hours}h`, 'success');
+    setSessionDebrief(debriefData);
   };
 
   const toggleCardViewMode = () => {
@@ -1693,6 +1768,14 @@ export default function GameAnalyticsPage() {
             }
           }}
           onClose={() => setReviewChatGame(null)}
+        />
+      )}
+
+      {/* Session Debrief — shown after logging a play session */}
+      {sessionDebrief && (
+        <SessionDebriefModal
+          data={sessionDebrief}
+          onDismiss={() => setSessionDebrief(null)}
         />
       )}
     </div>

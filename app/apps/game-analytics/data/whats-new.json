@@ -1,6 +1,12 @@
 {
   "entries": [
     {
+      "date": "2026-06-16",
+      "area": "Session logging",
+      "title": "Every session now gets a debrief",
+      "body": "Log a gaming session and a sleek celebration card slides up showing your new cost-per-hour, whether you just unlocked a better value tier (like reaching 'Good Value' on a pricey game), your current streak for that game, and how close you are to the next milestone. Hit 100 hours on a game? You'll see the Century Club badge right there. The card auto-closes after 7 seconds so it's never in the way."
+    },
+    {
       "date": "2026-06-10",
       "area": "Games tab",
       "title": "Play Tonight — find your perfect match in seconds",

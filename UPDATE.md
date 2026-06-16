@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-16 06:00 — Session — Post-Session Debrief Modal
+
+**Files**: app/apps/game-analytics/components/SessionDebriefModal.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Added a celebratory debrief modal that appears immediately after logging a play session (via quick check-in or full play log). The modal shows: a hero banner with the game art, session hours logged, new cost-per-hour with before/after comparison, a "value tier unlocked" celebration if the session pushed the game into a better tier (e.g., Fair → Good), milestone achievement alerts (5h, 10h, 20h, 30h, 50h, Century Club at 100h), current game-specific streak in consecutive days, next milestone progress bar, and a cross-library daily streak if the user has been gaming multiple days in a row. The modal slides up from the bottom, auto-closes after 7 seconds, and can be tapped to dismiss.
+
+FOLLOW-UP: Could add a shareable image from the debrief screen ("I just hit Century Club on Elden Ring!") or a haptic buzz on mobile when a milestone is crossed.
+
 ## 2026-06-10 12:00 — Games Tab — Play Tonight Smart Recommender
 
 **Files**: app/apps/game-analytics/components/PlayTonightModal.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json
