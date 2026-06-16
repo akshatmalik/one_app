@@ -57,6 +57,7 @@ import { WhatsNewModal } from './components/WhatsNewModal';
 import { GameReviewChat } from './components/GameReviewChat';
 import { GameCompareModal } from './components/GameCompareModal';
 import { PlayTonightModal } from './components/PlayTonightModal';
+import { GamingHistoryModal } from './components/GamingHistoryModal';
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist';
@@ -223,6 +224,7 @@ export default function GameAnalyticsPage() {
   const [showMeVsMe, setShowMeVsMe] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [showAwardsHub, setShowAwardsHub] = useState(false);
+  const [showGamingHistory, setShowGamingHistory] = useState(false);
   const [detailGame, setDetailGame] = useState<GameWithMetrics | null>(null);
   const [reviewChatGame, setReviewChatGame] = useState<GameWithMetrics | null>(null);
   const [compareGame, setCompareGame] = useState<GameWithMetrics | null>(null);
@@ -1082,6 +1084,7 @@ export default function GameAnalyticsPage() {
                       <div className="absolute right-0 top-full mt-1 z-50 w-52 rounded-xl border border-white/10 bg-[#15151c] shadow-xl py-1.5">
                         {[
                           { icon: <CreditCard size={15} className="text-cyan-400" />, label: 'Gamer Card', onClick: () => setShowGamerCard(true) },
+                          { icon: <Clock size={15} className="text-violet-400" />, label: 'Gaming History', onClick: () => setShowGamingHistory(true) },
                           { icon: <Swords size={15} className="text-pink-400" />, label: 'Me vs Me', onClick: () => setShowMeVsMe(true) },
                           { icon: <Gift size={15} className="text-purple-400" />, label: 'Yearly Wrapped', onClick: () => setWrappedYear(new Date().getFullYear()) },
                           { icon: <Star size={15} className="text-amber-400" />, label: 'Awards Hub', onClick: () => setShowAwardsHub(true) },
@@ -1588,6 +1591,15 @@ export default function GameAnalyticsPage() {
       {/* Me vs Me period comparison (shareable) */}
       {showMeVsMe && (
         <MeVsMe games={games} onClose={() => setShowMeVsMe(false)} />
+      )}
+
+      {/* Gaming History — cinematic view of activity, reel, story, genres, race */}
+      {showGamingHistory && (
+        <GamingHistoryModal
+          games={games}
+          totalHours={summary.totalHours}
+          onClose={() => setShowGamingHistory(false)}
+        />
       )}
 
       {/* Awards Hub */}

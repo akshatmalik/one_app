@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-16 12:00 — More Menu — Gaming History Cinematic Modal
+
+**Files**: app/apps/game-analytics/components/GamingHistoryModal.tsx (new), app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Surfaced five fully-built but never-exposed visual components (GamingPulse, FilmstripTimeline, StorySoFar, GenreEpochs, HoursRace) into a single cinematic full-screen "Gaming History" experience, accessible from the ⋮ More menu. Each section shows a different lens on your gaming life — an activity area-chart with drought annotations, a horizontally-scrollable monthly filmstrip, an AI narrative chronicle of your biggest play stretches, a genre-evolution stacked chart, and a playable animated hours race between your games. Users who tapped ⋮ before only saw Gamer Card and Wrapped; now they can explore a rich visual history of everything they've ever played.
+
+FOLLOW-UP: Could add a "History" shortcut pill to the Stats tab header so the feature is discoverable without opening the More menu.
+
 ## 2026-06-10 12:00 — Games Tab — Play Tonight Smart Recommender
 
 **Files**: app/apps/game-analytics/components/PlayTonightModal.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json
