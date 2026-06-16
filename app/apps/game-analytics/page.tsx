@@ -57,6 +57,7 @@ import { WhatsNewModal } from './components/WhatsNewModal';
 import { GameReviewChat } from './components/GameReviewChat';
 import { GameCompareModal } from './components/GameCompareModal';
 import { PlayTonightModal } from './components/PlayTonightModal';
+import { DailyChallenges } from './components/DailyChallenges';
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist';
@@ -990,6 +991,18 @@ export default function GameAnalyticsPage() {
         <div className="max-w-6xl mx-auto">
           {/* On This Day */}
           {games.length > 0 && <OnThisDayCard games={games} />}
+
+          {/* Daily Gaming Challenges */}
+          {games.length > 0 && (
+            <DailyChallenges
+              games={games}
+              userId={user?.uid}
+              onLogTime={(game) => {
+                const gwm = gamesWithMetrics.find(g => g.id === game.id);
+                if (gwm) setPlayLogGame(gwm);
+              }}
+            />
+          )}
 
           {/* Daily Fortune Cookie */}
           {games.length > 0 && <div className="mb-4"><FortuneCookie games={games} /></div>}

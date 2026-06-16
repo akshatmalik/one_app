@@ -14418,3 +14418,256 @@ export function getReviewNudges(games: Game[]): ReviewNudgeSummary {
     recentlyCompletedCount,
   };
 }
+
+// ========================================
+// DAILY CHALLENGES
+// ========================================
+
+export type DailyChallengeType =
+  | 'session-focus'
+  | 'genre-explorer'
+  | 'backlog-buster'
+  | 'closer'
+  | 'streak-keeper'
+  | 'value-hunter'
+  | 'reunion';
+
+export interface DailyChallenge {
+  id: string;
+  type: DailyChallengeType;
+  icon: string;
+  title: string;
+  description: string;
+  gameId?: string;
+  gameName?: string;
+  xp: number;
+}
+
+// Deterministic shuffle seeded on a date string
+function challengeShuffle<T>(arr: T[], seed: string): T[] {
+  const copy = [...arr];
+  for (let i = copy.length - 1; i > 0; i--) {
+    let hash = 0;
+    const str = seed + String(i);
+    for (let c = 0; c < str.length; c++) {
+      hash = ((hash << 5) - hash) + str.charCodeAt(c);
+      hash = hash & hash;
+    }
+    const j = Math.abs(hash) % (i + 1);
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
+
+export function getDailyChallenges(games: Game[]): DailyChallenge[] {
+  const today = new Date().toISOString().slice(0, 10);
+  const now = new Date();
+
+  const owned = games.filter(g => g.status !== 'Wishlist');
+  if (owned.length < 2) return [];
+
+  const withHours = owned.filter(g => getTotalHours(g) > 0);
+
+  const candidates: DailyChallenge[] = [];
+
+  // --- 1. Streak Keeper ---
+  const streakLen = getCurrentGamingStreak(games);
+  if (streakLen >= 2) {
+    const todayStr = today;
+    const playedToday = withHours.some(g =>
+      (g.playLogs ?? []).some(l => l.date.startsWith(todayStr))
+    );
+    if (!playedToday) {
+      candidates.push({
+        id: `streak-keeper-${today}`,
+        type: 'streak-keeper',
+        icon: '🔥',
+        title: 'Keep the streak alive',
+        description: `${streakLen}-day streak on the line. Play anything today to keep it going.`,
+        xp: Math.min(100, 40 + streakLen * 5),
+      });
+    }
+  }
+
+  // --- 2. Session Focus: continue most-recently-played In Progress game ---
+  const inProgressByRecency = owned
+    .filter(g => g.status === 'In Progress')
+    .sort((a, b) => {
+      const aLast = (a.playLogs ?? []).slice().sort((x, y) => y.date.localeCompare(x.date))[0]?.date ?? '';
+      const bLast = (b.playLogs ?? []).slice().sort((x, y) => y.date.localeCompare(x.date))[0]?.date ?? '';
+      return bLast.localeCompare(aLast);
+    });
+
+  if (inProgressByRecency.length > 0) {
+    const g = inProgressByRecency[0];
+    const logs = g.playLogs ?? [];
+    const avgH = logs.length > 0 ? Math.max(1, Math.round(logs.reduce((s, l) => s + l.hours, 0) / logs.length)) : 1;
+    candidates.push({
+      id: `session-focus-${g.id}-${today}`,
+      type: 'session-focus',
+      icon: '🎮',
+      title: `Continue ${g.name}`,
+      description: `Keep the momentum — aim for ${avgH}h today.`,
+      gameId: g.id,
+      gameName: g.name,
+      xp: 75,
+    });
+  }
+
+  // --- 3. Backlog Buster: start a Not-Started game ---
+  const notStarted = owned.filter(g => g.status === 'Not Started');
+  if (notStarted.length > 0) {
+    // Prefer games owned longest (purchased earliest)
+    const aged = notStarted.slice().sort((a, b) => {
+      const aDate = a.datePurchased ?? a.createdAt;
+      const bDate = b.datePurchased ?? b.createdAt;
+      return aDate.localeCompare(bDate);
+    });
+    const candidates2 = challengeShuffle(aged.slice(0, Math.min(5, aged.length)), today);
+    const g = candidates2[0];
+    if (g) {
+      candidates.push({
+        id: `backlog-buster-${g.id}-${today}`,
+        type: 'backlog-buster',
+        icon: '📦',
+        title: `First play: ${g.name}`,
+        description: `This one has been waiting. Give it its first session today.`,
+        gameId: g.id,
+        gameName: g.name,
+        xp: 80,
+      });
+    }
+  }
+
+  // --- 4. Genre Explorer: play from a neglected genre ---
+  const genreLastPlayed = new Map<string, Date>();
+  for (const g of withHours) {
+    if (!g.genre) continue;
+    const lastLog = (g.playLogs ?? []).slice().sort((a, b) => b.date.localeCompare(a.date))[0];
+    const d = lastLog ? parseLocalDate(lastLog.date) : parseLocalDate(g.startDate ?? g.createdAt);
+    const prev = genreLastPlayed.get(g.genre);
+    if (!prev || d > prev) genreLastPlayed.set(g.genre, d);
+  }
+
+  const neglectedGenres: string[] = [];
+  for (const [genre, lastDate] of genreLastPlayed.entries()) {
+    const days = (now.getTime() - lastDate.getTime()) / 86400000;
+    if (days >= 21) neglectedGenres.push(genre);
+  }
+
+  if (neglectedGenres.length > 0) {
+    const shuffled = challengeShuffle(neglectedGenres, today);
+    const targetGenre = shuffled[0];
+    const genreGames = owned.filter(g => g.genre === targetGenre);
+    const best = genreGames.slice().sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0))[0];
+    if (best) {
+      candidates.push({
+        id: `genre-explorer-${targetGenre}-${today}`,
+        type: 'genre-explorer',
+        icon: '🧭',
+        title: `Explore ${targetGenre}`,
+        description: `Your ${targetGenre} games have been quiet. Try ${best.name} today.`,
+        gameId: best.id,
+        gameName: best.name,
+        xp: 65,
+      });
+    }
+  }
+
+  // --- 5. Value Hunter: game close to hitting a better value tier ---
+  const nearMilestone = owned.filter(g => {
+    const hrs = getTotalHours(g);
+    if (hrs <= 0 || (g.price ?? 0) <= 0 || g.acquiredFree) return false;
+    const cph = g.price / hrs;
+    if (cph > 3 && cph <= 7) {
+      return g.price / 3 - hrs <= 5;
+    }
+    if (cph > 1 && cph <= 3) {
+      return g.price / 1 - hrs <= 5;
+    }
+    return false;
+  });
+
+  if (nearMilestone.length > 0) {
+    const picked = challengeShuffle(nearMilestone, today)[0];
+    const hrs = getTotalHours(picked);
+    const cph = picked.price / hrs;
+    const targetCph = cph > 3 ? 3 : 1;
+    const targetLabel = cph > 3 ? 'Good' : 'Excellent';
+    const needed = Math.ceil(picked.price / targetCph - hrs);
+    candidates.push({
+      id: `value-hunter-${picked.id}-${today}`,
+      type: 'value-hunter',
+      icon: '💎',
+      title: `${needed}h to ${targetLabel} value`,
+      description: `Play ${picked.name} for ${needed} more ${needed === 1 ? 'hour' : 'hours'} to unlock ${targetLabel} value tier.`,
+      gameId: picked.id,
+      gameName: picked.name,
+      xp: 70,
+    });
+  }
+
+  // --- 6. Reunion: return to a ghosted In Progress game ---
+  const ghosted = owned.filter(g => {
+    if (g.status !== 'In Progress') return false;
+    const logs = g.playLogs ?? [];
+    if (logs.length === 0) return false;
+    const lastLog = logs.slice().sort((a, b) => b.date.localeCompare(a.date))[0];
+    const days = (now.getTime() - parseLocalDate(lastLog.date).getTime()) / 86400000;
+    return days >= 30 && days <= 150;
+  });
+
+  if (ghosted.length > 0) {
+    const picked = challengeShuffle(ghosted, today)[0];
+    const logs = picked.playLogs!;
+    const lastLog = logs.slice().sort((a, b) => b.date.localeCompare(a.date))[0];
+    const days = Math.round((now.getTime() - parseLocalDate(lastLog.date).getTime()) / 86400000);
+    candidates.push({
+      id: `reunion-${picked.id}-${today}`,
+      type: 'reunion',
+      icon: '🔄',
+      title: `Reunite with ${picked.name}`,
+      description: `It's been ${days} days. Come back for one session.`,
+      gameId: picked.id,
+      gameName: picked.name,
+      xp: 68,
+    });
+  }
+
+  // --- 7. Closer: push a long-running In Progress game ---
+  const stalled = owned.filter(g => {
+    if (g.status !== 'In Progress' || getTotalHours(g) < 10) return false;
+    const logs = g.playLogs ?? [];
+    if (logs.length === 0) return false;
+    const lastLog = logs.slice().sort((a, b) => b.date.localeCompare(a.date))[0];
+    const days = (now.getTime() - parseLocalDate(lastLog.date).getTime()) / 86400000;
+    return days >= 21 && days <= 90;
+  });
+
+  if (stalled.length > 0) {
+    const picked = challengeShuffle(stalled, today)[0];
+    const hrs = Math.round(getTotalHours(picked));
+    candidates.push({
+      id: `closer-${picked.id}-${today}`,
+      type: 'closer',
+      icon: '🏆',
+      title: `Push to finish: ${picked.name}`,
+      description: `You've invested ${hrs}h. A session now could be the push it needs.`,
+      gameId: picked.id,
+      gameName: picked.name,
+      xp: 85,
+    });
+  }
+
+  // Deduplicate by gameId — keep only the first challenge per game
+  const seen = new Set<string>();
+  const deduped = candidates.filter(c => {
+    if (!c.gameId) return true;
+    if (seen.has(c.gameId)) return false;
+    seen.add(c.gameId);
+    return true;
+  });
+
+  // Shuffle to mix types, then pick 3
+  return challengeShuffle(deduped, today).slice(0, 3);
+}

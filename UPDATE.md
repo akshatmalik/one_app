@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-16 15:00 — Games Tab — Daily Gaming Challenges
+
+**Files**: app/apps/game-analytics/lib/calculations.ts, app/apps/game-analytics/components/DailyChallenges.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Added a Daily Challenges panel to the Games tab that generates 3 personalized challenges every day from 7 challenge types: Session Focus (continue your most-recent game), Backlog Buster (first play on a waiting game), Genre Explorer (try a neglected genre), Value Hunter (reach a better value tier in N hours), Reunion (return to a ghosted game), Closer (push a stalled in-progress game), and Streak Keeper (protect your streak). Challenges are seeded on the date so they stay stable all day; completions and a streak counter persist in localStorage. Each card shows the game thumbnail, a Log shortcut, and a ✓ button.
+
+FOLLOW-UP: Could add XP totals and a weekly challenge summary showing which types a user completes most often.
+
 ## 2026-06-10 12:00 — Games Tab — Play Tonight Smart Recommender
 
 **Files**: app/apps/game-analytics/components/PlayTonightModal.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json
