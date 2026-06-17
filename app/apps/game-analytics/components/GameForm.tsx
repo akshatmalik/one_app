@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { ChevronDown, X, Tag, DollarSign, Calendar, MessageSquare, Sparkles, Loader2 } from 'lucide-react';
+import { ChevronDown, X, Tag, DollarSign, Calendar, MessageSquare, Sparkles, Loader2, Pin } from 'lucide-react';
 import { Game, GameStatus, PurchaseSource, SubscriptionSource } from '../lib/types';
 import { calculateCostPerHour, getValueRating, formatRating, getTotalHours } from '../lib/calculations';
 import { lookupGameLength } from '../lib/ai-timeline-service';
@@ -126,6 +126,11 @@ export function GameForm({ onSubmit, onClose, initialGame, allGames = [], existi
     endDate: initialGame?.endDate || '',
     playLogs: initialGame?.playLogs || [],
     isSpecial: initialGame?.isSpecial || false,
+    tags: initialGame?.tags?.join(', ') || '',
+    replayability: initialGame?.replayability !== undefined ? initialGame.replayability.toString() : '',
+    pinned: initialGame?.pinned || false,
+    valueOverride: (initialGame?.valueOverride || '') as 'worth' | 'regret' | '',
+    deadline: initialGame?.deadline || '',
   });
 
   // Drag-to-dismiss
@@ -204,6 +209,13 @@ export function GameForm({ onSubmit, onClose, initialGame, allGames = [], existi
         startDate: formData.startDate || undefined,
         endDate: formData.endDate || undefined,
         isSpecial: formData.isSpecial || undefined,
+        tags: formData.tags
+          ? formData.tags.split(',').map((t) => t.trim()).filter(Boolean)
+          : undefined,
+        replayability: formData.replayability ? parseFloat(formData.replayability) : undefined,
+        pinned: formData.pinned || undefined,
+        valueOverride: formData.valueOverride || undefined,
+        deadline: formData.deadline || undefined,
       });
       onClose();
     } finally {
@@ -690,6 +702,32 @@ export function GameForm({ onSubmit, onClose, initialGame, allGames = [], existi
                 />
               </div>
 
+              {/* Tags (#14) */}
+              <div>
+                <label className="block text-xs font-medium text-white/50 mb-1.5">Tags</label>
+                <input
+                  type="text"
+                  value={formData.tags}
+                  onChange={e => setFormData({ ...formData, tags: e.target.value })}
+                  className="w-full px-3 py-2.5 bg-white/[0.03] border border-white/5 text-white rounded-xl text-sm focus:outline-none focus:bg-white/[0.05] focus:border-white/10 transition-all placeholder:text-white/30"
+                  placeholder="comma-separated, e.g. co-op, comfort, rage-quit"
+                />
+              </div>
+
+              {/* Replayability (#16) */}
+              <div>
+                <label className="block text-xs font-medium text-white/50 mb-1.5">Replayability (1–10)</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={10}
+                  value={formData.replayability}
+                  onChange={e => setFormData({ ...formData, replayability: e.target.value })}
+                  className="w-full px-3 py-2.5 bg-white/[0.03] border border-white/5 text-white rounded-xl text-sm focus:outline-none focus:bg-white/[0.05] focus:border-white/10 transition-all placeholder:text-white/30"
+                  placeholder="Would you replay it?"
+                />
+              </div>
+
               {/* Special Game Toggle */}
               <div className="flex items-center justify-between p-3 bg-white/[0.02] rounded-xl">
                 <div className="flex items-center gap-2">
@@ -712,6 +750,68 @@ export function GameForm({ onSubmit, onClose, initialGame, allGames = [], existi
                     formData.isSpecial ? 'left-5' : 'left-0.5'
                   )} />
                 </button>
+              </div>
+
+              {/* Pin to Top Toggle (#13) */}
+              <div className="flex items-center justify-between p-3 bg-white/[0.02] rounded-xl">
+                <div className="flex items-center gap-2">
+                  <Pin size={14} className={clsx(formData.pinned ? 'text-purple-400' : 'text-white/30')} />
+                  <div>
+                    <div className="text-sm text-white/80">Pin to Top</div>
+                    <div className="text-[10px] text-white/40">Keep this game at the top of your list</div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, pinned: !formData.pinned })}
+                  className={clsx(
+                    'w-11 h-6 rounded-full transition-all relative',
+                    formData.pinned ? 'bg-purple-500' : 'bg-white/10'
+                  )}
+                >
+                  <div className={clsx(
+                    'w-5 h-5 rounded-full bg-white absolute top-0.5 transition-all',
+                    formData.pinned ? 'left-5' : 'left-0.5'
+                  )} />
+                </button>
+              </div>
+
+              {/* Beat the Clock deadline (#74) */}
+              <div>
+                <label className="block text-xs font-medium text-white/50 mb-1.5">Finish-by Deadline</label>
+                <input
+                  type="date"
+                  value={formData.deadline}
+                  onChange={e => setFormData({ ...formData, deadline: e.target.value })}
+                  className="w-full px-3 py-2.5 bg-white/[0.03] border border-white/5 text-white rounded-xl text-sm focus:outline-none focus:bg-white/[0.05] focus:border-white/10 transition-all"
+                />
+                <p className="mt-1 text-[10px] text-white/30">e.g. finish before the sequel drops</p>
+              </div>
+
+              {/* Value Override (#56) */}
+              <div className="p-3 bg-white/[0.02] rounded-xl">
+                <div className="text-sm text-white/80 mb-2">Your Gut Verdict</div>
+                <div className="flex gap-2">
+                  {([
+                    { v: '', label: 'Auto' },
+                    { v: 'worth', label: '👍 Worth it' },
+                    { v: 'regret', label: '👎 Regret' },
+                  ] as const).map(opt => (
+                    <button
+                      key={opt.v}
+                      type="button"
+                      onClick={() => setFormData({ ...formData, valueOverride: opt.v })}
+                      className={clsx(
+                        'flex-1 px-2 py-2 rounded-lg text-xs font-medium transition-all',
+                        formData.valueOverride === opt.v
+                          ? 'bg-purple-500/30 text-white border border-purple-400/40'
+                          : 'bg-white/[0.03] text-white/50 border border-transparent hover:bg-white/[0.06]'
+                      )}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
               </div>
             </Section>
           </div>
