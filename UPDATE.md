@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-17 00:18 — Stats Tab — Activated Gaming Goals & Challenges
+
+**Files**: app/apps/game-analytics/components/StatsView.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Wired up the fully-built but completely orphaned Gaming Goals feature (`GoalsPanel.tsx`, `useGoals.ts`, `goals-storage.ts`) into the Stats tab. Users can now set personal goals — completion count, spending limit, hours target, genre variety, backlog clearance, or a custom metric — with live progress bars, start/end dates, and a collapsible history of past goals (completed/failed/archived). No new types or storage logic were needed; everything already existed, it just had no UI entry point until now.
+
+FOLLOW-UP: The Firestore security rules documented in CLAUDE.md don't yet include a `gamingGoals` rule — logged-in users currently fall back through HybridRepository's Firebase path without an explicit rule entry; this should be added in the Firebase console.
+
 ## 2026-06-10 12:00 — Games Tab — Play Tonight Smart Recommender
 
 **Files**: app/apps/game-analytics/components/PlayTonightModal.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/data/whats-new.json
