@@ -5,6 +5,13 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-17 06:40 — Import / Export — Bulk Library Import from CSV/JSON
+
+**Files**: app/apps/game-analytics/lib/export-service.ts, app/apps/game-analytics/components/ExportPanel.tsx, app/apps/game-analytics/page.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Added the missing other half of data portability: bulk import. `ExportPanel` (now "Import / Export") gained an Import mode with a 4-step flow — choose a CSV/JSON file, preview parsed games with duplicate detection and a "skip duplicates" toggle, run the import via the existing `addGame` hook with a progress indicator, and a done screen summarizing imported/skipped/failed counts. New parsers in `export-service.ts` (`parseGamesCSV`, `parseGamesJSON`, `parseImportFile`) round-trip this app's own CSV/JSON exports exactly (verified with a standalone script: embedded commas/quotes/newlines, `baselineHours` restoration) while also tolerating plain external spreadsheets with flexible header aliases and missing optional columns, collecting per-row errors instead of failing outright. No data-model, storage, or calculations.ts changes — uses the existing `addGame` repository method per-draft, so no new Firestore/localStorage write path was introduced.
+
 ## 2026-06-17 00:18 — Stats Tab — Activated Gaming Goals & Challenges
 
 **Files**: app/apps/game-analytics/components/StatsView.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json

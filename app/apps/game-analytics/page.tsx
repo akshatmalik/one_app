@@ -1085,7 +1085,7 @@ export default function GameAnalyticsPage() {
                           { icon: <Swords size={15} className="text-pink-400" />, label: 'Me vs Me', onClick: () => setShowMeVsMe(true) },
                           { icon: <Gift size={15} className="text-purple-400" />, label: 'Yearly Wrapped', onClick: () => setWrappedYear(new Date().getFullYear()) },
                           { icon: <Star size={15} className="text-amber-400" />, label: 'Awards Hub', onClick: () => setShowAwardsHub(true) },
-                          { icon: <Download size={15} className="text-white/50" />, label: 'Export data', onClick: () => setShowExport(true) },
+                          { icon: <Download size={15} className="text-white/50" />, label: 'Import / Export', onClick: () => setShowExport(true) },
                         ].map(item => (
                           <button key={item.label}
                             onClick={() => { item.onClick(); setShowMoreMenu(false); }}
@@ -1558,11 +1558,12 @@ export default function GameAnalyticsPage() {
         <WhatsNewModal onClose={() => setShowWhatsNew(false)} />
       )}
 
-      {/* Export Panel */}
+      {/* Import / Export Panel */}
       {showExport && (
         <ExportPanel
           games={games}
           onClose={() => setShowExport(false)}
+          onImportGame={addGame}
         />
       )}
 

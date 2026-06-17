@@ -2,6 +2,12 @@
   "entries": [
     {
       "date": "2026-06-17",
+      "area": "Import / Export",
+      "title": "Bring your whole library back in one shot",
+      "body": "The Export panel now has an Import tab too. Drop in a CSV or JSON file — your own backup from this app, or a spreadsheet you put together yourself — and it'll match up columns like Name, Status, Price, Hours, Rating, Platform, and Genre automatically. You'll see a preview of every game before anything's added, with already-in-your-library duplicates flagged so you can skip them. Perfect for restoring a backup, moving to a new device, or bulk-adding a big batch of games at once."
+    },
+    {
+      "date": "2026-06-17",
       "area": "Stats tab",
       "title": "Set goals and track your progress",
       "body": "A new Gaming Goals panel on the Stats tab lets you set personal challenges — finish a number of games, stick to a spending limit, hit an hours target, branch into new genres, clear your backlog, or track any custom metric you like. Watch your progress bar fill in real time, and look back at past goals in a collapsible history once they're done."
