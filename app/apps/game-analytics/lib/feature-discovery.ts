@@ -31,7 +31,8 @@ export const DISCOVERABLE_FEATURES: DiscoverableFeature[] = [
   { id: 'beat-the-clock', blurb: 'Set a finish-by Deadline when editing a game — Stats shows whether you’re on track to beat it.', tab: 'stats', cta: 'Open Stats' },
   { id: 'saved-filters', blurb: 'Found a filter+sort combo you like? Hit "Save view" on the Games tab to keep it one tap away.' },
   { id: 'progression', blurb: 'Stats now shows your Gamer Level, XP, and weekly Quests — level up by playing and finishing games.', tab: 'stats', cta: 'Open Stats' },
-  { id: 'bracket', blurb: 'Can’t decide what to play? Tap "Bracket" to run a knockout tournament across your backlog.' },
+  { id: 'bracket', blurb: 'Can’t decide what to play? Open the ⋮ menu and run a Backlog Bracket tournament.' },
+  { id: 'narration', blurb: 'In Stats, "Narrate My Year" scripts your gaming story in a host persona and reads it aloud — try the Nature Documentary voice.', tab: 'stats', cta: 'Open Stats' },
 ];
 
 const SEEN_KEY = 'ga-feature-discovery-seen';

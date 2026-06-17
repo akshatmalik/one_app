@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Game } from '../lib/types';
 import { generateLibraryRoast, generateGamingHoroscope, generateTonightsForecast } from '../lib/idea-ai';
+import { NarrationPanel } from './NarrationPanel';
 import { Flame, Sparkles, Moon, Loader2 } from 'lucide-react';
 
 interface AICompanionPanelProps {
@@ -100,6 +101,7 @@ export function AICompanionPanel({ games }: AICompanionPanelProps) {
           onGenerate={() => run('forecast', () => generateTonightsForecast(games), setForecast)}
         />
       </div>
+      <NarrationPanel games={games} />
     </div>
   );
 }

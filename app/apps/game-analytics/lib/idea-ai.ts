@@ -106,3 +106,52 @@ export async function generateTonightsForecast(games: Game[]): Promise<{ text: s
   const pick = (inProgress[0] || games[0])?.name || 'something from your backlog';
   return { text: `Tonight feels like a session with ${pick} — pick up where you left off.`, ai: false };
 }
+
+// ── #91/#92 AI Narration — scripted recap read aloud in a host persona ──
+
+export type NarrationPersona = 'documentary' | 'sportscaster' | 'noir' | 'wholesome';
+
+export const NARRATION_PERSONAS: Array<{ id: NarrationPersona; label: string; emoji: string; desc: string }> = [
+  { id: 'documentary', label: 'Nature Documentary', emoji: '🎬', desc: 'Calm, sweeping, Attenborough-style' },
+  { id: 'sportscaster', label: 'Hype Sportscaster', emoji: '🏟️', desc: 'Loud, breathless play-by-play' },
+  { id: 'noir', label: 'Noir Detective', emoji: '🕵️', desc: 'Moody, hard-boiled monologue' },
+  { id: 'wholesome', label: 'Wholesome Buddy', emoji: '🫶', desc: 'Warm, encouraging, cozy' },
+];
+
+const PERSONA_PROMPT: Record<NarrationPersona, string> = {
+  documentary: 'a calm nature-documentary narrator (think David Attenborough) observing the gamer like a creature in the wild',
+  sportscaster: 'an over-the-top hype sports commentator giving breathless play-by-play',
+  noir: 'a hard-boiled 1940s noir detective narrating in moody, world-weary monologue',
+  wholesome: 'a warm, wholesome best friend who is genuinely proud and encouraging',
+};
+
+/**
+ * #91/#92 — Generate a short spoken-style recap script in a chosen host persona.
+ * Returns plain text meant to be read aloud (by Web Speech API on the client).
+ */
+export async function generateNarrationScript(
+  games: Game[],
+  persona: NarrationPersona
+): Promise<{ text: string; ai: boolean }> {
+  const cacheKey = `idea-narration-${persona}-v1`;
+  const cached = getCache<string>(cacheKey, DAY_TTL);
+  if (cached) return { text: cached, ai: true };
+
+  if (games.filter((g) => g.status !== 'Wishlist').length < 2)
+    return { text: 'Add a few games and I’ll narrate your gaming story.', ai: false };
+
+  const prompt = `You are ${PERSONA_PROMPT[persona]}. Narrate this person's gaming life as a short spoken recap: 4-6 sentences, vivid and in-character, meant to be read ALOUD. Reference specific numbers and game names. No stage directions, no markdown — just the spoken words.\n\n${librarySummary(games)}\n\nReturn ONLY the narration.`;
+  const out = await runAI(prompt);
+  if (out) {
+    setCache(cacheKey, out);
+    return { text: out, ai: true };
+  }
+  // Deterministic fallback script
+  const owned = games.filter((g) => g.status !== 'Wishlist');
+  const hours = owned.reduce((s, g) => s + getTotalHours(g), 0);
+  const completed = owned.filter((g) => g.status === 'Completed').length;
+  return {
+    text: `Here we observe a gamer in their natural habitat. Across ${owned.length} titles, they have logged ${hours.toFixed(0)} hours and conquered ${completed} of them. A creature of patterns, drawn ever onward by the promise of just one more session.`,
+    ai: false,
+  };
+}
