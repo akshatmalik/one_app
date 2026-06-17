@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-17 06:00 — Games Tab — Backlog Bracket Tournament
+
+**Files**: app/apps/game-analytics/components/BacklogBracket.tsx, app/apps/game-analytics/page.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Added a single-elimination tournament bracket ("Backlog Bracket") accessible via the ⋮ command menu whenever 4+ Not Started/In Progress games exist. Users pick a bracket size (4/8/16), the field is seeded by `getGameChemistry()` score using standard tournament seeding (so close matches happen early, lopsided ones happen late), and the user taps a head-to-head winner each round until one champion remains. Reused the existing Elo "Battle" win-flash CSS and trophy-toast celebration animations rather than adding new ones. The champion screen offers one-tap "Start Playing" / "Add to Up Next" / "View Details", and a localStorage-backed "Past Champions" list (capped at 5) shows on the setup screen for a bit of delight on repeat use. Distinct from the existing Tier Rank/Elo system, which ranks the *entire* library persistently — this is a one-shot, actionable "what do I play right now" decision tool for the backlog specifically.
+
+FOLLOW-UP: Could let the bracket re-seed mid-run if a new game is logged, or surface bracket results as a one-line "Decided by tournament" note on the game card.
+
 ## 2026-06-17 00:18 — Stats Tab — Activated Gaming Goals & Challenges
 
 **Files**: app/apps/game-analytics/components/StatsView.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json
