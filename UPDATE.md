@@ -5,6 +5,13 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-17 05:19 — Games Tab — Bulk Import from Spreadsheet/CSV
+
+**Files**: app/apps/game-analytics/lib/import-service.ts, app/apps/game-analytics/components/ImportLibraryModal.tsx, app/apps/game-analytics/page.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Added a 3-step "Import Library" wizard (accessible via the ⋮ command menu) that lets users bulk-add games from a pasted spreadsheet, a CSV upload, or even a plain newline-separated list of names. `lib/import-service.ts` is a new pure-utility module handling CSV parsing (quoted fields, embedded commas/newlines), header-alias detection that mirrors the existing CSV export column names for round-trip compatibility, and row-to-Game transformation with loose date/number parsing. The review step shows an editable per-column field mapping, a capped live preview table flagging duplicates and rows missing a name, and toggles to skip existing games or force everything into the Wishlist. Only ever calls the existing `addGame` create path — no changes to `lib/types.ts`, storage, or shared calculations.
+
 ## 2026-06-17 00:18 — Stats Tab — Activated Gaming Goals & Challenges
 
 **Files**: app/apps/game-analytics/components/StatsView.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, CalendarClock, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical, Download, Gift, ShoppingCart, Search, X, Moon, CreditCard, Swords } from 'lucide-react';
+import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, CalendarClock, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical, Download, Gift, ShoppingCart, Search, X, Moon, CreditCard, Swords, Upload } from 'lucide-react';
 import { useGames } from './hooks/useGames';
 import { useAnalytics, GameWithMetrics } from './hooks/useAnalytics';
 import { useBudget } from './hooks/useBudget';
@@ -31,6 +31,7 @@ import { OnThisDayCard } from './components/OnThisDayCard';
 import { ActivityPulse } from './components/ActivityPulse';
 import { RandomPicker } from './components/RandomPicker';
 import { BulkWishlistModal } from './components/BulkWishlistModal';
+import { ImportLibraryModal } from './components/ImportLibraryModal';
 import { GameBottomSheet } from './components/GameBottomSheet';
 import { DiscoverTab } from './components/DiscoverTab';
 import { LeaderboardTab } from './components/LeaderboardTab';
@@ -217,6 +218,7 @@ export default function GameAnalyticsPage() {
   const [sortBy, setSortBy] = useState<'name' | 'price' | 'hours' | 'rating' | 'costPerHour' | 'dateAdded' | 'recentlyPlayed'>('recentlyPlayed');
   const [showRandomPicker, setShowRandomPicker] = useState(false);
   const [showBulkWishlist, setShowBulkWishlist] = useState(false);
+  const [showImportLibrary, setShowImportLibrary] = useState(false);
   const [showExport, setShowExport] = useState(false);
   const [wrappedYear, setWrappedYear] = useState<number | null>(null);
   const [showGamerCard, setShowGamerCard] = useState(false);
@@ -500,6 +502,12 @@ export default function GameAnalyticsPage() {
     }
   };
 
+  const handleImportLibrary = async (gamesToAdd: Omit<Game, 'id' | 'userId' | 'createdAt' | 'updatedAt'>[]) => {
+    for (const gameData of gamesToAdd) {
+      await addGame(gameData);
+    }
+  };
+
   if (authLoading || loading) {
     return (
       <div className="min-h-[calc(100vh-60px)] flex items-center justify-center">
@@ -634,6 +642,12 @@ export default function GameAnalyticsPage() {
                         className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white/70 hover:text-white hover:bg-white/5 transition-all"
                       >
                         <Heart size={14} /> Bulk Wishlist
+                      </button>
+                      <button
+                        onClick={() => { setShowImportLibrary(true); setShowCommandPalette(false); }}
+                        className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white/70 hover:text-white hover:bg-white/5 transition-all"
+                      >
+                        <Upload size={14} /> Import Library
                       </button>
                       {games.length === 0 && (
                         <button
@@ -1608,6 +1622,15 @@ export default function GameAnalyticsPage() {
           onClose={() => setShowBulkWishlist(false)}
           existingGameNames={games.map(g => g.name)}
           existingGames={games}
+        />
+      )}
+
+      {/* Import Library Modal */}
+      {showImportLibrary && (
+        <ImportLibraryModal
+          onImport={handleImportLibrary}
+          onClose={() => setShowImportLibrary(false)}
+          existingGameNames={games.map(g => g.name)}
         />
       )}
 
