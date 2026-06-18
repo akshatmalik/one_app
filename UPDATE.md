@@ -5,6 +5,13 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-18 09:00 — Games Tab — Bulk Library Import from CSV/Spreadsheet
+
+**Files**: app/apps/game-analytics/components/LibraryImportModal.tsx, app/apps/game-analytics/page.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+New "Import Library" flow (command palette + empty-state CTA) lets users paste a CSV/TSV export from Excel, Google Sheets, or a Steam library dump and bulk-add their entire collection in one go, instead of adding games one at a time through the full form. Three-step wizard: paste → map columns (auto-guesses Name/Price/Hours/Rating/Status/Platform/Genre/Franchise/Source/Notes from header text) → preview with per-row validation, duplicate detection against the existing library, and the ability to exclude individual rows before import. Reuses the existing `addGame` API in a loop (same pattern as Bulk Wishlist) — no changes to the repository/storage layer or data model.
+
 ## 2026-06-17 00:18 — Stats Tab — Activated Gaming Goals & Challenges
 
 **Files**: app/apps/game-analytics/components/StatsView.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json

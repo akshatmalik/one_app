@@ -1,6 +1,12 @@
 {
   "entries": [
     {
+      "date": "2026-06-18",
+      "area": "Games tab",
+      "title": "Import your whole library in one paste",
+      "body": "Already tracking your games in a spreadsheet? Open the ⋮ menu (or tap the prompt on an empty library) and choose \"Import Library.\" Paste rows copied from Excel, Google Sheets, or a Steam export, match up the columns, preview exactly what will be added — including a heads-up on anything that looks like a duplicate — and import your whole collection in one go instead of typing each game in by hand."
+    },
+    {
       "date": "2026-06-17",
       "area": "Stats tab",
       "title": "Set goals and track your progress",
