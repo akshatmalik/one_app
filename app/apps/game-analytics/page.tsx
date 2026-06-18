@@ -1532,6 +1532,7 @@ export default function GameAnalyticsPage() {
           initialGame={editingGame || undefined}
           allGames={games}
           existingFranchises={Array.from(new Set(games.map(g => g.franchise).filter(Boolean) as string[]))}
+          budgets={budgets}
         />
       )}
 

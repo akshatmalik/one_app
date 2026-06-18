@@ -1,4 +1,4 @@
-import { Game, GameStatus, GameMetrics, AnalyticsSummary, TasteProfile, SessionMood, SessionContext } from './types';
+import { Game, GameStatus, GameMetrics, AnalyticsSummary, TasteProfile, SessionMood, SessionContext, BudgetSettings } from './types';
 
 /**
  * Parse a YYYY-MM-DD date string as local time instead of UTC.
@@ -14612,5 +14612,63 @@ export function getSocialGamingStats(games: Game[]): SocialGamingStats {
     breakdown,
     topSocialGame,
     insight,
+  };
+}
+
+export interface BudgetImpactPreview {
+  year: number;
+  budgetAmount: number;
+  spentBeforeThisGame: number;
+  spentAfterThisGame: number;
+  remainingBefore: number;
+  remainingAfter: number;
+  percentUsedBefore: number;
+  percentUsedAfter: number;
+  willExceed: boolean;
+  overageAmount: number;
+}
+
+/**
+ * Live preview of how a purchase (being entered in GameForm, not yet saved)
+ * would affect the yearly budget for the year it was purchased in.
+ * Returns null when there's no budget set for that year, so callers can
+ * skip rendering entirely rather than showing a meaningless "$0 budget" card.
+ */
+export function getBudgetImpactPreview(
+  price: number,
+  datePurchased: string,
+  allGames: Game[],
+  budgets: BudgetSettings[],
+  excludeGameId?: string
+): BudgetImpactPreview | null {
+  const year = datePurchased ? parseLocalDate(datePurchased).getFullYear() : new Date().getFullYear();
+  const budget = budgets.find(b => b.year === year);
+  if (!budget || budget.yearlyBudget <= 0) return null;
+
+  const spentBeforeThisGame = allGames
+    .filter(g =>
+      g.id !== excludeGameId &&
+      !g.acquiredFree &&
+      g.status !== 'Wishlist' &&
+      g.datePurchased &&
+      parseLocalDate(g.datePurchased).getFullYear() === year
+    )
+    .reduce((sum, g) => sum + (g.price || 0), 0);
+
+  const spentAfterThisGame = spentBeforeThisGame + price;
+  const percentUsedBefore = (spentBeforeThisGame / budget.yearlyBudget) * 100;
+  const percentUsedAfter = (spentAfterThisGame / budget.yearlyBudget) * 100;
+
+  return {
+    year,
+    budgetAmount: budget.yearlyBudget,
+    spentBeforeThisGame: Math.round(spentBeforeThisGame * 100) / 100,
+    spentAfterThisGame: Math.round(spentAfterThisGame * 100) / 100,
+    remainingBefore: Math.round((budget.yearlyBudget - spentBeforeThisGame) * 100) / 100,
+    remainingAfter: Math.round((budget.yearlyBudget - spentAfterThisGame) * 100) / 100,
+    percentUsedBefore: Math.round(percentUsedBefore * 10) / 10,
+    percentUsedAfter: Math.round(percentUsedAfter * 10) / 10,
+    willExceed: spentAfterThisGame > budget.yearlyBudget,
+    overageAmount: Math.round(Math.max(0, spentAfterThisGame - budget.yearlyBudget) * 100) / 100,
   };
 }

@@ -3,6 +3,12 @@
     {
       "date": "2026-06-18",
       "area": "Games tab",
+      "title": "See your budget impact before you hit save",
+      "body": "Set a yearly budget on the Stats tab? Now when you add (or edit) a game's price in the Add Game form, you'll see exactly what it does to your budget — money spent so far this year, what's left after this purchase, and a color-coded bar that turns amber as you approach your limit and red if you'd go over. No more finding out you blew the budget after the fact."
+    },
+    {
+      "date": "2026-06-18",
+      "area": "Games tab",
       "title": "Import your library from a CSV or JSON file",
       "body": "Got a spreadsheet of games, or an old export from this app? Tap ⋮ then \"Import games\" to bring it in. Drop in a file or paste CSV text, review a preview of what was found (games already in your library are flagged so you don't accidentally duplicate them), uncheck anything you don't want, and import the rest in one go. Pairs with the existing Export so you've got a full backup-and-restore loop."
     },

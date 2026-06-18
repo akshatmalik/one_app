@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-18 20:14 — Games Tab — Budget Impact Preview in Add/Edit Game
+
+**Files**: app/apps/game-analytics/lib/calculations.ts, app/apps/game-analytics/components/GameForm.tsx, app/apps/game-analytics/page.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Yearly budgets (`useBudget`/`BudgetSettings`) have existed in the Stats tab for a while, but the budget was invisible at the exact moment it mattered most: while actually entering a purchase. Added a `getBudgetImpactPreview()` pure function (price, purchase date, all games, budgets → year/budget amount/spend before & after/percent used/overage) and wired it into `GameForm` as a live "Budget Impact Preview" card — shown whenever you're entering a price for an owned, non-free game and a budget exists for that purchase's year. A two-segment progress bar (existing spend in white, this purchase's slice in green/amber/red) and a one-line readout ("$142.50 left after this purchase" or "$30.00 over budget") update as you type, before you ever hit save. Purely additive: no changes to the budget storage layer, `GameRepository`, or any existing calculation function. Verified with `npm run build` and `npm run lint` (zero new errors/warnings), and a dev-server smoke test confirmed `/apps/game-analytics` compiles and serves cleanly with no console errors.
+
+FOLLOW-UP: Could surface the same preview in the Buy Queue / Backlog Triage flows wherever a price is entered, and could add a one-tap "bump this year's budget by $X" shortcut right from the over-budget state.
+
 ## 2026-06-18 07:30 — Games Tab — Bulk Import (CSV/JSON)
 
 **Files**: app/apps/game-analytics/lib/import-service.ts, app/apps/game-analytics/components/ImportModal.tsx, app/apps/game-analytics/page.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json

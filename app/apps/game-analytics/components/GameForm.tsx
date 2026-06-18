@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
-import { ChevronDown, X, Tag, DollarSign, Calendar, MessageSquare, Sparkles, Loader2 } from 'lucide-react';
-import { Game, GameStatus, PurchaseSource, SubscriptionSource } from '../lib/types';
-import { calculateCostPerHour, getValueRating, formatRating, getTotalHours } from '../lib/calculations';
+import { useState, useRef, useEffect, useMemo } from 'react';
+import { ChevronDown, X, Tag, DollarSign, Calendar, MessageSquare, Sparkles, Loader2, Wallet } from 'lucide-react';
+import { Game, GameStatus, PurchaseSource, SubscriptionSource, BudgetSettings } from '../lib/types';
+import { calculateCostPerHour, getValueRating, formatRating, getTotalHours, getBudgetImpactPreview } from '../lib/calculations';
 import { lookupGameLength } from '../lib/ai-timeline-service';
 import { AIReviewInterview } from './AIReviewInterview';
 import clsx from 'clsx';
@@ -14,6 +14,7 @@ interface GameFormProps {
   initialGame?: Game;
   allGames?: Game[];
   existingFranchises?: string[];
+  budgets?: BudgetSettings[];
 }
 
 const PLATFORMS = ['PC', 'PS5', 'PS4', 'Xbox Series', 'Xbox One', 'Switch', 'Mobile', 'Other'];
@@ -100,7 +101,7 @@ function Section({ title, icon, defaultOpen = false, children, badge }: {
   );
 }
 
-export function GameForm({ onSubmit, onClose, initialGame, allGames = [], existingFranchises = [] }: GameFormProps) {
+export function GameForm({ onSubmit, onClose, initialGame, allGames = [], existingFranchises = [], budgets = [] }: GameFormProps) {
   const [loading, setLoading] = useState(false);
   const [showInterview, setShowInterview] = useState(false);
   const [lengthLoading, setLengthLoading] = useState(false);
@@ -180,6 +181,11 @@ export function GameForm({ onSubmit, onClose, initialGame, allGames = [], existi
   const isOwned = formData.status !== 'Wishlist';
   const showPlayDates = isOwned && (formData.status === 'In Progress' || formData.status === 'Completed' || formData.status === 'Abandoned');
   const showRating = formData.status !== 'Not Started' && formData.status !== 'Wishlist';
+
+  const budgetImpact = useMemo(() => {
+    if (!isOwned || formData.acquiredFree || priceNum <= 0) return null;
+    return getBudgetImpactPreview(priceNum, formData.datePurchased, allGames, budgets, initialGame?.id);
+  }, [isOwned, formData.acquiredFree, priceNum, formData.datePurchased, allGames, budgets, initialGame?.id]);
 
   const paidPrice = parseFloat(formData.price) || 0;
   const origPrice = parseFloat(formData.originalPrice) || 0;
@@ -364,6 +370,52 @@ export function GameForm({ onSubmit, onClose, initialGame, allGames = [], existi
               <div className="px-3 py-2 rounded-xl bg-emerald-500/10 text-emerald-400 text-sm flex items-center justify-between">
                 <span className="font-medium">{discount.toFixed(0)}% discount</span>
                 <span className="text-xs opacity-70">Saved ${savings.toFixed(2)}</span>
+              </div>
+            )}
+
+            {/* Budget Impact Preview */}
+            {budgetImpact && (
+              <div className={clsx(
+                'px-3.5 py-3 rounded-xl border space-y-2',
+                budgetImpact.willExceed
+                  ? 'bg-red-500/10 border-red-500/30'
+                  : budgetImpact.percentUsedAfter >= 85
+                    ? 'bg-amber-500/10 border-amber-500/30'
+                    : 'bg-emerald-500/10 border-emerald-500/30'
+              )}>
+                <div className="flex items-center justify-between text-xs">
+                  <span className={clsx(
+                    'flex items-center gap-1.5 font-medium',
+                    budgetImpact.willExceed ? 'text-red-400' : budgetImpact.percentUsedAfter >= 85 ? 'text-amber-400' : 'text-emerald-400'
+                  )}>
+                    <Wallet size={12} /> {budgetImpact.year} budget
+                  </span>
+                  <span className="text-white/40">${budgetImpact.budgetAmount.toFixed(0)} total</span>
+                </div>
+                <div className="relative h-2 rounded-full bg-white/10 overflow-hidden">
+                  <div
+                    className="absolute inset-y-0 left-0 bg-white/20"
+                    style={{ width: `${Math.min(100, budgetImpact.percentUsedBefore)}%` }}
+                  />
+                  <div
+                    className={clsx(
+                      'absolute inset-y-0 rounded-r-full',
+                      budgetImpact.willExceed ? 'bg-red-400' : budgetImpact.percentUsedAfter >= 85 ? 'bg-amber-400' : 'bg-emerald-400'
+                    )}
+                    style={{
+                      left: `${Math.min(100, budgetImpact.percentUsedBefore)}%`,
+                      width: `${Math.max(0, Math.min(100, budgetImpact.percentUsedAfter) - Math.min(100, budgetImpact.percentUsedBefore))}%`,
+                    }}
+                  />
+                </div>
+                <p className={clsx(
+                  'text-xs font-medium',
+                  budgetImpact.willExceed ? 'text-red-400' : budgetImpact.percentUsedAfter >= 85 ? 'text-amber-400' : 'text-emerald-400'
+                )}>
+                  {budgetImpact.willExceed
+                    ? `This puts you $${budgetImpact.overageAmount.toFixed(2)} over budget (${budgetImpact.percentUsedAfter.toFixed(0)}% used)`
+                    : `$${budgetImpact.remainingAfter.toFixed(2)} left after this purchase (${budgetImpact.percentUsedAfter.toFixed(0)}% used)`}
+                </p>
               </div>
             )}
 
