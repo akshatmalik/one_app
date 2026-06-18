@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, CalendarClock, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical, Download, Gift, ShoppingCart, Search, X, Moon, CreditCard, Swords } from 'lucide-react';
+import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, CalendarClock, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical, Download, Gift, ShoppingCart, Search, X, Moon, CreditCard, Swords, Inbox } from 'lucide-react';
 import { useGames } from './hooks/useGames';
 import { useAnalytics, GameWithMetrics } from './hooks/useAnalytics';
 import { useBudget } from './hooks/useBudget';
@@ -26,7 +26,7 @@ import { BASELINE_BUY_QUEUE } from './data/baseline-buy-queue';
 import { purchaseQueueRepository } from './lib/purchase-queue-storage';
 import { useAuthContext } from '@/lib/AuthContext';
 import { useToast } from '@/components/Toast';
-import { getROIRating, getWeekStatsForOffset, getGamesPlayedInTimeRange, getCompletionProbability, getGameHealthDot, getRelativeTime, getDaysContext, getSessionMomentum, getValueTrajectory, getGameSmartOneLiner, getFranchiseInfo, getProgressPercent, getShelfLife, parseLocalDate, getCardRarity, getRelationshipStatus, getGameStreak, getHeroNumber, getCardFreshness, getGameSections, getCardBackData, getContextualWhisper, getLibraryRank, getCardMoodPulse, getProgressRingData, getStatPopoverData, getWeekRecapData, getSmartNudges, getGamingCreditScore, getRotationStats, getSpendingForecast, getSpendingByMonth, getShelfLifeExpiry, formatRating, getRatingRank, getYearInReviewFullData } from './lib/calculations';
+import { getROIRating, getWeekStatsForOffset, getGamesPlayedInTimeRange, getCompletionProbability, getGameHealthDot, getRelativeTime, getDaysContext, getSessionMomentum, getValueTrajectory, getGameSmartOneLiner, getFranchiseInfo, getProgressPercent, getShelfLife, parseLocalDate, getCardRarity, getRelationshipStatus, getGameStreak, getHeroNumber, getCardFreshness, getGameSections, getCardBackData, getContextualWhisper, getLibraryRank, getCardMoodPulse, getProgressRingData, getStatPopoverData, getWeekRecapData, getSmartNudges, getGamingCreditScore, getRotationStats, getSpendingForecast, getSpendingByMonth, getShelfLifeExpiry, formatRating, getRatingRank, getYearInReviewFullData, getBacklogTriageCandidates } from './lib/calculations';
 import { OnThisDayCard } from './components/OnThisDayCard';
 import { ActivityPulse } from './components/ActivityPulse';
 import { RandomPicker } from './components/RandomPicker';
@@ -57,6 +57,7 @@ import { WhatsNewModal } from './components/WhatsNewModal';
 import { GameReviewChat } from './components/GameReviewChat';
 import { GameCompareModal } from './components/GameCompareModal';
 import { PlayTonightModal } from './components/PlayTonightModal';
+import { BacklogTriageModal } from './components/BacklogTriageModal';
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist';
@@ -247,6 +248,7 @@ export default function GameAnalyticsPage() {
   const [showErrorLog, setShowErrorLog] = useState(false);
   const [showWhatsNew, setShowWhatsNew] = useState(false);
   const [showPlayTonight, setShowPlayTonight] = useState(false);
+  const [showBacklogTriage, setShowBacklogTriage] = useState(false);
 
   // Week recap data for header strip
   const weekRecap = useMemo(() => {
@@ -256,6 +258,9 @@ export default function GameAnalyticsPage() {
 
   // Smart nudges for the title subtitle
   const smartNudges = useMemo(() => getSmartNudges(games), [games]);
+
+  // Backlog triage candidates (games that need a decision: queue, abandon, or snooze)
+  const backlogTriageCandidates = useMemo(() => getBacklogTriageCandidates(games), [games]);
   const [nudgeIndex, setNudgeIndex] = useState(0);
   // Rotate nudges every 8 seconds
   useEffect(() => {
@@ -627,6 +632,15 @@ export default function GameAnalyticsPage() {
                           className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white/70 hover:text-white hover:bg-white/5 transition-all"
                         >
                           <Sparkles size={14} /> Random Pick
+                        </button>
+                      )}
+                      {backlogTriageCandidates.length > 0 && (
+                        <button
+                          onClick={() => { setShowBacklogTriage(true); setShowCommandPalette(false); }}
+                          className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white/70 hover:text-white hover:bg-white/5 transition-all"
+                        >
+                          <Inbox size={14} className="text-amber-400" /> Backlog Triage
+                          <span className="ml-auto text-[10px] text-white/30">{backlogTriageCandidates.length}</span>
                         </button>
                       )}
                       <button
@@ -1543,6 +1557,21 @@ export default function GameAnalyticsPage() {
           onClose={() => setShowPlayTonight(false)}
           onOpenGame={(game) => {
             setShowPlayTonight(false);
+            setDetailGame(game);
+          }}
+        />
+      )}
+
+      {/* Backlog Triage Modal */}
+      {showBacklogTriage && (
+        <BacklogTriageModal
+          games={games}
+          gamesWithMetrics={gamesWithMetrics}
+          onClose={() => setShowBacklogTriage(false)}
+          onQueue={addToQueue}
+          onAbandon={async (gameId) => { await updateGame(gameId, { status: 'Abandoned' }); }}
+          onOpenGame={(game) => {
+            setShowBacklogTriage(false);
             setDetailGame(game);
           }}
         />

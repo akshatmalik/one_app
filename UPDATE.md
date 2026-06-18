@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-18 00:00 — Games Tab — Backlog Triage
+
+**Files**: app/apps/game-analytics/lib/calculations.ts, app/apps/game-analytics/components/BacklogTriageModal.tsx, app/apps/game-analytics/page.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Added a "Backlog Triage" flow accessible via the ⋮ command menu (badge shows the count of games needing a decision). A new pure function, `getBacklogTriageCandidates()`, surfaces every owned, unstarted-or-in-progress game whose shelf life isn't "thriving" — built entirely from the existing `getShelfLifeExpiry()` and `getRelationshipStatus()` calculations — sorted worst-first (expired → critical → at risk → stable). `BacklogTriageModal.tsx` presents these one at a time, Tinder-card style, with three swipe-style actions: Queue it (adds to Up Next via the existing queue hook), Let it go (marks Abandoned), or Snooze (hides the game from triage for 21 days via a localStorage map, `ga-triage-snoozed`). A completion screen tallies the session's decisions and the hours/spend finally resolved. Tapping a card opens its full detail sheet without leaving the flow.
+
+FOLLOW-UP: Could add an "undo" toast after each decision in case of a mis-swipe.
+
 ## 2026-06-17 00:18 — Stats Tab — Activated Gaming Goals & Challenges
 
 **Files**: app/apps/game-analytics/components/StatsView.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json

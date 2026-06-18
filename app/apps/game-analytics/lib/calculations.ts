@@ -14418,3 +14418,63 @@ export function getReviewNudges(games: Game[]): ReviewNudgeSummary {
     recentlyCompletedCount,
   };
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BACKLOG TRIAGE
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface TriageCandidate {
+  game: Game;
+  urgency: ShelfLifeTier;
+  urgencyLabel: string;
+  urgencyColor: string;
+  contextLine: string;
+  relationship: RelationshipStatus;
+  totalHours: number;
+}
+
+const TRIAGE_URGENCY_ORDER: Record<ShelfLifeTier, number> = {
+  expired: 0,
+  critical: 1,
+  at_risk: 2,
+  stable: 3,
+  thriving: 4,
+};
+
+/**
+ * Surfaces the backlog games most worth a decision right now — unstarted
+ * purchases going stale and in-progress games that have quietly stalled.
+ * Sorted worst-shelf-life-first so the most overdue decisions surface first.
+ */
+export function getBacklogTriageCandidates(games: Game[]): TriageCandidate[] {
+  const eligible = games.filter(g => g.status === 'Not Started' || g.status === 'In Progress');
+
+  const candidates: TriageCandidate[] = eligible.map(game => {
+    const shelfLife = getShelfLifeExpiry(game, games);
+    const relationship = getRelationshipStatus(game, games);
+    const totalHours = getTotalHours(game);
+
+    const contextLine = game.status === 'In Progress' && totalHours > 0
+      ? `${totalHours}h played so far — ${shelfLife.reasoning.charAt(0).toLowerCase()}${shelfLife.reasoning.slice(1)}`
+      : shelfLife.reasoning;
+
+    return {
+      game,
+      urgency: shelfLife.tier,
+      urgencyLabel: shelfLife.tierLabel,
+      urgencyColor: shelfLife.urgencyColor,
+      contextLine,
+      relationship,
+      totalHours,
+    };
+  });
+
+  // Fresh purchases and actively-thriving games don't need a decision yet.
+  const needsDecision = candidates.filter(c => c.urgency !== 'thriving');
+
+  return needsDecision.sort((a, b) => {
+    const order = TRIAGE_URGENCY_ORDER[a.urgency] - TRIAGE_URGENCY_ORDER[b.urgency];
+    if (order !== 0) return order;
+    return (b.game.datePurchased || '').localeCompare(a.game.datePurchased || '');
+  });
+}
