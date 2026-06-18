@@ -1,4 +1,4 @@
-import { Game, GameStatus, GameMetrics, AnalyticsSummary, TasteProfile, SessionMood } from './types';
+import { Game, GameStatus, GameMetrics, AnalyticsSummary, TasteProfile, SessionMood, SessionContext } from './types';
 
 /**
  * Parse a YYYY-MM-DD date string as local time instead of UTC.
@@ -14477,4 +14477,140 @@ export function getBacklogTriageCandidates(games: Game[]): TriageCandidate[] {
     if (order !== 0) return order;
     return (b.game.datePurchased || '').localeCompare(a.game.datePurchased || '');
   });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SOCIAL GAMING BREAKDOWN
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface SocialContextBreakdown {
+  context: SessionContext;
+  label: string;
+  emoji: string;
+  hours: number;
+  sessions: number;
+  percent: number; // % of tagged hours
+}
+
+export interface SocialGamingStats {
+  hasData: boolean; // at least one session has been tagged with a context
+  taggedSessions: number;
+  totalSessions: number;
+  taggedHours: number;
+  soloHours: number;
+  socialHours: number; // co-op + online + couch-co-op + stream
+  socialPercent: number; // % of tagged hours that were social
+  breakdown: SocialContextBreakdown[];
+  topSocialGame: { name: string; thumbnail?: string; hours: number; context: SessionContext } | null;
+  insight: string;
+}
+
+const SOCIAL_CONTEXT_META: Record<SessionContext, { label: string; emoji: string }> = {
+  solo: { label: 'Solo', emoji: '🎮' },
+  'co-op': { label: 'Co-op', emoji: '🤝' },
+  online: { label: 'Online', emoji: '🌐' },
+  'couch-co-op': { label: 'Couch Co-op', emoji: '🛋️' },
+  stream: { label: 'Streamed', emoji: '📺' },
+};
+
+const SOCIAL_CONTEXTS: SessionContext[] = ['co-op', 'online', 'couch-co-op', 'stream'];
+
+/**
+ * Surfaces how much of your gaming is solo vs social, using the per-session
+ * context tag (solo / co-op / online / couch-co-op / stream). Entirely
+ * derived from existing PlayLog.context data.
+ */
+export function getSocialGamingStats(games: Game[]): SocialGamingStats {
+  const allLogs = getAllPlayLogs(games);
+  const totalSessions = allLogs.length;
+  const tagged = allLogs.filter(({ log }) => !!log.context);
+  const taggedSessions = tagged.length;
+  const taggedHours = tagged.reduce((sum, { log }) => sum + log.hours, 0);
+
+  if (taggedSessions === 0) {
+    return {
+      hasData: false,
+      taggedSessions: 0,
+      totalSessions,
+      taggedHours: 0,
+      soloHours: 0,
+      socialHours: 0,
+      socialPercent: 0,
+      breakdown: [],
+      topSocialGame: null,
+      insight: 'Tag a session with who you played with to unlock this.',
+    };
+  }
+
+  const hoursByContext: Record<SessionContext, number> = {
+    solo: 0, 'co-op': 0, online: 0, 'couch-co-op': 0, stream: 0,
+  };
+  const sessionsByContext: Record<SessionContext, number> = {
+    solo: 0, 'co-op': 0, online: 0, 'couch-co-op': 0, stream: 0,
+  };
+  // Track per-game hours for each social context to find the standout game.
+  const gameHoursByContext: Record<SessionContext, Map<string, number>> = {
+    solo: new Map(), 'co-op': new Map(), online: new Map(), 'couch-co-op': new Map(), stream: new Map(),
+  };
+
+  tagged.forEach(({ game, log }) => {
+    const ctx = log.context as SessionContext;
+    hoursByContext[ctx] += log.hours;
+    sessionsByContext[ctx] += 1;
+    gameHoursByContext[ctx].set(game.id, (gameHoursByContext[ctx].get(game.id) || 0) + log.hours);
+  });
+
+  const breakdown: SocialContextBreakdown[] = (Object.keys(hoursByContext) as SessionContext[])
+    .filter(ctx => hoursByContext[ctx] > 0)
+    .map(ctx => ({
+      context: ctx,
+      label: SOCIAL_CONTEXT_META[ctx].label,
+      emoji: SOCIAL_CONTEXT_META[ctx].emoji,
+      hours: Math.round(hoursByContext[ctx] * 10) / 10,
+      sessions: sessionsByContext[ctx],
+      percent: taggedHours > 0 ? Math.round((hoursByContext[ctx] / taggedHours) * 100) : 0,
+    }))
+    .sort((a, b) => b.hours - a.hours);
+
+  const soloHours = hoursByContext.solo;
+  const socialHours = SOCIAL_CONTEXTS.reduce((sum, ctx) => sum + hoursByContext[ctx], 0);
+  const socialPercent = taggedHours > 0 ? Math.round((socialHours / taggedHours) * 100) : 0;
+
+  // Find the game with the most hours in any single social context.
+  const socialGameCandidates: NonNullable<SocialGamingStats['topSocialGame']>[] = [];
+  SOCIAL_CONTEXTS.forEach(ctx => {
+    gameHoursByContext[ctx].forEach((hours, gameId) => {
+      const game = games.find(g => g.id === gameId);
+      if (game) {
+        socialGameCandidates.push({ name: game.name, thumbnail: game.thumbnail, hours: Math.round(hours * 10) / 10, context: ctx });
+      }
+    });
+  });
+  const topSocialGame: SocialGamingStats['topSocialGame'] = socialGameCandidates.length > 0
+    ? socialGameCandidates.reduce((best, c) => (c.hours > best.hours ? c : best))
+    : null;
+
+  let insight: string;
+  if (socialPercent >= 60) {
+    insight = `${socialPercent}% of your tagged hours are social — gaming is a group activity for you.`;
+  } else if (socialPercent <= 15) {
+    insight = `Only ${socialPercent}% of your tagged hours are social — you're mostly a solo player.`;
+  } else if (topSocialGame) {
+    insight = `${topSocialGame.name} is your go-to ${SOCIAL_CONTEXT_META[topSocialGame.context].label.toLowerCase()} game at ${topSocialGame.hours}h.`;
+  } else {
+    insight = `${socialPercent}% of your tagged hours are social.`;
+  }
+
+  return {
+    hasData: true,
+    taggedSessions,
+    totalSessions,
+    taggedHours: Math.round(taggedHours * 10) / 10,
+    soloHours: Math.round(soloHours * 10) / 10,
+    socialHours: Math.round(socialHours * 10) / 10,
+    socialPercent,
+    breakdown,
+    topSocialGame,
+    insight,
+  };
 }

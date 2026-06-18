@@ -8,7 +8,7 @@ import {
 import {
   Brain, Calendar, Skull, Grid3X3, TrendingDown,
   Filter, Ruler, Hourglass, ArrowRightLeft, Activity,
-  AlertTriangle, LayoutGrid, Zap, Link2, Leaf,
+  AlertTriangle, LayoutGrid, Zap, Link2, Leaf, Users,
 } from 'lucide-react';
 import { Game } from '../lib/types';
 import {
@@ -26,6 +26,7 @@ import {
   getValueVelocity,
   getCrossGenreAffinity,
   getSeasonalGenreDrift,
+  getSocialGamingStats,
 } from '../lib/calculations';
 import clsx from 'clsx';
 
@@ -54,6 +55,7 @@ export function AnalyticsPanel({ games }: AnalyticsPanelProps) {
   const valueVelocity = useMemo(() => getValueVelocity(games), [games]);
   const genreAffinity = useMemo(() => getCrossGenreAffinity(games), [games]);
   const seasonalDrift = useMemo(() => getSeasonalGenreDrift(games), [games]);
+  const socialStats = useMemo(() => getSocialGamingStats(games), [games]);
 
   const ownedGames = games.filter(g => g.status !== 'Wishlist');
   if (ownedGames.length === 0) return null;
@@ -878,6 +880,67 @@ export function AnalyticsPanel({ games }: AnalyticsPanelProps) {
               </div>
             ) : null;
           })()}
+        </div>
+      )}
+
+      {/* Social Gaming Breakdown */}
+      {hasPlayLogs && (
+        <div className="p-4 bg-gradient-to-br from-cyan-500/10 to-teal-500/10 border border-cyan-500/20 rounded-xl">
+          <h4 className="text-sm font-medium text-white/70 flex items-center gap-2 mb-3">
+            <Users size={14} className="text-cyan-400" />
+            Social Gaming Breakdown
+          </h4>
+          {!socialStats.hasData ? (
+            <div className="text-center py-4">
+              <p className="text-xs text-white/40">
+                Tag sessions with who you played with (Solo, Co-op, Online, Couch Co-op, Streamed) when logging time to see how much of your gaming is solo vs social.
+              </p>
+            </div>
+          ) : (
+            <>
+              <div className="mb-3">
+                <div className="flex h-3 rounded-full overflow-hidden bg-white/5">
+                  <div
+                    className="bg-white/30"
+                    style={{ width: `${100 - socialStats.socialPercent}%` }}
+                    title={`Solo: ${socialStats.soloHours}h`}
+                  />
+                  <div
+                    className="bg-cyan-400"
+                    style={{ width: `${socialStats.socialPercent}%` }}
+                    title={`Social: ${socialStats.socialHours}h`}
+                  />
+                </div>
+                <div className="flex justify-between text-[10px] text-white/40 mt-1">
+                  <span>Solo {100 - socialStats.socialPercent}%</span>
+                  <span className="text-cyan-400">Social {socialStats.socialPercent}%</span>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                {socialStats.breakdown.map(b => (
+                  <div key={b.context} className="flex items-center gap-3 p-2 bg-white/5 rounded-lg">
+                    <span className="text-sm">{b.emoji}</span>
+                    <div className="flex-1">
+                      <div className="text-xs font-medium text-white/70">{b.label}</div>
+                      <div className="text-[10px] text-white/40">{b.sessions} session{b.sessions !== 1 ? 's' : ''}</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-sm font-bold text-cyan-400">{b.hours}h</div>
+                      <div className="text-[10px] text-white/40">{b.percent}%</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-3 text-xs text-white/50 text-center">
+                {socialStats.insight}
+              </div>
+              {socialStats.taggedSessions < socialStats.totalSessions && (
+                <div className="mt-1.5 text-[10px] text-white/25 text-center">
+                  Based on {socialStats.taggedSessions} of {socialStats.totalSessions} sessions tagged
+                </div>
+              )}
+            </>
+          )}
         </div>
       )}
     </div>

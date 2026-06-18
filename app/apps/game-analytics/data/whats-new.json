@@ -2,6 +2,12 @@
   "entries": [
     {
       "date": "2026-06-18",
+      "area": "Stats tab",
+      "title": "Solo or social? Find out where your hours actually go",
+      "body": "When logging a play session, you can now tag who you played with — Solo, Co-op, Online, Couch Co-op, or Streamed. The Stats tab's Analytics panel turns those tags into a Social Gaming Breakdown: a solo-vs-social split of your hours, a per-mode bar, and a quick insight like your go-to co-op game. Tag a few sessions to unlock it."
+    },
+    {
+      "date": "2026-06-18",
       "area": "Games tab",
       "title": "Backlog Triage — make peace with your pile of unplayed games",
       "body": "Tap ⋮ then \"Backlog Triage\" to swipe through the games in your library that actually need a decision — the ones going stale unstarted, or stalled mid-playthrough. One card at a time, you choose: Queue it up next, Let it go (mark abandoned), or Snooze for three weeks. A summary at the end tallies how many hours and dollars you finally made a call on. No more scrolling past the same forgotten games every time you open the app."

@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-18 01:30 — Stats Tab — Social Gaming Breakdown
+
+**Files**: app/apps/game-analytics/lib/calculations.ts, app/apps/game-analytics/components/PlayLogModal.tsx, app/apps/game-analytics/components/AnalyticsPanel.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+`PlayLog.context` (`solo | co-op | online | couch-co-op | stream`) has existed on the data model since the session-tagging feature shipped, but nothing in the app ever set it or read it. Added a "Who'd you play with?" tag picker to the play-session logging modal (alongside the existing Mood and Vibe tags) and a new `getSocialGamingStats()` pure function that turns tagged sessions into a solo-vs-social hours split, a per-context breakdown, and a one-line insight ("62% of your tagged hours are social" / your go-to co-op game). Surfaced as a new "Social Gaming Breakdown" section in the Stats tab's Analytics panel, with a helpful empty state for users who haven't tagged any sessions yet.
+
+FOLLOW-UP: Could feed `getGameChemistry()`'s "Mood Momentum" factor with this context data once enough users have tagged sessions.
+
 ## 2026-06-18 00:00 — Games Tab — Backlog Triage
 
 **Files**: app/apps/game-analytics/lib/calculations.ts, app/apps/game-analytics/components/BacklogTriageModal.tsx, app/apps/game-analytics/page.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json

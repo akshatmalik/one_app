@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { X, Plus, Trash2, Clock, Calendar, MessageSquare } from 'lucide-react';
-import { Game, PlayLog, SessionMood, SessionVibe } from '../lib/types';
+import { Game, PlayLog, SessionMood, SessionVibe, SessionContext } from '../lib/types';
 import { parseLocalDate } from '../lib/calculations';
 import { v4 as uuidv4 } from 'uuid';
 import clsx from 'clsx';
@@ -43,6 +43,7 @@ export function PlayLogModal({ game, onSave, onClose }: PlayLogModalProps) {
     notes: string;
     mood?: SessionMood;
     vibe?: SessionVibe;
+    context?: SessionContext;
   }>({
     date: getLocalDateString(),
     hours: '1',
@@ -60,6 +61,7 @@ export function PlayLogModal({ game, onSave, onClose }: PlayLogModalProps) {
       notes: newLog.notes || undefined,
       mood: newLog.mood,
       vibe: newLog.vibe,
+      context: newLog.context,
     };
     setLogs([log, ...logs].sort((a, b) => parseLocalDate(b.date).getTime() - parseLocalDate(a.date).getTime()));
     setNewLog({
@@ -233,6 +235,32 @@ export function PlayLogModal({ game, onSave, onClose }: PlayLogModalProps) {
                 ))}
               </div>
             </div>
+            <div>
+              <label className="block text-[10px] text-white/30 mb-1.5">Who&apos;d you play with? (optional)</label>
+              <div className="flex gap-1.5 flex-wrap">
+                {([
+                  { value: 'solo', label: '🎮 Solo' },
+                  { value: 'co-op', label: '🤝 Co-op' },
+                  { value: 'online', label: '🌐 Online' },
+                  { value: 'couch-co-op', label: '🛋️ Couch Co-op' },
+                  { value: 'stream', label: '📺 Streamed' },
+                ] as const).map(opt => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setNewLog({ ...newLog, context: newLog.context === opt.value ? undefined : opt.value })}
+                    className={clsx(
+                      'px-2.5 py-1 rounded-lg text-[11px] font-medium border transition-all',
+                      newLog.context === opt.value
+                        ? 'bg-cyan-500/15 text-cyan-400 border-cyan-500/20'
+                        : 'bg-white/[0.02] text-white/30 border-white/5 hover:border-white/10',
+                    )}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
 
@@ -265,7 +293,7 @@ export function PlayLogModal({ game, onSave, onClose }: PlayLogModalProps) {
                       {log.hours}h
                     </span>
                   </div>
-                  {(log.mood || log.vibe) && (
+                  {(log.mood || log.vibe || log.context) && (
                     <div className="flex items-center gap-1.5 mt-1">
                       {log.mood && (
                         <span className={clsx(
@@ -281,6 +309,11 @@ export function PlayLogModal({ game, onSave, onClose }: PlayLogModalProps) {
                       {log.vibe && (
                         <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-purple-500/10 text-purple-400">
                           {log.vibe}
+                        </span>
+                      )}
+                      {log.context && (
+                        <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400">
+                          {log.context === 'solo' && '🎮'} {log.context === 'co-op' && '🤝'} {log.context === 'online' && '🌐'} {log.context === 'couch-co-op' && '🛋️'} {log.context === 'stream' && '📺'} {log.context}
                         </span>
                       )}
                     </div>
