@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-18 07:30 — Games Tab — Bulk Import (CSV/JSON)
+
+**Files**: app/apps/game-analytics/lib/import-service.ts, app/apps/game-analytics/components/ImportModal.tsx, app/apps/game-analytics/page.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+`ExportPanel.tsx` has shipped CSV/JSON export for a long time, but there was no way back in — no import path existed anywhere in the app, so a user's only on-ramp was typing every game into `GameForm` by hand. Added a new "Import games" entry to the ⋮ More menu, opening `ImportModal.tsx`: pick a `.csv`/`.json` file or paste CSV text, see a parsed preview with per-row checkboxes (rows matching an existing library name are flagged "already in library" and unchecked by default), then import. `lib/import-service.ts` hand-rolls an RFC4180-ish CSV parser (handles quoted fields with embedded commas/newlines) plus a header-alias map so it accepts both the app's own export headers and free-form spreadsheet headers (`Game`/`Title` → name, `Cost` → price, etc.), and a JSON parser that accepts either the app's own `{games:[...]}` export shape or a bare array. Only `name` is required — every other field is optional and defaults sensibly. Imports loop sequential `addGame()` calls through the existing `useGames` hook (no changes to `lib/storage.ts`, `GameRepository`, or `calculations.ts`), so risk is contained to two new self-contained files plus four additive lines in `page.tsx`. Verified end-to-end with Playwright at 375px width: pasted a 2-row CSV, confirmed the preview parsed both rows correctly, imported, and confirmed the games appeared in the live library with full card rendering, stats, and value ratings — zero console errors (the one pre-existing RAWG-thumbnail-fetch network warning is unrelated and occurs for any newly added game in this sandboxed environment).
+
+FOLLOW-UP: Could add a "skip duplicates automatically" toggle, or support direct re-import of a previously exported JSON backup as a full restore (currently it's additive-only — re-importing doesn't update existing games' play logs).
+
 ## 2026-06-18 01:30 — Stats Tab — Social Gaming Breakdown
 
 **Files**: app/apps/game-analytics/lib/calculations.ts, app/apps/game-analytics/components/PlayLogModal.tsx, app/apps/game-analytics/components/AnalyticsPanel.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json

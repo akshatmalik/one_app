@@ -2,6 +2,12 @@
   "entries": [
     {
       "date": "2026-06-18",
+      "area": "Games tab",
+      "title": "Import your library from a CSV or JSON file",
+      "body": "Got a spreadsheet of games, or an old export from this app? Tap ⋮ then \"Import games\" to bring it in. Drop in a file or paste CSV text, review a preview of what was found (games already in your library are flagged so you don't accidentally duplicate them), uncheck anything you don't want, and import the rest in one go. Pairs with the existing Export so you've got a full backup-and-restore loop."
+    },
+    {
+      "date": "2026-06-18",
       "area": "Stats tab",
       "title": "Solo or social? Find out where your hours actually go",
       "body": "When logging a play session, you can now tag who you played with — Solo, Co-op, Online, Couch Co-op, or Streamed. The Stats tab's Analytics panel turns those tags into a Social Gaming Breakdown: a solo-vs-social split of your hours, a per-mode bar, and a quick insight like your go-to co-op game. Tag a few sessions to unlock it."
