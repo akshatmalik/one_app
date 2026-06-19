@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useRef, useEffect } from 'react';
-import { Clock, ChevronDown, ChevronUp, ListPlus, Check, Heart, Edit3, Trash2, Trophy, Sparkles, Zap, MessageCircle, ArrowLeftRight, Share2 } from 'lucide-react';
+import { Clock, ChevronDown, ChevronUp, ListPlus, Check, Heart, Edit3, Trash2, Trophy, Sparkles, Zap, MessageCircle, ArrowLeftRight, Share2, Play } from 'lucide-react';
 import { Game } from '../lib/types';
 import { GameWithMetrics } from '../hooks/useAnalytics';
 import {
@@ -41,6 +41,8 @@ interface GameBottomSheetProps {
   onOpenReviewChat: () => void;
   onCompare: () => void;
   isInQueue: boolean;
+  isTimerActive?: boolean;
+  onStartTimer?: () => void;
 }
 
 function getValueColor(rating: string): string {
@@ -66,6 +68,8 @@ export function GameBottomSheet({
   onOpenReviewChat,
   onCompare,
   isInQueue,
+  isTimerActive,
+  onStartTimer,
 }: GameBottomSheetProps) {
   const [showAwards, setShowAwards] = useState(false);
   const [showJourney, setShowJourney] = useState(false);
@@ -497,12 +501,26 @@ export function GameBottomSheet({
 
           {/* Quick Check-In */}
           {game.status !== 'Completed' && game.status !== 'Wishlist' && game.status !== 'Abandoned' && (
-            <div className="px-5 pb-4">
+            <div className="px-5 pb-4 space-y-2">
               <QuickCheckIn
                 game={game}
                 onLogTime={(hours) => onLogTime(hours)}
                 onOpenFullLog={onOpenPlayLog}
               />
+              {onStartTimer && (
+                <button
+                  onClick={onStartTimer}
+                  disabled={isTimerActive}
+                  className={clsx(
+                    'w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all',
+                    isTimerActive
+                      ? 'bg-purple-500/10 text-purple-400/50'
+                      : 'bg-purple-600/20 text-purple-300 active:bg-purple-600/40 border border-purple-500/10'
+                  )}
+                >
+                  <Play size={14} /> {isTimerActive ? 'Timer Running' : 'Start Live Timer'}
+                </button>
+              )}
             </div>
           )}
 

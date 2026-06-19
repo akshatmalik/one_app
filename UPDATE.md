@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-19 09:00 — Games Tab — Live Session Timer ("Now Playing" bar)
+
+**Files**: app/apps/game-analytics/hooks/useLiveSession.ts, app/apps/game-analytics/components/LiveSessionBar.tsx, app/apps/game-analytics/lib/format.ts, app/apps/game-analytics/page.tsx, app/apps/game-analytics/components/GameBottomSheet.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Logging play time has always been after-the-fact (manual hour entry once you're done). Added a persistent, global live session timer: `useLiveSession()` stores a single active timer in localStorage (`ga-live-session-v1`) with a `firstStartedAt` (set once, used to date the eventual PlayLog) separate from `startedAt` (reset on every resume, used to compute live elapsed time), so pause/resume cycles spanning midnight still log against the correct date. A new floating `LiveSessionBar` (Tailwind-only, no new keyframes — `app/globals.css` is out of scope) renders a Spotify-style "Now Playing" pill with a live `formatClock()` readout and pause/resume/stop controls; tapping stop expands it into a "Stop & Log Session" sheet that pre-fills hours (rounded to the nearest 0.1h from live elapsed time) and lets you tag a mood before saving into the existing PlayLog-append path. Wired a "Start Timer" entry point into all four places a session can begin: `NowPlayingCard`, `PosterCard`, `CompactCard`, and the `GameBottomSheet` detail panel — only one timer can run at a time, and active-game cards show a "Timing" state. No changes to `lib/types.ts`, the storage/repository layer, or any existing `calculations.ts` function. Verified with a clean `npm run build` (Next 14.2.35, 11/11 static pages) and `npm run lint` (no new warnings); no headless browser is available in this environment, so the 375px mobile check was substituted with a full manual diff review plus a dev-server HTTP 200 fetch of `/apps/game-analytics` showing a clean compile.
+
+FOLLOW-UP: Could surface elapsed live-session time as a subtle pulse on the corresponding game's card itself (beyond the bar), and could let the timer survive a full browser/tab close notification ("you left a timer running") via a visibility-change listener.
+
 ## 2026-06-18 20:14 — Games Tab — Budget Impact Preview in Add/Edit Game
 
 **Files**: app/apps/game-analytics/lib/calculations.ts, app/apps/game-analytics/components/GameForm.tsx, app/apps/game-analytics/page.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json

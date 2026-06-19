@@ -63,6 +63,16 @@ export function formatRelativeTime(isoDate: string): string {
   return `${years} year${years === 1 ? '' : 's'} ago`;
 }
 
+/** Live duration clock from milliseconds, e.g. 65000 -> "1:05", 3661000 -> "1:01:01". */
+export function formatClock(ms: number): string {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return hours > 0 ? `${hours}:${pad(minutes)}:${pad(seconds)}` : `${minutes}:${pad(seconds)}`;
+}
+
 /** Compact date, e.g. "Mar 3" or "Mar 3, 2024" when not the current year. */
 export function formatDate(isoDate: string): string {
   if (!isoDate) return '';

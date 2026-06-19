@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, CalendarClock, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical, Download, Upload, Gift, ShoppingCart, Search, X, Moon, CreditCard, Swords, Inbox } from 'lucide-react';
+import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, CalendarClock, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical, Download, Upload, Gift, ShoppingCart, Search, X, Moon, CreditCard, Swords, Inbox, Play } from 'lucide-react';
 import { useGames } from './hooks/useGames';
 import { useAnalytics, GameWithMetrics } from './hooks/useAnalytics';
 import { useBudget } from './hooks/useBudget';
@@ -9,6 +9,7 @@ import { useGameThumbnails } from './hooks/useGameThumbnails';
 import { useGameQueue } from './hooks/useGameQueue';
 import { useGameColors } from './hooks/useGameColors';
 import { useGameQuips } from './hooks/useGameQuips';
+import { useLiveSession } from './hooks/useLiveSession';
 import { GameForm } from './components/GameForm';
 import { PlayLogModal } from './components/PlayLogModal';
 import { TimelineView } from './components/TimelineView';
@@ -32,6 +33,7 @@ import { ActivityPulse } from './components/ActivityPulse';
 import { RandomPicker } from './components/RandomPicker';
 import { BulkWishlistModal } from './components/BulkWishlistModal';
 import { GameBottomSheet } from './components/GameBottomSheet';
+import { LiveSessionBar } from './components/LiveSessionBar';
 import { DiscoverTab } from './components/DiscoverTab';
 import { LeaderboardTab } from './components/LeaderboardTab';
 import { BuyQueueTab } from './components/BuyQueueTab';
@@ -153,6 +155,7 @@ export default function GameAnalyticsPage() {
   const { loading: thumbnailsLoading, fetchedCount } = useGameThumbnails(games, updateGame);
   const gameColors = useGameColors(games);
   const { quips: gameQuips } = useGameQuips(games, user?.uid ?? null);
+  const liveSession = useLiveSession();
   const { rankings: allTimeRankings } = useRankings(user?.uid ?? null, 'all', 'all');
   const { allTrophies, summary: trophySummary, pinnedTrophies, pinnedIds: pinnedTrophyIds, togglePin: toggleTrophyPin, toastQueue: trophyToastQueue, dismissToast: dismissTrophyToast } = useTrophies(games, user?.uid ?? null);
   const { assignments: allTimeTiers } = useTierAssignments(user?.uid ?? null, 'all');
@@ -401,13 +404,14 @@ export default function GameAnalyticsPage() {
     showToast(isFirstSession ? 'Game started! Sessions saved' : 'Play sessions saved', 'success');
   };
 
-  const handleQuickLog = async (game: GameWithMetrics, hours: number) => {
+  const handleQuickLog = async (game: GameWithMetrics, hours: number, opts?: { mood?: PlayLog['mood']; date?: string }) => {
     const now = new Date();
-    const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const dateStr = opts?.date ?? `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
     const newLog: PlayLog = {
       id: `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
       date: dateStr,
       hours,
+      ...(opts?.mood ? { mood: opts.mood } : {}),
     };
     const existingLogs = game.playLogs || [];
     const updates: Partial<Game> = { playLogs: [...existingLogs, newLog] };
@@ -419,6 +423,30 @@ export default function GameAnalyticsPage() {
 
     await updateGame(game.id, updates);
     showToast(`Logged ${hours}h`, 'success');
+  };
+
+  const handleStartTimer = (game: GameWithMetrics) => {
+    if (liveSession.activeSession && liveSession.activeSession.gameId !== game.id) {
+      showToast('Stop the current timer before starting a new one', 'error');
+      return;
+    }
+    liveSession.start({ gameId: game.id, gameName: game.name, thumbnail: game.thumbnail });
+    showToast(`Timer started for ${game.name}`, 'success');
+  };
+
+  const handleStopTimerAndLog = async (hours: number, mood?: PlayLog['mood']) => {
+    const target = liveSession.activeSession;
+    const result = liveSession.stop();
+    if (!target || !result) return;
+    const game = gamesWithMetrics.find((g) => g.id === target.gameId);
+    if (!game) return;
+    const started = new Date(result.firstStartedAt);
+    const dateStr = `${started.getFullYear()}-${String(started.getMonth() + 1).padStart(2, '0')}-${String(started.getDate()).padStart(2, '0')}`;
+    await handleQuickLog(game, hours, { mood, date: dateStr });
+  };
+
+  const handleDiscardTimer = () => {
+    liveSession.discard();
   };
 
   const toggleCardViewMode = () => {
@@ -1315,6 +1343,8 @@ export default function GameAnalyticsPage() {
                   eloByGameId={eloByGameId}
                   tierAssignments={allTimeTiers}
                   eloTierRanks={eloTierRanks}
+                  onStartTimer={handleStartTimer}
+                  activeTimerGameId={liveSession.activeSession?.gameId ?? null}
                 />
               )}
             </>
@@ -1710,6 +1740,8 @@ export default function GameAnalyticsPage() {
             setDetailGame(null);
           }}
           isInQueue={isInQueue(detailGame.id)}
+          isTimerActive={liveSession.activeSession?.gameId === detailGame.id}
+          onStartTimer={() => handleStartTimer(detailGame)}
         />
       )}
 
@@ -1735,6 +1767,20 @@ export default function GameAnalyticsPage() {
             }
           }}
           onClose={() => setReviewChatGame(null)}
+        />
+      )}
+
+      {/* Live Session Timer — persists across tabs */}
+      {liveSession.activeSession && (
+        <LiveSessionBar
+          gameName={liveSession.activeSession.gameName}
+          thumbnail={liveSession.activeSession.thumbnail}
+          elapsedMs={liveSession.elapsedMs}
+          isPaused={liveSession.isPaused}
+          onPause={liveSession.pause}
+          onResume={liveSession.resume}
+          onStopAndLog={handleStopTimerAndLog}
+          onDiscard={handleDiscardTimer}
         />
       )}
     </div>
@@ -1823,6 +1869,8 @@ interface GameCardListProps {
   eloByGameId?: Map<string, GameRanking>;
   tierAssignments?: TierAssignmentMap;
   eloTierRanks?: Map<string, { tier: GameTier; rank: number }>;
+  onStartTimer?: (game: GameWithMetrics) => void;
+  activeTimerGameId?: string | null;
 }
 
 function GameCardList({
@@ -1843,6 +1891,8 @@ function GameCardList({
   eloByGameId = new Map(),
   tierAssignments = {},
   eloTierRanks = new Map(),
+  onStartTimer,
+  activeTimerGameId = null,
 }: GameCardListProps) {
   const sections = useMemo(() => groupBySection ? getGameSections(allGames) : [], [allGames, groupBySection]);
 
@@ -1894,13 +1944,13 @@ function GameCardList({
     if (cardViewMode === 'poster') {
       return (
         <div key={game.id} className={animClass}>
-          <PosterCard game={game} allGames={allGames} idx={idx} onClick={() => onCardClick(game)} onQuickLog={(h) => onQuickLog(game, h)} isInQueue={isInQueue(game.id)} sortBy={sortBy} tintColor={gameColors.get(game.id)} aiQuip={gameQuips[game.id]?.quip} eloRanking={eloRanking} gameTier={gameTier} eloTierRank={eloTierRank} />
+          <PosterCard game={game} allGames={allGames} idx={idx} onClick={() => onCardClick(game)} onQuickLog={(h) => onQuickLog(game, h)} isInQueue={isInQueue(game.id)} sortBy={sortBy} tintColor={gameColors.get(game.id)} aiQuip={gameQuips[game.id]?.quip} eloRanking={eloRanking} gameTier={gameTier} eloTierRank={eloTierRank} onStartTimer={onStartTimer ? () => onStartTimer(game) : undefined} isTimerActive={activeTimerGameId === game.id} />
         </div>
       );
     }
     return (
       <div key={game.id} className={animClass}>
-        <CompactCard game={game} allGames={allGames} idx={idx} onClick={() => onCardClick(game)} onLogTime={() => onLogTime(game)} onToggleQueue={() => onToggleQueue(game)} onDelete={() => onDelete(game)} isInQueue={isInQueue(game.id)} sortBy={sortBy} tintColor={gameColors.get(game.id)} aiQuip={gameQuips[game.id]?.quip} eloRanking={eloRanking} gameTier={gameTier} eloTierRank={eloTierRank} />
+        <CompactCard game={game} allGames={allGames} idx={idx} onClick={() => onCardClick(game)} onLogTime={() => onLogTime(game)} onToggleQueue={() => onToggleQueue(game)} onDelete={() => onDelete(game)} isInQueue={isInQueue(game.id)} sortBy={sortBy} tintColor={gameColors.get(game.id)} aiQuip={gameQuips[game.id]?.quip} eloRanking={eloRanking} gameTier={gameTier} eloTierRank={eloTierRank} onStartTimer={onStartTimer ? () => onStartTimer(game) : undefined} isTimerActive={activeTimerGameId === game.id} />
       </div>
     );
   };
@@ -1922,7 +1972,7 @@ function GameCardList({
             <div className="space-y-3">
               {nowPlayingGames.map(g => (
                 <div key={g.id} className={`game-card-animate${enteringCards.has(g.id) ? ' game-card-enter' : ''}`}>
-                  <NowPlayingCard game={g} allGames={allGames} onClick={() => onCardClick(g)} onQuickLog={(h) => onQuickLog(g, h)} sortBy={sortBy} tintColor={gameColors.get(g.id)} eloRanking={eloByGameId.get(g.id)} gameTier={tierAssignments[g.id] as GameTier | undefined} eloTierRank={eloTierRanks.get(g.id)} />
+                  <NowPlayingCard game={g} allGames={allGames} onClick={() => onCardClick(g)} onQuickLog={(h) => onQuickLog(g, h)} sortBy={sortBy} tintColor={gameColors.get(g.id)} eloRanking={eloByGameId.get(g.id)} gameTier={tierAssignments[g.id] as GameTier | undefined} eloTierRank={eloTierRanks.get(g.id)} onStartTimer={onStartTimer ? () => onStartTimer(g) : undefined} isTimerActive={activeTimerGameId === g.id} />
                 </div>
               ))}
             </div>
@@ -1965,7 +2015,7 @@ function GameCardList({
           <div className="space-y-3">
             {nowPlayingGames.map(g => (
               <div key={g.id} className={`game-card-animate${enteringCards.has(g.id) ? ' game-card-enter' : ''}`}>
-                <NowPlayingCard game={g} allGames={allGames} onClick={() => onCardClick(g)} onQuickLog={(h) => onQuickLog(g, h)} eloRanking={eloByGameId.get(g.id)} gameTier={tierAssignments[g.id] as GameTier | undefined} />
+                <NowPlayingCard game={g} allGames={allGames} onClick={() => onCardClick(g)} onQuickLog={(h) => onQuickLog(g, h)} eloRanking={eloByGameId.get(g.id)} gameTier={tierAssignments[g.id] as GameTier | undefined} onStartTimer={onStartTimer ? () => onStartTimer(g) : undefined} isTimerActive={activeTimerGameId === g.id} />
               </div>
             ))}
           </div>
@@ -1995,7 +2045,7 @@ function SectionIcon({ id }: { id: string }) {
 
 // --- Now Playing Card ---
 
-function NowPlayingCard({ game, allGames, onClick, onQuickLog, sortBy = 'hours', tintColor, eloRanking, gameTier, eloTierRank }: {
+function NowPlayingCard({ game, allGames, onClick, onQuickLog, sortBy = 'hours', tintColor, eloRanking, gameTier, eloTierRank, onStartTimer, isTimerActive }: {
   game: GameWithMetrics;
   allGames: Game[];
   onClick: () => void;
@@ -2005,6 +2055,8 @@ function NowPlayingCard({ game, allGames, onClick, onQuickLog, sortBy = 'hours',
   eloRanking?: GameRanking;
   gameTier?: GameTier;
   eloTierRank?: { tier: GameTier; rank: number };
+  onStartTimer?: () => void;
+  isTimerActive?: boolean;
 }) {
   const [isFlipped, setIsFlipped] = useState(false);
   const [checkInHours, setCheckInHours] = useState(1);
@@ -2229,6 +2281,21 @@ function NowPlayingCard({ game, allGames, onClick, onQuickLog, sortBy = 'hours',
             >
               {checkInDone ? <><Check size={11} /> Done!</> : <><Clock size={11} /> Check In</>}
             </button>
+            {onStartTimer && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onStartTimer(); }}
+                disabled={isTimerActive}
+                title="Start a live session timer"
+                className={clsx(
+                  'h-7 px-2.5 flex items-center justify-center gap-1 rounded-lg text-xs font-bold transition-all shrink-0',
+                  isTimerActive
+                    ? 'bg-purple-500/10 text-purple-400/50'
+                    : 'bg-purple-600/20 text-purple-300 active:bg-purple-600/40 border border-purple-500/10'
+                )}
+              >
+                <Play size={11} /> {isTimerActive ? 'Timing' : 'Timer'}
+              </button>
+            )}
           </div>
 
           {/* Mood pulse strip */}
@@ -2260,7 +2327,7 @@ function NowPlayingCard({ game, allGames, onClick, onQuickLog, sortBy = 'hours',
 
 // --- Poster Card ---
 
-function PosterCard({ game, allGames, idx, onClick, onQuickLog, isInQueue, sortBy = 'hours', tintColor, aiQuip, eloRanking, gameTier, eloTierRank }: {
+function PosterCard({ game, allGames, idx, onClick, onQuickLog, isInQueue, sortBy = 'hours', tintColor, aiQuip, eloRanking, gameTier, eloTierRank, onStartTimer, isTimerActive }: {
   game: GameWithMetrics;
   allGames: Game[];
   idx: number;
@@ -2273,6 +2340,8 @@ function PosterCard({ game, allGames, idx, onClick, onQuickLog, isInQueue, sortB
   eloRanking?: GameRanking;
   gameTier?: GameTier;
   eloTierRank?: { tier: GameTier; rank: number };
+  onStartTimer?: () => void;
+  isTimerActive?: boolean;
 }) {
   const [isFlipped, setIsFlipped] = useState(false);
   const rarity = getCardRarity(game);
@@ -2457,6 +2526,19 @@ function PosterCard({ game, allGames, idx, onClick, onQuickLog, isInQueue, sortB
               </span>
             )}
             <div className="flex-1" />
+            {onStartTimer && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onStartTimer(); }}
+                disabled={isTimerActive}
+                title="Start a live session timer"
+                className={clsx(
+                  'w-6 h-6 flex items-center justify-center rounded-lg transition-all',
+                  isTimerActive ? 'text-purple-400/50 bg-purple-500/5' : 'text-white/30 active:text-purple-400 active:bg-purple-500/10'
+                )}
+              >
+                <Play size={11} />
+              </button>
+            )}
             {/* Momentum sparkline */}
             {momentum.length >= 2 && <MomentumDots sessions={momentum} />}
             {game.platform && <span className="text-[9px] px-1.5 py-0.5 bg-white/5 rounded text-white/30">{game.platform}</span>}
@@ -2624,7 +2706,7 @@ function PosterCardBack({ game, allGames, onFlip, rarity, freshness, relationshi
 
 // --- Compact Card (original layout, fixed) ---
 
-function CompactCard({ game, allGames, idx, onClick, onLogTime, onToggleQueue, onDelete, isInQueue, sortBy = 'hours', tintColor, aiQuip, eloRanking, gameTier, eloTierRank }: {
+function CompactCard({ game, allGames, idx, onClick, onLogTime, onToggleQueue, onDelete, isInQueue, sortBy = 'hours', tintColor, aiQuip, eloRanking, gameTier, eloTierRank, onStartTimer, isTimerActive }: {
   game: GameWithMetrics;
   allGames: Game[];
   idx: number;
@@ -2639,6 +2721,8 @@ function CompactCard({ game, allGames, idx, onClick, onLogTime, onToggleQueue, o
   eloRanking?: GameRanking;
   gameTier?: GameTier;
   eloTierRank?: { tier: GameTier; rank: number };
+  onStartTimer?: () => void;
+  isTimerActive?: boolean;
 }) {
   const [isFlipped, setIsFlipped] = useState(false);
   const rarity = getCardRarity(game);
@@ -2895,6 +2979,19 @@ function CompactCard({ game, allGames, idx, onClick, onLogTime, onToggleQueue, o
               {isInQueue ? <Check size={12} /> : <ListPlus size={12} />}
               {isInQueue ? 'Queued' : 'Queue'}
             </button>
+            {onStartTimer && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onStartTimer(); }}
+                disabled={isTimerActive}
+                title="Start a live session timer"
+                className={clsx(
+                  'flex items-center gap-1 px-2.5 py-1.5 rounded-lg transition-all text-xs',
+                  isTimerActive ? 'text-purple-400/50 bg-purple-500/5' : 'text-white/30 active:text-purple-400 active:bg-purple-500/10'
+                )}
+              >
+                <Play size={12} /> {isTimerActive ? 'Timing' : 'Timer'}
+              </button>
+            )}
             <div className="flex-1" />
             {/* Flip button */}
             <button
