@@ -2,6 +2,12 @@
   "entries": [
     {
       "date": "2026-06-19",
+      "area": "Header",
+      "title": "A new bell icon watches your budget, queue, and backlog for you",
+      "body": "There's now a bell icon up top that quietly keeps an eye on the stuff you'd hate to miss: getting close to (or over) your yearly budget, a game that's been sitting shamefully long in your Up Next queue, a backlog game about to expire, a goal deadline coming up fast, or a play session that's been running for hours. Tap the bell to see everything at a glance, dismiss what you've handled, snooze the rest for a day, or turn on desktop notifications so the important ones reach you even with the tab closed."
+    },
+    {
+      "date": "2026-06-19",
       "area": "Games tab",
       "title": "Start a live timer while you play",
       "body": "Hit \"Timer\" on any game card (or the \"Start Live Timer\" button in a game's detail sheet) and a Now Playing bar drops in at the bottom of the screen with a running stopwatch — it keeps counting even if you switch tabs or come back later. Pause it, resume it, or tap stop to log the session: the hours are pre-filled from the timer, and you can tag your mood (🔥 Great, 👍 Good, 😐 Meh, 💪 Grind) before saving. No more guessing how long you actually played."

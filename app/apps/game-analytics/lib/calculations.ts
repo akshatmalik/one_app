@@ -1,4 +1,4 @@
-import { Game, GameStatus, GameMetrics, AnalyticsSummary, TasteProfile, SessionMood, SessionContext, BudgetSettings } from './types';
+import { Game, GameStatus, GameMetrics, AnalyticsSummary, TasteProfile, SessionMood, SessionContext, BudgetSettings, GamingGoal } from './types';
 
 /**
  * Parse a YYYY-MM-DD date string as local time instead of UTC.
@@ -14671,4 +14671,153 @@ export function getBudgetImpactPreview(
     willExceed: spentAfterThisGame > budget.yearlyBudget,
     overageAmount: Math.round(Math.max(0, spentAfterThisGame - budget.yearlyBudget) * 100) / 100,
   };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ALERTS CENTER — aggregates existing signals (budget, queue shame, shelf life,
+// goals, live session) into one prioritized, actionable feed. Purely additive:
+// reads other calculation functions, never mutates state, never replaces them.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type AlertSeverity = 'critical' | 'warning' | 'info';
+export type AlertCategory = 'budget' | 'queue' | 'shelf-life' | 'goal' | 'session';
+
+export interface GameAlert {
+  id: string;
+  category: AlertCategory;
+  severity: AlertSeverity;
+  icon: string;
+  title: string;
+  message: string;
+  gameId?: string;
+  actionLabel: string;
+}
+
+const ALERT_SEVERITY_ORDER: Record<AlertSeverity, number> = { critical: 0, warning: 1, info: 2 };
+
+/**
+ * Builds today's prioritized alert feed. Every input is data that already
+ * exists elsewhere in the app (budgets, goals, queue, shelf life) — this
+ * function just decides which of it is currently actionable enough to surface.
+ */
+export function getActiveAlerts(
+  games: Game[],
+  budgets: BudgetSettings[],
+  goals: GamingGoal[],
+  liveSession?: { gameId: string; gameName: string; elapsedMs: number } | null
+): GameAlert[] {
+  const alerts: GameAlert[] = [];
+  const todayIso = new Date().toISOString().slice(0, 10);
+
+  // Budget — year-to-date spend pressure (reuses getBudgetImpactPreview with a $0 hypothetical purchase)
+  const preview = getBudgetImpactPreview(0, todayIso, games, budgets);
+  if (preview) {
+    if (preview.percentUsedBefore >= 100) {
+      alerts.push({
+        id: `budget-${preview.year}`,
+        category: 'budget',
+        severity: 'critical',
+        icon: '🚨',
+        title: `${preview.year} budget exceeded`,
+        message: `You're $${Math.abs(preview.remainingBefore).toFixed(2)} over your $${preview.budgetAmount.toFixed(0)} budget for the year.`,
+        actionLabel: 'Review budget',
+      });
+    } else if (preview.percentUsedBefore >= 90) {
+      alerts.push({
+        id: `budget-${preview.year}`,
+        category: 'budget',
+        severity: 'warning',
+        icon: '⚠️',
+        title: `${preview.year} budget at ${Math.round(preview.percentUsedBefore)}%`,
+        message: `Only $${preview.remainingBefore.toFixed(2)} left for the rest of the year.`,
+        actionLabel: 'Review budget',
+      });
+    } else if (preview.percentUsedBefore >= 75) {
+      alerts.push({
+        id: `budget-${preview.year}`,
+        category: 'budget',
+        severity: 'info',
+        icon: '💸',
+        title: `${preview.year} budget at ${Math.round(preview.percentUsedBefore)}%`,
+        message: `$${preview.remainingBefore.toFixed(2)} left of your $${preview.budgetAmount.toFixed(0)} budget.`,
+        actionLabel: 'Review budget',
+      });
+    }
+  }
+
+  // Queue shame — games rotting in the Up Next queue
+  games
+    .filter(g => g.queuePosition != null)
+    .forEach(g => {
+      const shame = getQueueShameData(g, games);
+      if (shame && (shame.tier === 'embarrassing' || shame.tier === 'hall_of_shame')) {
+        alerts.push({
+          id: `queue-${g.id}`,
+          category: 'queue',
+          severity: shame.tier === 'hall_of_shame' ? 'critical' : 'warning',
+          icon: shame.icon,
+          title: `${g.name} — ${shame.tierLabel}`,
+          message: shame.message,
+          gameId: g.id,
+          actionLabel: 'Open queue',
+        });
+      }
+    });
+
+  // Shelf life — owned games at risk of being permanently forgotten
+  games
+    .filter(g => g.status === 'Not Started' || g.status === 'In Progress')
+    .forEach(g => {
+      const expiry = getShelfLifeExpiry(g, games);
+      if (expiry.tier === 'critical' || expiry.tier === 'expired') {
+        alerts.push({
+          id: `shelf-${g.id}`,
+          category: 'shelf-life',
+          severity: expiry.tier === 'expired' ? 'critical' : 'warning',
+          icon: expiry.tier === 'expired' ? '⚰️' : '⏰',
+          title: `${g.name} — ${expiry.tierLabel}`,
+          message: expiry.reasoning,
+          gameId: g.id,
+          actionLabel: 'View game',
+        });
+      }
+    });
+
+  // Goals — active goals running out of time before their end date
+  const now = new Date();
+  goals
+    .filter(g => g.status === 'active')
+    .forEach(g => {
+      const end = parseLocalDate(g.endDate);
+      const daysLeft = Math.ceil((end.getTime() - now.getTime()) / (24 * 60 * 60 * 1000));
+      const progress = g.targetValue > 0 ? (g.currentValue / g.targetValue) * 100 : 0;
+      if (daysLeft >= 0 && daysLeft <= 7 && progress < 100) {
+        alerts.push({
+          id: `goal-${g.id}`,
+          category: 'goal',
+          severity: daysLeft <= 2 ? 'critical' : 'warning',
+          icon: '🎯',
+          title: `"${g.title}" ends in ${daysLeft === 0 ? 'less than a day' : `${daysLeft}d`}`,
+          message: `${Math.round(progress)}% there — ${g.currentValue}/${g.targetValue} ${g.unit}.`,
+          actionLabel: 'View goals',
+        });
+      }
+    });
+
+  // Live session — timer left running for a long stretch
+  if (liveSession && liveSession.elapsedMs >= 3 * 60 * 60 * 1000) {
+    const hours = (liveSession.elapsedMs / (60 * 60 * 1000)).toFixed(1);
+    alerts.push({
+      id: `session-${liveSession.gameId}`,
+      category: 'session',
+      severity: 'info',
+      icon: '⏱️',
+      title: 'Timer still running',
+      message: `${liveSession.gameName} has been timing for ${hours}h. Still playing?`,
+      gameId: liveSession.gameId,
+      actionLabel: 'Check in',
+    });
+  }
+
+  return alerts.sort((a, b) => ALERT_SEVERITY_ORDER[a.severity] - ALERT_SEVERITY_ORDER[b.severity]);
 }

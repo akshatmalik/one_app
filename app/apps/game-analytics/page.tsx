@@ -10,6 +10,8 @@ import { useGameQueue } from './hooks/useGameQueue';
 import { useGameColors } from './hooks/useGameColors';
 import { useGameQuips } from './hooks/useGameQuips';
 import { useLiveSession } from './hooks/useLiveSession';
+import { useGoals } from './hooks/useGoals';
+import { useAlerts } from './hooks/useAlerts';
 import { GameForm } from './components/GameForm';
 import { PlayLogModal } from './components/PlayLogModal';
 import { TimelineView } from './components/TimelineView';
@@ -27,7 +29,7 @@ import { BASELINE_BUY_QUEUE } from './data/baseline-buy-queue';
 import { purchaseQueueRepository } from './lib/purchase-queue-storage';
 import { useAuthContext } from '@/lib/AuthContext';
 import { useToast } from '@/components/Toast';
-import { getROIRating, getWeekStatsForOffset, getGamesPlayedInTimeRange, getCompletionProbability, getGameHealthDot, getRelativeTime, getDaysContext, getSessionMomentum, getValueTrajectory, getGameSmartOneLiner, getFranchiseInfo, getProgressPercent, getShelfLife, parseLocalDate, getCardRarity, getRelationshipStatus, getGameStreak, getHeroNumber, getCardFreshness, getGameSections, getCardBackData, getContextualWhisper, getLibraryRank, getCardMoodPulse, getProgressRingData, getStatPopoverData, getWeekRecapData, getSmartNudges, getGamingCreditScore, getRotationStats, getSpendingForecast, getSpendingByMonth, getShelfLifeExpiry, formatRating, getRatingRank, getYearInReviewFullData, getBacklogTriageCandidates } from './lib/calculations';
+import { getROIRating, getWeekStatsForOffset, getGamesPlayedInTimeRange, getCompletionProbability, getGameHealthDot, getRelativeTime, getDaysContext, getSessionMomentum, getValueTrajectory, getGameSmartOneLiner, getFranchiseInfo, getProgressPercent, getShelfLife, parseLocalDate, getCardRarity, getRelationshipStatus, getGameStreak, getHeroNumber, getCardFreshness, getGameSections, getCardBackData, getContextualWhisper, getLibraryRank, getCardMoodPulse, getProgressRingData, getStatPopoverData, getWeekRecapData, getSmartNudges, getGamingCreditScore, getRotationStats, getSpendingForecast, getSpendingByMonth, getShelfLifeExpiry, formatRating, getRatingRank, getYearInReviewFullData, getBacklogTriageCandidates, GameAlert } from './lib/calculations';
 import { OnThisDayCard } from './components/OnThisDayCard';
 import { ActivityPulse } from './components/ActivityPulse';
 import { RandomPicker } from './components/RandomPicker';
@@ -57,6 +59,7 @@ import { TrophyShowcase } from './components/TrophyShowcase';
 import { TrophyToast } from './components/TrophyToast';
 import { ErrorLogPanel, ErrorLogButton } from './components/ErrorLogPanel';
 import { WhatsNewModal } from './components/WhatsNewModal';
+import { AlertsCenter } from './components/AlertsCenter';
 import { GameReviewChat } from './components/GameReviewChat';
 import { GameCompareModal } from './components/GameCompareModal';
 import { PlayTonightModal } from './components/PlayTonightModal';
@@ -156,6 +159,22 @@ export default function GameAnalyticsPage() {
   const gameColors = useGameColors(games);
   const { quips: gameQuips } = useGameQuips(games, user?.uid ?? null);
   const liveSession = useLiveSession();
+  const { goals } = useGoals(user?.uid ?? null);
+  const alertsLiveSession = useMemo(
+    () => liveSession.activeSession
+      ? { gameId: liveSession.activeSession.gameId, gameName: liveSession.activeSession.gameName, elapsedMs: liveSession.elapsedMs }
+      : null,
+    [liveSession.activeSession, liveSession.elapsedMs]
+  );
+  const {
+    alerts,
+    criticalCount: alertsCriticalCount,
+    warningCount: alertsWarningCount,
+    permission: alertsPermission,
+    requestPermission: requestAlertsPermission,
+    dismissAlert,
+    snoozeAlert,
+  } = useAlerts(games, budgets, goals, user?.uid ?? null, alertsLiveSession);
   const { rankings: allTimeRankings } = useRankings(user?.uid ?? null, 'all', 'all');
   const { allTrophies, summary: trophySummary, pinnedTrophies, pinnedIds: pinnedTrophyIds, togglePin: toggleTrophyPin, toastQueue: trophyToastQueue, dismissToast: dismissTrophyToast } = useTrophies(games, user?.uid ?? null);
   const { assignments: allTimeTiers } = useTierAssignments(user?.uid ?? null, 'all');
@@ -374,6 +393,21 @@ export default function GameAnalyticsPage() {
 
   const handleOpenPlayLog = (game: GameWithMetrics) => {
     setPlayLogGame(game);
+  };
+
+  const handleAlertAction = (alert: GameAlert) => {
+    if (alert.category === 'budget' || alert.category === 'goal') {
+      setTabMode('stats');
+      return;
+    }
+    if (alert.category === 'queue') {
+      setTabMode('up-next');
+      return;
+    }
+    if (alert.gameId) {
+      const game = gamesWithMetrics.find(g => g.id === alert.gameId);
+      if (game) setDetailGame(game);
+    }
   };
 
   const handleSavePlayLogs = async (playLogs: PlayLog[]) => {
@@ -692,6 +726,18 @@ export default function GameAnalyticsPage() {
                 )}
               </div>
               <ErrorLogButton onClick={() => setShowErrorLog(true)} />
+              {games.length > 0 && (
+                <AlertsCenter
+                  alerts={alerts}
+                  criticalCount={alertsCriticalCount}
+                  warningCount={alertsWarningCount}
+                  permission={alertsPermission}
+                  onRequestPermission={requestAlertsPermission}
+                  onDismiss={dismissAlert}
+                  onSnooze={snoozeAlert}
+                  onAction={handleAlertAction}
+                />
+              )}
               <button
                 onClick={() => setShowWhatsNew(true)}
                 className="flex items-center gap-1.5 px-2.5 py-2 bg-white/5 text-white/60 hover:text-white/80 rounded-lg transition-all text-sm"

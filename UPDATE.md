@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-19 15:00 — Header — Alerts Center
+
+**Files**: app/apps/game-analytics/lib/calculations.ts, app/apps/game-analytics/hooks/useAlerts.ts, app/apps/game-analytics/components/AlertsCenter.tsx, app/apps/game-analytics/page.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+The app already calculates a pile of "you should know about this" signals — budget overage (`getBudgetImpactPreview`), queue shame tiers (`getQueueShameData`), shelf-life expiry (`getShelfLifeExpiry`), goal deadlines (`useGoals`), even the live session timer — but every one of them was buried inside its own tab, so nothing surfaced unless you happened to scroll to the right panel. Added a new `getActiveAlerts(games, budgets, goals, liveSession?)` pure function in `calculations.ts` that composes those existing calculations into a single severity-sorted (`critical` → `warning` → `info`) alert feed: budget pressure at 75/90/100% of yearly budget, queue items in the "embarrassing"/"hall of shame" shame tiers, shelf-life games at "critical"/"expired", active goals with 0-7 days left and incomplete progress, and a nudge if a live session has been running 3+ hours. A new `useAlerts` hook layers in localStorage-persisted dismiss/snooze state (keyed by `id:severity` so an escalating alert like a budget warning-turned-critical resurfaces even if you dismissed the milder version) and an opt-in browser `Notification` ping fired once per alert for critical/warning tiers. Surfaced as a bell icon in the header (next to the error log button, only shown once you have games) with a red/amber badge count and a dropdown panel — tapping an alert's action button routes you to the right tab (Stats for budget/goals, Up Next for queue) or opens the relevant game's detail sheet. No changes to `lib/types.ts`, the storage/repository layer, or any existing function's signature — `getActiveAlerts` only calls existing exports. Verified with a clean `npm run build` (Next 14.2.35, 11/11 static pages) and `npm run lint` (zero new warnings — confirmed no matches for the new files in the full lint output); no headless browser is available in this sandbox, so the 375px mobile/console check was substituted with a dev-server HTTP 200 fetch of `/apps/game-analytics` showing a clean compile and no server-side errors, plus manual review of the responsive Tailwind classes used (`w-[320px] max-w-[90vw]`, `max-h-[70vh]`).
+
+FOLLOW-UP: Could add an alert for "On This Day"-style anniversaries and for trophy/milestone proximity (e.g., "3 hours from Century Club"), and could let users mute a whole alert category from a small settings affordance in the panel itself.
+
 ## 2026-06-19 09:00 — Games Tab — Live Session Timer ("Now Playing" bar)
 
 **Files**: app/apps/game-analytics/hooks/useLiveSession.ts, app/apps/game-analytics/components/LiveSessionBar.tsx, app/apps/game-analytics/lib/format.ts, app/apps/game-analytics/page.tsx, app/apps/game-analytics/components/GameBottomSheet.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json
