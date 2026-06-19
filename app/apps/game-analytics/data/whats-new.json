@@ -1,6 +1,12 @@
 {
   "entries": [
     {
+      "date": "2026-06-19",
+      "area": "Global",
+      "title": "A bell icon that tells you what actually needs your attention",
+      "body": "New notification bell in the header (next to the menu, on every tab) collects everything worth knowing into one feed: budget pace warnings, games that have been sitting in your queue too long, your backlog triage pile, goals approaching their deadline, and games just a session or two from their next milestone. The badge color tells you how urgent things are at a glance. Tap any alert to jump straight to it — open the game, open triage, or hop to Stats — and dismiss what you've already handled (it stays cleared for 24 hours). No more digging through five different tabs to find out what's going on with your library."
+    },
+    {
       "date": "2026-06-18",
       "area": "Games tab",
       "title": "See your budget impact before you hit save",

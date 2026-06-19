@@ -1,4 +1,4 @@
-import { Game, GameStatus, GameMetrics, AnalyticsSummary, TasteProfile, SessionMood, SessionContext, BudgetSettings } from './types';
+import { Game, GameStatus, GameMetrics, AnalyticsSummary, TasteProfile, SessionMood, SessionContext, BudgetSettings, GamingGoal } from './types';
 
 /**
  * Parse a YYYY-MM-DD date string as local time instead of UTC.
@@ -14671,4 +14671,247 @@ export function getBudgetImpactPreview(
     willExceed: spentAfterThisGame > budget.yearlyBudget,
     overageAmount: Math.round(Math.max(0, spentAfterThisGame - budget.yearlyBudget) * 100) / 100,
   };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GOAL PROGRESS (shared by GoalsPanel and the Notification Center alert feed)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Live progress for a goal, recomputed from current game data rather than the
+ * persisted `currentValue` (which can drift stale between saves). Custom goals
+ * have no derivable formula, so they fall back to the manually-entered value.
+ */
+export function getGoalProgress(goal: GamingGoal, games: Game[]): number {
+  const start = parseLocalDate(goal.startDate);
+  const now = new Date();
+
+  switch (goal.type) {
+    case 'completion': {
+      return games.filter(g => {
+        if (g.status !== 'Completed' || !g.endDate) return false;
+        const endDate = parseLocalDate(g.endDate);
+        return endDate >= start && endDate <= now;
+      }).length;
+    }
+    case 'spending': {
+      return games
+        .filter(g => {
+          if (g.status === 'Wishlist' || !g.datePurchased) return false;
+          const purchaseDate = parseLocalDate(g.datePurchased);
+          return purchaseDate >= start && purchaseDate <= now;
+        })
+        .reduce((sum, g) => sum + g.price, 0);
+    }
+    case 'hours': {
+      return games.reduce((total, g) => {
+        const logHours = (g.playLogs || [])
+          .filter(log => {
+            const logDate = parseLocalDate(log.date);
+            return logDate >= start && logDate <= now;
+          })
+          .reduce((sum, log) => sum + log.hours, 0);
+        return total + logHours;
+      }, 0);
+    }
+    case 'genre_variety': {
+      const genres = new Set<string>();
+      games.forEach(g => {
+        if (!g.genre) return;
+        const hasRecentActivity = (g.playLogs || []).some(log => {
+          const logDate = parseLocalDate(log.date);
+          return logDate >= start && logDate <= now;
+        });
+        if (hasRecentActivity) genres.add(g.genre);
+      });
+      return genres.size;
+    }
+    case 'backlog': {
+      return games.filter(g => {
+        if (!g.startDate) return false;
+        const startedDate = parseLocalDate(g.startDate);
+        return startedDate >= start && startedDate <= now;
+      }).length;
+    }
+    case 'custom':
+    default:
+      return goal.currentValue;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// NOTIFICATION CENTER — UNIFIED ALERT FEED
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type AlertSeverity = 'high' | 'medium' | 'low';
+export type AlertCategory = 'budget' | 'queue' | 'backlog' | 'goal' | 'milestone';
+
+export interface AlertItem {
+  id: string;
+  category: AlertCategory;
+  severity: AlertSeverity;
+  icon: string;
+  title: string;
+  message: string;
+  actionLabel: string;
+  gameId?: string;
+}
+
+const ALERT_SEVERITY_ORDER: Record<AlertSeverity, number> = { high: 0, medium: 1, low: 2 };
+
+/**
+ * Aggregates several existing signals (budget pace, queue shame, backlog
+ * triage, goal deadlines, near-miss milestones) into one prioritized feed for
+ * the Notification Center. Each source is capped so one noisy category can't
+ * drown out the rest; the result is sorted worst-first.
+ */
+export function getAlertFeed(games: Game[], budgets: BudgetSettings[], goals: GamingGoal[]): AlertItem[] {
+  const alerts: AlertItem[] = [];
+  const now = new Date();
+  const currentYear = now.getFullYear();
+
+  // ── Budget pace ──────────────────────────────────────────────
+  const budget = budgets.find(b => b.year === currentYear);
+  if (budget && budget.yearlyBudget > 0) {
+    const spent = games
+      .filter(g => !g.acquiredFree && g.status !== 'Wishlist' && g.datePurchased && parseLocalDate(g.datePurchased).getFullYear() === currentYear)
+      .reduce((sum, g) => sum + (g.price || 0), 0);
+    const percentUsed = (spent / budget.yearlyBudget) * 100;
+
+    if (percentUsed >= 100) {
+      alerts.push({
+        id: 'budget-exceeded',
+        category: 'budget',
+        severity: 'high',
+        icon: '🚨',
+        title: 'Budget exceeded',
+        message: `You've spent $${Math.round(spent)} of your $${Math.round(budget.yearlyBudget)} ${currentYear} budget — ${Math.round(percentUsed)}% used.`,
+        actionLabel: 'Review spending',
+      });
+    } else if (percentUsed >= 90) {
+      alerts.push({
+        id: 'budget-90',
+        category: 'budget',
+        severity: 'high',
+        icon: '⚠️',
+        title: 'Budget almost gone',
+        message: `${Math.round(percentUsed)}% of your ${currentYear} budget is spent ($${Math.round(budget.yearlyBudget - spent)} left).`,
+        actionLabel: 'Review spending',
+      });
+    } else if (percentUsed >= 75) {
+      alerts.push({
+        id: 'budget-75',
+        category: 'budget',
+        severity: 'medium',
+        icon: '💰',
+        title: 'Budget pace check',
+        message: `You've used ${Math.round(percentUsed)}% of your ${currentYear} budget with $${Math.round(budget.yearlyBudget - spent)} remaining.`,
+        actionLabel: 'Review spending',
+      });
+    }
+  }
+
+  // ── Queue shame ──────────────────────────────────────────────
+  const queued = games.filter(g => g.queuePosition != null);
+  const shameAlerts = queued
+    .map(g => ({ game: g, shame: getQueueShameData(g, games) }))
+    .filter((x): x is { game: Game; shame: QueueShameData } => !!x.shame && (x.shame.tier === 'embarrassing' || x.shame.tier === 'hall_of_shame'))
+    .sort((a, b) => b.shame.daysQueued - a.shame.daysQueued)
+    .slice(0, 3);
+
+  shameAlerts.forEach(({ game, shame }) => {
+    alerts.push({
+      id: `queue-shame-${game.id}`,
+      category: 'queue',
+      severity: shame.tier === 'hall_of_shame' ? 'high' : 'medium',
+      icon: shame.icon,
+      title: `${game.name} has waited ${shame.daysQueued} days`,
+      message: shame.message,
+      actionLabel: 'Start it or remove it',
+      gameId: game.id,
+    });
+  });
+
+  // ── Backlog triage ───────────────────────────────────────────
+  const triageCandidates = getBacklogTriageCandidates(games);
+  const urgentTriage = triageCandidates.filter(c => c.urgency === 'expired' || c.urgency === 'critical');
+  if (urgentTriage.length > 0) {
+    alerts.push({
+      id: 'backlog-triage',
+      category: 'backlog',
+      severity: urgentTriage.some(c => c.urgency === 'expired') ? 'high' : 'medium',
+      icon: '📥',
+      title: `${urgentTriage.length} game${urgentTriage.length === 1 ? '' : 's'} need${urgentTriage.length === 1 ? 's' : ''} a decision`,
+      message: urgentTriage.length === 1
+        ? urgentTriage[0].contextLine
+        : `${urgentTriage[0].game.name} and ${urgentTriage.length - 1} other${urgentTriage.length - 1 === 1 ? '' : 's'} are overdue for a call — queue, abandon, or snooze.`,
+      actionLabel: 'Open Backlog Triage',
+    });
+  }
+
+  // ── Goals ────────────────────────────────────────────────────
+  goals
+    .filter(g => g.status === 'active')
+    .forEach(goal => {
+      const progress = getGoalProgress(goal, games);
+      const percent = goal.targetValue > 0 ? (progress / goal.targetValue) * 100 : 0;
+      const daysLeft = Math.ceil((parseLocalDate(goal.endDate).getTime() - now.getTime()) / (24 * 60 * 60 * 1000));
+
+      if (percent >= 100) return; // completion sweep elsewhere; not an alert
+
+      if (daysLeft <= 7 && daysLeft >= 0 && percent < 80) {
+        alerts.push({
+          id: `goal-deadline-${goal.id}`,
+          category: 'goal',
+          severity: 'medium',
+          icon: '🎯',
+          title: `"${goal.title}" ends in ${daysLeft} day${daysLeft === 1 ? '' : 's'}`,
+          message: `You're at ${Math.round(percent)}% (${Math.round(progress)}/${goal.targetValue} ${goal.unit}).`,
+          actionLabel: 'View goal',
+        });
+      } else if (percent >= 90) {
+        alerts.push({
+          id: `goal-close-${goal.id}`,
+          category: 'goal',
+          severity: 'low',
+          icon: '🔥',
+          title: `"${goal.title}" is almost done`,
+          message: `${Math.round(percent)}% there — just ${Math.max(0, Math.round(goal.targetValue - progress))} ${goal.unit} to go.`,
+          actionLabel: 'View goal',
+        });
+      } else if (daysLeft < 0) {
+        alerts.push({
+          id: `goal-expired-${goal.id}`,
+          category: 'goal',
+          severity: 'low',
+          icon: '⌛',
+          title: `"${goal.title}" deadline passed`,
+          message: `Ended at ${Math.round(percent)}% (${Math.round(progress)}/${goal.targetValue} ${goal.unit}). Mark it complete, archive it, or extend the deadline.`,
+          actionLabel: 'View goal',
+        });
+      }
+    });
+
+  // ── Near-miss milestones ─────────────────────────────────────
+  const inProgress = games.filter(g => g.status === 'In Progress');
+  const milestoneAlerts = inProgress
+    .map(g => ({ game: g, milestone: getNextMilestone(g, games) }))
+    .filter((x): x is { game: Game; milestone: NextMilestoneData } => !!x.milestone && x.milestone.remaining <= 3 && x.milestone.progressPercent >= 85)
+    .sort((a, b) => b.milestone.progressPercent - a.milestone.progressPercent)
+    .slice(0, 3);
+
+  milestoneAlerts.forEach(({ game, milestone }) => {
+    alerts.push({
+      id: `milestone-${game.id}`,
+      category: 'milestone',
+      severity: 'low',
+      icon: '🏆',
+      title: `${game.name} is close to ${milestone.description}`,
+      message: `${milestone.remaining} more hour${milestone.remaining === 1 ? '' : 's'} to get there.`,
+      actionLabel: 'Log time',
+      gameId: game.id,
+    });
+  });
+
+  return alerts.sort((a, b) => ALERT_SEVERITY_ORDER[a.severity] - ALERT_SEVERITY_ORDER[b.severity]);
 }

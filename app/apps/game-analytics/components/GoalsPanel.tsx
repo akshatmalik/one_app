@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react';
 import { Target, Trophy, Plus, Trash2, Edit3, Check, Clock, ChevronDown, ChevronUp, X, Gamepad2, DollarSign, Flame, Layers, Sparkles } from 'lucide-react';
 import { Game, GamingGoal, GoalType, GoalStatus } from '../lib/types';
-import { getTotalHours, parseLocalDate } from '../lib/calculations';
+import { getTotalHours, parseLocalDate, getGoalProgress } from '../lib/calculations';
 import { useGoals } from '../hooks/useGoals';
 import { useAuthContext } from '@/lib/AuthContext';
 import clsx from 'clsx';
@@ -16,74 +16,6 @@ const GOAL_TYPE_CONFIG: Record<GoalType, { label: string; icon: React.ReactNode;
   backlog: { label: 'Clear Backlog', icon: <Flame size={14} />, defaultUnit: 'games', color: 'yellow' },
   custom: { label: 'Custom Goal', icon: <Sparkles size={14} />, defaultUnit: '', color: 'cyan' },
 };
-
-function calculateGoalProgress(goal: GamingGoal, games: Game[]): number {
-  const start = parseLocalDate(goal.startDate);
-  const now = new Date();
-
-  // Filter games relevant to the goal period
-  const gamesInPeriod = (filterFn: (g: Game) => boolean) =>
-    games.filter(g => filterFn(g));
-
-  switch (goal.type) {
-    case 'completion': {
-      // Count games completed since startDate
-      return gamesInPeriod(g => {
-        if (g.status !== 'Completed' || !g.endDate) return false;
-        const endDate = parseLocalDate(g.endDate);
-        return endDate >= start && endDate <= now;
-      }).length;
-    }
-    case 'spending': {
-      // Total price of games purchased since startDate
-      return gamesInPeriod(g => {
-        if (g.status === 'Wishlist' || !g.datePurchased) return false;
-        const purchaseDate = parseLocalDate(g.datePurchased);
-        return purchaseDate >= start && purchaseDate <= now;
-      }).reduce((sum, g) => sum + g.price, 0);
-    }
-    case 'hours': {
-      // Total hours logged since startDate
-      return games.reduce((total, g) => {
-        const logHours = (g.playLogs || [])
-          .filter(log => {
-            const logDate = parseLocalDate(log.date);
-            return logDate >= start && logDate <= now;
-          })
-          .reduce((sum, log) => sum + log.hours, 0);
-        return total + logHours;
-      }, 0);
-    }
-    case 'genre_variety': {
-      // Count unique genres played since startDate
-      const genres = new Set<string>();
-      games.forEach(g => {
-        if (!g.genre) return;
-        const hasRecentActivity = (g.playLogs || []).some(log => {
-          const logDate = parseLocalDate(log.date);
-          return logDate >= start && logDate <= now;
-        });
-        if (hasRecentActivity) {
-          genres.add(g.genre);
-        }
-      });
-      return genres.size;
-    }
-    case 'backlog': {
-      // Count of Not Started games (should decrease, so we invert the logic)
-      // Target represents how many to clear; current = games started or completed since startDate that were previously Not Started
-      return gamesInPeriod(g => {
-        if (!g.startDate) return false;
-        const startedDate = parseLocalDate(g.startDate);
-        return startedDate >= start && startedDate <= now;
-      }).length;
-    }
-    case 'custom':
-    default:
-      // Custom goals use manual currentValue
-      return goal.currentValue;
-  }
-}
 
 function getDaysRemaining(endDate: string): number {
   const end = parseLocalDate(endDate);
@@ -135,7 +67,7 @@ export function GoalsPanel({ games }: { games: Game[] }) {
   // Auto-calculate progress for active goals
   const goalsWithProgress = useMemo(() => {
     return activeGoals.map(goal => {
-      const currentValue = calculateGoalProgress(goal, games);
+      const currentValue = getGoalProgress(goal, games);
       const percent = goal.targetValue > 0 ? Math.min((currentValue / goal.targetValue) * 100, 100) : 0;
       const daysRemaining = getDaysRemaining(goal.endDate);
       return { ...goal, calculatedValue: currentValue, percent, daysRemaining };
@@ -585,7 +517,7 @@ export function GoalsPanel({ games }: { games: Game[] }) {
                 .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
                 .map(goal => {
                   const typeConfig = GOAL_TYPE_CONFIG[goal.type];
-                  const progress = calculateGoalProgress(goal, games);
+                  const progress = getGoalProgress(goal, games);
                   const percent = goal.targetValue > 0 ? Math.min((progress / goal.targetValue) * 100, 100) : 0;
 
                   return (

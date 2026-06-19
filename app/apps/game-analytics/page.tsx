@@ -55,6 +55,7 @@ import { TrophyShowcase } from './components/TrophyShowcase';
 import { TrophyToast } from './components/TrophyToast';
 import { ErrorLogPanel, ErrorLogButton } from './components/ErrorLogPanel';
 import { WhatsNewModal } from './components/WhatsNewModal';
+import { NotificationCenter } from './components/NotificationCenter';
 import { GameReviewChat } from './components/GameReviewChat';
 import { GameCompareModal } from './components/GameCompareModal';
 import { PlayTonightModal } from './components/PlayTonightModal';
@@ -663,6 +664,18 @@ export default function GameAnalyticsPage() {
                   </>
                 )}
               </div>
+              {games.length > 0 && (
+                <NotificationCenter
+                  games={games}
+                  budgets={budgets}
+                  onOpenBacklogTriage={() => setShowBacklogTriage(true)}
+                  onGoToTab={(tab) => setTabMode(tab as TabMode)}
+                  onOpenGame={(gameId) => {
+                    const gwm = gamesWithMetrics.find(g => g.id === gameId);
+                    if (gwm) setDetailGame(gwm);
+                  }}
+                />
+              )}
               <ErrorLogButton onClick={() => setShowErrorLog(true)} />
               <button
                 onClick={() => setShowWhatsNew(true)}

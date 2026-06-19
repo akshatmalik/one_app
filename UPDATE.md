@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-19 00:22 — Global Header — Notification Center / Alerts Inbox
+
+**Files**: app/apps/game-analytics/lib/calculations.ts, app/apps/game-analytics/components/GoalsPanel.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/components/NotificationCenter.tsx (new), UPDATE.md, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+The app had accumulated several independent "you should know about this" signals — budget pace (`useBudget`), queue shame tiers (`getQueueShameData`), backlog triage candidates (`getBacklogTriageCandidates`), gaming goal deadlines (`useGoals`), and near-miss milestones (`getNextMilestone`) — but each only surfaced if you happened to be on the right tab or opened the right menu. Added a bell icon to the global header (visible on every tab) backed by a new `getAlertFeed(games, budgets, goals)` in `lib/calculations.ts`, which composes all five sources into one severity-sorted (`high`/`medium`/`low`) list of `AlertItem`s — budget exceeded/90%/75% thresholds, the top 3 most-embarrassing queued games, one backlog-triage summary alert, goal alerts for goals nearing their deadline/nearly complete/expired, and the top 3 in-progress games within 3 sessions of their next milestone. `components/NotificationCenter.tsx` renders the badge count (color matches highest severity present) and a dropdown feed; tapping an alert's action button routes to the right place (opens Backlog Triage, opens a game's detail sheet, or jumps to the Stats tab) and each alert can be dismissed individually or all at once, persisted for 24h via a `ga-alert-dismissed` localStorage map (same pattern as the existing triage-snooze map). Extracted the goal-progress math that used to live only inside `GoalsPanel.tsx` into a shared `getGoalProgress()` export so the new alert feed and the existing Goals panel use the identical calculation — no behavior change for the Goals panel itself. Dismiss buttons are always visible (not hover-gated), matching the project's mobile-first card guidance. Verified with `npm run build` (clean) and `npm run lint` (zero new errors/warnings — all pre-existing issues are in unrelated mini-apps), and a dev-server smoke test confirmed `/apps/game-analytics` compiles and serves with no SSR/console errors.
+
+FOLLOW-UP: Could add a "notification preferences" toggle to mute specific alert categories, and could push the same `getAlertFeed()` data into the Daily Fortune Cookie / header area for a non-dismissible "most urgent thing today" callout.
+
 ## 2026-06-18 20:14 — Games Tab — Budget Impact Preview in Add/Edit Game
 
 **Files**: app/apps/game-analytics/lib/calculations.ts, app/apps/game-analytics/components/GameForm.tsx, app/apps/game-analytics/page.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json
