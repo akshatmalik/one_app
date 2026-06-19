@@ -14680,7 +14680,7 @@ export function getBudgetImpactPreview(
 // ─────────────────────────────────────────────────────────────────────────────
 
 export type AlertSeverity = 'critical' | 'warning' | 'info';
-export type AlertCategory = 'budget' | 'queue' | 'shelf-life' | 'goal' | 'session';
+export type AlertCategory = 'budget' | 'queue' | 'shelf-life' | 'goal' | 'session' | 'price';
 
 export interface GameAlert {
   id: string;
@@ -14693,7 +14693,7 @@ export interface GameAlert {
   actionLabel: string;
 }
 
-const ALERT_SEVERITY_ORDER: Record<AlertSeverity, number> = { critical: 0, warning: 1, info: 2 };
+export const ALERT_SEVERITY_ORDER: Record<AlertSeverity, number> = { critical: 0, warning: 1, info: 2 };
 
 /**
  * Builds today's prioritized alert feed. Every input is data that already
@@ -14820,4 +14820,53 @@ export function getActiveAlerts(
   }
 
   return alerts.sort((a, b) => ALERT_SEVERITY_ORDER[a.severity] - ALERT_SEVERITY_ORDER[b.severity]);
+}
+
+/**
+ * Surfaces Buy Queue price movement as alerts: a game hitting its target price
+ * (the "deferred"/discount-watch bucket exists exactly for this), or a price
+ * dropping to a new low even before it reaches target. Read-only over
+ * priceHistory/currentPrice — never mutates the queue.
+ */
+export function getPriceWatchAlerts(entries: PurchaseQueueEntry[]): GameAlert[] {
+  const alerts: GameAlert[] = [];
+
+  entries
+    .filter(e => !e.purchased)
+    .forEach(e => {
+      if (e.currentPrice == null) return;
+
+      if (e.targetPrice != null && e.currentPrice <= e.targetPrice) {
+        alerts.push({
+          id: `price-target-${e.id}`,
+          category: 'price',
+          severity: 'warning',
+          icon: '💰',
+          title: `${e.gameName} hit your target price`,
+          message: `Now $${e.currentPrice.toFixed(2)}, at or below your $${e.targetPrice.toFixed(2)} target.`,
+          gameId: e.id,
+          actionLabel: 'Open buy queue',
+        });
+        return;
+      }
+
+      const history = e.priceHistory ?? [];
+      if (history.length >= 2) {
+        const priorLow = Math.min(...history.slice(0, -1).map(p => p.price));
+        if (e.currentPrice < priorLow) {
+          alerts.push({
+            id: `price-low-${e.id}`,
+            category: 'price',
+            severity: 'info',
+            icon: '📉',
+            title: `${e.gameName} hit a new low`,
+            message: `Now $${e.currentPrice.toFixed(2)}, down from a previous low of $${priorLow.toFixed(2)}.`,
+            gameId: e.id,
+            actionLabel: 'Open buy queue',
+          });
+        }
+      }
+    });
+
+  return alerts;
 }

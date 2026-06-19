@@ -154,7 +154,7 @@ export default function GameAnalyticsPage() {
   const { games, loading, error, addGame, updateGame, updateManyGames, deleteGame, refresh } = useGames(user?.uid ?? null);
   const { gamesWithMetrics, summary } = useAnalytics(games);
   const { budgets, setBudget } = useBudget(user?.uid ?? null);
-  const { upcomingEntries, addEntry: addPurchaseEntry } = usePurchaseQueue(user?.uid ?? null);
+  const { entries: purchaseQueueEntries, upcomingEntries, addEntry: addPurchaseEntry } = usePurchaseQueue(user?.uid ?? null);
   const { loading: thumbnailsLoading, fetchedCount } = useGameThumbnails(games, updateGame);
   const gameColors = useGameColors(games);
   const { quips: gameQuips } = useGameQuips(games, user?.uid ?? null);
@@ -174,7 +174,7 @@ export default function GameAnalyticsPage() {
     requestPermission: requestAlertsPermission,
     dismissAlert,
     snoozeAlert,
-  } = useAlerts(games, budgets, goals, user?.uid ?? null, alertsLiveSession);
+  } = useAlerts(games, budgets, goals, user?.uid ?? null, alertsLiveSession, purchaseQueueEntries);
   const { rankings: allTimeRankings } = useRankings(user?.uid ?? null, 'all', 'all');
   const { allTrophies, summary: trophySummary, pinnedTrophies, pinnedIds: pinnedTrophyIds, togglePin: toggleTrophyPin, toastQueue: trophyToastQueue, dismissToast: dismissTrophyToast } = useTrophies(games, user?.uid ?? null);
   const { assignments: allTimeTiers } = useTierAssignments(user?.uid ?? null, 'all');
@@ -402,6 +402,10 @@ export default function GameAnalyticsPage() {
     }
     if (alert.category === 'queue') {
       setTabMode('up-next');
+      return;
+    }
+    if (alert.category === 'price') {
+      setTabMode('buy-queue');
       return;
     }
     if (alert.gameId) {

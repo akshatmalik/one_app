@@ -2,6 +2,12 @@
   "entries": [
     {
       "date": "2026-06-19",
+      "area": "Buy Queue",
+      "title": "Price drops in your buy queue now show up as alerts",
+      "body": "If a game in your Buy Queue hits the target price you set, or drops to a new low even before reaching that target, it now surfaces in the alerts bell up top — no need to keep checking back manually. There's also a new \"Check all prices\" button on the Buy Queue tab that refreshes every game's price in one tap, instead of checking each one individually. Tapping a price alert jumps you straight to the Buy Queue."
+    },
+    {
+      "date": "2026-06-19",
       "area": "Header",
       "title": "A new bell icon watches your budget, queue, and backlog for you",
       "body": "There's now a bell icon up top that quietly keeps an eye on the stuff you'd hate to miss: getting close to (or over) your yearly budget, a game that's been sitting shamefully long in your Up Next queue, a backlog game about to expire, a goal deadline coming up fast, or a play session that's been running for hours. Tap the bell to see everything at a glance, dismiss what you've handled, snooze the rest for a day, or turn on desktop notifications so the important ones reach you even with the tab closed."

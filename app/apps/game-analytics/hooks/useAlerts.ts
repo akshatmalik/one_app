@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Game, BudgetSettings, GamingGoal } from '../lib/types';
-import { getActiveAlerts, GameAlert } from '../lib/calculations';
+import { Game, BudgetSettings, GamingGoal, PurchaseQueueEntry } from '../lib/types';
+import { getActiveAlerts, getPriceWatchAlerts, ALERT_SEVERITY_ORDER, GameAlert } from '../lib/calculations';
 
 const DISMISSED_KEY_PREFIX = 'game-analytics-alerts-dismissed';
 const NOTIFIED_KEY_PREFIX = 'game-analytics-alerts-notified';
@@ -46,7 +46,8 @@ export function useAlerts(
   budgets: BudgetSettings[],
   goals: GamingGoal[],
   userId: string | null,
-  liveSession?: LiveSessionAlertInput | null
+  liveSession?: LiveSessionAlertInput | null,
+  purchaseQueue: PurchaseQueueEntry[] = []
 ) {
   const dismissedKey = `${DISMISSED_KEY_PREFIX}-${userId || 'local-user'}`;
   const notifiedKey = `${NOTIFIED_KEY_PREFIX}-${userId || 'local-user'}`;
@@ -57,8 +58,9 @@ export function useAlerts(
   );
 
   const rawAlerts = useMemo(
-    () => getActiveAlerts(games, budgets, goals, liveSession ?? null),
-    [games, budgets, goals, liveSession]
+    () => [...getActiveAlerts(games, budgets, goals, liveSession ?? null), ...getPriceWatchAlerts(purchaseQueue)]
+      .sort((a, b) => ALERT_SEVERITY_ORDER[a.severity] - ALERT_SEVERITY_ORDER[b.severity]),
+    [games, budgets, goals, liveSession, purchaseQueue]
   );
 
   const now = Date.now();

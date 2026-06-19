@@ -5,7 +5,7 @@ import {
   Plus, ShoppingCart, Calendar, PackageCheck,
   Settings, Sparkles, Percent, ChevronDown, ChevronUp,
   Tag, Gift, Target, BarChart2, ArrowRight, HelpCircle,
-  Wand2, Loader2, ListOrdered, X, Wallet
+  Wand2, Loader2, ListOrdered, X, Wallet, RefreshCw
 } from 'lucide-react';
 import {
   DndContext, closestCenter, KeyboardSensor, PointerSensor, TouchSensor,
@@ -29,6 +29,8 @@ import {
   buildBuyQueueAIContext,
 } from '../lib/calculations';
 import { generateBuyQueueAdvice, BuyQueueAdvice } from '../lib/ai-buyqueue-service';
+import { fetchCheapestPrice } from '../lib/price-fetch';
+import { useToast } from '@/components/Toast';
 import clsx from 'clsx';
 
 type PriceMode = 'full' | 'deal' | 'model';
@@ -90,6 +92,8 @@ export function BuyQueueTab({ userId, wishlistGames, allGames, budgets, yearSpen
   const [aiAdvice, setAiAdvice] = useState<BuyQueueAdvice | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [justPurchased, setJustPurchased] = useState<{ name: string; gameId: string } | null>(null);
+  const [checkingAllPrices, setCheckingAllPrices] = useState(false);
+  const { showToast } = useToast();
 
   // Pricing scenario: your target deals (default), full MSRP, or a modeled % off.
   const [priceMode, setPriceMode] = useState<PriceMode>('deal');
@@ -260,6 +264,45 @@ export function BuyQueueTab({ userId, wishlistGames, allGames, budgets, yearSpen
     }
   };
 
+  const handleCheckAllPrices = async () => {
+    const targets = [...activeEntries, ...maybeEntries, ...deferredEntries];
+    if (targets.length === 0 || checkingAllPrices) return;
+    setCheckingAllPrices(true);
+    let drops = 0;
+    let atTarget = 0;
+    let checked = 0;
+    try {
+      for (const entry of targets) {
+        try {
+          const result = await fetchCheapestPrice(entry.gameName);
+          if (result) {
+            checked++;
+            const today = new Date().toISOString().split('T')[0];
+            const history = entry.priceHistory ? [...entry.priceHistory] : [];
+            const last = history[history.length - 1];
+            if (last && last.date === today) history[history.length - 1] = { date: today, price: result.price };
+            else if (!last || last.price !== result.price) history.push({ date: today, price: result.price });
+            if (entry.currentPrice != null && result.price < entry.currentPrice) drops++;
+            if (entry.targetPrice != null && result.price <= entry.targetPrice) atTarget++;
+            await updateEntry(entry.id, { currentPrice: result.price, priceHistory: history });
+          }
+        } catch {
+          // skip this entry — lookup failed, leave its price untouched
+        }
+      }
+    } finally {
+      setCheckingAllPrices(false);
+    }
+    if (checked === 0) {
+      showToast('Could not check prices — try again later', 'error');
+    } else {
+      const parts = [`Checked ${checked} game${checked !== 1 ? 's' : ''}`];
+      if (drops > 0) parts.push(`${drops} price drop${drops !== 1 ? 's' : ''}`);
+      if (atTarget > 0) parts.push(`${atTarget} at target!`);
+      showToast(parts.join(' — '), atTarget > 0 ? 'success' : 'info');
+    }
+  };
+
   const handleDelete = (id: string) => {
     if (window.confirm('Remove this game from your buy queue?')) {
       deleteEntry(id);
@@ -398,8 +441,22 @@ export function BuyQueueTab({ userId, wishlistGames, allGames, budgets, yearSpen
   const modeLabel = priceMode === 'full' ? 'full price' : priceMode === 'model' ? `${Math.round(modelDiscount * 100)}% off` : 'your deal prices';
   const isEmpty = orderedCommitted.length === 0 && laterEntries.length === 0;
 
+  const priceCheckTargets = activeEntries.length + maybeEntries.length + deferredEntries.length;
+
   return (
     <div className="space-y-5">
+      {/* Bulk price refresh */}
+      {priceCheckTargets > 0 && (
+        <button
+          onClick={handleCheckAllPrices}
+          disabled={checkingAllPrices}
+          className="w-full flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] hover:bg-white/[0.06] disabled:opacity-50 text-white/70 text-xs font-medium py-2.5 transition-colors"
+        >
+          <RefreshCw size={13} className={checkingAllPrices ? 'animate-spin' : ''} />
+          {checkingAllPrices ? `Checking prices...` : `Check all prices (${priceCheckTargets})`}
+        </button>
+      )}
+
       {/* Deal Alert Banner */}
       {dealsAtTarget.length > 0 && (
         <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/[0.08] p-3 buy-queue-deal-alert">
