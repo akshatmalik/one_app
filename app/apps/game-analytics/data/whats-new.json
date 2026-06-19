@@ -3,6 +3,12 @@
     {
       "date": "2026-06-19",
       "area": "Games tab",
+      "title": "Smart Alerts — your library's nagging (helpful) friend",
+      "body": "A new bell icon next to What's New collects everything that actually needs your attention right now into one feed: a streak about to break, this year's budget tracking over or close to the line, games at risk of expiring from your backlog, the most embarrassing wait in your Up Next queue, and a couple of top nudges. Turn on \"notifications\" from the panel and the most urgent ones (a busted streak, a blown budget) will pop up as a real desktop notification while the tab's open — so you don't have to keep checking back. Tap any alert with a game attached to jump straight to it."
+    },
+    {
+      "date": "2026-06-19",
+      "area": "Games tab",
       "title": "Start a live timer while you play",
       "body": "Hit \"Timer\" on any game card (or the \"Start Live Timer\" button in a game's detail sheet) and a Now Playing bar drops in at the bottom of the screen with a running stopwatch — it keeps counting even if you switch tabs or come back later. Pause it, resume it, or tap stop to log the session: the hours are pre-filled from the timer, and you can tag your mood (🔥 Great, 👍 Good, 😐 Meh, 💪 Grind) before saving. No more guessing how long you actually played."
     },

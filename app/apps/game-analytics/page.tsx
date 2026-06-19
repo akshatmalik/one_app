@@ -61,6 +61,8 @@ import { GameReviewChat } from './components/GameReviewChat';
 import { GameCompareModal } from './components/GameCompareModal';
 import { PlayTonightModal } from './components/PlayTonightModal';
 import { BacklogTriageModal } from './components/BacklogTriageModal';
+import { AlertsCenter } from './components/AlertsCenter';
+import { useSmartAlerts } from './hooks/useSmartAlerts';
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist';
@@ -151,6 +153,7 @@ export default function GameAnalyticsPage() {
   const { games, loading, error, addGame, updateGame, updateManyGames, deleteGame, refresh } = useGames(user?.uid ?? null);
   const { gamesWithMetrics, summary } = useAnalytics(games);
   const { budgets, setBudget } = useBudget(user?.uid ?? null);
+  const smartAlerts = useSmartAlerts(games, budgets, user?.uid ?? null);
   const { upcomingEntries, addEntry: addPurchaseEntry } = usePurchaseQueue(user?.uid ?? null);
   const { loading: thumbnailsLoading, fetchedCount } = useGameThumbnails(games, updateGame);
   const gameColors = useGameColors(games);
@@ -692,6 +695,16 @@ export default function GameAnalyticsPage() {
                 )}
               </div>
               <ErrorLogButton onClick={() => setShowErrorLog(true)} />
+              <AlertsCenter
+                alerts={smartAlerts.alerts}
+                enabled={smartAlerts.enabled}
+                onSetEnabled={smartAlerts.setAlertsEnabled}
+                permission={smartAlerts.permission}
+                onViewGame={(gameId) => {
+                  const game = gamesWithMetrics.find(g => g.id === gameId);
+                  if (game) setDetailGame(game);
+                }}
+              />
               <button
                 onClick={() => setShowWhatsNew(true)}
                 className="flex items-center gap-1.5 px-2.5 py-2 bg-white/5 text-white/60 hover:text-white/80 rounded-lg transition-all text-sm"
