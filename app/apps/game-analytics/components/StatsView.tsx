@@ -67,6 +67,7 @@ import { WeeklyDigest } from './WeeklyDigest';
 import { WhatIfSimulator } from './WhatIfSimulator';
 import { PlayedSummary, BoughtSummary } from './RangeGlance';
 import { GoalsPanel } from './GoalsPanel';
+import { GenreMasteryPanel } from './GenreMasteryPanel';
 import clsx from 'clsx';
 
 interface StatsViewProps {
@@ -996,6 +997,9 @@ export function StatsView({ games, summary, budgets = [], onSetBudget, trophies,
 
       {/* Fun Stats Panel */}
       <FunStatsPanel games={games} />
+
+      {/* Genre Mastery — RPG-style per-genre leveling */}
+      <GenreMasteryPanel games={games} />
 
       {/* Deep Insights Panel (Phase 1 Enhancements) */}
       <InsightsPanel

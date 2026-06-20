@@ -14870,3 +14870,170 @@ export function getPriceWatchAlerts(entries: PurchaseQueueEntry[]): GameAlert[] 
 
   return alerts;
 }
+
+// ── Genre Mastery ──────────────────────────────────────────────────
+// RPG-style leveling system: every genre you play is a "class" that
+// levels up from XP earned through hours, completions, and ratings.
+// Quadratic curve (xpForLevel = 100 * (level-1)^2) means early levels
+// come fast but mastery (level 25+) takes genuine dedication.
+
+export type GenreRankTitle = 'Novice' | 'Apprentice' | 'Adept' | 'Expert' | 'Master' | 'Legend';
+
+export interface GenreMasteryClass {
+  genre: string;
+  xp: number;
+  level: number;
+  rank: GenreRankTitle;
+  xpIntoLevel: number;
+  xpForNextLevel: number;
+  progressPercent: number; // 0-100 toward next level
+  gameCount: number;
+  totalHours: number;
+  avgRating: number;
+  completedCount: number;
+  perk: string;
+  nextPerk: string | null;
+  nextPerkLevel: number | null;
+  insight: string;
+}
+
+export interface GenreMasteryData {
+  classes: GenreMasteryClass[]; // sorted by XP descending
+  mainClass: GenreMasteryClass | null;
+  hybridWith: GenreMasteryClass | null; // a second class within 80% of mainClass's XP
+  playerLevel: number;
+  playerTitle: string;
+  totalXP: number;
+}
+
+const GENRE_RANK_LEVELS: Array<{ level: number; rank: GenreRankTitle }> = [
+  { level: 1, rank: 'Novice' },
+  { level: 5, rank: 'Apprentice' },
+  { level: 10, rank: 'Adept' },
+  { level: 18, rank: 'Expert' },
+  { level: 25, rank: 'Master' },
+  { level: 50, rank: 'Legend' },
+];
+
+const GENRE_PERK_LEVELS: Array<{ level: number; perk: string }> = [
+  { level: 1, perk: 'Just getting started' },
+  { level: 3, perk: 'Knows the genre\'s basics cold' },
+  { level: 5, perk: 'Spots a good entry in the genre on sight' },
+  { level: 8, perk: 'Rarely abandons a game in this genre' },
+  { level: 10, perk: 'Has opinions worth trusting on this genre' },
+  { level: 15, perk: 'Finishes what they start here' },
+  { level: 18, perk: 'Could write the genre\'s tier list' },
+  { level: 25, perk: 'A true authority on this genre' },
+  { level: 35, perk: 'Has seen it all in this genre' },
+  { level: 50, perk: 'Living legend of the genre' },
+];
+
+/** Inverse of xpForLevel: floor(sqrt(xp/100)) + 1 */
+function levelForXP(xp: number): number {
+  return Math.floor(Math.sqrt(Math.max(0, xp) / 100)) + 1;
+}
+
+/** XP required to reach a given level. */
+function xpForLevel(level: number): number {
+  return 100 * Math.pow(level - 1, 2);
+}
+
+function rankForLevel(level: number): GenreRankTitle {
+  let rank: GenreRankTitle = 'Novice';
+  for (const tier of GENRE_RANK_LEVELS) {
+    if (level >= tier.level) rank = tier.rank;
+  }
+  return rank;
+}
+
+function perkForLevel(level: number): string {
+  let perk = GENRE_PERK_LEVELS[0].perk;
+  for (const tier of GENRE_PERK_LEVELS) {
+    if (level >= tier.level) perk = tier.perk;
+  }
+  return perk;
+}
+
+function nextPerkForLevel(level: number): { perk: string; level: number } | null {
+  const next = GENRE_PERK_LEVELS.find(tier => tier.level > level);
+  return next ? { perk: next.perk, level: next.level } : null;
+}
+
+function genreInsight(c: { genre: string; gameCount: number; totalHours: number; avgRating: number; completedCount: number }): string {
+  if (c.completedCount >= 3 && c.completedCount === c.gameCount) {
+    return `You finish every ${c.genre} game you start.`;
+  }
+  if (c.avgRating >= 8.5) {
+    return `${c.genre} might be your best-rated genre.`;
+  }
+  if (c.totalHours / Math.max(1, c.gameCount) >= 40) {
+    return `You go deep on ${c.genre} — averaging ${Math.round(c.totalHours / c.gameCount)}h per game.`;
+  }
+  return `${c.gameCount} ${c.genre} game${c.gameCount === 1 ? '' : 's'} played so far.`;
+}
+
+export function getGenreMastery(games: Game[]): GenreMasteryData {
+  const byGenre = new Map<string, { xp: number; gameCount: number; totalHours: number; ratingSum: number; ratingCount: number; completedCount: number }>();
+
+  games.forEach(g => {
+    const genre = g.genre?.trim();
+    if (!genre || g.status === 'Wishlist') return;
+
+    const hours = getTotalHours(g);
+    let xp = hours * 10;
+    if (g.status === 'Completed') xp += 200;
+    if (g.rating > 0) xp += g.rating * 15;
+    if (g.status === 'Abandoned') xp *= 0.5;
+
+    const entry = byGenre.get(genre) ?? { xp: 0, gameCount: 0, totalHours: 0, ratingSum: 0, ratingCount: 0, completedCount: 0 };
+    entry.xp += xp;
+    entry.gameCount += 1;
+    entry.totalHours += hours;
+    if (g.rating > 0) {
+      entry.ratingSum += g.rating;
+      entry.ratingCount += 1;
+    }
+    if (g.status === 'Completed') entry.completedCount += 1;
+    byGenre.set(genre, entry);
+  });
+
+  const classes: GenreMasteryClass[] = Array.from(byGenre.entries())
+    .map(([genre, data]) => {
+      const xp = Math.round(data.xp);
+      const level = levelForXP(xp);
+      const xpAtLevel = xpForLevel(level);
+      const xpAtNextLevel = xpForLevel(level + 1);
+      const xpIntoLevel = xp - xpAtLevel;
+      const xpForNextLevel = xpAtNextLevel - xpAtLevel;
+      const avgRating = data.ratingCount > 0 ? data.ratingSum / data.ratingCount : 0;
+      const next = nextPerkForLevel(level);
+
+      return {
+        genre,
+        xp,
+        level,
+        rank: rankForLevel(level),
+        xpIntoLevel,
+        xpForNextLevel,
+        progressPercent: xpForNextLevel > 0 ? Math.min(100, Math.round((xpIntoLevel / xpForNextLevel) * 100)) : 100,
+        gameCount: data.gameCount,
+        totalHours: Math.round(data.totalHours * 10) / 10,
+        avgRating: Math.round(avgRating * 10) / 10,
+        completedCount: data.completedCount,
+        perk: perkForLevel(level),
+        nextPerk: next?.perk ?? null,
+        nextPerkLevel: next?.level ?? null,
+        insight: genreInsight({ genre, gameCount: data.gameCount, totalHours: data.totalHours, avgRating, completedCount: data.completedCount }),
+      };
+    })
+    .sort((a, b) => b.xp - a.xp);
+
+  const mainClass = classes[0] ?? null;
+  const hybridWith = mainClass && classes[1] && classes[1].xp >= mainClass.xp * 0.8 ? classes[1] : null;
+
+  const totalXP = classes.reduce((sum, c) => sum + c.xp, 0);
+  const playerLevel = levelForXP(totalXP);
+  const playerTitle = mainClass ? `${rankForLevel(playerLevel)} ${mainClass.genre} ${hybridWith ? `/ ${hybridWith.genre} ` : ''}Player` : 'Aspiring Gamer';
+
+  return { classes, mainClass, hybridWith, playerLevel, playerTitle, totalXP: Math.round(totalXP) };
+}

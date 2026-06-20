@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-20 — Stats Tab — Genre Mastery
+
+**Files**: app/apps/game-analytics/lib/calculations.ts, app/apps/game-analytics/components/GenreMasteryPanel.tsx, app/apps/game-analytics/components/StatsView.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Added an RPG-style leveling system for genres: every genre you've played becomes a "class" that earns XP from hours played (×10), a completion bonus (+200), and a rating bonus (rating×15), halved for abandoned games — XP follows a quadratic level curve (`xpForLevel(level) = 100*(level-1)^2`) so early levels come fast but reaching Master (level 25) or Legend (level 50) takes real dedication. `getGenreMastery(games)` in `calculations.ts` aggregates this per genre, ranks classes by XP to detect your "Main Class" (and a "hybrid" second class if it's within 80% of the main class's XP), and rolls everything up into an aggregate player level + title (e.g. "Adept RPG / Strategy Player"). New self-contained `GenreMasteryPanel.tsx` renders a player summary header, a hero card for your Main Class (level ring via the existing `ProgressRing` component, rank badge, XP bar, current + next unlockable perk text, a one-line data-driven insight), and a grid of your other genre classes — wired into `StatsView.tsx` with one import + one JSX line next to `FunStatsPanel`. No changes to `lib/types.ts` (new `GenreClass`/`GenreMasteryData` interfaces live in `calculations.ts` itself), the storage/repository layer, or any existing function's body — purely additive. Verified with a clean `npm run build` (Next 14.2.35, 11/11 static pages — `npm install` was required first since `node_modules` wasn't present) and `npm run lint` (zero new warnings — confirmed no matches for the new files/lines in the full lint output, which only contains pre-existing warnings/errors in unrelated mini-apps); no headless browser is available in this sandbox, so the 375px mobile/console check was substituted with a dev-server HTTP 200 fetch of `/apps/game-analytics` showing a clean compile with no server-side errors.
+
+FOLLOW-UP: Could add a small toast/celebration when a genre class levels up (mirroring the existing milestone-celebration pattern), and could surface the Main Class badge on the Gamer Card / share card alongside personality type and credit score.
+
 ## 2026-06-19 20:16 — Buy Queue — Price Watch alerts
 
 **Files**: app/apps/game-analytics/lib/calculations.ts, app/apps/game-analytics/hooks/useAlerts.ts, app/apps/game-analytics/page.tsx, app/apps/game-analytics/components/BuyQueueTab.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json
