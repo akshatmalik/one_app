@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, CalendarClock, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical, Download, Upload, Gift, ShoppingCart, Search, X, Moon, CreditCard, Swords, Inbox, Play } from 'lucide-react';
+import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, CalendarClock, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical, Download, Upload, Gift, ShoppingCart, Search, X, Moon, CreditCard, Swords, Inbox, Play, History } from 'lucide-react';
 import { useGames } from './hooks/useGames';
 import { useAnalytics, GameWithMetrics } from './hooks/useAnalytics';
 import { useBudget } from './hooks/useBudget';
@@ -46,6 +46,8 @@ import { MomentumDots } from './components/MomentumDots';
 import { ProgressRing } from './components/ProgressRing';
 import { ExportPanel } from './components/ExportPanel';
 import { ImportModal } from './components/ImportModal';
+import { TimeMachineModal } from './components/TimeMachineModal';
+import { useLibrarySnapshots } from './hooks/useLibrarySnapshots';
 import { YearStoryMode } from './components/YearStoryMode';
 import { GamerCard } from './components/GamerCard';
 import { MeVsMe } from './components/MeVsMe';
@@ -152,6 +154,7 @@ export default function GameAnalyticsPage() {
   const { user, loading: authLoading } = useAuthContext();
   const { showToast } = useToast();
   const { games, loading, error, addGame, updateGame, updateManyGames, deleteGame, refresh } = useGames(user?.uid ?? null);
+  const librarySnapshots = useLibrarySnapshots(user?.uid ?? null, games, loading, { addGame, updateGame, deleteGame });
   const { gamesWithMetrics, summary } = useAnalytics(games);
   const { budgets, setBudget } = useBudget(user?.uid ?? null);
   const { entries: purchaseQueueEntries, upcomingEntries, addEntry: addPurchaseEntry } = usePurchaseQueue(user?.uid ?? null);
@@ -243,6 +246,7 @@ export default function GameAnalyticsPage() {
   const [showBulkWishlist, setShowBulkWishlist] = useState(false);
   const [showExport, setShowExport] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  const [showTimeMachine, setShowTimeMachine] = useState(false);
   const [wrappedYear, setWrappedYear] = useState<number | null>(null);
   const [showGamerCard, setShowGamerCard] = useState(false);
   const [showMeVsMe, setShowMeVsMe] = useState(false);
@@ -1181,6 +1185,7 @@ export default function GameAnalyticsPage() {
                           { icon: <Star size={15} className="text-amber-400" />, label: 'Awards Hub', onClick: () => setShowAwardsHub(true) },
                           { icon: <Download size={15} className="text-white/50" />, label: 'Export data', onClick: () => setShowExport(true) },
                           { icon: <Upload size={15} className="text-white/50" />, label: 'Import games', onClick: () => setShowImport(true) },
+                          { icon: <History size={15} className="text-emerald-400" />, label: 'Time Machine', onClick: () => setShowTimeMachine(true) },
                         ].map(item => (
                           <button key={item.label}
                             onClick={() => { item.onClick(); setShowMoreMenu(false); }}
@@ -1685,6 +1690,19 @@ export default function GameAnalyticsPage() {
           games={games}
           onImport={addGame}
           onClose={() => setShowImport(false)}
+        />
+      )}
+
+      {/* Time Machine — snapshot/restore safety net */}
+      {showTimeMachine && (
+        <TimeMachineModal
+          snapshots={librarySnapshots.snapshots}
+          getDiff={librarySnapshots.getDiff}
+          restoring={librarySnapshots.restoring}
+          onSaveManual={librarySnapshots.saveManualSnapshot}
+          onDelete={librarySnapshots.removeSnapshot}
+          onRestore={librarySnapshots.restoreSnapshot}
+          onClose={() => setShowTimeMachine(false)}
         />
       )}
 

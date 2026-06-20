@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-20 — Library — Time Machine (snapshot & restore)
+
+**Files**: app/apps/game-analytics/lib/snapshot-storage.ts, app/apps/game-analytics/hooks/useLibrarySnapshots.ts, app/apps/game-analytics/components/TimeMachineModal.tsx, app/apps/game-analytics/page.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Added a personal safety net against the worst-case data accidents this app has never protected against: an accidental delete, a bad bulk import, or a wiped browser profile wiping out a whole library with zero recovery path. New `lib/snapshot-storage.ts` is a device-local store (same precedent as `queue-preferences.ts`/`estimator-settings.ts`, key `ga-library-snapshots-${userId}`, SSR-guarded, try/catch around all localStorage access) that periodically saves a full deep copy of the games array — auto-snapshots are debounced and gap-limited (max one every 12h, skipped if nothing actually changed) and capped at 20 total (oldest auto-snapshots pruned first, manual ones protected). `diffSnapshot()` compares any snapshot against the live library (added/removed/modified-with-field-level-changes) and `buildRestorePlan()` turns a diff into a concrete restore: a "safe" mode that brings back deleted games and reverts changed fields without ever deleting anything you've added since, and an opt-in "exact" mode that also removes games added after the snapshot. New `useLibrarySnapshots` hook wires this to the existing `addGame`/`updateGame`/`deleteGame` callbacks from `useGames`, and a new `TimeMachineModal` (styled to match `ImportModal`'s existing modal conventions) lists every snapshot with an expandable diff, a "Save a snapshot now" button, and a confirm-before-restore step that calls out exactly what will change. Wired into `page.tsx` with one new "Time Machine" entry in the existing More-menu and one hook call — no changes to `lib/types.ts`, the Hybrid/Firebase repository layer, or any existing `calculations.ts` function. Verified with a clean `npm run build` (Next 14.2.35, 11/11 static pages — `npm install` was required first since `node_modules` wasn't present) and `npm run lint` (zero new warnings/errors — the only ones in the full lint output are pre-existing and in unrelated mini-apps: `game-interest-tracker`, `mood-tracker`, `survivor-deckbuilder`, `time-tracker`, `todo-app`); no headless browser is available in this sandbox, so the 375px mobile/console check was substituted with a dev-server HTTP 200 fetch of `/apps/game-analytics` showing a clean compile with no server-side errors.
+
+FOLLOW-UP: Could surface a one-tap "Undo" toast right after a delete/bulk-import action that jumps straight to a pre-action snapshot's restore confirmation, instead of requiring a trip through the More menu.
+
 ## 2026-06-20 — Stats Tab — Genre Mastery
 
 **Files**: app/apps/game-analytics/lib/calculations.ts, app/apps/game-analytics/components/GenreMasteryPanel.tsx, app/apps/game-analytics/components/StatsView.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json
