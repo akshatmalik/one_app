@@ -64,6 +64,7 @@ import { GameReviewChat } from './components/GameReviewChat';
 import { GameCompareModal } from './components/GameCompareModal';
 import { PlayTonightModal } from './components/PlayTonightModal';
 import { BacklogTriageModal } from './components/BacklogTriageModal';
+import { SchedulePlannerModal } from './components/SchedulePlannerModal';
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist';
@@ -273,6 +274,7 @@ export default function GameAnalyticsPage() {
   const [showWhatsNew, setShowWhatsNew] = useState(false);
   const [showPlayTonight, setShowPlayTonight] = useState(false);
   const [showBacklogTriage, setShowBacklogTriage] = useState(false);
+  const [showSchedulePlanner, setShowSchedulePlanner] = useState(false);
 
   // Week recap data for header strip
   const weekRecap = useMemo(() => {
@@ -692,6 +694,14 @@ export default function GameAnalyticsPage() {
                           className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white/70 hover:text-white hover:bg-white/5 transition-all"
                         >
                           <Moon size={14} className="text-indigo-400" /> Play Tonight
+                        </button>
+                      )}
+                      {games.filter(g => g.status !== 'Wishlist' && g.status !== 'Completed' && g.status !== 'Abandoned').length > 0 && (
+                        <button
+                          onClick={() => { setShowSchedulePlanner(true); setShowCommandPalette(false); }}
+                          className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white/70 hover:text-white hover:bg-white/5 transition-all"
+                        >
+                          <CalendarClock size={14} className="text-cyan-400" /> Plan My Week
                         </button>
                       )}
                       {games.filter(g => g.status !== 'Wishlist' && g.status !== 'Completed' && g.status !== 'Abandoned').length > 0 && (
@@ -1643,6 +1653,21 @@ export default function GameAnalyticsPage() {
             setShowPlayTonight(false);
             setDetailGame(game);
           }}
+        />
+      )}
+
+      {/* Plan My Week Modal */}
+      {showSchedulePlanner && (
+        <SchedulePlannerModal
+          games={games}
+          gamesWithMetrics={gamesWithMetrics}
+          queuedGames={queuedGames}
+          onClose={() => setShowSchedulePlanner(false)}
+          onOpenGame={(game) => {
+            setShowSchedulePlanner(false);
+            setDetailGame(game);
+          }}
+          onStartTimer={handleStartTimer}
         />
       )}
 

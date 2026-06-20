@@ -1,6 +1,12 @@
 {
   "entries": [
     {
+      "date": "2026-06-20",
+      "area": "Up Next",
+      "title": "Plan My Week turns your free time into a real schedule",
+      "body": "New \"Plan My Week\" button in the header's More menu. Tell it how many hours you're free each day for the next 7 days, and it builds you a day-by-day play schedule using the same chemistry scoring that powers your queue — prioritizing whatever's already at the top of Up Next, then your best-matched games after that. Each day shows the game, a chemistry grade badge, and a one-line reason it was picked. Don't like a pick? Swap it for the next best match or clear the day. Once you're happy with the week, export it straight to a calendar file (.ics) you can drop into Google Calendar, Apple Calendar, or anywhere else — or just hit play on today's slot to start your timer right from the planner."
+    },
+    {
       "date": "2026-06-19",
       "area": "Buy Queue",
       "title": "Price drops in your buy queue now show up as alerts",
