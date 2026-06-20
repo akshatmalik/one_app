@@ -171,6 +171,7 @@ export default function GameAnalyticsPage() {
       : null,
     [liveSession.activeSession, liveSession.elapsedMs]
   );
+  const { allTrophies, summary: trophySummary, pinnedTrophies, pinnedIds: pinnedTrophyIds, togglePin: toggleTrophyPin, toastQueue: trophyToastQueue, dismissToast: dismissTrophyToast } = useTrophies(games, user?.uid ?? null);
   const {
     alerts,
     criticalCount: alertsCriticalCount,
@@ -179,9 +180,10 @@ export default function GameAnalyticsPage() {
     requestPermission: requestAlertsPermission,
     dismissAlert,
     snoozeAlert,
-  } = useAlerts(games, budgets, goals, user?.uid ?? null, alertsLiveSession, purchaseQueueEntries);
+    mutedCategories: alertsMutedCategories,
+    toggleCategoryMute: toggleAlertCategoryMute,
+  } = useAlerts(games, budgets, goals, user?.uid ?? null, alertsLiveSession, purchaseQueueEntries, allTrophies);
   const { rankings: allTimeRankings } = useRankings(user?.uid ?? null, 'all', 'all');
-  const { allTrophies, summary: trophySummary, pinnedTrophies, pinnedIds: pinnedTrophyIds, togglePin: toggleTrophyPin, toastQueue: trophyToastQueue, dismissToast: dismissTrophyToast } = useTrophies(games, user?.uid ?? null);
   const { toastQueue: genreToastQueue, dismissToast: dismissGenreToast } = useGenreLevelUps(games, user?.uid ?? null);
   const { assignments: allTimeTiers } = useTierAssignments(user?.uid ?? null, 'all');
   const eloByGameId = useMemo(() => {
@@ -413,6 +415,10 @@ export default function GameAnalyticsPage() {
     }
     if (alert.category === 'price') {
       setTabMode('buy-queue');
+      return;
+    }
+    if (alert.category === 'milestone') {
+      setTabMode('stats');
       return;
     }
     if (alert.gameId) {
@@ -747,6 +753,8 @@ export default function GameAnalyticsPage() {
                   onDismiss={dismissAlert}
                   onSnooze={snoozeAlert}
                   onAction={handleAlertAction}
+                  mutedCategories={alertsMutedCategories}
+                  onToggleCategoryMute={toggleAlertCategoryMute}
                 />
               )}
               <button

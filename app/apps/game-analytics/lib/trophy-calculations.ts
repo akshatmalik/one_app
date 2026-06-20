@@ -13,6 +13,7 @@ import {
   parseLocalDate,
   getValueRating,
   getCardRarity,
+  GameAlert,
 } from './calculations';
 import {
   TROPHY_DEFINITIONS,
@@ -1151,4 +1152,26 @@ export function getTrophyScoreSummary(trophies: TrophyProgress[]): TrophyScoreSu
     byCategory,
     pinnedIds: [],
   };
+}
+
+function capitalize(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+/**
+ * Surfaces tiered (non-milestone) trophies that are 85%+ of the way to their
+ * next tier, so close progress doesn't go unnoticed between Trophy Room visits.
+ */
+export function getMilestoneProximityAlerts(trophies: TrophyProgress[]): GameAlert[] {
+  return trophies
+    .filter(t => !t.definition.isMilestone && t.nextTier !== null && t.progress >= 85 && t.progress < 100)
+    .map(t => ({
+      id: `milestone-${t.definition.id}-${t.nextTier}`,
+      category: 'milestone' as const,
+      severity: 'info' as const,
+      icon: t.definition.icon,
+      title: `${Math.round(t.progress)}% to ${capitalize(t.nextTier as string)} ${t.definition.name}`,
+      message: t.definition.description,
+      actionLabel: 'View trophies',
+    }));
 }

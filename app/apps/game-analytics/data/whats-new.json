@@ -2,27 +2,33 @@
   "entries": [
     {
       "date": "2026-06-20",
+      "area": "Header",
+      "title": "Alerts now remember anniversaries and almost-earned trophies",
+      "body": "The bell icon in the header just got smarter. It will now nudge you about gaming anniversaries (\"1 year ago you started Elden Ring\") and let you know when you are within a few percent of leveling up a trophy (\"92% to Gold Century Club\"). And if any alert category is not your thing, tap the new settings gear inside the alerts panel to mute it for good \u2014 budget warnings, queue reminders, anniversaries, whatever you want quiet."
+    },
+    {
+      "date": "2026-06-20",
       "area": "Stats Tab",
       "title": "Genre level-ups now get a celebration",
-      "body": "Push a genre to a new level — or a whole new rank like Adept or Master — and you'll see a toast pop up celebrating it, with a crown if it's your Main Class. Your Gamer Card (the shareable one) now shows your Main Class badge too, right next to your gamer personality. Also fixed a bug where trophy-earned toasts were silently never showing up — those now fire properly alongside the new genre ones."
+      "body": "Push a genre to a new level \u2014 or a whole new rank like Adept or Master \u2014 and you'll see a toast pop up celebrating it, with a crown if it's your Main Class. Your Gamer Card (the shareable one) now shows your Main Class badge too, right next to your gamer personality. Also fixed a bug where trophy-earned toasts were silently never showing up \u2014 those now fire properly alongside the new genre ones."
     },
     {
       "date": "2026-06-20",
       "area": "Library",
       "title": "Time Machine: undo accidental deletes and bad imports",
-      "body": "Your library now quietly saves itself in the background, and you can save a snapshot manually any time too. Open \"Time Machine\" from the ⋮ menu to see every snapshot with exactly what's changed since — games added, removed, or edited — and restore any of them with one tap. Accidentally deleted a game? A bulk import went sideways? Just roll back to right before it happened. You'll never lose your library to a mistake again."
+      "body": "Your library now quietly saves itself in the background, and you can save a snapshot manually any time too. Open \"Time Machine\" from the \u22ee menu to see every snapshot with exactly what's changed since \u2014 games added, removed, or edited \u2014 and restore any of them with one tap. Accidentally deleted a game? A bulk import went sideways? Just roll back to right before it happened. You'll never lose your library to a mistake again."
     },
     {
       "date": "2026-06-20",
       "area": "Stats Tab",
       "title": "Level up your favorite genres",
-      "body": "Every genre you play is now its own character class that levels up the more you play it — hours, finishing games, and rating them all earn XP. Head to the Stats tab to see your rank in each genre (Novice through Legend), your \"Main Class\" — the genre that defines you as a gamer — and what perks you unlock as you level up. It's a fun new way to see where your gaming energy actually goes, and which genre you've truly mastered versus which ones you just dabble in."
+      "body": "Every genre you play is now its own character class that levels up the more you play it \u2014 hours, finishing games, and rating them all earn XP. Head to the Stats tab to see your rank in each genre (Novice through Legend), your \"Main Class\" \u2014 the genre that defines you as a gamer \u2014 and what perks you unlock as you level up. It's a fun new way to see where your gaming energy actually goes, and which genre you've truly mastered versus which ones you just dabble in."
     },
     {
       "date": "2026-06-19",
       "area": "Buy Queue",
       "title": "Price drops in your buy queue now show up as alerts",
-      "body": "If a game in your Buy Queue hits the target price you set, or drops to a new low even before reaching that target, it now surfaces in the alerts bell up top — no need to keep checking back manually. There's also a new \"Check all prices\" button on the Buy Queue tab that refreshes every game's price in one tap, instead of checking each one individually. Tapping a price alert jumps you straight to the Buy Queue."
+      "body": "If a game in your Buy Queue hits the target price you set, or drops to a new low even before reaching that target, it now surfaces in the alerts bell up top \u2014 no need to keep checking back manually. There's also a new \"Check all prices\" button on the Buy Queue tab that refreshes every game's price in one tap, instead of checking each one individually. Tapping a price alert jumps you straight to the Buy Queue."
     },
     {
       "date": "2026-06-19",
@@ -34,49 +40,49 @@
       "date": "2026-06-19",
       "area": "Games tab",
       "title": "Start a live timer while you play",
-      "body": "Hit \"Timer\" on any game card (or the \"Start Live Timer\" button in a game's detail sheet) and a Now Playing bar drops in at the bottom of the screen with a running stopwatch — it keeps counting even if you switch tabs or come back later. Pause it, resume it, or tap stop to log the session: the hours are pre-filled from the timer, and you can tag your mood (🔥 Great, 👍 Good, 😐 Meh, 💪 Grind) before saving. No more guessing how long you actually played."
+      "body": "Hit \"Timer\" on any game card (or the \"Start Live Timer\" button in a game's detail sheet) and a Now Playing bar drops in at the bottom of the screen with a running stopwatch \u2014 it keeps counting even if you switch tabs or come back later. Pause it, resume it, or tap stop to log the session: the hours are pre-filled from the timer, and you can tag your mood (\ud83d\udd25 Great, \ud83d\udc4d Good, \ud83d\ude10 Meh, \ud83d\udcaa Grind) before saving. No more guessing how long you actually played."
     },
     {
       "date": "2026-06-18",
       "area": "Games tab",
       "title": "See your budget impact before you hit save",
-      "body": "Set a yearly budget on the Stats tab? Now when you add (or edit) a game's price in the Add Game form, you'll see exactly what it does to your budget — money spent so far this year, what's left after this purchase, and a color-coded bar that turns amber as you approach your limit and red if you'd go over. No more finding out you blew the budget after the fact."
+      "body": "Set a yearly budget on the Stats tab? Now when you add (or edit) a game's price in the Add Game form, you'll see exactly what it does to your budget \u2014 money spent so far this year, what's left after this purchase, and a color-coded bar that turns amber as you approach your limit and red if you'd go over. No more finding out you blew the budget after the fact."
     },
     {
       "date": "2026-06-18",
       "area": "Games tab",
       "title": "Import your library from a CSV or JSON file",
-      "body": "Got a spreadsheet of games, or an old export from this app? Tap ⋮ then \"Import games\" to bring it in. Drop in a file or paste CSV text, review a preview of what was found (games already in your library are flagged so you don't accidentally duplicate them), uncheck anything you don't want, and import the rest in one go. Pairs with the existing Export so you've got a full backup-and-restore loop."
+      "body": "Got a spreadsheet of games, or an old export from this app? Tap \u22ee then \"Import games\" to bring it in. Drop in a file or paste CSV text, review a preview of what was found (games already in your library are flagged so you don't accidentally duplicate them), uncheck anything you don't want, and import the rest in one go. Pairs with the existing Export so you've got a full backup-and-restore loop."
     },
     {
       "date": "2026-06-18",
       "area": "Stats tab",
       "title": "Solo or social? Find out where your hours actually go",
-      "body": "When logging a play session, you can now tag who you played with — Solo, Co-op, Online, Couch Co-op, or Streamed. The Stats tab's Analytics panel turns those tags into a Social Gaming Breakdown: a solo-vs-social split of your hours, a per-mode bar, and a quick insight like your go-to co-op game. Tag a few sessions to unlock it."
+      "body": "When logging a play session, you can now tag who you played with \u2014 Solo, Co-op, Online, Couch Co-op, or Streamed. The Stats tab's Analytics panel turns those tags into a Social Gaming Breakdown: a solo-vs-social split of your hours, a per-mode bar, and a quick insight like your go-to co-op game. Tag a few sessions to unlock it."
     },
     {
       "date": "2026-06-18",
       "area": "Games tab",
-      "title": "Backlog Triage — make peace with your pile of unplayed games",
-      "body": "Tap ⋮ then \"Backlog Triage\" to swipe through the games in your library that actually need a decision — the ones going stale unstarted, or stalled mid-playthrough. One card at a time, you choose: Queue it up next, Let it go (mark abandoned), or Snooze for three weeks. A summary at the end tallies how many hours and dollars you finally made a call on. No more scrolling past the same forgotten games every time you open the app."
+      "title": "Backlog Triage \u2014 make peace with your pile of unplayed games",
+      "body": "Tap \u22ee then \"Backlog Triage\" to swipe through the games in your library that actually need a decision \u2014 the ones going stale unstarted, or stalled mid-playthrough. One card at a time, you choose: Queue it up next, Let it go (mark abandoned), or Snooze for three weeks. A summary at the end tallies how many hours and dollars you finally made a call on. No more scrolling past the same forgotten games every time you open the app."
     },
     {
       "date": "2026-06-17",
       "area": "Stats tab",
       "title": "Set goals and track your progress",
-      "body": "A new Gaming Goals panel on the Stats tab lets you set personal challenges — finish a number of games, stick to a spending limit, hit an hours target, branch into new genres, clear your backlog, or track any custom metric you like. Watch your progress bar fill in real time, and look back at past goals in a collapsible history once they're done."
+      "body": "A new Gaming Goals panel on the Stats tab lets you set personal challenges \u2014 finish a number of games, stick to a spending limit, hit an hours target, branch into new genres, clear your backlog, or track any custom metric you like. Watch your progress bar fill in real time, and look back at past goals in a collapsible history once they're done."
     },
     {
       "date": "2026-06-10",
       "area": "Games tab",
-      "title": "Play Tonight — find your perfect match in seconds",
-      "body": "Tap ⋮ then \"Play Tonight\" and tell the app how much time you have — Quick, Standard, Long, or Marathon. It instantly ranks your unfinished games by chemistry, session-length fit, and current momentum, showing your top pick with a highlighted card and a one-line reason, plus four runner-ups. Tap any result to jump straight into the game's detail sheet and log your session."
+      "title": "Play Tonight \u2014 find your perfect match in seconds",
+      "body": "Tap \u22ee then \"Play Tonight\" and tell the app how much time you have \u2014 Quick, Standard, Long, or Marathon. It instantly ranks your unfinished games by chemistry, session-length fit, and current momentum, showing your top pick with a highlighted card and a one-line reason, plus four runner-ups. Tap any result to jump straight into the game's detail sheet and log your session."
     },
     {
       "date": "2026-06-01",
       "area": "Game detail",
       "title": "Compare any two games head to head",
-      "body": "Open any game's detail sheet, tap the new ⇄ Compare button, and pick a second game from your library. You'll see a full side-by-side breakdown — price, hours, rating, cost-per-hour, ROI, sessions — with a winner highlighted for each category, a radar chart visualising both profiles at once, and an overall verdict showing which game came out on top."
+      "body": "Open any game's detail sheet, tap the new \u21c4 Compare button, and pick a second game from your library. You'll see a full side-by-side breakdown \u2014 price, hours, rating, cost-per-hour, ROI, sessions \u2014 with a winner highlighted for each category, a radar chart visualising both profiles at once, and an overall verdict showing which game came out on top."
     },
     {
       "date": "2026-06-01",

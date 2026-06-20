@@ -14680,7 +14680,7 @@ export function getBudgetImpactPreview(
 // ─────────────────────────────────────────────────────────────────────────────
 
 export type AlertSeverity = 'critical' | 'warning' | 'info';
-export type AlertCategory = 'budget' | 'queue' | 'shelf-life' | 'goal' | 'session' | 'price';
+export type AlertCategory = 'budget' | 'queue' | 'shelf-life' | 'goal' | 'session' | 'price' | 'anniversary' | 'milestone';
 
 export interface GameAlert {
   id: string;
@@ -14820,6 +14820,41 @@ export function getActiveAlerts(
   }
 
   return alerts.sort((a, b) => ALERT_SEVERITY_ORDER[a.severity] - ALERT_SEVERITY_ORDER[b.severity]);
+}
+
+const ANNIVERSARY_EVENT_ICON: Record<OnThisDayEvent['eventType'], string> = {
+  purchased: '🛒',
+  started: '🚀',
+  completed: '🏆',
+  played: '🎮',
+  abandoned: '👋',
+};
+
+const ANNIVERSARY_EVENT_VERB: Record<OnThisDayEvent['eventType'], string> = {
+  purchased: 'you bought',
+  started: 'you started',
+  completed: 'you completed',
+  played: 'you played',
+  abandoned: 'you set aside',
+};
+
+/**
+ * Turns today's "On This Day" matches (already computed by getOnThisDay) into
+ * alert-feed entries, so anniversaries surface in the header bell even on tabs
+ * that never render the OnThisDayCard. Purely additive — getOnThisDay itself
+ * is untouched.
+ */
+export function getAnniversaryAlerts(games: Game[]): GameAlert[] {
+  return getOnThisDay(games).map(event => ({
+    id: `anniversary-${event.game.id}-${event.eventType}-${event.timeAgo}`,
+    category: 'anniversary',
+    severity: 'info',
+    icon: ANNIVERSARY_EVENT_ICON[event.eventType],
+    title: `${event.timeAgo}: ${event.game.name}`,
+    message: `${event.timeAgo}, ${ANNIVERSARY_EVENT_VERB[event.eventType]} ${event.game.name}.`,
+    gameId: event.game.id,
+    actionLabel: 'View game',
+  }));
 }
 
 /**

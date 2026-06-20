@@ -1,14 +1,25 @@
 'use client';
 
 import { useState } from 'react';
-import { Bell, BellRing, X, Clock3 } from 'lucide-react';
+import { Bell, BellRing, X, Clock3, Settings2, Check } from 'lucide-react';
 import clsx from 'clsx';
-import { GameAlert, AlertSeverity } from '../lib/calculations';
+import { GameAlert, AlertSeverity, AlertCategory } from '../lib/calculations';
 
 const SEVERITY_STYLES: Record<AlertSeverity, { border: string; bg: string; text: string }> = {
   critical: { border: 'border-red-500/30', bg: 'bg-red-500/10', text: 'text-red-300' },
   warning: { border: 'border-amber-500/30', bg: 'bg-amber-500/10', text: 'text-amber-300' },
   info: { border: 'border-blue-500/30', bg: 'bg-blue-500/10', text: 'text-blue-300' },
+};
+
+const CATEGORY_LABELS: Record<AlertCategory, string> = {
+  budget: 'Budget',
+  queue: 'Up Next queue',
+  'shelf-life': 'Shelf life',
+  goal: 'Goals',
+  session: 'Live session',
+  price: 'Price watch',
+  anniversary: 'Anniversaries',
+  milestone: 'Trophy milestones',
 };
 
 interface AlertsCenterProps {
@@ -20,6 +31,8 @@ interface AlertsCenterProps {
   onDismiss: (alert: GameAlert) => void;
   onSnooze: (alert: GameAlert) => void;
   onAction: (alert: GameAlert) => void;
+  mutedCategories: Set<AlertCategory>;
+  onToggleCategoryMute: (category: AlertCategory) => void;
 }
 
 export function AlertsCenter({
@@ -31,8 +44,11 @@ export function AlertsCenter({
   onDismiss,
   onSnooze,
   onAction,
+  mutedCategories,
+  onToggleCategoryMute,
 }: AlertsCenterProps) {
   const [open, setOpen] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
 
   const badgeCount = criticalCount + warningCount;
   const hasAlerts = alerts.length > 0;
@@ -67,62 +83,100 @@ export function AlertsCenter({
           <div className="absolute right-0 top-full mt-1 z-50 w-[320px] max-w-[90vw] bg-[#1a1a2e] border border-white/10 rounded-xl shadow-2xl max-h-[70vh] overflow-y-auto">
             <div className="flex items-center justify-between px-4 py-3 border-b border-white/5">
               <span className="text-sm font-semibold text-white">Alerts</span>
-              <button onClick={() => setOpen(false)} className="text-white/40 hover:text-white/70">
-                <X size={14} />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowSettings(s => !s)}
+                  className={clsx('text-white/40 hover:text-white/70', showSettings && 'text-purple-300')}
+                  title="Alert preferences"
+                  aria-label="Alert preferences"
+                >
+                  <Settings2 size={14} />
+                </button>
+                <button onClick={() => setOpen(false)} className="text-white/40 hover:text-white/70">
+                  <X size={14} />
+                </button>
+              </div>
             </div>
 
-            {permission === 'default' && (
-              <button
-                onClick={onRequestPermission}
-                className="w-full text-left px-4 py-2.5 text-[12px] text-purple-300 hover:bg-white/5 border-b border-white/5"
-              >
-                Enable desktop alerts for budget &amp; queue warnings →
-              </button>
-            )}
-
-            {alerts.length === 0 ? (
-              <div className="px-4 py-8 text-center text-white/40 text-sm">
-                All clear. Nothing needs your attention right now.
-              </div>
-            ) : (
-              <div className="divide-y divide-white/5">
-                {alerts.map(alert => {
-                  const style = SEVERITY_STYLES[alert.severity];
+            {showSettings ? (
+              <div className="py-1">
+                <p className="px-4 pt-2 pb-1 text-[11px] text-white/40">Mute alert categories</p>
+                {(Object.keys(CATEGORY_LABELS) as AlertCategory[]).map(category => {
+                  const muted = mutedCategories.has(category);
                   return (
-                    <div key={`${alert.id}:${alert.severity}`} className={clsx('px-4 py-3', style.bg)}>
-                      <div className="flex items-start gap-2">
-                        <span className="text-base leading-none mt-0.5">{alert.icon}</span>
-                        <div className="flex-1 min-w-0">
-                          <p className={clsx('text-[13px] font-medium', style.text)}>{alert.title}</p>
-                          <p className="text-[12px] text-white/60 mt-0.5">{alert.message}</p>
-                          <div className="flex items-center gap-3 mt-2">
-                            <button
-                              onClick={() => { onAction(alert); setOpen(false); }}
-                              className={clsx('text-[11px] font-medium px-2 py-1 rounded-md border', style.border, style.text, 'hover:opacity-80')}
-                            >
-                              {alert.actionLabel}
-                            </button>
-                            <button
-                              onClick={() => onSnooze(alert)}
-                              className="text-[11px] text-white/40 hover:text-white/70 flex items-center gap-1"
-                              title="Snooze for a day"
-                            >
-                              <Clock3 size={11} /> Snooze
-                            </button>
-                            <button
-                              onClick={() => onDismiss(alert)}
-                              className="text-[11px] text-white/40 hover:text-white/70 ml-auto"
-                            >
-                              Dismiss
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
+                    <button
+                      key={category}
+                      onClick={() => onToggleCategoryMute(category)}
+                      className="w-full flex items-center justify-between px-4 py-2 text-[12px] text-white/70 hover:bg-white/5"
+                    >
+                      <span className={clsx(muted && 'text-white/40 line-through')}>{CATEGORY_LABELS[category]}</span>
+                      <span
+                        className={clsx(
+                          'w-4 h-4 rounded border flex items-center justify-center',
+                          muted ? 'border-white/15' : 'border-purple-400/60 bg-purple-500/20'
+                        )}
+                      >
+                        {!muted && <Check size={11} className="text-purple-300" />}
+                      </span>
+                    </button>
                   );
                 })}
               </div>
+            ) : (
+              <>
+                {permission === 'default' && (
+                  <button
+                    onClick={onRequestPermission}
+                    className="w-full text-left px-4 py-2.5 text-[12px] text-purple-300 hover:bg-white/5 border-b border-white/5"
+                  >
+                    Enable desktop alerts for budget &amp; queue warnings →
+                  </button>
+                )}
+
+                {alerts.length === 0 ? (
+                  <div className="px-4 py-8 text-center text-white/40 text-sm">
+                    All clear. Nothing needs your attention right now.
+                  </div>
+                ) : (
+                  <div className="divide-y divide-white/5">
+                    {alerts.map(alert => {
+                      const style = SEVERITY_STYLES[alert.severity];
+                      return (
+                        <div key={`${alert.id}:${alert.severity}`} className={clsx('px-4 py-3', style.bg)}>
+                          <div className="flex items-start gap-2">
+                            <span className="text-base leading-none mt-0.5">{alert.icon}</span>
+                            <div className="flex-1 min-w-0">
+                              <p className={clsx('text-[13px] font-medium', style.text)}>{alert.title}</p>
+                              <p className="text-[12px] text-white/60 mt-0.5">{alert.message}</p>
+                              <div className="flex items-center gap-3 mt-2">
+                                <button
+                                  onClick={() => { onAction(alert); setOpen(false); }}
+                                  className={clsx('text-[11px] font-medium px-2 py-1 rounded-md border', style.border, style.text, 'hover:opacity-80')}
+                                >
+                                  {alert.actionLabel}
+                                </button>
+                                <button
+                                  onClick={() => onSnooze(alert)}
+                                  className="text-[11px] text-white/40 hover:text-white/70 flex items-center gap-1"
+                                  title="Snooze for a day"
+                                >
+                                  <Clock3 size={11} /> Snooze
+                                </button>
+                                <button
+                                  onClick={() => onDismiss(alert)}
+                                  className="text-[11px] text-white/40 hover:text-white/70 ml-auto"
+                                >
+                                  Dismiss
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </>
             )}
           </div>
         </>
