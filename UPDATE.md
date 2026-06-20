@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-20 — Stats Tab — Genre level-up celebrations + Main Class badge
+
+**Files**: app/apps/game-analytics/hooks/useGenreLevelUps.ts, app/apps/game-analytics/components/GenreLevelUpToast.tsx, app/apps/game-analytics/page.tsx, app/apps/game-analytics/components/GamerCard.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Closed out the FOLLOW-UP from the Genre Mastery run: new `useGenreLevelUps(games, userId)` hook mirrors `useTrophies.ts`'s exact localStorage-diffing pattern (`ga-genre-levels-${userId}`, an `initialLoadRef` that syncs silently on first load so existing libraries don't get flooded with toasts for levels they already earned, and a `*Ref` mirror of state so the detection effect sees fresh data even if it re-runs before React commits) to detect the moment any genre class in `getGenreMastery()` ticks up a level or crosses into a new rank title, queuing a `GenreLevelUpToast` styled after the existing `TrophyToast` (same fixed-position/fade/auto-dismiss/tap-to-dismiss conventions, reusing the already-defined `trophy-toast-*` CSS animation classes) with a 👑 treatment when the leveled-up genre is your Main Class. While wiring the toast into `page.tsx`, found and fixed a real pre-existing bug: `TrophyToast` was imported and its queue/dismiss callback destructured from `useTrophies()` but never actually rendered anywhere in the JSX, so trophy-earned toasts have never fired — both toast queues are now rendered together with a `stacked` offset so they don't overlap if both fire at once. Also added the Main Class badge to `GamerCard.tsx` next to the personality type, as suggested in the follow-up. No changes to `lib/types.ts`, the storage/repository layer, or any existing `calculations.ts` function body — only a new read of the already-exported `getGenreMastery()`. Verified with a clean `npm run build` (Next 14.2.35, 11/11 static pages), `npm run lint` (zero new warnings — the only `<img>` warning touching a changed file is pre-existing on an unrelated line in `GamerCard.tsx`), and a dev-server HTTP 200 fetch of `/apps/game-analytics` showing a clean compile with no server-side errors (no headless browser available in this sandbox for a true 375px console check).
+
+FOLLOW-UP: Could extend the same level-up celebration treatment to the aggregate player level (not just per-genre classes), and could add a small badge/sparkle on the Stats tab nav item itself when an unseen genre level-up is waiting to be viewed.
+
 ## 2026-06-20 — Library — Time Machine (snapshot & restore)
 
 **Files**: app/apps/game-analytics/lib/snapshot-storage.ts, app/apps/game-analytics/hooks/useLibrarySnapshots.ts, app/apps/game-analytics/components/TimeMachineModal.tsx, app/apps/game-analytics/page.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json

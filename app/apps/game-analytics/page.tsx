@@ -59,6 +59,8 @@ import { AwardsHub } from './components/AwardsHub';
 import { useTrophies } from './hooks/useTrophies';
 import { TrophyShowcase } from './components/TrophyShowcase';
 import { TrophyToast } from './components/TrophyToast';
+import { useGenreLevelUps } from './hooks/useGenreLevelUps';
+import { GenreLevelUpToast } from './components/GenreLevelUpToast';
 import { ErrorLogPanel, ErrorLogButton } from './components/ErrorLogPanel';
 import { WhatsNewModal } from './components/WhatsNewModal';
 import { AlertsCenter } from './components/AlertsCenter';
@@ -180,6 +182,7 @@ export default function GameAnalyticsPage() {
   } = useAlerts(games, budgets, goals, user?.uid ?? null, alertsLiveSession, purchaseQueueEntries);
   const { rankings: allTimeRankings } = useRankings(user?.uid ?? null, 'all', 'all');
   const { allTrophies, summary: trophySummary, pinnedTrophies, pinnedIds: pinnedTrophyIds, togglePin: toggleTrophyPin, toastQueue: trophyToastQueue, dismissToast: dismissTrophyToast } = useTrophies(games, user?.uid ?? null);
+  const { toastQueue: genreToastQueue, dismissToast: dismissGenreToast } = useGenreLevelUps(games, user?.uid ?? null);
   const { assignments: allTimeTiers } = useTierAssignments(user?.uid ?? null, 'all');
   const eloByGameId = useMemo(() => {
     const map = new Map<string, GameRanking>();
@@ -1849,6 +1852,30 @@ export default function GameAnalyticsPage() {
           onResume={liveSession.resume}
           onStopAndLog={handleStopTimerAndLog}
           onDiscard={handleDiscardTimer}
+        />
+      )}
+
+      {/* Trophy + Genre Mastery celebration toasts */}
+      {trophyToastQueue[0] && (
+        <TrophyToast
+          key={trophyToastQueue[0].trophyId}
+          name={trophyToastQueue[0].name}
+          icon={trophyToastQueue[0].icon}
+          tier={trophyToastQueue[0].tier}
+          isUpgrade={trophyToastQueue[0].isUpgrade}
+          onDismiss={dismissTrophyToast}
+        />
+      )}
+      {genreToastQueue[0] && (
+        <GenreLevelUpToast
+          key={`${genreToastQueue[0].genre}-${genreToastQueue[0].level}`}
+          genre={genreToastQueue[0].genre}
+          level={genreToastQueue[0].level}
+          rank={genreToastQueue[0].rank}
+          isMainClass={genreToastQueue[0].isMainClass}
+          isRankUp={genreToastQueue[0].isRankUp}
+          stacked={!!trophyToastQueue[0]}
+          onDismiss={dismissGenreToast}
         />
       )}
     </div>

@@ -2,6 +2,12 @@
   "entries": [
     {
       "date": "2026-06-20",
+      "area": "Stats Tab",
+      "title": "Genre level-ups now get a celebration",
+      "body": "Push a genre to a new level — or a whole new rank like Adept or Master — and you'll see a toast pop up celebrating it, with a crown if it's your Main Class. Your Gamer Card (the shareable one) now shows your Main Class badge too, right next to your gamer personality. Also fixed a bug where trophy-earned toasts were silently never showing up — those now fire properly alongside the new genre ones."
+    },
+    {
+      "date": "2026-06-20",
       "area": "Library",
       "title": "Time Machine: undo accidental deletes and bad imports",
       "body": "Your library now quietly saves itself in the background, and you can save a snapshot manually any time too. Open \"Time Machine\" from the ⋮ menu to see every snapshot with exactly what's changed since — games added, removed, or edited — and restore any of them with one tap. Accidentally deleted a game? A bulk import went sideways? Just roll back to right before it happened. You'll never lose your library to a mistake again."

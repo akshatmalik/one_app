@@ -9,6 +9,7 @@ import {
   getLifetimeStats,
   getActivityPulse,
   getTotalHours,
+  getGenreMastery,
 } from '../lib/calculations';
 import { formatHours, formatNumber, formatCostPerHour } from '../lib/format';
 import { ShareButton } from './ShareButton';
@@ -31,6 +32,7 @@ export function GamerCard({ games, displayName, onClose }: GamerCardProps) {
   const credit = getGamingCreditScore(games);
   const lifetime = getLifetimeStats(games);
   const pulse = getActivityPulse(games);
+  const mainClass = getGenreMastery(games).mainClass;
 
   const topGames = [...games]
     .filter(g => g.status !== 'Wishlist')
@@ -58,7 +60,14 @@ export function GamerCard({ games, displayName, onClose }: GamerCardProps) {
               </span>
             </div>
             <h2 className="text-2xl font-bold text-white">{displayName || 'Player One'}</h2>
-            <p className="text-sm font-medium text-purple-300">{personality.type}</p>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <p className="text-sm font-medium text-purple-300">{personality.type}</p>
+              {mainClass && (
+                <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-rose-500/15 text-rose-300 border border-rose-500/20">
+                  ⚔️ Lvl {mainClass.level} {mainClass.genre} {mainClass.rank}
+                </span>
+              )}
+            </div>
             {personality.description && (
               <p className="text-xs text-white/50 mt-1 leading-relaxed">{personality.description}</p>
             )}
