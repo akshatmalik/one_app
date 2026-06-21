@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, CalendarClock, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical, Download, Upload, Gift, ShoppingCart, Search, X, Moon, CreditCard, Swords, Inbox, Play, History, RefreshCw } from 'lucide-react';
+import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, CalendarClock, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical, Download, Upload, Gift, ShoppingCart, Search, X, Moon, CreditCard, Swords, Inbox, Play, History, RefreshCw, Crown } from 'lucide-react';
 import { useGames } from './hooks/useGames';
 import { useAnalytics, GameWithMetrics } from './hooks/useAnalytics';
 import { useBudget } from './hooks/useBudget';
@@ -70,6 +70,7 @@ import { GameReviewChat } from './components/GameReviewChat';
 import { GameCompareModal } from './components/GameCompareModal';
 import { PlayTonightModal } from './components/PlayTonightModal';
 import { BacklogTriageModal } from './components/BacklogTriageModal';
+import { BacklogBracketModal } from './components/BacklogBracketModal';
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist';
@@ -286,6 +287,7 @@ export default function GameAnalyticsPage() {
   const [showWhatsNew, setShowWhatsNew] = useState(false);
   const [showPlayTonight, setShowPlayTonight] = useState(false);
   const [showBacklogTriage, setShowBacklogTriage] = useState(false);
+  const [showBacklogBracket, setShowBacklogBracket] = useState(false);
 
   // Week recap data for header strip
   const weekRecap = useMemo(() => {
@@ -726,6 +728,14 @@ export default function GameAnalyticsPage() {
                         >
                           <Inbox size={14} className="text-amber-400" /> Backlog Triage
                           <span className="ml-auto text-[10px] text-white/30">{backlogTriageCandidates.length}</span>
+                        </button>
+                      )}
+                      {games.filter(g => g.status !== 'Wishlist' && g.status !== 'Completed' && g.status !== 'Abandoned').length >= 4 && (
+                        <button
+                          onClick={() => { setShowBacklogBracket(true); setShowCommandPalette(false); }}
+                          className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white/70 hover:text-white hover:bg-white/5 transition-all"
+                        >
+                          <Crown size={14} className="text-amber-400" /> Backlog Bracket
                         </button>
                       )}
                       <button
@@ -1679,6 +1689,27 @@ export default function GameAnalyticsPage() {
           onOpenGame={(game) => {
             setShowBacklogTriage(false);
             setDetailGame(game);
+          }}
+        />
+      )}
+
+      {/* Backlog Bracket — single-elimination "what should I play next" tournament */}
+      {showBacklogBracket && (
+        <BacklogBracketModal
+          games={games}
+          userId={user?.uid ?? ''}
+          onClose={() => setShowBacklogBracket(false)}
+          onStartGame={async (gameId) => {
+            const game = games.find(g => g.id === gameId);
+            if (!game) return;
+            const today = new Date().toISOString().split('T')[0];
+            await updateGame(gameId, { status: 'In Progress', startDate: game.startDate || today });
+            showToast(`Started playing ${game.name}`, 'success');
+          }}
+          onAddToQueue={async (gameId) => {
+            await addToQueue(gameId);
+            const game = games.find(g => g.id === gameId);
+            if (game) showToast(`Added ${game.name} to Up Next`, 'success');
           }}
         />
       )}

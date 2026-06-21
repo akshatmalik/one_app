@@ -3,6 +3,12 @@
     {
       "date": "2026-06-21",
       "area": "Library",
+      "title": "Backlog Bracket: a tournament for \"what should I play next?\"",
+      "body": "Can't decide what to play next? Open ⋮ → \"Backlog Bracket\" to seed a single-elimination tournament from your backlog — weighted toward the games that have been waiting longest — and just tap your way to a winner. Pick a bracket size (4, 8, or 16 games), choose a winner in each head-to-head matchup, and a champion gets crowned in a few taps. From there you can start playing it immediately or send it to your Up Next queue. Past champions are saved in a \"Hall of Champions\" so you can see what's won before."
+    },
+    {
+      "date": "2026-06-21",
+      "area": "Library",
       "title": "Achievement Hunter: see your real Steam achievement progress",
       "body": "If you've synced Steam, open ⋮ → \"Achievement Hunter\" to see exactly how close you are to 100% on every game — total achievements unlocked, how many games you've fully completed, and your single rarest unlock across your whole library (with the percentage of players who have it too). Tap any game to see every achievement, unlocked or not, with icons and descriptions. No extra setup needed — it reuses your existing Steam sync."
     },
