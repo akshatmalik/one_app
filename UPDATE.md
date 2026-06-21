@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-21 15:16 — Library — Rival Check (friend-to-friend library comparison via shareable code)
+
+**Files**: app/apps/game-analytics/lib/versus-codes.ts, app/apps/game-analytics/components/VersusModal.tsx, app/apps/game-analytics/page.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Added "Rival Check" (⋮ → Rival Check), the app's first friend-to-friend comparison feature — everything prior only compared a user against their own past self (Me vs Me) or one game against another (Head-to-Head). A new `lib/versus-codes.ts` builds a compact `VersusSnapshot` purely from existing `calculateSummary`/`getGamingCreditScore`/`getGenreMastery` output (total hours, spend, cost/hr, avg rating, completion rate, credit score, top/best-value game names — never the underlying game list) and encodes it as a base64url text code with no server round-trip. `VersusModal.tsx` lets the user copy their own code, paste a friend's code back in, and see a `GameCompareModal`-style stats table with per-category winner highlighting and an overall "wins N/M categories" verdict. No changes to `lib/types.ts`, `lib/storage.ts`, or any existing calculation function body.
+
+FOLLOW-UP: Could add a small share-via-link option (URL query param) for users who'd rather not hand-paste a code, and/or remember the last rival's name+code in localStorage so repeat check-ins don't require re-pasting.
+
 ## 2026-06-21 — Library — Backlog Bracket (single-elimination "what should I play next")
 
 **Files**: app/apps/game-analytics/lib/bracket-storage.ts, app/apps/game-analytics/hooks/useBacklogBracket.ts, app/apps/game-analytics/components/BacklogBracketModal.tsx, app/apps/game-analytics/page.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json

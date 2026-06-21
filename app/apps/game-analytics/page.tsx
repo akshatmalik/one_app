@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, CalendarClock, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical, Download, Upload, Gift, ShoppingCart, Search, X, Moon, CreditCard, Swords, Inbox, Play, History, RefreshCw, Crown } from 'lucide-react';
+import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, CalendarClock, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical, Download, Upload, Gift, ShoppingCart, Search, X, Moon, CreditCard, Swords, Inbox, Play, History, RefreshCw, Crown, Users } from 'lucide-react';
 import { useGames } from './hooks/useGames';
 import { useAnalytics, GameWithMetrics } from './hooks/useAnalytics';
 import { useBudget } from './hooks/useBudget';
@@ -53,6 +53,7 @@ import { useLibrarySnapshots } from './hooks/useLibrarySnapshots';
 import { YearStoryMode } from './components/YearStoryMode';
 import { GamerCard } from './components/GamerCard';
 import { MeVsMe } from './components/MeVsMe';
+import { VersusModal } from './components/VersusModal';
 import { FortuneCookie } from './components/FortuneCookie';
 import { SubscriptionSyncBanner } from './components/SubscriptionSyncBanner';
 import { loadSubscriptionSettings, hasNewDrop } from './lib/subscription-settings';
@@ -260,6 +261,7 @@ export default function GameAnalyticsPage() {
   const [wrappedYear, setWrappedYear] = useState<number | null>(null);
   const [showGamerCard, setShowGamerCard] = useState(false);
   const [showMeVsMe, setShowMeVsMe] = useState(false);
+  const [showVersusModal, setShowVersusModal] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [showAwardsHub, setShowAwardsHub] = useState(false);
   const [detailGame, setDetailGame] = useState<GameWithMetrics | null>(null);
@@ -1206,6 +1208,7 @@ export default function GameAnalyticsPage() {
                         {[
                           { icon: <CreditCard size={15} className="text-cyan-400" />, label: 'Gamer Card', onClick: () => setShowGamerCard(true) },
                           { icon: <Swords size={15} className="text-pink-400" />, label: 'Me vs Me', onClick: () => setShowMeVsMe(true) },
+                          { icon: <Users size={15} className="text-emerald-400" />, label: 'Rival Check', onClick: () => setShowVersusModal(true) },
                           { icon: <Gift size={15} className="text-purple-400" />, label: 'Yearly Wrapped', onClick: () => setWrappedYear(new Date().getFullYear()) },
                           { icon: <Star size={15} className="text-amber-400" />, label: 'Awards Hub', onClick: () => setShowAwardsHub(true) },
                           { icon: <Download size={15} className="text-white/50" />, label: 'Export data', onClick: () => setShowExport(true) },
@@ -1796,6 +1799,11 @@ export default function GameAnalyticsPage() {
       {/* Me vs Me period comparison (shareable) */}
       {showMeVsMe && (
         <MeVsMe games={games} onClose={() => setShowMeVsMe(false)} />
+      )}
+
+      {/* Rival Check — share a stats code, compare against a friend's */}
+      {showVersusModal && (
+        <VersusModal games={games} onClose={() => setShowVersusModal(false)} />
       )}
 
       {/* Awards Hub */}

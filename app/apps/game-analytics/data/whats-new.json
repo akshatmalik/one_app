@@ -3,6 +3,12 @@
     {
       "date": "2026-06-21",
       "area": "Library",
+      "title": "Rival Check: compare libraries with a friend, no accounts needed",
+      "body": "Open ⋮ → \"Rival Check\" to challenge a friend to a head-to-head. You get a short text code that packs up your library stats — total hours, spend, cost-per-hour, average rating, completion rate, and your Gaming Credit Score — with nothing about your actual game list inside it. Send it to a friend any way you like (text, Discord, whatever), and when they send theirs back, paste it in to see a full stat-by-stat comparison with a winner called for each category and an overall verdict. No sign-in, no server, no shared account required."
+    },
+    {
+      "date": "2026-06-21",
+      "area": "Library",
       "title": "Backlog Bracket: a tournament for \"what should I play next?\"",
       "body": "Can't decide what to play next? Open ⋮ → \"Backlog Bracket\" to seed a single-elimination tournament from your backlog — weighted toward the games that have been waiting longest — and just tap your way to a winner. Pick a bracket size (4, 8, or 16 games), choose a winner in each head-to-head matchup, and a champion gets crowned in a few taps. From there you can start playing it immediately or send it to your Up Next queue. Past champions are saved in a \"Hall of Champions\" so you can see what's won before."
     },
