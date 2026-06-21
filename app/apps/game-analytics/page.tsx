@@ -72,6 +72,7 @@ import { GameCompareModal } from './components/GameCompareModal';
 import { PlayTonightModal } from './components/PlayTonightModal';
 import { BacklogTriageModal } from './components/BacklogTriageModal';
 import { BacklogBracketModal } from './components/BacklogBracketModal';
+import { CommandPalette, PaletteCommand } from './components/CommandPalette';
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist';
@@ -285,6 +286,7 @@ export default function GameAnalyticsPage() {
     return localStorage.getItem('ga-recap-collapsed') === 'true';
   });
   const [showCommandPalette, setShowCommandPalette] = useState(false);
+  const [recentCommandIds, setRecentCommandIds] = useState<string[]>([]);
   const [showErrorLog, setShowErrorLog] = useState(false);
   const [showWhatsNew, setShowWhatsNew] = useState(false);
   const [showPlayTonight, setShowPlayTonight] = useState(false);
@@ -594,6 +596,81 @@ export default function GameAnalyticsPage() {
     }
   };
 
+  const cmdkRecentKey = `ga-cmdk-recent-${user?.uid || 'local-user'}`;
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const saved = JSON.parse(localStorage.getItem(cmdkRecentKey) || '[]');
+      setRecentCommandIds(Array.isArray(saved) ? saved : []);
+    } catch {
+      setRecentCommandIds([]);
+    }
+  }, [cmdkRecentKey]);
+
+  const handleRunCommand = useCallback((id: string) => {
+    setRecentCommandIds((prev) => {
+      const next = [id, ...prev.filter((c) => c !== id)].slice(0, 5);
+      if (typeof window !== 'undefined') localStorage.setItem(cmdkRecentKey, JSON.stringify(next));
+      return next;
+    });
+  }, [cmdkRecentKey]);
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setShowCommandPalette((v) => !v);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
+
+  const activeGamesCount = games.filter(g => g.status !== 'Wishlist' && g.status !== 'Completed' && g.status !== 'Abandoned').length;
+
+  const commands: PaletteCommand[] = useMemo(() => {
+    const goTo: PaletteCommand[] = ([
+      { id: 'games', icon: <List size={15} />, title: 'Games' },
+      { id: 'timeline', icon: <Calendar size={15} />, title: 'Timeline' },
+      { id: 'stats', icon: <BarChart3 size={15} />, title: 'Stats' },
+      { id: 'ai-coach', icon: <MessageCircle size={15} />, title: 'AI Coach' },
+      { id: 'up-next', icon: <ListOrdered size={15} />, title: 'Up Next' },
+      { id: 'discover', icon: <Compass size={15} />, title: 'Discover' },
+      { id: 'leaderboard', icon: <Trophy size={15} />, title: 'Ranks' },
+      { id: 'buy-queue', icon: <ShoppingCart size={15} />, title: 'Buy Queue' },
+      { id: 'estimator', icon: <CalendarClock size={15} />, title: 'Timeline Estimator' },
+    ] as const).map((tab) => ({
+      id: `goto-${tab.id}`,
+      label: tab.title,
+      section: 'Go to',
+      icon: tab.icon,
+      run: () => setTabMode(tab.id),
+    }));
+
+    const actions: PaletteCommand[] = [
+      { id: 'add-game', label: 'Add Game', section: 'Actions', icon: <Plus size={15} />, run: () => setIsFormOpen(true) },
+      ...(activeGamesCount > 0 ? [{ id: 'play-tonight', label: 'Play Tonight', section: 'Actions', icon: <Moon size={15} className="text-indigo-400" />, run: () => setShowPlayTonight(true) }] : []),
+      ...(activeGamesCount > 0 ? [{ id: 'random-pick', label: 'Random Pick', section: 'Actions', icon: <Sparkles size={15} />, run: () => setShowRandomPicker(true) }] : []),
+      ...(backlogTriageCandidates.length > 0 ? [{ id: 'backlog-triage', label: 'Backlog Triage', section: 'Actions', icon: <Inbox size={15} className="text-amber-400" />, run: () => setShowBacklogTriage(true) }] : []),
+      ...(activeGamesCount >= 4 ? [{ id: 'backlog-bracket', label: 'Backlog Bracket', section: 'Actions', icon: <Crown size={15} className="text-amber-400" />, run: () => setShowBacklogBracket(true) }] : []),
+      { id: 'bulk-wishlist', label: 'Bulk Wishlist', section: 'Actions', icon: <Heart size={15} />, run: () => setShowBulkWishlist(true) },
+      ...(games.length === 0 ? [{ id: 'load-samples', label: 'Load Samples', section: 'Actions', icon: <Sparkles size={15} />, run: () => handleSeedData() }] : []),
+      { id: 'gamer-card', label: 'Gamer Card', section: 'Actions', icon: <CreditCard size={15} className="text-cyan-400" />, run: () => setShowGamerCard(true) },
+      { id: 'me-vs-me', label: 'Me vs Me', section: 'Actions', icon: <Swords size={15} className="text-pink-400" />, run: () => setShowMeVsMe(true) },
+      { id: 'rival-check', label: 'Rival Check', section: 'Actions', icon: <Users size={15} className="text-emerald-400" />, run: () => setShowVersusModal(true) },
+      { id: 'yearly-wrapped', label: 'Yearly Wrapped', section: 'Actions', icon: <Gift size={15} className="text-purple-400" />, run: () => setWrappedYear(new Date().getFullYear()) },
+      { id: 'awards-hub', label: 'Awards Hub', section: 'Actions', icon: <Star size={15} className="text-amber-400" />, run: () => setShowAwardsHub(true) },
+      { id: 'export-data', label: 'Export data', section: 'Actions', icon: <Download size={15} className="text-white/50" />, run: () => setShowExport(true) },
+      { id: 'import-games', label: 'Import games', section: 'Actions', icon: <Upload size={15} className="text-white/50" />, run: () => setShowImport(true) },
+      { id: 'sync-steam', label: 'Sync Steam Library', section: 'Actions', icon: <RefreshCw size={15} className="text-[#66c0f4]" />, run: () => setShowSteamSync(true) },
+      { id: 'achievement-hunter', label: 'Achievement Hunter', section: 'Actions', icon: <Trophy size={15} className="text-amber-400" />, run: () => setShowAchievementHunter(true) },
+      { id: 'time-machine', label: 'Time Machine', section: 'Actions', icon: <History size={15} className="text-emerald-400" />, run: () => setShowTimeMachine(true) },
+      { id: 'whats-new', label: "What's New", section: 'Actions', icon: <Sparkles size={15} />, run: () => setShowWhatsNew(true) },
+    ];
+
+    return [...goTo, ...actions];
+  }, [activeGamesCount, backlogTriageCandidates.length, games.length]);
+
   if (authLoading || loading) {
     return (
       <div className="min-h-[calc(100vh-60px)] flex items-center justify-center">
@@ -695,69 +772,23 @@ export default function GameAnalyticsPage() {
                 </button>
               )}
               {/* Command Palette */}
-              <div className="relative">
-                <button
-                  onClick={() => setShowCommandPalette(!showCommandPalette)}
-                  className="flex items-center gap-2 px-3 py-2 bg-white/5 text-white/60 hover:text-white/80 rounded-lg transition-all text-sm"
-                  title="More actions"
-                >
-                  <MoreVertical size={16} />
-                </button>
-                {showCommandPalette && (
-                  <>
-                    <div className="fixed inset-0 z-40" onClick={() => setShowCommandPalette(false)} />
-                    <div className="absolute right-0 top-full mt-1 z-50 bg-[#1a1a2e] border border-white/10 rounded-xl shadow-2xl py-1 min-w-[180px]">
-                      {games.filter(g => g.status !== 'Wishlist' && g.status !== 'Completed' && g.status !== 'Abandoned').length > 0 && (
-                        <button
-                          onClick={() => { setShowPlayTonight(true); setShowCommandPalette(false); }}
-                          className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white/70 hover:text-white hover:bg-white/5 transition-all"
-                        >
-                          <Moon size={14} className="text-indigo-400" /> Play Tonight
-                        </button>
-                      )}
-                      {games.filter(g => g.status !== 'Wishlist' && g.status !== 'Completed' && g.status !== 'Abandoned').length > 0 && (
-                        <button
-                          onClick={() => { setShowRandomPicker(true); setShowCommandPalette(false); }}
-                          className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white/70 hover:text-white hover:bg-white/5 transition-all"
-                        >
-                          <Sparkles size={14} /> Random Pick
-                        </button>
-                      )}
-                      {backlogTriageCandidates.length > 0 && (
-                        <button
-                          onClick={() => { setShowBacklogTriage(true); setShowCommandPalette(false); }}
-                          className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white/70 hover:text-white hover:bg-white/5 transition-all"
-                        >
-                          <Inbox size={14} className="text-amber-400" /> Backlog Triage
-                          <span className="ml-auto text-[10px] text-white/30">{backlogTriageCandidates.length}</span>
-                        </button>
-                      )}
-                      {games.filter(g => g.status !== 'Wishlist' && g.status !== 'Completed' && g.status !== 'Abandoned').length >= 4 && (
-                        <button
-                          onClick={() => { setShowBacklogBracket(true); setShowCommandPalette(false); }}
-                          className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white/70 hover:text-white hover:bg-white/5 transition-all"
-                        >
-                          <Crown size={14} className="text-amber-400" /> Backlog Bracket
-                        </button>
-                      )}
-                      <button
-                        onClick={() => { setShowBulkWishlist(true); setShowCommandPalette(false); }}
-                        className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white/70 hover:text-white hover:bg-white/5 transition-all"
-                      >
-                        <Heart size={14} /> Bulk Wishlist
-                      </button>
-                      {games.length === 0 && (
-                        <button
-                          onClick={() => { handleSeedData(); setShowCommandPalette(false); }}
-                          className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white/70 hover:text-white hover:bg-white/5 transition-all"
-                        >
-                          <Sparkles size={14} /> Load Samples
-                        </button>
-                      )}
-                    </div>
-                  </>
-                )}
-              </div>
+              <button
+                onClick={() => setShowCommandPalette(true)}
+                className="flex items-center gap-2 px-3 py-2 bg-white/5 text-white/60 hover:text-white/80 rounded-lg transition-all text-sm"
+                title="Search games, tabs, and actions (Ctrl/Cmd+K)"
+              >
+                <Search size={16} />
+                <kbd className="hidden md:inline text-[10px] text-white/30 border border-white/10 rounded px-1 py-0.5">⌘K</kbd>
+              </button>
+              <CommandPalette
+                open={showCommandPalette}
+                onClose={() => setShowCommandPalette(false)}
+                commands={commands}
+                games={gamesWithMetrics}
+                onSelectGame={(game) => setDetailGame(game)}
+                recentCommandIds={recentCommandIds}
+                onRunCommand={handleRunCommand}
+              />
               <ErrorLogButton onClick={() => setShowErrorLog(true)} />
               {games.length > 0 && (
                 <AlertsCenter

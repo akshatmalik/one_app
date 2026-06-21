@@ -2,6 +2,12 @@
   "entries": [
     {
       "date": "2026-06-21",
+      "area": "Navigation",
+      "title": "Press Cmd/Ctrl+K to jump anywhere instantly",
+      "body": "There's now a Spotlight-style command palette built into the app. Hit Cmd+K (or Ctrl+K on Windows) anywhere, or tap the new search icon next to the menu, to fuzzy-search your games, jump straight to any tab, or fire off an action — Add Game, Play Tonight, Random Pick, Backlog Triage, Export, Sync Steam, and more, all in one box. It remembers your 5 most recent picks so the things you use most are right at the top, and you can fully drive it with arrow keys and Enter."
+    },
+    {
+      "date": "2026-06-21",
       "area": "Library",
       "title": "Rival Check: compare libraries with a friend, no accounts needed",
       "body": "Open ⋮ → \"Rival Check\" to challenge a friend to a head-to-head. You get a short text code that packs up your library stats — total hours, spend, cost-per-hour, average rating, completion rate, and your Gaming Credit Score — with nothing about your actual game list inside it. Send it to a friend any way you like (text, Discord, whatever), and when they send theirs back, paste it in to see a full stat-by-stat comparison with a winner called for each category and an overall verdict. No sign-in, no server, no shared account required."
