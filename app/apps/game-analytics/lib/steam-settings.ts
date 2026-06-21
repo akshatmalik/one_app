@@ -16,6 +16,7 @@ export interface SteamSyncSettings {
   apiKey: string;
   lastSyncedAt: string | null;     // ISO timestamp of the last successful fetch
   importedAppIds: number[];        // Steam appids already imported, to power "new since last sync"
+  appIdMap: Record<string, number>; // lowercased game name -> Steam appid, powers Achievement Hunter lookups
 }
 
 export const DEFAULT_STEAM_SYNC_SETTINGS: SteamSyncSettings = {
@@ -23,6 +24,7 @@ export const DEFAULT_STEAM_SYNC_SETTINGS: SteamSyncSettings = {
   apiKey: '',
   lastSyncedAt: null,
   importedAppIds: [],
+  appIdMap: {},
 };
 
 const keyFor = (userId: string) => `ga-steam-sync-${userId || 'local-user'}`;
@@ -38,6 +40,7 @@ export function loadSteamSyncSettings(userId: string): SteamSyncSettings {
         apiKey: parsed.apiKey || '',
         lastSyncedAt: parsed.lastSyncedAt ?? null,
         importedAppIds: Array.isArray(parsed.importedAppIds) ? parsed.importedAppIds : [],
+        appIdMap: parsed.appIdMap && typeof parsed.appIdMap === 'object' ? parsed.appIdMap : {},
       };
     }
   } catch {

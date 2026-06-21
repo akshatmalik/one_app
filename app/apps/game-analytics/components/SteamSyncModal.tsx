@@ -8,6 +8,7 @@ import { ImportRow, ImportedGameData } from '../lib/import-service';
 import {
   fetchSteamLibrary,
   mapSteamGamesToImportRows,
+  buildAppIdMap,
   SteamOwnedGame,
 } from '../lib/steam-import-service';
 import { loadSteamSyncSettings, saveSteamSyncSettings } from '../lib/steam-settings';
@@ -69,6 +70,18 @@ export function SteamSyncModal({ userId, games, onImport, onClose }: SteamSyncMo
     setSteamGames(result.games);
     setRows(mapSteamGamesToImportRows(result.games, games, settingsRef.current.importedAppIds));
     setStep('preview');
+
+    // Remember the name -> appid mapping for every game on the account (not just
+    // imported ones) so Achievement Hunter can look up achievements for games
+    // already in the library without requiring a re-sync.
+    if (remember) {
+      const updated = {
+        ...settingsRef.current,
+        appIdMap: { ...settingsRef.current.appIdMap, ...buildAppIdMap(result.games) },
+      };
+      settingsRef.current = updated;
+      saveSteamSyncSettings(userId, updated);
+    }
   };
 
   const toggleRow = (rowIndex: number) => {

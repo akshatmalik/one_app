@@ -38,6 +38,15 @@ export function minutesToHours(minutes: number): number {
   return Math.round((minutes / 60) * 10) / 10;
 }
 
+/** Lowercased game name -> Steam appid, so Achievement Hunter can look up appids later without re-fetching the library. */
+export function buildAppIdMap(steamGames: SteamOwnedGame[]): Record<string, number> {
+  const map: Record<string, number> = {};
+  for (const sg of steamGames) {
+    map[sg.name.toLowerCase()] = sg.appId;
+  }
+  return map;
+}
+
 /**
  * Maps Steam's owned-games list into `ImportRow`s, in the same shape/contract
  * `parseImportContent` produces for CSV/JSON. Rows for games already in the

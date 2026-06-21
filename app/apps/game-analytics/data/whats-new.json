@@ -3,6 +3,12 @@
     {
       "date": "2026-06-21",
       "area": "Library",
+      "title": "Achievement Hunter: see your real Steam achievement progress",
+      "body": "If you've synced Steam, open ⋮ → \"Achievement Hunter\" to see exactly how close you are to 100% on every game — total achievements unlocked, how many games you've fully completed, and your single rarest unlock across your whole library (with the percentage of players who have it too). Tap any game to see every achievement, unlocked or not, with icons and descriptions. No extra setup needed — it reuses your existing Steam sync."
+    },
+    {
+      "date": "2026-06-21",
+      "area": "Library",
       "title": "Sync your real Steam library in one tap",
       "body": "No more typing in every game by hand. Open ⋮ → \"Sync Steam Library\", paste a free Steam API key and your SteamID, and we'll pull your entire owned-games list straight from Steam — with your real playtime included. Preview every game before importing, with already-owned and already-synced titles unchecked for you automatically. Your Steam key is stored only on this device and never leaves it except to talk to Steam directly."
     },

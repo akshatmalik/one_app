@@ -48,6 +48,7 @@ import { ExportPanel } from './components/ExportPanel';
 import { ImportModal } from './components/ImportModal';
 import { TimeMachineModal } from './components/TimeMachineModal';
 import { SteamSyncModal } from './components/SteamSyncModal';
+import { AchievementHunterModal } from './components/AchievementHunterModal';
 import { useLibrarySnapshots } from './hooks/useLibrarySnapshots';
 import { YearStoryMode } from './components/YearStoryMode';
 import { GamerCard } from './components/GamerCard';
@@ -254,6 +255,7 @@ export default function GameAnalyticsPage() {
   const [showImport, setShowImport] = useState(false);
   const [showTimeMachine, setShowTimeMachine] = useState(false);
   const [showSteamSync, setShowSteamSync] = useState(false);
+  const [showAchievementHunter, setShowAchievementHunter] = useState(false);
   const [wrappedYear, setWrappedYear] = useState<number | null>(null);
   const [showGamerCard, setShowGamerCard] = useState(false);
   const [showMeVsMe, setShowMeVsMe] = useState(false);
@@ -1199,6 +1201,7 @@ export default function GameAnalyticsPage() {
                           { icon: <Download size={15} className="text-white/50" />, label: 'Export data', onClick: () => setShowExport(true) },
                           { icon: <Upload size={15} className="text-white/50" />, label: 'Import games', onClick: () => setShowImport(true) },
                           { icon: <RefreshCw size={15} className="text-[#66c0f4]" />, label: 'Sync Steam Library', onClick: () => setShowSteamSync(true) },
+                          { icon: <Trophy size={15} className="text-amber-400" />, label: 'Achievement Hunter', onClick: () => setShowAchievementHunter(true) },
                           { icon: <History size={15} className="text-emerald-400" />, label: 'Time Machine', onClick: () => setShowTimeMachine(true) },
                         ].map(item => (
                           <button key={item.label}
@@ -1714,6 +1717,16 @@ export default function GameAnalyticsPage() {
           games={games}
           onImport={addGame}
           onClose={() => setShowSteamSync(false)}
+        />
+      )}
+
+      {/* Achievement Hunter — real Steam achievement progress for synced games */}
+      {showAchievementHunter && (
+        <AchievementHunterModal
+          userId={user?.uid ?? ''}
+          games={games}
+          onClose={() => setShowAchievementHunter(false)}
+          onOpenSteamSync={() => { setShowAchievementHunter(false); setShowSteamSync(true); }}
         />
       )}
 

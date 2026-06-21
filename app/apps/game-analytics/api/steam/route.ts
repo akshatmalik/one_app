@@ -39,6 +39,28 @@ interface SteamResolveVanityResponse {
   };
 }
 
+interface SteamPlayerAchievementsResponse {
+  playerstats?: {
+    success?: boolean;
+    error?: string;
+    achievements?: { apiname: string; achieved: number; unlocktime: number }[];
+  };
+}
+
+interface SteamSchemaResponse {
+  game?: {
+    availableGameStats?: {
+      achievements?: { name: string; displayName?: string; description?: string; icon?: string; icongray?: string }[];
+    };
+  };
+}
+
+interface SteamGlobalPercentagesResponse {
+  achievementpercentages?: {
+    achievements?: { name: string; percent: number }[];
+  };
+}
+
 const STEAM_API_BASE = 'https://api.steampowered.com';
 
 async function resolveSteamId64(idOrVanity: string, apiKey: string): Promise<string | null> {
@@ -51,8 +73,89 @@ async function resolveSteamId64(idOrVanity: string, apiKey: string): Promise<str
   return null;
 }
 
+async function handleAchievements(request: NextRequest): Promise<NextResponse> {
+  const { searchParams } = new URL(request.url);
+  const apiKey = (searchParams.get('key') || '').trim();
+  const idInput = (searchParams.get('steamId') || '').trim();
+  const appId = (searchParams.get('appid') || '').trim();
+
+  if (!apiKey || !idInput || !appId || !/^\d+$/.test(appId)) {
+    return NextResponse.json(
+      { success: false, error: 'Missing Steam API key, Steam ID, or app ID.' },
+      { status: 400 }
+    );
+  }
+
+  let steamId64: string | null;
+  try {
+    steamId64 = await resolveSteamId64(idInput, apiKey);
+  } catch {
+    return NextResponse.json({ success: false, error: 'Could not reach the Steam API.' }, { status: 502 });
+  }
+  if (!steamId64) {
+    return NextResponse.json({ success: false, error: `Couldn't resolve "${idInput}" to a Steam profile.` }, { status: 404 });
+  }
+
+  try {
+    const [achRes, schemaRes, globalRes] = await Promise.all([
+      fetch(`${STEAM_API_BASE}/ISteamUserStats/GetPlayerAchievements/v1/?key=${encodeURIComponent(apiKey)}&steamid=${steamId64}&appid=${appId}&l=english`),
+      fetch(`${STEAM_API_BASE}/ISteamUserStats/GetSchemaForGame/v2/?key=${encodeURIComponent(apiKey)}&appid=${appId}&l=english`),
+      fetch(`${STEAM_API_BASE}/ISteamUserStats/GetGlobalAchievementPercentagesForApp/v2/?gameid=${appId}`),
+    ]);
+
+    if (achRes.status === 403) {
+      return NextResponse.json({ success: false, error: 'Steam rejected this API key.' }, { status: 403 });
+    }
+
+    const achData: SteamPlayerAchievementsResponse = achRes.ok ? await achRes.json() : {};
+    const schemaData: SteamSchemaResponse = schemaRes.ok ? await schemaRes.json() : {};
+    const globalData: SteamGlobalPercentagesResponse = globalRes.ok ? await globalRes.json() : {};
+
+    if (!achData.playerstats?.success || !achData.playerstats.achievements) {
+      // Most commonly: "Requested app has no stats", or a private game-details
+      // setting blocking this specific title. Not an error — just no data.
+      return NextResponse.json({ success: true, hasStats: false, achievements: [], unlocked: 0, total: 0 });
+    }
+
+    const schemaByName = new Map(
+      (schemaData.game?.availableGameStats?.achievements || []).map(a => [a.name, a])
+    );
+    const globalByName = new Map(
+      (globalData.achievementpercentages?.achievements || []).map(a => [a.name, a.percent])
+    );
+
+    const achievements = achData.playerstats.achievements.map(a => {
+      const schema = schemaByName.get(a.apiname);
+      return {
+        apiName: a.apiname,
+        displayName: schema?.displayName || a.apiname,
+        description: schema?.description || '',
+        icon: schema?.icon || '',
+        iconGray: schema?.icongray || '',
+        achieved: a.achieved === 1,
+        unlockTime: a.unlocktime || 0,
+        globalPercent: globalByName.has(a.apiname) ? globalByName.get(a.apiname) ?? null : null,
+      };
+    });
+
+    return NextResponse.json({
+      success: true,
+      hasStats: true,
+      achievements,
+      unlocked: achievements.filter(a => a.achieved).length,
+      total: achievements.length,
+    });
+  } catch {
+    return NextResponse.json({ success: false, error: 'Could not reach the Steam API. Try again in a moment.' }, { status: 502 });
+  }
+}
+
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
+  if (searchParams.get('mode') === 'achievements') {
+    return handleAchievements(request);
+  }
+
   const apiKey = (searchParams.get('key') || '').trim();
   const idInput = (searchParams.get('steamId') || '').trim();
 
