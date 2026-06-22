@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-22 08:00 — Safety — Undo Toast for Delete, Triage, and Bulk Import
+
+**Files**: app/apps/game-analytics/hooks/useUndoToast.ts (new), app/apps/game-analytics/components/UndoToast.tsx (new), app/apps/game-analytics/page.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Closed three open FOLLOW-UPs at once (Time Machine's "undo toast after delete" idea, Backlog Triage's "undo after a mis-swipe" idea, and the general data-loss risk the blocking delete-confirm dialog only partially addressed) with a single reusable undo system. Deleting a game no longer shows a `window.confirm` — it deletes immediately and surfaces an 8-second "Deleted "X" · Undo" toast (`useUndoToast.ts` + `UndoToast.tsx`) that recreates the game via `addGame` if tapped. The same toast now fires when Backlog Triage marks a game Abandoned (reverts the status) and after a bulk import or Steam sync finishes (`trackedImport`/`finalizeImportUndo` in `page.tsx` track every newly-created id and delete them all on undo). Zero changes to `lib/types.ts` or the storage layer — purely additive, only `page.tsx` touched outside the two new self-contained files. Verified via `npm run build`, `npm run lint` (no new warnings/errors), and a Playwright smoke test at 375px width that deleted and restored a sample game end-to-end with no console errors.
+
+FOLLOW-UP: Could extend the same undo pattern to the "Mark Abandoned" and "Remove from Queue" quick actions on the game card itself, and to the Wishlist→Dismiss action in Discover.
+
 ## 2026-06-22 02:15 — Library — Replay Radar
 
 **Files**: app/apps/game-analytics/lib/calculations.ts, app/apps/game-analytics/components/ReplayRadarModal.tsx (new), app/apps/game-analytics/page.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json

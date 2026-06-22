@@ -75,6 +75,8 @@ import { GameCompareModal } from './components/GameCompareModal';
 import { PlayTonightModal } from './components/PlayTonightModal';
 import { BacklogTriageModal } from './components/BacklogTriageModal';
 import { BacklogBracketModal } from './components/BacklogBracketModal';
+import { useUndoToast } from './hooks/useUndoToast';
+import { UndoToast } from './components/UndoToast';
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist';
@@ -164,6 +166,7 @@ export default function GameAnalyticsPage() {
   const { showToast } = useToast();
   const { games, loading, error, addGame, updateGame, updateManyGames, deleteGame, refresh } = useGames(user?.uid ?? null);
   const librarySnapshots = useLibrarySnapshots(user?.uid ?? null, games, loading, { addGame, updateGame, deleteGame });
+  const { pending: pendingUndo, showUndo, dismiss: dismissUndo, confirmUndo } = useUndoToast();
   const { gamesWithMetrics, summary } = useAnalytics(games);
   const { budgets, setBudget } = useBudget(user?.uid ?? null);
   const { entries: purchaseQueueEntries, upcomingEntries, addEntry: addPurchaseEntry } = usePurchaseQueue(user?.uid ?? null);
@@ -413,20 +416,75 @@ export default function GameAnalyticsPage() {
   };
 
   const handleDelete = async (id: string, gameName: string) => {
-    // Show confirmation dialog
-    const confirmed = window.confirm(
-      `Are you sure you want to delete "${gameName}"?\n\nThis action cannot be undone.`
-    );
-
-    if (!confirmed) return;
+    const snapshot = games.find(g => g.id === id);
+    if (!snapshot) return;
 
     try {
       await deleteGame(id);
-      showToast('Game deleted', 'success');
+      showUndo({
+        message: `Deleted "${gameName}"`,
+        onUndo: async () => {
+          try {
+            await addGame({
+              name: snapshot.name,
+              price: snapshot.price,
+              hours: snapshot.hours,
+              expectedHours: snapshot.expectedHours,
+              rating: snapshot.rating,
+              status: snapshot.status,
+              platform: snapshot.platform,
+              genre: snapshot.genre,
+              franchise: snapshot.franchise,
+              purchaseSource: snapshot.purchaseSource,
+              acquiredFree: snapshot.acquiredFree,
+              originalPrice: snapshot.originalPrice,
+              subscriptionSource: snapshot.subscriptionSource,
+              notes: snapshot.notes,
+              review: snapshot.review,
+              reviewMessages: snapshot.reviewMessages,
+              datePurchased: snapshot.datePurchased,
+              startDate: snapshot.startDate,
+              endDate: snapshot.endDate,
+              playLogs: snapshot.playLogs,
+              thumbnail: snapshot.thumbnail,
+              awards: snapshot.awards,
+              isSpecial: snapshot.isSpecial,
+              queuePosition: snapshot.queuePosition,
+            });
+            showToast(`Restored "${gameName}"`, 'success');
+          } catch (e) {
+            showToast(`Failed to restore "${gameName}": ${(e as Error).message}`, 'error');
+          }
+        },
+      });
     } catch (e) {
       showToast(`Failed to delete game: ${(e as Error).message}`, 'error');
     }
   };
+
+  const importedIdsRef = useRef<string[]>([]);
+
+  const trackedImport = useCallback(async (gameData: Parameters<typeof addGame>[0]) => {
+    const created = await addGame(gameData);
+    importedIdsRef.current.push(created.id);
+    return created;
+  }, [addGame]);
+
+  const finalizeImportUndo = useCallback((closeFn: () => void) => {
+    const ids = importedIdsRef.current;
+    importedIdsRef.current = [];
+    closeFn();
+    if (ids.length > 0) {
+      showUndo({
+        message: `Imported ${ids.length} game${ids.length === 1 ? '' : 's'}`,
+        onUndo: async () => {
+          for (const id of ids) {
+            await deleteGame(id);
+          }
+        },
+      });
+    }
+  }, [showUndo, deleteGame]);
 
   const handleOpenPlayLog = (game: GameWithMetrics) => {
     setPlayLogGame(game);
@@ -1710,7 +1768,16 @@ export default function GameAnalyticsPage() {
           gamesWithMetrics={gamesWithMetrics}
           onClose={() => setShowBacklogTriage(false)}
           onQueue={addToQueue}
-          onAbandon={async (gameId) => { await updateGame(gameId, { status: 'Abandoned' }); }}
+          onAbandon={async (gameId) => {
+            const before = games.find(g => g.id === gameId);
+            await updateGame(gameId, { status: 'Abandoned' });
+            if (before) {
+              showUndo({
+                message: `"${before.name}" marked Abandoned`,
+                onUndo: async () => { await updateGame(gameId, { status: before.status }); },
+              });
+            }
+          }}
           onOpenGame={(game) => {
             setShowBacklogTriage(false);
             setDetailGame(game);
@@ -1761,8 +1828,8 @@ export default function GameAnalyticsPage() {
       {showImport && (
         <ImportModal
           games={games}
-          onImport={addGame}
-          onClose={() => setShowImport(false)}
+          onImport={trackedImport}
+          onClose={() => finalizeImportUndo(() => setShowImport(false))}
         />
       )}
 
@@ -1771,8 +1838,8 @@ export default function GameAnalyticsPage() {
         <SteamSyncModal
           userId={user?.uid ?? ''}
           games={games}
-          onImport={addGame}
-          onClose={() => setShowSteamSync(false)}
+          onImport={trackedImport}
+          onClose={() => finalizeImportUndo(() => setShowSteamSync(false))}
         />
       )}
 
@@ -2005,6 +2072,17 @@ export default function GameAnalyticsPage() {
           isRankUp={genreToastQueue[0].isRankUp}
           stacked={!!trophyToastQueue[0]}
           onDismiss={dismissGenreToast}
+        />
+      )}
+
+      {/* Undo toast — delete, backlog triage abandon, bulk import */}
+      {pendingUndo && (
+        <UndoToast
+          key={pendingUndo.id}
+          message={pendingUndo.message}
+          durationMs={pendingUndo.durationMs}
+          onUndo={confirmUndo}
+          onDismiss={dismissUndo}
         />
       )}
     </div>

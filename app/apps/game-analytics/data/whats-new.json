@@ -2,6 +2,12 @@
   "entries": [
     {
       "date": "2026-06-22",
+      "area": "Undo",
+      "title": "Made a mistake? Undo it.",
+      "body": "Deleting a game no longer asks you to confirm first — it just deletes, and a quick toast pops up with an \"Undo\" button for a few seconds afterward so you can bring it right back if you tapped the wrong one. The same safety net now covers marking a game Abandoned in Backlog Triage and finishing a bulk import or Steam sync, so a misclick or a bad import never has to be permanent."
+    },
+    {
+      "date": "2026-06-22",
       "area": "Library",
       "title": "Replay Radar: a ranked list of games worth playing again",
       "body": "Open ⋮ → \"Replay Radar\" to see which dormant games in your library actually deserve another shot. It looks at everything you haven't touched in 3+ weeks and ranks it by how highly you rated it, how long it's been sitting, how good the value already is, and whether you left it unfinished — sorting the results into Overdue, Ready, Worth It, and Someday tiers with a one-line reason for each pick, like \"One of your highest-rated games — 645 days since you last touched it.\" Tap any game to jump straight into its detail view."
