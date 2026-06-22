@@ -2,6 +2,12 @@
   "entries": [
     {
       "date": "2026-06-22",
+      "area": "Fortune Cookie",
+      "title": "Your daily fortune now knows about your backlog and your wishlist",
+      "body": "The Daily Fortune Cookie can now serve up two new kinds of fortunes: a nudge toward your single best Replay Radar pick (\"Abandoned 645 days ago — might hit different now\"), and a heads-up on the next wishlist game that becomes affordable under your budget plan (\"becomes affordable Sep 2026\"). Same tap-to-crack cookie, just a little smarter about what's worth your attention today."
+    },
+    {
+      "date": "2026-06-22",
       "area": "Undo",
       "title": "Made a mistake? Undo it.",
       "body": "Deleting a game no longer asks you to confirm first — it just deletes, and a quick toast pops up with an \"Undo\" button for a few seconds afterward so you can bring it right back if you tapped the wrong one. The same safety net now covers marking a game Abandoned in Backlog Triage and finishing a bulk import or Steam sync, so a misclick or a bad import never has to be permanent."

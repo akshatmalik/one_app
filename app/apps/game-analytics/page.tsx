@@ -29,7 +29,7 @@ import { BASELINE_BUY_QUEUE } from './data/baseline-buy-queue';
 import { purchaseQueueRepository } from './lib/purchase-queue-storage';
 import { useAuthContext } from '@/lib/AuthContext';
 import { useToast } from '@/components/Toast';
-import { getROIRating, getWeekStatsForOffset, getGamesPlayedInTimeRange, getCompletionProbability, getGameHealthDot, getRelativeTime, getDaysContext, getSessionMomentum, getValueTrajectory, getGameSmartOneLiner, getFranchiseInfo, getProgressPercent, getShelfLife, parseLocalDate, getCardRarity, getRelationshipStatus, getGameStreak, getHeroNumber, getCardFreshness, getGameSections, getCardBackData, getContextualWhisper, getLibraryRank, getCardMoodPulse, getProgressRingData, getStatPopoverData, getWeekRecapData, getSmartNudges, getGamingCreditScore, getRotationStats, getSpendingForecast, getSpendingByMonth, getShelfLifeExpiry, formatRating, getRatingRank, getYearInReviewFullData, getBacklogTriageCandidates, GameAlert } from './lib/calculations';
+import { getROIRating, getWeekStatsForOffset, getGamesPlayedInTimeRange, getCompletionProbability, getGameHealthDot, getRelativeTime, getDaysContext, getSessionMomentum, getValueTrajectory, getGameSmartOneLiner, getFranchiseInfo, getProgressPercent, getShelfLife, parseLocalDate, getCardRarity, getRelationshipStatus, getGameStreak, getHeroNumber, getCardFreshness, getGameSections, getCardBackData, getContextualWhisper, getLibraryRank, getCardMoodPulse, getProgressRingData, getStatPopoverData, getWeekRecapData, getSmartNudges, getGamingCreditScore, getRotationStats, getSpendingForecast, getSpendingByMonth, getShelfLifeExpiry, formatRating, getRatingRank, getYearInReviewFullData, getBacklogTriageCandidates, GameAlert, getReplayCandidates, getWishlistAffordabilityPlan } from './lib/calculations';
 import { OnThisDayCard } from './components/OnThisDayCard';
 import { ActivityPulse } from './components/ActivityPulse';
 import { RandomPicker } from './components/RandomPicker';
@@ -367,6 +367,16 @@ export default function GameAnalyticsPage() {
     const wishlist = games.filter(g => g.status === 'Wishlist');
     return resolveWishlistOrder(wishlist, wishlistPriorityOrder);
   }, [games, wishlistPriorityOrder]);
+
+  // Top Replay Radar candidate — surfaced in the Daily Fortune Cookie
+  const topReplayCandidate = useMemo(() => getReplayCandidates(games, 1)[0], [games]);
+
+  // Next wishlist item that becomes affordable under the current budget plan — surfaced in the Daily Fortune Cookie
+  const wishlistNextAffordable = useMemo(() => {
+    const year = new Date().getFullYear();
+    const annualBudget = budgets.find(b => b.year === year)?.yearlyBudget ?? null;
+    return getWishlistAffordabilityPlan(wishlistOrderedGames, annualBudget, currentYearSpent).nextAffordable ?? undefined;
+  }, [wishlistOrderedGames, budgets, currentYearSpent]);
 
   const handleReorderWishlist = (orderedIds: string[]) => {
     setWishlistPriorityOrder(orderedIds);
@@ -1195,7 +1205,7 @@ export default function GameAnalyticsPage() {
           {games.length > 0 && <OnThisDayCard games={games} />}
 
           {/* Daily Fortune Cookie */}
-          {games.length > 0 && <div className="mb-4"><FortuneCookie games={games} /></div>}
+          {games.length > 0 && <div className="mb-4"><FortuneCookie games={games} replayCandidate={topReplayCandidate} wishlistNextAffordable={wishlistNextAffordable} /></div>}
 
           {/* New month's PS Plus games nudge */}
           <SubscriptionSyncBanner

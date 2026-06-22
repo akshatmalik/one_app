@@ -11613,7 +11613,7 @@ export function getShelfLifeExpiry(game: Game, allGames: Game[]): ShelfLifeExpir
 
 export type FortuneCategory =
   | 'spending' | 'time' | 'completion' | 'backlog' | 'value'
-  | 'streak' | 'genre' | 'prediction';
+  | 'streak' | 'genre' | 'prediction' | 'replay' | 'wishlist';
 
 export interface DailyFortune {
   text: string;
@@ -11622,7 +11622,12 @@ export interface DailyFortune {
   dataPoint: string;   // the concrete stat it's referencing
 }
 
-export function getDailyFortune(games: Game[]): DailyFortune {
+export interface DailyFortuneContext {
+  replayCandidate?: ReplayCandidate;
+  wishlistNextAffordable?: WishlistAffordabilityItem;
+}
+
+export function getDailyFortune(games: Game[], context?: DailyFortuneContext): DailyFortune {
   const today = new Date();
   const seed = today.getFullYear() * 10000 + (today.getMonth() + 1) * 100 + today.getDate();
 
@@ -11633,6 +11638,29 @@ export function getDailyFortune(games: Game[]): DailyFortune {
   const notStarted = ownedGames.filter(g => g.status === 'Not Started');
 
   const fortunes: DailyFortune[] = [];
+
+  // Replay Radar fortune
+  if (context?.replayCandidate) {
+    const replay = context.replayCandidate;
+    fortunes.push({
+      text: `${replay.game.name}: ${replay.headline}.`,
+      category: 'replay', icon: '🔁',
+      dataPoint: `${replay.tier} — ${replay.daysSinceLastPlayed}d since last played`,
+    });
+  }
+
+  // Wishlist affordability fortune
+  if (context?.wishlistNextAffordable && context.wishlistNextAffordable.monthsFromNow !== null) {
+    const item = context.wishlistNextAffordable;
+    const when = item.monthsFromNow === 0
+      ? 'is affordable right now'
+      : `becomes affordable ${(item.affordableDate as Date).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}`;
+    fortunes.push({
+      text: `${item.game.name} ${when} under your current budget plan.`,
+      category: 'wishlist', icon: '🛒',
+      dataPoint: item.monthsFromNow === 0 ? 'Affordable now' : `$${item.price.toFixed(0)}`,
+    });
+  }
 
   // Backlog fortunes
   if (notStarted.length > 0) {

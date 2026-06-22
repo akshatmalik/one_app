@@ -5,6 +5,16 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-22 20:17 — Fortune Cookie — Replay Radar & Wishlist Affordability nudges
+
+**Files**: app/apps/game-analytics/lib/calculations.ts, app/apps/game-analytics/components/FortuneCookie.tsx, app/apps/game-analytics/page.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json
+**Risk**: risky (widens the signature of `getDailyFortune`, an existing `calculations.ts` function already imported by `FortuneCookie.tsx`)
+**Snapshot**: branch `master-stable-2026-06-22-2017` (pushed in place of a tag — `git tag` push is rejected with HTTP 403 in this sandbox), pointing at pre-change HEAD `5d94b22`
+
+Closed two open FOLLOW-UPs at once — Replay Radar's "surface the single top Overdue candidate as a Daily Fortune Cookie rotation entry" and Wishlist Affordability Planner's "fold the nearest affordable item into the Daily Fortune Cookie rotation" — with one cohesive change. `getDailyFortune(games, context?)` now accepts an optional `{ replayCandidate?, wishlistNextAffordable? }` context and, when present, adds two new fortune candidates to its existing deterministic daily-pick pool: a `'replay'`-category fortune built from the top `ReplayCandidate`'s own `headline` (e.g. "Abandoned 645 days ago — might hit different now"), and a `'wishlist'`-category fortune phrased identically to `WishlistPlannerModal`'s existing "Affordable now" / "becomes affordable `<Mon YYYY>`" convention. `FortuneCookie.tsx` gained two optional props and two new `categoryColors` entries (teal for replay, violet for wishlist); `page.tsx` computes `topReplayCandidate` (`getReplayCandidates(games, 1)[0]`) and `wishlistNextAffordable` (`getWishlistAffordabilityPlan(wishlistOrderedGames, annualBudget, currentYearSpent).nextAffordable`) from data it already memoizes for other features, and passes them into the existing `<FortuneCookie>` call site. The widened parameter is optional and backward-compatible — no existing caller breaks — but the change still touches a shared `calculations.ts` function body, so it's classified risky per the stated rules and got a pre-change snapshot. No changes to `lib/types.ts` or the storage layer. Verified via `npm run build` (clean, 12/12 static pages), `npm run lint` (zero new warnings/errors on any touched file), and an HTTP-level dev-server smoke test (`/apps/game-analytics` → 200, clean compile log, no headless browser available in this sandbox).
+
+FOLLOW-UP: Could extend the same context pattern to surface a Shelf Life "Expiring Soon" game or the nearest Queue Shame entry as additional fortune categories, rounding out the Fortune Cookie into a single daily digest of every "you should look at this" surface in the app.
+
 ## 2026-06-22 08:00 — Safety — Undo Toast for Delete, Triage, and Bulk Import
 
 **Files**: app/apps/game-analytics/hooks/useUndoToast.ts (new), app/apps/game-analytics/components/UndoToast.tsx (new), app/apps/game-analytics/page.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json

@@ -3,11 +3,13 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Sparkles, X } from 'lucide-react';
-import { getDailyFortune, DailyFortune } from '../lib/calculations';
+import { getDailyFortune, DailyFortune, ReplayCandidate, WishlistAffordabilityItem } from '../lib/calculations';
 import { Game } from '../lib/types';
 
 interface FortuneCookieProps {
   games: Game[];
+  replayCandidate?: ReplayCandidate;
+  wishlistNextAffordable?: WishlistAffordabilityItem;
 }
 
 const categoryColors: Record<string, { bg: string; text: string; border: string }> = {
@@ -19,9 +21,11 @@ const categoryColors: Record<string, { bg: string; text: string; border: string 
   streak: { bg: 'from-red-500/10 to-orange-500/10', text: 'text-orange-300', border: 'border-orange-500/20' },
   genre: { bg: 'from-purple-500/10 to-violet-500/10', text: 'text-purple-300', border: 'border-purple-500/20' },
   prediction: { bg: 'from-pink-500/10 to-fuchsia-500/10', text: 'text-pink-300', border: 'border-pink-500/20' },
+  replay: { bg: 'from-teal-500/10 to-cyan-500/10', text: 'text-teal-300', border: 'border-teal-500/20' },
+  wishlist: { bg: 'from-violet-500/10 to-indigo-500/10', text: 'text-violet-300', border: 'border-violet-500/20' },
 };
 
-export function FortuneCookie({ games }: FortuneCookieProps) {
+export function FortuneCookie({ games, replayCandidate, wishlistNextAffordable }: FortuneCookieProps) {
   const [fortune, setFortune] = useState<DailyFortune | null>(null);
   const [dismissed, setDismissed] = useState(false);
   const [cracked, setCracked] = useState(false);
@@ -35,9 +39,9 @@ export function FortuneCookie({ games }: FortuneCookieProps) {
       setDismissed(true);
       return;
     }
-    const f = getDailyFortune(games);
+    const f = getDailyFortune(games, { replayCandidate, wishlistNextAffordable });
     setFortune(f);
-  }, [games]);
+  }, [games, replayCandidate, wishlistNextAffordable]);
 
   const handleDismiss = () => {
     const today = new Date().toDateString();
