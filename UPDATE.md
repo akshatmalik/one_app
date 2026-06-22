@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-22 01:30 — Wishlist — Affordability Planner
+
+**Files**: app/apps/game-analytics/lib/calculations.ts, app/apps/game-analytics/lib/wishlist-priority.ts (new), app/apps/game-analytics/components/WishlistPlannerModal.tsx (new), app/apps/game-analytics/page.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Added "Wishlist Planner" (⋮ → Wishlist Planner) — the gap left by the existing Buy Queue purchase calendar, which only schedules items with a known release date and never answers "when can I actually afford the stuff already on my wishlist?" A new pure function `getWishlistAffordabilityPlan` in `calculations.ts` greedily simulates saving the rest of this year's budget (then a full year's budget per future year) against a user-ordered wishlist queue, predicting an affordable month for each item plus a running total and a "next up" headline. Priority order is drag-free (up/down arrows), stored device-local via a new `lib/wishlist-priority.ts` (same localStorage-per-user precedent as queue-preferences/estimator-settings — no Firestore rule needed), and reconciled against the live wishlist on load so removed games drop out and newly-wishlisted games append at the end. No changes to `lib/types.ts`, `lib/storage.ts`, or any existing calculation function body.
+
+FOLLOW-UP: Could surface a small "Set budget" shortcut directly from the wishlist empty state on the Games tab, and/or fold the nearest "affordable now" item into the existing Daily Fortune Cookie rotation.
+
 ## 2026-06-22 00:00 — Library — Squad Leaderboard (multi-friend ranking inside Rival Check)
 
 **Files**: app/apps/game-analytics/lib/squad-storage.ts, app/apps/game-analytics/hooks/useSquad.ts, app/apps/game-analytics/components/VersusModal.tsx, app/apps/game-analytics/page.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json

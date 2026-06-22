@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, CalendarClock, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical, Download, Upload, Gift, ShoppingCart, Search, X, Moon, CreditCard, Swords, Inbox, Play, History, RefreshCw, Crown, Users } from 'lucide-react';
+import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, CalendarClock, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical, Download, Upload, Gift, ShoppingCart, Search, X, Moon, CreditCard, Swords, Inbox, Play, History, RefreshCw, Crown, Users, PiggyBank } from 'lucide-react';
 import { useGames } from './hooks/useGames';
 import { useAnalytics, GameWithMetrics } from './hooks/useAnalytics';
 import { useBudget } from './hooks/useBudget';
@@ -49,6 +49,8 @@ import { ImportModal } from './components/ImportModal';
 import { TimeMachineModal } from './components/TimeMachineModal';
 import { SteamSyncModal } from './components/SteamSyncModal';
 import { AchievementHunterModal } from './components/AchievementHunterModal';
+import { WishlistPlannerModal } from './components/WishlistPlannerModal';
+import { loadWishlistPriority, saveWishlistPriority, resolveWishlistOrder } from './lib/wishlist-priority';
 import { useLibrarySnapshots } from './hooks/useLibrarySnapshots';
 import { YearStoryMode } from './components/YearStoryMode';
 import { GamerCard } from './components/GamerCard';
@@ -250,6 +252,9 @@ export default function GameAnalyticsPage() {
   useEffect(() => {
     setPsPlusNewDrop(hasNewDrop(loadSubscriptionSettings(user?.uid ?? '')));
   }, [user?.uid, tabMode, games.length]);
+  useEffect(() => {
+    setWishlistPriorityOrder(loadWishlistPriority(user?.uid ?? ''));
+  }, [user?.uid]);
   const [sortBy, setSortBy] = useState<'name' | 'price' | 'hours' | 'rating' | 'costPerHour' | 'dateAdded' | 'recentlyPlayed'>('recentlyPlayed');
   const [showRandomPicker, setShowRandomPicker] = useState(false);
   const [showBulkWishlist, setShowBulkWishlist] = useState(false);
@@ -258,6 +263,8 @@ export default function GameAnalyticsPage() {
   const [showTimeMachine, setShowTimeMachine] = useState(false);
   const [showSteamSync, setShowSteamSync] = useState(false);
   const [showAchievementHunter, setShowAchievementHunter] = useState(false);
+  const [showWishlistPlanner, setShowWishlistPlanner] = useState(false);
+  const [wishlistPriorityOrder, setWishlistPriorityOrder] = useState<string[]>([]);
   const [wrappedYear, setWrappedYear] = useState<number | null>(null);
   const [showGamerCard, setShowGamerCard] = useState(false);
   const [showMeVsMe, setShowMeVsMe] = useState(false);
@@ -349,6 +356,17 @@ export default function GameAnalyticsPage() {
     const currentBudget = budgets.find(b => b.year === year);
     return getSpendingForecast(games, year, currentBudget?.yearlyBudget);
   }, [games, budgets]);
+
+  // Wishlist Planner — wishlist games in the user's saved priority order
+  const wishlistOrderedGames = useMemo(() => {
+    const wishlist = games.filter(g => g.status === 'Wishlist');
+    return resolveWishlistOrder(wishlist, wishlistPriorityOrder);
+  }, [games, wishlistPriorityOrder]);
+
+  const handleReorderWishlist = (orderedIds: string[]) => {
+    setWishlistPriorityOrder(orderedIds);
+    saveWishlistPriority(user?.uid ?? '', orderedIds);
+  };
 
   // Calculate week and month data for AI chat
   const weekData = useMemo(() => {
@@ -1216,6 +1234,7 @@ export default function GameAnalyticsPage() {
                           { icon: <RefreshCw size={15} className="text-[#66c0f4]" />, label: 'Sync Steam Library', onClick: () => setShowSteamSync(true) },
                           { icon: <Trophy size={15} className="text-amber-400" />, label: 'Achievement Hunter', onClick: () => setShowAchievementHunter(true) },
                           { icon: <History size={15} className="text-emerald-400" />, label: 'Time Machine', onClick: () => setShowTimeMachine(true) },
+                          { icon: <PiggyBank size={15} className="text-emerald-400" />, label: 'Wishlist Planner', onClick: () => setShowWishlistPlanner(true) },
                         ].map(item => (
                           <button key={item.label}
                             onClick={() => { item.onClick(); setShowMoreMenu(false); }}
@@ -1774,6 +1793,25 @@ export default function GameAnalyticsPage() {
           onDelete={librarySnapshots.removeSnapshot}
           onRestore={librarySnapshots.restoreSnapshot}
           onClose={() => setShowTimeMachine(false)}
+        />
+      )}
+
+      {/* Wishlist Planner — when can I afford the next thing I want? */}
+      {showWishlistPlanner && (
+        <WishlistPlannerModal
+          wishlistGames={wishlistOrderedGames}
+          annualBudget={budgets.find(b => b.year === new Date().getFullYear())?.yearlyBudget ?? null}
+          yearSpent={currentYearSpent}
+          onReorder={handleReorderWishlist}
+          onSetBudget={amount => setBudget(new Date().getFullYear(), amount)}
+          onOpenGame={gameId => {
+            const game = gamesWithMetrics.find(g => g.id === gameId);
+            if (game) {
+              setDetailGame(game);
+              setShowWishlistPlanner(false);
+            }
+          }}
+          onClose={() => setShowWishlistPlanner(false)}
         />
       )}
 

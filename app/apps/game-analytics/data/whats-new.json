@@ -2,6 +2,12 @@
   "entries": [
     {
       "date": "2026-06-22",
+      "area": "Wishlist",
+      "title": "Wishlist Planner: find out exactly when you can afford what you want",
+      "body": "Open ⋮ → \"Wishlist Planner\" to see when each game on your wishlist actually fits your budget. Set a yearly budget once, then drag-free reorder your wishlist with up/down arrows to choose what you're saving up for first — the planner does the math and tells you the month each one becomes affordable, plus when your whole list will be cleared. Your priority order is remembered, so it's right there next time you open it."
+    },
+    {
+      "date": "2026-06-22",
       "area": "Library",
       "title": "Squad Leaderboard: rank your whole friend group, not just one rival",
       "body": "Rival Check now has a \"Squad\" tab. Paste in codes from several friends at once and see everyone ranked together on one leaderboard — a composite score blends all 7 stats (hours, library size, spend, cost-per-hour, rating, completion rate, credit score), with a crown for whoever's on top and \"Best in Squad\" highlights for whoever wins each individual stat. Your saved squad sticks around the next time you open it, so you don't have to re-paste everyone's code every time."

@@ -2496,6 +2496,129 @@ export function getSpendingForecast(games: Game[], year: number, budgetAmount?: 
 }
 
 /**
+ * Wishlist Affordability Planner
+ *
+ * Given a prioritized wishlist (caller controls order), simulate saving up
+ * against an annual budget month-by-month and predict when each item becomes
+ * affordable. Remaining budget for the rest of THIS year funds the front of
+ * the queue; a full year's budget (annualBudget / 12) funds future years.
+ * Greedy: items earlier in priority order claim savings first.
+ */
+export interface WishlistAffordabilityItem {
+  game: Game;
+  price: number;
+  cumulativeCost: number;
+  affordableDate: Date | null;
+  monthsFromNow: number | null;
+}
+
+export interface WishlistAffordabilityPlan {
+  hasBudget: boolean;
+  annualBudget: number | null;
+  remainingThisYear: number;
+  monthlyPaceThisYear: number;
+  monthlyPaceFuture: number;
+  totalWishlistValue: number;
+  items: WishlistAffordabilityItem[];
+  nextAffordable: WishlistAffordabilityItem | null;
+  fullyAffordableDate: Date | null;
+}
+
+const WISHLIST_PLAN_HORIZON_MONTHS = 36;
+
+export function getWishlistAffordabilityPlan(
+  wishlistInPriorityOrder: Game[],
+  annualBudget: number | null,
+  yearSpent: number,
+  today: Date = new Date()
+): WishlistAffordabilityPlan {
+  const totalWishlistValue = wishlistInPriorityOrder.reduce((sum, g) => sum + g.price, 0);
+
+  if (!annualBudget || annualBudget <= 0) {
+    const items: WishlistAffordabilityItem[] = wishlistInPriorityOrder.map(game => ({
+      game,
+      price: game.price,
+      cumulativeCost: 0,
+      affordableDate: null,
+      monthsFromNow: null,
+    }));
+    let running = 0;
+    items.forEach(item => { running += item.price; item.cumulativeCost = running; });
+    return {
+      hasBudget: false,
+      annualBudget: null,
+      remainingThisYear: 0,
+      monthlyPaceThisYear: 0,
+      monthlyPaceFuture: 0,
+      totalWishlistValue,
+      items,
+      nextAffordable: null,
+      fullyAffordableDate: null,
+    };
+  }
+
+  const monthsRemainingThisYear = 12 - today.getMonth();
+  const remainingThisYear = Math.max(0, annualBudget - yearSpent);
+  const monthlyPaceThisYear = monthsRemainingThisYear > 0 ? remainingThisYear / monthsRemainingThisYear : 0;
+  const monthlyPaceFuture = annualBudget / 12;
+
+  const items: WishlistAffordabilityItem[] = wishlistInPriorityOrder.map(game => ({
+    game,
+    price: game.price,
+    cumulativeCost: 0,
+    affordableDate: null,
+    monthsFromNow: null,
+  }));
+
+  let pool = 0;
+  let cumulativeCost = 0;
+  let nextItemIndex = 0;
+  const currentYear = today.getFullYear();
+
+  for (let monthOffset = 0; monthOffset < WISHLIST_PLAN_HORIZON_MONTHS && nextItemIndex < items.length; monthOffset++) {
+    const cursor = new Date(today.getFullYear(), today.getMonth() + monthOffset, 1);
+    const pace = cursor.getFullYear() === currentYear ? monthlyPaceThisYear : monthlyPaceFuture;
+    pool += pace;
+
+    while (nextItemIndex < items.length) {
+      const item = items[nextItemIndex];
+      if (item.price <= pool || item.price === 0) {
+        pool -= item.price;
+        cumulativeCost += item.price;
+        item.cumulativeCost = cumulativeCost;
+        item.affordableDate = cursor;
+        item.monthsFromNow = monthOffset;
+        nextItemIndex++;
+      } else {
+        break;
+      }
+    }
+  }
+
+  // Any items left unresolved within the horizon still need a cumulativeCost for display.
+  for (let i = nextItemIndex; i < items.length; i++) {
+    cumulativeCost += items[i].price;
+    items[i].cumulativeCost = cumulativeCost;
+  }
+
+  const nextAffordable = items.find(i => i.affordableDate !== null) ?? null;
+  const lastResolved = [...items].reverse().find(i => i.affordableDate !== null) ?? null;
+  const fullyAffordableDate = nextItemIndex >= items.length ? (lastResolved?.affordableDate ?? null) : null;
+
+  return {
+    hasBudget: true,
+    annualBudget,
+    remainingThisYear,
+    monthlyPaceThisYear,
+    monthlyPaceFuture,
+    totalWishlistValue,
+    items,
+    nextAffordable,
+    fullyAffordableDate,
+  };
+}
+
+/**
  * Canonical game-event model.
  *
  * Purchases, starts, completions, abandonments, and play sessions derived from
