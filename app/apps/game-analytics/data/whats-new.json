@@ -2,6 +2,12 @@
   "entries": [
     {
       "date": "2026-06-22",
+      "area": "Library",
+      "title": "Replay Radar: a ranked list of games worth playing again",
+      "body": "Open ⋮ → \"Replay Radar\" to see which dormant games in your library actually deserve another shot. It looks at everything you haven't touched in 3+ weeks and ranks it by how highly you rated it, how long it's been sitting, how good the value already is, and whether you left it unfinished — sorting the results into Overdue, Ready, Worth It, and Someday tiers with a one-line reason for each pick, like \"One of your highest-rated games — 645 days since you last touched it.\" Tap any game to jump straight into its detail view."
+    },
+    {
+      "date": "2026-06-22",
       "area": "Wishlist",
       "title": "Wishlist Planner: find out exactly when you can afford what you want",
       "body": "Open ⋮ → \"Wishlist Planner\" to see when each game on your wishlist actually fits your budget. Set a yearly budget once, then drag-free reorder your wishlist with up/down arrows to choose what you're saving up for first — the planner does the math and tells you the month each one becomes affordable, plus when your whole list will be cleared. Your priority order is remembered, so it's right there next time you open it."

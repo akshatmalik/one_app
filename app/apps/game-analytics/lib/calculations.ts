@@ -15195,3 +15195,111 @@ export function getGenreMastery(games: Game[]): GenreMasteryData {
 
   return { classes, mainClass, hybridWith, playerLevel, playerTitle, totalXP: Math.round(totalXP) };
 }
+
+// ─── Replay Radar ───────────────────────────────────────────────────────────
+
+export type ReplayTier = 'Overdue' | 'Ready' | 'Worth It' | 'Someday';
+
+export interface ReplayCandidate {
+  game: Game;
+  score: number;
+  tier: ReplayTier;
+  tierColor: string;
+  tierBgColor: string;
+  daysSinceLastPlayed: number;
+  totalHours: number;
+  costPerHour: number;
+  headline: string;
+}
+
+const REPLAY_TIER_META: Record<ReplayTier, { color: string; bgColor: string }> = {
+  Overdue: { color: '#34d399', bgColor: 'rgba(52, 211, 153, 0.12)' },
+  Ready: { color: '#60a5fa', bgColor: 'rgba(96, 165, 250, 0.12)' },
+  'Worth It': { color: '#fbbf24', bgColor: 'rgba(251, 191, 36, 0.12)' },
+  Someday: { color: '#a78bfa', bgColor: 'rgba(167, 139, 250, 0.12)' },
+};
+
+function getLastSessionDate(game: Game): Date | null {
+  if (!game.playLogs || game.playLogs.length === 0) return null;
+  const sorted = [...game.playLogs].sort(
+    (a, b) => parseLocalDate(b.date).getTime() - parseLocalDate(a.date).getTime()
+  );
+  return parseLocalDate(sorted[0].date);
+}
+
+function buildReplayHeadline(game: Game, daysSinceLastPlayed: number, costPerHour: number): string {
+  const days = daysSinceLastPlayed;
+  if (game.status === 'In Progress') {
+    return `${days} days since your last session — still mid-story`;
+  }
+  if (game.status === 'Abandoned') {
+    return `Abandoned ${days} days ago — might hit different now`;
+  }
+  if (game.status === 'Completed' && game.rating >= 8) {
+    return `One of your highest-rated games — ${days} days since you last touched it`;
+  }
+  if (costPerHour > 0 && costPerHour <= 1) {
+    return `Already at $${costPerHour.toFixed(2)}/hr value — more time only makes it cheaper`;
+  }
+  return `${days} days dormant — due for a revisit`;
+}
+
+/**
+ * Surfaces owned games worth playing again: dormant titles with strong rating,
+ * value, or unfinished business (In Progress / Abandoned), ranked by a blended
+ * quality + dormancy + value + unfinished-business score.
+ */
+export function getReplayCandidates(games: Game[], limit = 12): ReplayCandidate[] {
+  const now = Date.now();
+  const DAY_MS = 24 * 60 * 60 * 1000;
+
+  const eligible = games.filter(g => g.status !== 'Wishlist' && g.status !== 'Not Started');
+
+  const candidates: ReplayCandidate[] = eligible
+    .map(game => {
+      const totalHours = getTotalHours(game);
+      if (totalHours < 2) return null;
+
+      const lastSession = getLastSessionDate(game);
+      const referenceDate = lastSession ?? (game.endDate ? parseLocalDate(game.endDate) : null);
+      if (!referenceDate) return null;
+
+      const daysSinceLastPlayed = Math.floor((now - referenceDate.getTime()) / DAY_MS);
+      if (daysSinceLastPlayed < 21) return null;
+
+      const costPerHour = calculateCostPerHour(game.price, totalHours);
+
+      const qualityScore = (game.rating / 10) * 45;
+
+      const dormancyDays = Math.min(daysSinceLastPlayed, 270);
+      const dormancyScore = (dormancyDays / 270) * 25;
+
+      const valueScore = costPerHour <= 0 ? 15 : Math.max(0, 15 - costPerHour * 1.5);
+
+      const unfinishedBonus =
+        game.status === 'In Progress' ? 15 : game.status === 'Abandoned' ? 8 : 0;
+
+      const score = Math.min(100, Math.round(qualityScore + dormancyScore + valueScore + unfinishedBonus));
+      if (score < 30) return null;
+
+      const tier: ReplayTier = score >= 75 ? 'Overdue' : score >= 58 ? 'Ready' : score >= 40 ? 'Worth It' : 'Someday';
+      const tierMeta = REPLAY_TIER_META[tier];
+
+      return {
+        game,
+        score,
+        tier,
+        tierColor: tierMeta.color,
+        tierBgColor: tierMeta.bgColor,
+        daysSinceLastPlayed,
+        totalHours,
+        costPerHour,
+        headline: buildReplayHeadline(game, daysSinceLastPlayed, costPerHour),
+      };
+    })
+    .filter((c): c is ReplayCandidate => c !== null)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit);
+
+  return candidates;
+}

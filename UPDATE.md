@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-22 02:15 — Library — Replay Radar
+
+**Files**: app/apps/game-analytics/lib/calculations.ts, app/apps/game-analytics/components/ReplayRadarModal.tsx (new), app/apps/game-analytics/page.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Added "Replay Radar" (⋮ → Replay Radar) — a ranked list of owned games worth playing again, closing a gap none of the existing discovery surfaces cover: Backlog Triage only judges Not Started/In Progress games against abandonment, and Hidden Gems only looks at cheap+great games regardless of dormancy. A new pure function `getReplayCandidates` in `calculations.ts` scores every dormant owned game (21+ days since last session, excluding Wishlist/Not Started, 2+ hours already played) on a blend of rating quality, how long it's been dormant (capped at 270 days), cost-per-hour value, and an "unfinished business" bonus for In Progress/Abandoned titles — capped at 100 and bucketed into Overdue/Ready/Worth It/Someday tiers, each with a contextual one-line headline (e.g. "Abandoned 645 days ago — might hit different now"). Rendered in a new `ReplayRadarModal.tsx` styled after the existing Wishlist Planner modal; tapping a row opens the game's detail sheet. No changes to `lib/types.ts`, `lib/storage.ts`, or any existing calculation function body — purely additive read of existing `Game`/`PlayLog` data.
+
+FOLLOW-UP: Could add a per-game "snooze for 30 days" dismiss action (same localStorage pattern as Backlog Triage) for games the user has consciously decided not to revisit, and/or surface the single top "Overdue" candidate as a Daily Fortune Cookie rotation entry.
+
 ## 2026-06-22 01:30 — Wishlist — Affordability Planner
 
 **Files**: app/apps/game-analytics/lib/calculations.ts, app/apps/game-analytics/lib/wishlist-priority.ts (new), app/apps/game-analytics/components/WishlistPlannerModal.tsx (new), app/apps/game-analytics/page.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json
