@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-22 00:00 — Library — Squad Leaderboard (multi-friend ranking inside Rival Check)
+
+**Files**: app/apps/game-analytics/lib/squad-storage.ts, app/apps/game-analytics/hooks/useSquad.ts, app/apps/game-analytics/components/VersusModal.tsx, app/apps/game-analytics/page.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Rival Check could only ever compare you against one friend at a time. Added a "Squad" mode (new tab inside the same modal) that lets you paste in several friends' Rival Check codes and see everyone ranked on a single leaderboard, not just head-to-head. Each member's composite score is computed from standard-competition-ranking across all 7 stat categories (hours, library size, spend, cost/hour, rating, completion rate, credit score), normalized to 0-100 and inverted where lower is better, with "Best in squad" highlighting per stat and a crown for whoever's on top. Saved rivals persist locally (new `lib/squad-storage.ts`, same localStorage-per-user precedent as queue-preferences/estimator-settings — no Firestore rule needed) so the leaderboard survives reopening the app; existing 1v1 comparison is untouched.
+
+FOLLOW-UP: Could wire up the already-built `refreshSquadMember` storage function to a per-rival "update their code" action in the UI, for when a friend's stats change and they re-share.
+
 ## 2026-06-21 15:16 — Library — Rival Check (friend-to-friend library comparison via shareable code)
 
 **Files**: app/apps/game-analytics/lib/versus-codes.ts, app/apps/game-analytics/components/VersusModal.tsx, app/apps/game-analytics/page.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json

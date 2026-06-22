@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { X, Users, Copy, Check, Trophy, ClipboardPaste, ArrowLeftRight } from 'lucide-react';
+import { X, Users, Copy, Check, Trophy, ClipboardPaste, ArrowLeftRight, Crown, UserPlus } from 'lucide-react';
 import clsx from 'clsx';
 import { Game } from '../lib/types';
 import {
@@ -11,10 +11,82 @@ import {
   decodeVersusCode,
 } from '../lib/versus-codes';
 import { formatCurrency, formatCostPerHour, formatHours, formatPercent } from '../lib/format';
+import { useSquad } from '../hooks/useSquad';
 
 interface Props {
   games: Game[];
+  userId: string | null;
   onClose: () => void;
+}
+
+type ViewMode = '1v1' | 'squad';
+
+interface SquadStatDef {
+  key: string;
+  label: string;
+  lowerBetter: boolean;
+  value: (s: VersusSnapshot) => number;
+  format: (s: VersusSnapshot) => string;
+}
+
+const SQUAD_STATS: SquadStatDef[] = [
+  { key: 'totalHours', label: 'Hours', lowerBetter: false, value: s => s.totalHours, format: s => formatHours(s.totalHours) },
+  { key: 'ownedCount', label: 'Library', lowerBetter: false, value: s => s.ownedCount, format: s => String(s.ownedCount) },
+  { key: 'totalSpent', label: 'Spent', lowerBetter: false, value: s => s.totalSpent, format: s => formatCurrency(s.totalSpent) },
+  { key: 'avgCostPerHour', label: '$/Hour', lowerBetter: true, value: s => s.avgCostPerHour, format: s => formatCostPerHour(s.avgCostPerHour) },
+  { key: 'avgRating', label: 'Rating', lowerBetter: false, value: s => s.avgRating, format: s => (s.avgRating > 0 ? `${s.avgRating.toFixed(1)}/10` : '—') },
+  { key: 'completionRate', label: 'Completion', lowerBetter: false, value: s => s.completionRate, format: s => formatPercent(s.completionRate * 100) },
+  { key: 'creditScore', label: 'Credit', lowerBetter: false, value: s => s.creditScore, format: s => String(s.creditScore) },
+];
+
+interface LeaderboardEntry {
+  name: string;
+  snapshot: VersusSnapshot;
+  isMe: boolean;
+  memberId?: string;
+  composite: number;
+  bestStats: string[];
+}
+
+function computeRanks(values: number[], lowerBetter: boolean): number[] {
+  const order = values.map((v, i) => ({ v, i })).sort((a, b) => (lowerBetter ? a.v - b.v : b.v - a.v));
+  const ranks = new Array(values.length).fill(0);
+  order.forEach((o, idx) => {
+    ranks[o.i] = idx > 0 && o.v === order[idx - 1].v ? ranks[order[idx - 1].i] : idx + 1;
+  });
+  return ranks;
+}
+
+function rankToScore(rank: number, n: number): number {
+  if (n <= 1) return 100;
+  return Math.round(((n - rank) / (n - 1)) * 100);
+}
+
+function buildLeaderboard(me: VersusSnapshot, rivals: { id: string; snapshot: VersusSnapshot }[]): LeaderboardEntry[] {
+  const entries = [
+    { snapshot: me, isMe: true, memberId: undefined as string | undefined },
+    ...rivals.map(r => ({ snapshot: r.snapshot, isMe: false, memberId: r.id as string | undefined })),
+  ];
+  const n = entries.length;
+  const perStatRanks = SQUAD_STATS.map(stat => computeRanks(entries.map(e => stat.value(e.snapshot)), stat.lowerBetter));
+  const composites = entries.map((_, i) => {
+    const scores = perStatRanks.map(ranks => rankToScore(ranks[i], n));
+    return Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
+  });
+  const bestStatsPerEntry = entries.map((_, i) =>
+    SQUAD_STATS.filter((_, si) => perStatRanks[si][i] === 1).map(s => s.key)
+  );
+
+  return entries
+    .map((e, i) => ({
+      name: e.snapshot.name,
+      snapshot: e.snapshot,
+      isMe: e.isMe,
+      memberId: e.memberId,
+      composite: composites[i],
+      bestStats: bestStatsPerEntry[i],
+    }))
+    .sort((a, b) => b.composite - a.composite);
 }
 
 interface StatRow {
@@ -93,15 +165,35 @@ function rowWinner(row: StatRow): 'me' | 'rival' | 'tie' {
   return row.meNum > row.rivalNum ? 'me' : 'rival';
 }
 
-export function VersusModal({ games, onClose }: Props) {
+export function VersusModal({ games, userId, onClose }: Props) {
+  const [mode, setMode] = useState<ViewMode>('1v1');
   const [name, setName] = useState('Player');
   const [copied, setCopied] = useState(false);
   const [pasteValue, setPasteValue] = useState('');
   const [pasteError, setPasteError] = useState(false);
   const [rival, setRival] = useState<VersusSnapshot | null>(null);
 
+  const [squadPasteValue, setSquadPasteValue] = useState('');
+  const [squadPasteError, setSquadPasteError] = useState(false);
+  const squad = useSquad(userId);
+
   const mySnapshot = useMemo(() => buildVersusSnapshot(games, name), [games, name]);
   const myCode = useMemo(() => encodeVersusCode(mySnapshot), [mySnapshot]);
+
+  const leaderboard = useMemo(
+    () => buildLeaderboard(mySnapshot, squad.members.map(m => ({ id: m.id, snapshot: m.snapshot }))),
+    [mySnapshot, squad.members]
+  );
+
+  function handleAddSquadMember() {
+    const ok = squad.addFromCode(squadPasteValue);
+    if (!ok) {
+      setSquadPasteError(true);
+      return;
+    }
+    setSquadPasteError(false);
+    setSquadPasteValue('');
+  }
 
   async function handleCopy() {
     try {
@@ -155,8 +247,129 @@ export function VersusModal({ games, onClose }: Props) {
           </button>
         </div>
 
+        {/* Mode toggle */}
+        <div className="flex items-center gap-1 px-4 pt-3 pb-1 shrink-0">
+          <button
+            onClick={() => setMode('1v1')}
+            className={clsx(
+              'flex-1 py-1.5 rounded-lg text-xs font-semibold transition-colors',
+              mode === '1v1' ? 'bg-white/10 text-white' : 'text-white/30 hover:text-white/50'
+            )}
+          >
+            1v1
+          </button>
+          <button
+            onClick={() => setMode('squad')}
+            className={clsx(
+              'flex-1 py-1.5 rounded-lg text-xs font-semibold transition-colors',
+              mode === 'squad' ? 'bg-white/10 text-white' : 'text-white/30 hover:text-white/50'
+            )}
+          >
+            Squad
+          </button>
+        </div>
+
         <div className="overflow-y-auto flex-1 min-h-0 overscroll-contain">
-          {!rival ? (
+          {mode === 'squad' ? (
+            /* ── Squad leaderboard ── */
+            <div className="p-4 space-y-5 pb-8">
+              <p className="text-xs text-white/40 leading-relaxed">
+                Add multiple friends&apos; codes to build a leaderboard — composite score blends all 7 stats,
+                ranked against everyone in the squad.
+              </p>
+
+              <div>
+                <label className="block text-[10px] text-white/25 font-bold uppercase tracking-wider mb-1.5">
+                  Add a rival&apos;s code
+                </label>
+                <textarea
+                  value={squadPasteValue}
+                  onChange={e => { setSquadPasteValue(e.target.value); setSquadPasteError(false); }}
+                  placeholder="Paste their Rival Check code here…"
+                  rows={3}
+                  className={clsx(
+                    'w-full px-3 py-2 bg-white/[0.04] border rounded-lg text-white text-xs placeholder:text-white/25 focus:outline-none transition-all resize-none font-mono',
+                    squadPasteError ? 'border-red-500/50' : 'border-white/10 focus:border-emerald-500/50'
+                  )}
+                />
+                {squadPasteError && (
+                  <p className="text-[11px] text-red-400 mt-1.5">
+                    That code didn&apos;t decode. Ask them to copy their Rival Check code again.
+                  </p>
+                )}
+                <button
+                  onClick={handleAddSquadMember}
+                  disabled={!squadPasteValue.trim()}
+                  className="mt-3 w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-emerald-500/15 text-emerald-300 text-sm font-semibold hover:bg-emerald-500/20 disabled:opacity-30 disabled:hover:bg-emerald-500/15 transition-colors"
+                >
+                  <UserPlus size={14} /> Add to Squad
+                </button>
+              </div>
+
+              {squad.members.length === 0 ? (
+                <div className="rounded-xl border border-white/5 bg-white/[0.025] p-5 text-center">
+                  <p className="text-xs text-white/30">Add at least one rival&apos;s code above to start the leaderboard.</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {leaderboard.map((entry, idx) => (
+                    <div
+                      key={entry.memberId ?? 'me'}
+                      className={clsx(
+                        'rounded-xl border p-3',
+                        entry.isMe ? 'border-emerald-500/30 bg-emerald-500/[0.04]' : 'border-white/5 bg-white/[0.025]'
+                      )}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className={clsx(
+                            'flex items-center justify-center w-6 h-6 rounded-full text-[11px] font-bold shrink-0',
+                            idx === 0 ? 'bg-yellow-500/20 text-yellow-300' : 'bg-white/10 text-white/50'
+                          )}>
+                            {idx === 0 ? <Crown size={12} /> : idx + 1}
+                          </span>
+                          <div className="min-w-0">
+                            <p className="text-xs font-semibold text-white/90 truncate">
+                              {entry.name}{entry.isMe && ' (You)'}
+                            </p>
+                            <p className="text-[9px] text-white/25">
+                              {entry.bestStats.length > 0
+                                ? `Best in squad: ${entry.bestStats.length} stat${entry.bestStats.length > 1 ? 's' : ''}`
+                                : ' '}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="text-sm font-bold text-white tabular-nums">{entry.composite}</span>
+                          {!entry.isMe && entry.memberId && (
+                            <button
+                              onClick={() => squad.remove(entry.memberId!)}
+                              className="p-1 text-white/25 hover:text-red-400 transition-colors"
+                            >
+                              <X size={12} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-4 gap-1.5 mt-2.5">
+                        {SQUAD_STATS.map(stat => (
+                          <div key={stat.key} className="text-center">
+                            <p className={clsx(
+                              'text-[10px] font-semibold tabular-nums',
+                              entry.bestStats.includes(stat.key) ? 'text-emerald-300' : 'text-white/50'
+                            )}>
+                              {stat.format(entry.snapshot)}
+                            </p>
+                            <p className="text-[8px] text-white/20 uppercase tracking-wide">{stat.label}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : !rival ? (
             /* ── Setup: share my code + paste a friend's ── */
             <div className="p-4 space-y-5 pb-8">
               <p className="text-xs text-white/40 leading-relaxed">

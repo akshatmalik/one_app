@@ -1,6 +1,12 @@
 {
   "entries": [
     {
+      "date": "2026-06-22",
+      "area": "Library",
+      "title": "Squad Leaderboard: rank your whole friend group, not just one rival",
+      "body": "Rival Check now has a \"Squad\" tab. Paste in codes from several friends at once and see everyone ranked together on one leaderboard — a composite score blends all 7 stats (hours, library size, spend, cost-per-hour, rating, completion rate, credit score), with a crown for whoever's on top and \"Best in Squad\" highlights for whoever wins each individual stat. Your saved squad sticks around the next time you open it, so you don't have to re-paste everyone's code every time."
+    },
+    {
       "date": "2026-06-21",
       "area": "Library",
       "title": "Rival Check: compare libraries with a friend, no accounts needed",

@@ -1803,7 +1803,7 @@ export default function GameAnalyticsPage() {
 
       {/* Rival Check — share a stats code, compare against a friend's */}
       {showVersusModal && (
-        <VersusModal games={games} onClose={() => setShowVersusModal(false)} />
+        <VersusModal games={games} userId={user?.uid ?? null} onClose={() => setShowVersusModal(false)} />
       )}
 
       {/* Awards Hub */}
