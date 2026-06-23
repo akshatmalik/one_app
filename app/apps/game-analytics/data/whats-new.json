@@ -3,6 +3,12 @@
     {
       "date": "2026-06-23",
       "area": "General",
+      "title": "Daily Quests now celebrate Perfect Days and show your streak as a strip",
+      "body": "Go 3-for-3 on your Daily Quests and you'll now get a little celebration toast right when the last quest checks off — no need to reopen the panel to find out you nailed it. Inside the expanded quest panel there's also a new \"Last 7 days\" strip: a row of small squares showing which of the past week's days you completed (green = perfect, amber = partial), so your streak isn't just a number anymore, it's a visible run of good days."
+    },
+    {
+      "date": "2026-06-23",
+      "area": "General",
       "title": "Daily Quests: 3 small challenges, picked just for you, every day",
       "body": "There's a new \"Daily Quests\" chip right below your Fortune Cookie. Every day it picks 3 quick challenges out of a pool — things like logging any session, hitting 90 minutes of play, switching genres, starting something from your backlog, playing whatever's queued up in Up Next, finishing a game, or reviving something you haven't touched in 3+ weeks. It only ever picks quests you can actually complete with your current library, so it never asks for something impossible. Tap the chip to see the full list with live checkmarks as you complete them, and keep your streak going by going 3-for-3 — miss a day and the streak resets, just like any good habit tracker."
     },

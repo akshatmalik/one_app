@@ -5,14 +5,17 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronDown, Flame, Sparkles } from 'lucide-react';
 import { Game } from '../lib/types';
 import { useDailyQuests } from '../hooks/useDailyQuests';
+import { TrophyToast } from './TrophyToast';
 
 interface DailyQuestPanelProps {
   games: Game[];
   userId: string;
 }
 
+const WEEKDAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+
 export function DailyQuestPanel({ games, userId }: DailyQuestPanelProps) {
-  const { questSet, streak } = useDailyQuests(games, userId);
+  const { questSet, streak, last7Days, showPerfectDayToast, dismissPerfectDayToast } = useDailyQuests(games, userId);
   const [expanded, setExpanded] = useState(false);
 
   if (questSet.quests.length === 0) return null;
@@ -21,6 +24,15 @@ export function DailyQuestPanel({ games, userId }: DailyQuestPanelProps) {
 
   return (
     <div className="mb-4 rounded-xl border border-white/10 bg-gradient-to-r from-indigo-500/10 to-purple-500/10 overflow-hidden">
+      {showPerfectDayToast && (
+        <TrophyToast
+          name={`Perfect Day! ${streak > 1 ? `${streak}-Day Streak` : 'Quests Complete'}`}
+          icon="🎯"
+          tier="milestone"
+          isUpgrade={false}
+          onDismiss={dismissPerfectDayToast}
+        />
+      )}
       <button
         onClick={() => setExpanded(v => !v)}
         className="w-full flex items-center gap-3 px-4 py-3 text-left"
@@ -78,6 +90,33 @@ export function DailyQuestPanel({ games, userId }: DailyQuestPanelProps) {
                   Perfect day — {streak}-day streak!
                 </div>
               )}
+
+              <div className="pt-2 border-t border-white/10">
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-white/30 mb-1.5">Last 7 days</p>
+                <div className="flex items-center gap-1.5">
+                  {last7Days.map(day => {
+                    const isPerfect = day.total > 0 && day.completed === day.total;
+                    const isPartial = day.completed > 0 && day.completed < day.total;
+                    const weekday = WEEKDAY_LABELS[new Date(`${day.date}T00:00:00`).getDay()];
+                    return (
+                      <div key={day.date} className="flex flex-col items-center gap-1" title={`${day.date}: ${day.completed}/${day.total} quests`}>
+                        <div
+                          className={`w-5 h-5 rounded-md border flex items-center justify-center text-[9px] ${
+                            isPerfect
+                              ? 'bg-emerald-500/80 border-emerald-400 text-white'
+                              : isPartial
+                              ? 'bg-amber-500/40 border-amber-400/60 text-amber-200'
+                              : 'bg-white/5 border-white/10 text-white/20'
+                          } ${day.isToday ? 'ring-1 ring-white/40' : ''}`}
+                        >
+                          {isPerfect ? '✓' : day.total > 0 ? day.completed : ''}
+                        </div>
+                        <span className={`text-[8px] ${day.isToday ? 'text-white/60 font-semibold' : 'text-white/25'}`}>{weekday}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           </motion.div>
         )}

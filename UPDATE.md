@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-23 07:05 — General — Daily Quests: Perfect Day toast + 7-day streak strip
+
+**Files**: app/apps/game-analytics/hooks/useDailyQuests.ts, app/apps/game-analytics/components/DailyQuestPanel.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Closed the FOLLOW-UP from the Daily Quests run earlier today. `useDailyQuests` now tracks the previous render's completion state for *today only* via a ref, and fires `showPerfectDayToast` the exact instant the last quest flips from incomplete to complete (never on initial mount, when today may already be complete from an earlier session) — `DailyQuestPanel` renders the existing reusable `TrophyToast` component (`tier="milestone"`, same component already used by `useTrophies`/`useGenreLevelUps`) with a "Perfect Day!" message that includes the current streak count. Also added a derived `last7Days` array (built from the existing `getQuestHistory`/`recordQuestDay` device-local store, no new storage needed) and a new "Last 7 days" dot-strip inside the expanded panel: 7 small squares (emerald = perfect day, amber = partial with count shown, faint = empty/no data), today's square ringed, weekday-initial labels underneath — so the streak number now has a visible run of days backing it up. No `lib/types.ts`, storage schema, or `calculations.ts` changes — purely additive to one hook and its one consuming component (2 files). Verified via `npm run build` (clean, 12/12 static pages, zero TS errors), `npm run lint` (zero new warnings/errors — only pre-existing `<img>` LCP warnings elsewhere in the codebase, untouched by this change), and an HTTP-level dev-server smoke test (`/apps/game-analytics` → 200, clean compile log, no server-side render errors; no headless browser available in this sandbox to inspect live client console output).
+
+FOLLOW-UP: Could extend the 7-day strip into a full monthly calendar view (tap to expand from 7 days to the current month), and/or add a small "best streak ever" record alongside the live streak count so a broken streak doesn't erase the achievement of having had one.
+
 ## 2026-06-23 06:10 — General — Daily Quests (rotating challenges + streak)
 
 **Files**: app/apps/game-analytics/lib/calculations.ts, app/apps/game-analytics/lib/quest-storage.ts (new), app/apps/game-analytics/hooks/useDailyQuests.ts (new), app/apps/game-analytics/components/DailyQuestPanel.tsx (new), app/apps/game-analytics/page.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json
