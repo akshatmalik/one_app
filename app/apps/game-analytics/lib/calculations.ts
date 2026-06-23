@@ -1,4 +1,4 @@
-import { Game, GameStatus, GameMetrics, AnalyticsSummary, TasteProfile, SessionMood, SessionContext, BudgetSettings, GamingGoal } from './types';
+import { Game, GameStatus, GameMetrics, AnalyticsSummary, TasteProfile, SessionMood, SessionContext, BudgetSettings, GamingGoal, SubscriptionSource } from './types';
 
 /**
  * Parse a YYYY-MM-DD date string as local time instead of UTC.
@@ -15491,4 +15491,161 @@ export function getDailyQuestSet(games: Game[]): DailyQuestSet {
 
   const completedCount = quests.filter(q => q.completed).length;
   return { date: dateStr, quests, completedCount, allComplete: quests.length > 0 && completedCount === quests.length };
+}
+
+// ── Subscription Value Tracker ──────────────────────────────────────────────
+// PS Plus already gets a dedicated ROI meter (SubscriptionDropPanel), but
+// `Game.subscriptionSource` covers Game Pass, Epic Free, Prime Gaming, and
+// Humble Choice too — this is the general-purpose version: is each recurring
+// subscription actually paying for itself, based on what you've claimed and
+// played through it?
+
+export type SubscriptionBillingCycle = 'monthly' | 'yearly';
+
+export type SubscriptionVerdict = 'Crushing It' | 'Worth It' | 'Break Even' | 'Losing Money' | 'No Data Yet';
+
+/** Minimal shape needed from a tracked subscription — matches TrackedSubscription in subscription-tracker-storage.ts. */
+export interface SubscriptionTrackerInput {
+  id: string;
+  service: SubscriptionSource;
+  label?: string;
+  cost: number;
+  billingCycle: SubscriptionBillingCycle;
+  startedAt: string;
+  cancelledAt: string | null;
+}
+
+export interface SubscriptionClaimedGame {
+  gameId: string;
+  name: string;
+  hoursPlayed: number;
+  estimatedValue: number;
+}
+
+export interface SubscriptionValueEntry {
+  id: string;
+  service: SubscriptionSource;
+  label?: string;
+  cost: number;
+  billingCycle: SubscriptionBillingCycle;
+  isActive: boolean;
+  cyclesBilled: number;
+  totalCostToDate: number;
+  claimedGames: SubscriptionClaimedGame[];
+  totalHoursPlayed: number;
+  totalValueClaimed: number;
+  costPerHourEffective: number | null;
+  roiMultiple: number | null;
+  verdict: SubscriptionVerdict;
+  verdictLine: string;
+  ambiguous: boolean; // true when service is 'Other' and multiple 'Other' subscriptions exist (can't attribute games)
+}
+
+export interface SubscriptionValueReport {
+  entries: SubscriptionValueEntry[];
+  totalMonthlyCost: number;
+  totalCostToDate: number;
+  totalValueClaimed: number;
+  totalHoursPlayed: number;
+  netValue: number;
+}
+
+function buildSubscriptionVerdict(roiMultiple: number | null, claimedCount: number, service: string): { verdict: SubscriptionVerdict; verdictLine: string } {
+  if (claimedCount === 0 || roiMultiple === null) {
+    return { verdict: 'No Data Yet', verdictLine: `No games tagged to ${service} yet — claim something to start tracking value.` };
+  }
+  if (roiMultiple >= 1.5) {
+    return { verdict: 'Crushing It', verdictLine: `${roiMultiple.toFixed(1)}x return — this subscription is paying for itself many times over.` };
+  }
+  if (roiMultiple >= 1) {
+    return { verdict: 'Worth It', verdictLine: `${roiMultiple.toFixed(1)}x return — you've claimed more value than you've paid in.` };
+  }
+  if (roiMultiple >= 0.5) {
+    return { verdict: 'Break Even', verdictLine: `${roiMultiple.toFixed(1)}x return — getting close to paying for itself.` };
+  }
+  return { verdict: 'Losing Money', verdictLine: `Only ${roiMultiple.toFixed(1)}x return so far — you're paying more than you're claiming.` };
+}
+
+/**
+ * For every tracked subscription, matches owned games claimed through it
+ * (`game.subscriptionSource === service`, `acquiredFree` games only) and
+ * computes hours played, value claimed (using `originalPrice` when known —
+ * what it would have cost to buy), and a cost-vs-value verdict. 'Other'
+ * subscriptions can't be disambiguated from each other (no second
+ * identifying field on Game), so games are only attributed to an 'Other'
+ * entry when it's the sole 'Other' subscription being tracked.
+ */
+export function getSubscriptionValueReport(
+  games: Game[],
+  subscriptions: SubscriptionTrackerInput[],
+  now: Date = new Date()
+): SubscriptionValueReport {
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  const otherCount = subscriptions.filter(s => s.service === 'Other').length;
+
+  const entries: SubscriptionValueEntry[] = subscriptions.map(sub => {
+    const isActive = sub.cancelledAt === null;
+    const cycleDays = sub.billingCycle === 'monthly' ? 30 : 365;
+    const start = new Date(sub.startedAt);
+    const end = sub.cancelledAt ? new Date(sub.cancelledAt) : now;
+    const daysElapsed = Math.max(0, (end.getTime() - start.getTime()) / DAY_MS);
+    const cyclesBilled = Math.max(1, Math.ceil(daysElapsed / cycleDays));
+    const totalCostToDate = cyclesBilled * sub.cost;
+
+    const ambiguous = sub.service === 'Other' && otherCount > 1;
+
+    const claimedGames: SubscriptionClaimedGame[] = ambiguous
+      ? []
+      : games
+          .filter(g => g.status !== 'Wishlist' && g.acquiredFree && g.subscriptionSource === sub.service)
+          .map(g => ({
+            gameId: g.id,
+            name: g.name,
+            hoursPlayed: getTotalHours(g),
+            estimatedValue: g.originalPrice ?? g.price ?? 0,
+          }));
+
+    const totalHoursPlayed = claimedGames.reduce((sum, g) => sum + g.hoursPlayed, 0);
+    const totalValueClaimed = claimedGames.reduce((sum, g) => sum + g.estimatedValue, 0);
+    const costPerHourEffective = totalHoursPlayed > 0 ? totalCostToDate / totalHoursPlayed : null;
+    const roiMultiple = totalCostToDate > 0 ? totalValueClaimed / totalCostToDate : null;
+
+    const { verdict, verdictLine } = ambiguous
+      ? { verdict: 'No Data Yet' as SubscriptionVerdict, verdictLine: `Tag a custom label to tell multiple "Other" subscriptions apart.` }
+      : buildSubscriptionVerdict(roiMultiple, claimedGames.length, sub.label || sub.service);
+
+    return {
+      id: sub.id,
+      service: sub.service,
+      label: sub.label,
+      cost: sub.cost,
+      billingCycle: sub.billingCycle,
+      isActive,
+      cyclesBilled,
+      totalCostToDate,
+      claimedGames,
+      totalHoursPlayed,
+      totalValueClaimed,
+      costPerHourEffective,
+      roiMultiple,
+      verdict,
+      verdictLine,
+      ambiguous,
+    };
+  });
+
+  const activeEntries = entries.filter(e => e.isActive);
+  const totalMonthlyCost = activeEntries.reduce((sum, e) => sum + (e.billingCycle === 'monthly' ? e.cost : e.cost / 12), 0);
+  const totalCostToDate = entries.reduce((sum, e) => sum + e.totalCostToDate, 0);
+  const totalValueClaimed = entries.reduce((sum, e) => sum + e.totalValueClaimed, 0);
+  const totalHoursPlayed = entries.reduce((sum, e) => sum + e.totalHoursPlayed, 0);
+
+  return {
+    entries,
+    totalMonthlyCost,
+    totalCostToDate,
+    totalValueClaimed,
+    totalHoursPlayed,
+    netValue: totalValueClaimed - totalCostToDate,
+  };
 }
