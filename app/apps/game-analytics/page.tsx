@@ -59,6 +59,7 @@ import { GamerCard } from './components/GamerCard';
 import { MeVsMe } from './components/MeVsMe';
 import { VersusModal } from './components/VersusModal';
 import { FortuneCookie } from './components/FortuneCookie';
+import { DailyQuestPanel } from './components/DailyQuestPanel';
 import { SubscriptionSyncBanner } from './components/SubscriptionSyncBanner';
 import { loadSubscriptionSettings, hasNewDrop } from './lib/subscription-settings';
 import { ReviewNudgeBanner } from './components/ReviewNudgeBanner';
@@ -1271,6 +1272,9 @@ export default function GameAnalyticsPage() {
 
           {/* Daily Fortune Cookie */}
           {games.length > 0 && <div className="mb-4"><FortuneCookie games={games} replayCandidate={topReplayCandidate} wishlistNextAffordable={wishlistNextAffordable} /></div>}
+
+          {/* Daily Quests */}
+          {games.length > 0 && <DailyQuestPanel games={games} userId={user?.uid ?? 'local-user'} />}
 
           {/* New month's PS Plus games nudge */}
           <SubscriptionSyncBanner

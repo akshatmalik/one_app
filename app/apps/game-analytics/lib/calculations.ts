@@ -15331,3 +15331,164 @@ export function getReplayCandidates(games: Game[], limit = 12): ReplayCandidate[
 
   return candidates;
 }
+
+// ─── Daily Quests ───────────────────────────────────────────────────────────
+
+export type QuestType =
+  | 'play_session'
+  | 'marathon'
+  | 'genre_switch'
+  | 'backlog_starter'
+  | 'queue_clear'
+  | 'finisher'
+  | 'revive_dormant'
+  | 'double_header';
+
+export interface DailyQuest {
+  type: QuestType;
+  title: string;
+  description: string;
+  icon: string;
+  completed: boolean;
+  progressLabel: string;
+}
+
+export interface DailyQuestSet {
+  date: string; // YYYY-MM-DD, local
+  quests: DailyQuest[];
+  completedCount: number;
+  allComplete: boolean;
+}
+
+const QUEST_DEFINITIONS: Record<QuestType, { title: string; description: string; icon: string }> = {
+  play_session: { title: 'Show Up', description: 'Log any play session today.', icon: '🎮' },
+  marathon: { title: 'Marathon', description: 'Log 90+ minutes today (any combination of games).', icon: '🏃' },
+  genre_switch: { title: 'Genre Switch', description: 'Play a different genre than your last session.', icon: '🔀' },
+  backlog_starter: { title: 'Backlog Buster', description: 'Start a new game from your backlog.', icon: '📦' },
+  queue_clear: { title: 'Queue Clear', description: 'Play something from your Up Next queue.', icon: '📋' },
+  finisher: { title: 'Finisher', description: 'Complete a game today.', icon: '🏁' },
+  revive_dormant: { title: 'Old Friend', description: "Play a game you haven't touched in 21+ days.", icon: '👋' },
+  double_header: { title: 'Double Header', description: 'Log sessions on 2 different games today.', icon: '🎯' },
+};
+
+function localDateStr(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/** Deterministic per-day shuffle so the same quests show all day but change daily. */
+function seededShuffle<T>(arr: T[], seed: number): T[] {
+  const result = [...arr];
+  let s = seed;
+  for (let i = result.length - 1; i > 0; i--) {
+    s = (s * 9301 + 49297) % 233280;
+    const j = Math.floor((s / 233280) * (i + 1));
+    [result[i], result[j]] = [result[j], result[i]];
+  }
+  return result;
+}
+
+/**
+ * Computes today's 3 quests plus live completion state, purely derived from
+ * existing game/play-log data (no snapshot needed — completion is always
+ * re-derivable from playLogs/startDate/endDate dated today).
+ */
+export function getDailyQuestSet(games: Game[]): DailyQuestSet {
+  const now = new Date();
+  const dateStr = localDateStr(now);
+  const seed = now.getFullYear() * 10000 + (now.getMonth() + 1) * 100 + now.getDate();
+
+  const ownedGames = games.filter(g => g.status !== 'Wishlist');
+  if (ownedGames.length === 0) {
+    return { date: dateStr, quests: [], completedCount: 0, allComplete: false };
+  }
+
+  const notStarted = ownedGames.filter(g => g.status === 'Not Started');
+  const inProgress = ownedGames.filter(g => g.status === 'In Progress');
+  const queuedGames = ownedGames.filter(g => g.queuePosition !== undefined);
+  const distinctGenres = new Set(ownedGames.map(g => g.genre).filter(Boolean));
+
+  const allLogs = getAllPlayLogs(games); // sorted desc by date
+  const todaysLogs = allLogs.filter(({ log }) => log.date === dateStr);
+  const todaysGameIds = new Set(todaysLogs.map(({ game }) => game.id));
+  const todaysTotalHours = todaysLogs.reduce((sum, { log }) => sum + log.hours, 0);
+  const priorLog = allLogs.find(({ log }) => log.date < dateStr);
+
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  const isDormant = (game: Game): boolean => {
+    const priorSessions = (game.playLogs ?? []).filter(log => log.date < dateStr);
+    if (priorSessions.length > 0) {
+      const lastDate = priorSessions.reduce((latest, log) => (log.date > latest ? log.date : latest), priorSessions[0].date);
+      return (now.getTime() - parseLocalDate(lastDate).getTime()) / DAY_MS >= 21;
+    }
+    if (!game.datePurchased) return false;
+    return (now.getTime() - parseLocalDate(game.datePurchased).getTime()) / DAY_MS >= 21;
+  };
+  const dormantCandidates = ownedGames.filter(
+    g => (g.status === 'In Progress' || g.status === 'Abandoned') && isDormant(g)
+  );
+
+  const eligible: Record<QuestType, boolean> = {
+    play_session: true,
+    marathon: true,
+    genre_switch: distinctGenres.size >= 2,
+    backlog_starter: notStarted.length > 0,
+    queue_clear: queuedGames.length > 0,
+    finisher: inProgress.length > 0,
+    revive_dormant: dormantCandidates.length > 0,
+    double_header: ownedGames.length >= 2,
+  };
+
+  const eligibleTypes = (Object.keys(QUEST_DEFINITIONS) as QuestType[]).filter(t => eligible[t]);
+  const chosenTypes = seededShuffle(eligibleTypes, seed).slice(0, Math.min(3, eligibleTypes.length));
+
+  const quests: DailyQuest[] = chosenTypes.map(type => {
+    const def = QUEST_DEFINITIONS[type];
+    let completed = false;
+    let progressLabel = '';
+
+    switch (type) {
+      case 'play_session':
+        completed = todaysLogs.length > 0;
+        progressLabel = completed ? `${todaysTotalHours.toFixed(1)}h logged today` : `${ownedGames.length} games in your library`;
+        break;
+      case 'marathon':
+        completed = todaysTotalHours >= 1.5;
+        progressLabel = `${todaysTotalHours.toFixed(1)}h / 1.5h today`;
+        break;
+      case 'genre_switch': {
+        const priorGenre = priorLog?.game.genre;
+        const todayGenres = new Set(todaysLogs.map(({ game }) => game.genre).filter(Boolean));
+        completed = !!priorGenre && Array.from(todayGenres).some(g => g !== priorGenre);
+        progressLabel = priorGenre ? `Last session: ${priorGenre}` : 'No prior session on record';
+        break;
+      }
+      case 'backlog_starter':
+        completed = ownedGames.some(g => g.startDate === dateStr);
+        progressLabel = `${notStarted.length} games waiting in your backlog`;
+        break;
+      case 'queue_clear':
+        completed = queuedGames.some(g => todaysGameIds.has(g.id));
+        progressLabel = `${queuedGames.length} games queued in Up Next`;
+        break;
+      case 'finisher':
+        completed = ownedGames.some(g => g.status === 'Completed' && g.endDate === dateStr);
+        progressLabel = `${inProgress.length} games in progress`;
+        break;
+      case 'revive_dormant': {
+        const revived = dormantCandidates.find(g => todaysGameIds.has(g.id));
+        completed = !!revived;
+        progressLabel = revived ? `${revived.name} — welcome back` : `${dormantCandidates.length} games gone quiet 21+ days`;
+        break;
+      }
+      case 'double_header':
+        completed = todaysGameIds.size >= 2;
+        progressLabel = `${todaysGameIds.size}/2 games today`;
+        break;
+    }
+
+    return { type, title: def.title, description: def.description, icon: def.icon, completed, progressLabel };
+  });
+
+  const completedCount = quests.filter(q => q.completed).length;
+  return { date: dateStr, quests, completedCount, allComplete: quests.length > 0 && completedCount === quests.length };
+}

@@ -2,6 +2,12 @@
   "entries": [
     {
       "date": "2026-06-23",
+      "area": "General",
+      "title": "Daily Quests: 3 small challenges, picked just for you, every day",
+      "body": "There's a new \"Daily Quests\" chip right below your Fortune Cookie. Every day it picks 3 quick challenges out of a pool — things like logging any session, hitting 90 minutes of play, switching genres, starting something from your backlog, playing whatever's queued up in Up Next, finishing a game, or reviving something you haven't touched in 3+ weeks. It only ever picks quests you can actually complete with your current library, so it never asks for something impossible. Tap the chip to see the full list with live checkmarks as you complete them, and keep your streak going by going 3-for-3 — miss a day and the streak resets, just like any good habit tracker."
+    },
+    {
+      "date": "2026-06-23",
       "area": "Up Next",
       "title": "Calendar Sync: put your gaming plans on your real calendar",
       "body": "Open ⋮ → \"Calendar Sync\" (or find it with ⌘K) to export your gaming plans to Apple Calendar, Outlook, Google Calendar, or anything else. It pulls together your Up Next play schedule, upcoming Buy Queue release dates, and your active goal deadlines, lets you pick exactly which ones you want, and either downloads a single calendar file with everything in it or drops a one-tap \"Add to Google Calendar\" link next to each item. No more trying to remember when a game releases or when you told yourself you'd finish your goal — it's right there next to your other plans."
