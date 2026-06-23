@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-23 05:30 — Up Next — Calendar Sync (.ics export + Google Calendar links)
+
+**Files**: app/apps/game-analytics/lib/calendar-export.ts (new), app/apps/game-analytics/components/CalendarSyncModal.tsx (new), app/apps/game-analytics/page.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+The app already computes three separate kinds of planning dates — Up Next's projected per-game play windows (`buildPlaythroughTimeline`), Buy Queue release dates, and active Gaming Goal deadlines — but none of them ever left the app; there was no way to get any of it onto a real calendar. Added "Calendar Sync" (⋮ → Calendar Sync, also in the ⌘K palette) — a self-contained modal that turns all three into standard calendar events. New pure `lib/calendar-export.ts` builds RFC 5545-compliant all-day `VEVENT` blocks (with line folding and text escaping) into a downloadable `.ics` file via a Blob + temporary anchor click, and also builds one-tap Google Calendar quick-add URLs per event. `CalendarSyncModal.tsx` groups events into Play Plan / Release Reminders / Goal Deadlines sections, each item individually checkable (all checked by default) with its own "Add to Google Calendar" link, plus a combined "Download Calendar (.ics)" button for everything selected. No new data model and no storage layer — every event is derived on the fly from existing `Game`/`GamingGoal`/`PurchaseQueueEntry` state each time the modal opens, and no existing `calculations.ts`/`timeline-estimator.ts` function body was touched. Verified via `npm run build` (clean), `npm run lint` (zero new warnings/errors), and a Playwright smoke test at 375px width covering both the empty state and a populated state with sample data — the actual `.ics` download was captured and its content verified byte-for-byte as valid iCalendar (`BEGIN:VCALENDAR`/`VEVENT`/`DTSTART`/`DTEND`/`SUMMARY`/`END:VCALENDAR`), and all Google Calendar links resolved to correctly-formatted URLs, with zero console errors or warnings attributable to the new code.
+
+FOLLOW-UP: Could add a "subscribe" (webcal://) live-feed option for users who want their calendar to auto-update as the queue changes, instead of a one-off download, and/or remember the last-used checkbox selection per user so repeat exports don't require re-checking everything.
+
 ## 2026-06-23 00:20 — Navigation — Global Command Palette (⌘K)
 
 **Files**: app/apps/game-analytics/components/GlobalCommandPalette.tsx (new), app/apps/game-analytics/page.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json

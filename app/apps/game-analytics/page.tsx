@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, CalendarClock, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical, Download, Upload, Gift, ShoppingCart, Search, X, Moon, CreditCard, Swords, Inbox, Play, History, RefreshCw, Crown, Users, PiggyBank, Radar } from 'lucide-react';
+import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, CalendarClock, CalendarPlus, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical, Download, Upload, Gift, ShoppingCart, Search, X, Moon, CreditCard, Swords, Inbox, Play, History, RefreshCw, Crown, Users, PiggyBank, Radar } from 'lucide-react';
 import { useGames } from './hooks/useGames';
 import { useAnalytics, GameWithMetrics } from './hooks/useAnalytics';
 import { useBudget } from './hooks/useBudget';
@@ -51,6 +51,7 @@ import { SteamSyncModal } from './components/SteamSyncModal';
 import { AchievementHunterModal } from './components/AchievementHunterModal';
 import { WishlistPlannerModal } from './components/WishlistPlannerModal';
 import { ReplayRadarModal } from './components/ReplayRadarModal';
+import { CalendarSyncModal } from './components/CalendarSyncModal';
 import { loadWishlistPriority, saveWishlistPriority, resolveWishlistOrder } from './lib/wishlist-priority';
 import { useLibrarySnapshots } from './hooks/useLibrarySnapshots';
 import { YearStoryMode } from './components/YearStoryMode';
@@ -270,6 +271,7 @@ export default function GameAnalyticsPage() {
   const [showAchievementHunter, setShowAchievementHunter] = useState(false);
   const [showWishlistPlanner, setShowWishlistPlanner] = useState(false);
   const [showReplayRadar, setShowReplayRadar] = useState(false);
+  const [showCalendarSync, setShowCalendarSync] = useState(false);
   const [wishlistPriorityOrder, setWishlistPriorityOrder] = useState<string[]>([]);
   const [wrappedYear, setWrappedYear] = useState<number | null>(null);
   const [showGamerCard, setShowGamerCard] = useState(false);
@@ -775,6 +777,7 @@ export default function GameAnalyticsPage() {
     { id: 'action-time-machine', label: 'Time Machine', subtitle: 'See your library at a past date', group: 'Actions', icon: <History size={15} />, onRun: () => setShowTimeMachine(true) },
     { id: 'action-wishlist-planner', label: 'Wishlist Planner', subtitle: 'Plan what to save up for first', group: 'Actions', icon: <PiggyBank size={15} />, onRun: () => setShowWishlistPlanner(true) },
     { id: 'action-replay-radar', label: 'Replay Radar', subtitle: 'Dormant games worth revisiting', group: 'Actions', icon: <Radar size={15} />, onRun: () => setShowReplayRadar(true) },
+    { id: 'action-calendar-sync', label: 'Calendar Sync', subtitle: 'Export your play plan, releases & goals to a calendar', group: 'Actions', icon: <CalendarPlus size={15} />, onRun: () => setShowCalendarSync(true) },
     { id: 'action-steam-sync', label: 'Sync Steam Library', subtitle: 'Import owned games & playtime from Steam', group: 'Actions', icon: <RefreshCw size={15} />, onRun: () => setShowSteamSync(true) },
     { id: 'action-import', label: 'Import Games', subtitle: 'Bulk import from a file', group: 'Actions', icon: <Upload size={15} />, onRun: () => setShowImport(true) },
     ...(games.length === 0 ? [{ id: 'action-load-samples', label: 'Load Samples', subtitle: 'Try the app with demo data', group: 'Actions' as const, icon: <Sparkles size={15} />, onRun: () => handleSeedData() }] : []),
@@ -1368,6 +1371,7 @@ export default function GameAnalyticsPage() {
                           { icon: <History size={15} className="text-emerald-400" />, label: 'Time Machine', onClick: () => setShowTimeMachine(true) },
                           { icon: <PiggyBank size={15} className="text-emerald-400" />, label: 'Wishlist Planner', onClick: () => setShowWishlistPlanner(true) },
                           { icon: <Radar size={15} className="text-emerald-400" />, label: 'Replay Radar', onClick: () => setShowReplayRadar(true) },
+                          { icon: <CalendarPlus size={15} className="text-indigo-400" />, label: 'Calendar Sync', onClick: () => setShowCalendarSync(true) },
                         ].map(item => (
                           <button key={item.label}
                             onClick={() => { item.onClick(); setShowMoreMenu(false); }}
@@ -1979,6 +1983,18 @@ export default function GameAnalyticsPage() {
             }
           }}
           onClose={() => setShowReplayRadar(false)}
+        />
+      )}
+
+      {/* Calendar Sync — export Up Next play windows, Buy Queue releases, and goal deadlines to a calendar */}
+      {showCalendarSync && (
+        <CalendarSyncModal
+          userId={user?.uid ?? ''}
+          queuedGames={queuedGames}
+          allGames={games}
+          goals={goals}
+          upcomingEntries={upcomingEntries}
+          onClose={() => setShowCalendarSync(false)}
         />
       )}
 
