@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-23 00:20 — Navigation — Global Command Palette (⌘K)
+
+**Files**: app/apps/game-analytics/components/GlobalCommandPalette.tsx (new), app/apps/game-analytics/page.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Addressed a structural gap that had been growing for months: the app has 9 tabs and ~20 buried actions (Play Tonight, Random Pick, Backlog Triage/Bracket, Gamer Card, Me vs Me, Rival Check, Yearly Wrapped, Awards Hub, Export/Import, Steam Sync, Achievement Hunter, Time Machine, Wishlist Planner, Replay Radar, etc.) split across two separate non-searchable dropdown menus, with zero keyboard-shortcut or search-driven navigation anywhere — confirmed by grep that no `metaKey`/`ctrlKey` shortcut code existed at all. New self-contained `GlobalCommandPalette.tsx` is a Linear/Slack-style fuzzy-searchable palette: a 4-tier match scorer (exact > prefix > substring > subsequence) ranks both commands and games by name/subtitle/keywords/genre/platform, results are grouped (Navigate/Actions/Recap & Share/Data, or a flat "Results" + "Games" list while typing), full keyboard nav (↑↓/Enter/Esc) drives a single flattened result list with auto-scroll, and the last 6 run commands are remembered per-user in localStorage (`ga-command-palette-recents-${userId}`) the same way `wishlist-priority.ts` persists planning state. `page.tsx` wires it up with a global ⌘K/Ctrl+K listener, a new header search button, and a `paletteCommands` array built entirely from existing setters (no new state machinery beyond `showGlobalPalette`) — selecting a game opens the existing `GameBottomSheet` via `setDetailGame`. No `lib/types.ts`, storage, or `calculations.ts` changes; one new file plus wiring in one existing file. Verified via `npm run build` (clean, 12/12 static pages, zero TS errors), `npm run lint` (zero new warnings/errors — only the same pre-existing `<img>` LCP warnings already present throughout the codebase), and an HTTP-level dev-server smoke test (`/apps/game-analytics` → 200, clean compile log, no server-side render errors; no headless browser available in this sandbox to inspect live console output).
+
+FOLLOW-UP: Could add a "Jump to recently viewed game" recent-games section (separate from recent commands), and surface a subtle first-time tooltip pointing at the ⌘K shortcut so users discover it without needing to click the search icon first.
+
 ## 2026-06-22 20:17 — Fortune Cookie — Replay Radar & Wishlist Affordability nudges
 
 **Files**: app/apps/game-analytics/lib/calculations.ts, app/apps/game-analytics/components/FortuneCookie.tsx, app/apps/game-analytics/page.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json

@@ -1,6 +1,12 @@
 {
   "entries": [
     {
+      "date": "2026-06-23",
+      "area": "Navigation",
+      "title": "Press ⌘K to jump anywhere, instantly",
+      "body": "There's now a real search bar for the whole app. Press ⌘K (or Ctrl+K on Windows) anywhere, or tap the new search icon in the header, and start typing — it'll find any game in your library by name, jump straight to any tab, or fire off any of the ~20 actions that used to be buried in menus (Play Tonight, Random Pick, Gamer Card, Yearly Wrapped, Export, Steam Sync, Wishlist Planner, Replay Radar, and more). Use the arrow keys and Enter to pick a result, or just click it. Your most recently used commands show up first the next time you open it, so the things you reach for most are always one keystroke away."
+    },
+    {
       "date": "2026-06-22",
       "area": "Fortune Cookie",
       "title": "Your daily fortune now knows about your backlog and your wishlist",

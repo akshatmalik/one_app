@@ -77,6 +77,7 @@ import { BacklogTriageModal } from './components/BacklogTriageModal';
 import { BacklogBracketModal } from './components/BacklogBracketModal';
 import { useUndoToast } from './hooks/useUndoToast';
 import { UndoToast } from './components/UndoToast';
+import { GlobalCommandPalette, PaletteCommand } from './components/GlobalCommandPalette';
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist';
@@ -302,6 +303,19 @@ export default function GameAnalyticsPage() {
   const [showPlayTonight, setShowPlayTonight] = useState(false);
   const [showBacklogTriage, setShowBacklogTriage] = useState(false);
   const [showBacklogBracket, setShowBacklogBracket] = useState(false);
+  const [showGlobalPalette, setShowGlobalPalette] = useState(false);
+
+  // Global ⌘K / Ctrl+K shortcut — opens the searchable command palette from anywhere in the app.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setShowGlobalPalette(v => !v);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
 
   // Week recap data for header strip
   const weekRecap = useMemo(() => {
@@ -737,6 +751,45 @@ export default function GameAnalyticsPage() {
       }
     });
 
+  const hasActiveBacklog = games.filter(g => g.status !== 'Wishlist' && g.status !== 'Completed' && g.status !== 'Abandoned').length > 0;
+
+  const paletteCommands: PaletteCommand[] = [
+    // Navigate — jump straight to any tab
+    { id: 'nav-games', label: 'Games', subtitle: 'Your full library', group: 'Navigate', icon: <List size={15} />, onRun: () => setTabMode('games') },
+    { id: 'nav-timeline', label: 'Timeline', subtitle: 'Monthly history of events', group: 'Navigate', icon: <Calendar size={15} />, onRun: () => setTabMode('timeline') },
+    { id: 'nav-stats', label: 'Stats', subtitle: 'Charts, trophies, breakdowns', group: 'Navigate', icon: <BarChart3 size={15} />, onRun: () => setTabMode('stats') },
+    { id: 'nav-ai-coach', label: 'AI Coach', subtitle: 'Chat about your gaming habits', group: 'Navigate', icon: <MessageCircle size={15} />, onRun: () => setTabMode('ai-coach') },
+    { id: 'nav-up-next', label: 'Up Next', subtitle: 'Priority queue', group: 'Navigate', icon: <ListOrdered size={15} />, onRun: () => setTabMode('up-next') },
+    { id: 'nav-discover', label: 'Discover', subtitle: 'Recommendations & PS Plus', group: 'Navigate', icon: <Compass size={15} />, onRun: () => setTabMode('discover') },
+    { id: 'nav-leaderboard', label: 'Ranks', subtitle: 'Leaderboards & rival check', group: 'Navigate', icon: <Trophy size={15} />, onRun: () => setTabMode('leaderboard') },
+    { id: 'nav-buy-queue', label: 'Buy Queue', subtitle: 'Games you plan to buy', group: 'Navigate', icon: <ShoppingCart size={15} />, onRun: () => setTabMode('buy-queue') },
+    { id: 'nav-estimator', label: 'Timeline Estimator', subtitle: 'Project when you’ll finish your backlog', group: 'Navigate', icon: <CalendarClock size={15} />, onRun: () => setTabMode('estimator') },
+    // Actions
+    { id: 'action-add-game', label: 'Add Game', subtitle: 'Log a new purchase or wishlist item', group: 'Actions', icon: <Plus size={15} />, onRun: () => setIsFormOpen(true) },
+    ...(hasActiveBacklog ? [{ id: 'action-play-tonight', label: 'Play Tonight', subtitle: 'Get a pick for tonight’s session', group: 'Actions' as const, icon: <Moon size={15} />, onRun: () => setShowPlayTonight(true) }] : []),
+    ...(hasActiveBacklog ? [{ id: 'action-random-pick', label: 'Random Pick', subtitle: 'Spin the wheel on your backlog', group: 'Actions' as const, icon: <Sparkles size={15} />, onRun: () => setShowRandomPicker(true) }] : []),
+    ...(backlogTriageCandidates.length > 0 ? [{ id: 'action-backlog-triage', label: 'Backlog Triage', subtitle: `${backlogTriageCandidates.length} games need a decision`, group: 'Actions' as const, icon: <Inbox size={15} />, onRun: () => setShowBacklogTriage(true) }] : []),
+    ...(games.filter(g => g.status !== 'Wishlist' && g.status !== 'Completed' && g.status !== 'Abandoned').length >= 4 ? [{ id: 'action-backlog-bracket', label: 'Backlog Bracket', subtitle: 'Tournament-style pick for what to play next', group: 'Actions' as const, icon: <Crown size={15} />, onRun: () => setShowBacklogBracket(true) }] : []),
+    { id: 'action-bulk-wishlist', label: 'Bulk Wishlist', subtitle: 'Add many games to your wishlist at once', group: 'Actions', icon: <Heart size={15} />, onRun: () => setShowBulkWishlist(true) },
+    { id: 'action-achievement-hunter', label: 'Achievement Hunter', subtitle: 'Browse earnable badges', group: 'Actions', icon: <Trophy size={15} />, onRun: () => setShowAchievementHunter(true) },
+    { id: 'action-time-machine', label: 'Time Machine', subtitle: 'See your library at a past date', group: 'Actions', icon: <History size={15} />, onRun: () => setShowTimeMachine(true) },
+    { id: 'action-wishlist-planner', label: 'Wishlist Planner', subtitle: 'Plan what to save up for first', group: 'Actions', icon: <PiggyBank size={15} />, onRun: () => setShowWishlistPlanner(true) },
+    { id: 'action-replay-radar', label: 'Replay Radar', subtitle: 'Dormant games worth revisiting', group: 'Actions', icon: <Radar size={15} />, onRun: () => setShowReplayRadar(true) },
+    { id: 'action-steam-sync', label: 'Sync Steam Library', subtitle: 'Import owned games & playtime from Steam', group: 'Actions', icon: <RefreshCw size={15} />, onRun: () => setShowSteamSync(true) },
+    { id: 'action-import', label: 'Import Games', subtitle: 'Bulk import from a file', group: 'Actions', icon: <Upload size={15} />, onRun: () => setShowImport(true) },
+    ...(games.length === 0 ? [{ id: 'action-load-samples', label: 'Load Samples', subtitle: 'Try the app with demo data', group: 'Actions' as const, icon: <Sparkles size={15} />, onRun: () => handleSeedData() }] : []),
+    // Recap & Share
+    { id: 'recap-gamer-card', label: 'Gamer Card', subtitle: 'Shareable summary of your library', group: 'Recap & Share', icon: <CreditCard size={15} />, onRun: () => setShowGamerCard(true) },
+    { id: 'recap-me-vs-me', label: 'Me vs Me', subtitle: 'Compare yourself over time', group: 'Recap & Share', icon: <Swords size={15} />, onRun: () => setShowMeVsMe(true) },
+    { id: 'recap-rival-check', label: 'Rival Check', subtitle: 'Compare against a friend', group: 'Recap & Share', icon: <Users size={15} />, onRun: () => setShowVersusModal(true) },
+    { id: 'recap-yearly-wrapped', label: 'Yearly Wrapped', subtitle: 'Your year in gaming, story-mode', group: 'Recap & Share', icon: <Gift size={15} />, onRun: () => setWrappedYear(new Date().getFullYear()) },
+    { id: 'recap-awards-hub', label: 'Awards Hub', subtitle: 'Oscar-style monthly & yearly awards', group: 'Recap & Share', icon: <Star size={15} />, onRun: () => setShowAwardsHub(true) },
+    // Data
+    { id: 'data-export', label: 'Export Data', subtitle: 'Download your library as a file', group: 'Data', icon: <Download size={15} />, onRun: () => setShowExport(true) },
+    { id: 'data-whats-new', label: "What's New", subtitle: 'See recent app updates', group: 'Data', icon: <Sparkles size={15} />, onRun: () => setShowWhatsNew(true) },
+    { id: 'data-error-log', label: 'Error Log', subtitle: 'View sync/save issues', group: 'Data', icon: <Shield size={15} />, onRun: () => setShowErrorLog(true) },
+  ];
+
   return (
     <div className="min-h-[calc(100vh-60px)] flex flex-col">
       {/* Header */}
@@ -763,6 +816,15 @@ export default function GameAnalyticsPage() {
               </div>
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
+              {/* Global Command Palette trigger */}
+              <button
+                onClick={() => setShowGlobalPalette(true)}
+                title="Search games & actions (⌘K)"
+                className="flex items-center gap-2 px-3 py-2 bg-white/5 text-white/60 hover:text-white/80 rounded-lg transition-all text-sm"
+              >
+                <Search size={16} />
+                <kbd className="hidden sm:inline-block text-[10px] text-white/30 border border-white/10 rounded px-1 py-0.5">⌘K</kbd>
+              </button>
               {/* Trophy Showcase */}
               {games.length > 0 && (
                 <TrophyShowcase
@@ -1825,6 +1887,16 @@ export default function GameAnalyticsPage() {
       {showWhatsNew && (
         <WhatsNewModal onClose={() => setShowWhatsNew(false)} />
       )}
+
+      {/* Global Command Palette — ⌘K to search games, jump tabs, or run any buried action */}
+      <GlobalCommandPalette
+        open={showGlobalPalette}
+        onClose={() => setShowGlobalPalette(false)}
+        commands={paletteCommands}
+        games={gamesWithMetrics}
+        onSelectGame={(game) => setDetailGame(game)}
+        userId={user?.uid ?? null}
+      />
 
       {/* Export Panel */}
       {showExport && (
