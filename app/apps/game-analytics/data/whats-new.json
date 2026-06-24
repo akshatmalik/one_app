@@ -2,6 +2,12 @@
   "entries": [
     {
       "date": "2026-06-24",
+      "area": "Recap & Share",
+      "title": "Common Ground: see which wishlist games you and a friend both want",
+      "body": "There's a new \"Common Ground\" option (in the More menu and command palette) that lets you compare wishlists with a friend without sharing anything about what you already own or play. Share your code, paste theirs back, and you'll instantly see which games are on both your lists — plus anything that's only on their list, with a one-tap button to add it straight to your own wishlist."
+    },
+    {
+      "date": "2026-06-24",
       "area": "Stats",
       "title": "You vs. The Critics: see how your ratings stack up against Metacritic",
       "body": "There's a new card in your Stats tab comparing every game you've rated against its Metacritic score. It'll tell you whether you're a \"Mainstream Taste\" who mostly agrees with critics, a \"True Contrarian\" who loves what they hate, a \"Tough Crowd,\" or somewhere in between — plus it calls out your single biggest hidden gem (a game you loved that critics slept on) and the one critically-adored game you just didn't buy into. Tap to expand and see the full breakdown for every game."

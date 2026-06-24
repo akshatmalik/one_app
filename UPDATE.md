@@ -5,6 +5,13 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-24 14:30 — Recap & Share — Common Ground (wishlist overlap matcher)
+
+**Files**: app/apps/game-analytics/lib/coop-codes.ts (new), app/apps/game-analytics/components/CommonGroundModal.tsx (new), app/apps/game-analytics/page.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+New "Common Ground" feature for finding overlap between your Wishlist and a friend's, without ever sharing your owned/played library. Mirrors the existing Rival Check privacy pattern: `lib/coop-codes.ts` encodes only Wishlist-status games (name/price/genre, capped at 60 items) into a base64url code, paste-decode shows shared games plus friend-only games with a one-tap "Add to my Wishlist" (reusing the existing `handleBulkWishlist` handler). Wired into the command palette and "More" menu next to Rival Check; `VersusModal.tsx` and `versus-codes.ts` were left untouched.
+
 ## 2026-06-24 08:15 — Stats — You vs. The Critics (Metacritic comparison)
 
 **Files**: app/apps/game-analytics/lib/calculations.ts, app/apps/game-analytics/hooks/useCriticComparison.ts (new), app/apps/game-analytics/components/CriticComparisonPanel.tsx (new), app/apps/game-analytics/components/StatsView.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json

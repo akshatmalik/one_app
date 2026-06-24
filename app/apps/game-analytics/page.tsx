@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, CalendarClock, CalendarPlus, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical, Download, Upload, Gift, ShoppingCart, Search, X, Moon, CreditCard, Swords, Inbox, Play, History, RefreshCw, Crown, Users, PiggyBank, Radar } from 'lucide-react';
+import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, CalendarClock, CalendarPlus, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical, Download, Upload, Gift, ShoppingCart, Search, X, Moon, CreditCard, Swords, Inbox, Play, History, RefreshCw, Crown, Users, PiggyBank, Radar, Handshake } from 'lucide-react';
 import { useGames } from './hooks/useGames';
 import { useAnalytics, GameWithMetrics } from './hooks/useAnalytics';
 import { useBudget } from './hooks/useBudget';
@@ -58,6 +58,7 @@ import { YearStoryMode } from './components/YearStoryMode';
 import { GamerCard } from './components/GamerCard';
 import { MeVsMe } from './components/MeVsMe';
 import { VersusModal } from './components/VersusModal';
+import { CommonGroundModal } from './components/CommonGroundModal';
 import { FortuneCookie } from './components/FortuneCookie';
 import { DailyQuestPanel } from './components/DailyQuestPanel';
 import { SubscriptionSyncBanner } from './components/SubscriptionSyncBanner';
@@ -278,6 +279,7 @@ export default function GameAnalyticsPage() {
   const [showGamerCard, setShowGamerCard] = useState(false);
   const [showMeVsMe, setShowMeVsMe] = useState(false);
   const [showVersusModal, setShowVersusModal] = useState(false);
+  const [showCommonGround, setShowCommonGround] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [showAwardsHub, setShowAwardsHub] = useState(false);
   const [detailGame, setDetailGame] = useState<GameWithMetrics | null>(null);
@@ -786,6 +788,7 @@ export default function GameAnalyticsPage() {
     { id: 'recap-gamer-card', label: 'Gamer Card', subtitle: 'Shareable summary of your library', group: 'Recap & Share', icon: <CreditCard size={15} />, onRun: () => setShowGamerCard(true) },
     { id: 'recap-me-vs-me', label: 'Me vs Me', subtitle: 'Compare yourself over time', group: 'Recap & Share', icon: <Swords size={15} />, onRun: () => setShowMeVsMe(true) },
     { id: 'recap-rival-check', label: 'Rival Check', subtitle: 'Compare against a friend', group: 'Recap & Share', icon: <Users size={15} />, onRun: () => setShowVersusModal(true) },
+    { id: 'recap-common-ground', label: 'Common Ground', subtitle: 'See wishlist overlap with a friend', group: 'Recap & Share', icon: <Handshake size={15} />, onRun: () => setShowCommonGround(true) },
     { id: 'recap-yearly-wrapped', label: 'Yearly Wrapped', subtitle: 'Your year in gaming, story-mode', group: 'Recap & Share', icon: <Gift size={15} />, onRun: () => setWrappedYear(new Date().getFullYear()) },
     { id: 'recap-awards-hub', label: 'Awards Hub', subtitle: 'Oscar-style monthly & yearly awards', group: 'Recap & Share', icon: <Star size={15} />, onRun: () => setShowAwardsHub(true) },
     // Data
@@ -1366,6 +1369,7 @@ export default function GameAnalyticsPage() {
                           { icon: <CreditCard size={15} className="text-cyan-400" />, label: 'Gamer Card', onClick: () => setShowGamerCard(true) },
                           { icon: <Swords size={15} className="text-pink-400" />, label: 'Me vs Me', onClick: () => setShowMeVsMe(true) },
                           { icon: <Users size={15} className="text-emerald-400" />, label: 'Rival Check', onClick: () => setShowVersusModal(true) },
+                          { icon: <Handshake size={15} className="text-amber-400" />, label: 'Common Ground', onClick: () => setShowCommonGround(true) },
                           { icon: <Gift size={15} className="text-purple-400" />, label: 'Yearly Wrapped', onClick: () => setWrappedYear(new Date().getFullYear()) },
                           { icon: <Star size={15} className="text-amber-400" />, label: 'Awards Hub', onClick: () => setShowAwardsHub(true) },
                           { icon: <Download size={15} className="text-white/50" />, label: 'Export data', onClick: () => setShowExport(true) },
@@ -2029,6 +2033,11 @@ export default function GameAnalyticsPage() {
       {/* Rival Check — share a stats code, compare against a friend's */}
       {showVersusModal && (
         <VersusModal games={games} userId={user?.uid ?? null} onClose={() => setShowVersusModal(false)} />
+      )}
+
+      {/* Common Ground — wishlist-only overlap code, never shares owned/played games */}
+      {showCommonGround && (
+        <CommonGroundModal games={games} onAddGames={handleBulkWishlist} onClose={() => setShowCommonGround(false)} />
       )}
 
       {/* Awards Hub */}
