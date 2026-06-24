@@ -64,6 +64,37 @@ export function getQuestHistory(userId: string): QuestDayRecord[] {
   return Object.values(store.days).sort((a, b) => a.date.localeCompare(b.date));
 }
 
+/**
+ * Longest-ever run of consecutive "perfect" days found anywhere in the
+ * recorded history (not just the live streak counting back from today), so a
+ * broken streak doesn't erase the record of having had one. Two recorded
+ * dates only count as consecutive if they're exactly one calendar day apart
+ * — a gap in the log (e.g. no quest set existed yet, or storage was cleared)
+ * breaks the run rather than silently bridging it.
+ */
+export function getBestStreak(userId: string): number {
+  const history = getQuestHistory(userId);
+  let best = 0;
+  let current = 0;
+  let prevDate: Date | null = null;
+
+  for (const record of history) {
+    const isPerfect = record.totalCount > 0 && record.completedCount === record.totalCount;
+    const date = new Date(`${record.date}T00:00:00`);
+
+    if (!isPerfect) {
+      current = 0;
+    } else {
+      const isConsecutive = prevDate !== null && Math.round((date.getTime() - prevDate.getTime()) / 86400000) === 1;
+      current = isConsecutive ? current + 1 : 1;
+      best = Math.max(best, current);
+    }
+    prevDate = date;
+  }
+
+  return best;
+}
+
 /** Consecutive "perfect" days (completedCount === totalCount, totalCount > 0), counting back from today. */
 export function getQuestStreak(userId: string, todayStr: string): number {
   const history = getQuestHistory(userId);

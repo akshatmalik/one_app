@@ -1,6 +1,12 @@
 {
   "entries": [
     {
+      "date": "2026-06-24",
+      "area": "General",
+      "title": "Daily Quests: your best streak is now permanent, and you can see the whole month",
+      "body": "Break your streak and it used to just... vanish. Not anymore — there's now a \"Best\" badge next to your streak flame that holds onto your all-time longest run of perfect days, even after a slip-up resets the live count. And the \"Last 7 days\" strip in the expanded panel now has a \"Show month\" button that flips it into a full calendar grid for the current month, so you can see your whole pattern of good days (and gaps) at a glance, not just the last week."
+    },
+    {
       "date": "2026-06-23",
       "area": "General",
       "title": "Daily Quests now celebrate Perfect Days and show your streak as a strip",

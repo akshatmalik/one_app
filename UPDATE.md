@@ -5,6 +5,13 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-24 09:15 — General — Daily Quests: best streak record + monthly calendar view
+
+**Files**: app/apps/game-analytics/lib/quest-storage.ts, app/apps/game-analytics/hooks/useDailyQuests.ts, app/apps/game-analytics/components/DailyQuestPanel.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Closed both halves of the FOLLOW-UP left on the previous Daily Quests run. New `getBestStreak(userId)` in `quest-storage.ts` scans the full device-local history (not just the live run counting back from today) for the longest-ever run of consecutive perfect days, treating any gap of more than one calendar day as a break — so a streak that gets broken tomorrow doesn't erase today's record. `useDailyQuests` surfaces it as `bestStreak` alongside the existing live `streak`, and adds a new `monthDays` memo that builds every day of the current calendar month (mirroring the existing `last7Days` logic) with a new `isFuture` flag on `QuestHistoryDay` so days after today render as empty/upcoming rather than "missed." `DailyQuestPanel` now shows a small "Best N" badge next to the streak flame in the collapsed header, and the expanded panel's "Last 7 days" strip gained a "Show month" toggle that swaps it for a full weekday-aligned calendar grid (leading blank cells computed from the 1st's weekday, today ringed, future days rendered dim/transparent instead of "missed"). No `lib/types.ts`, storage schema, or existing function-body changes — purely additive to one storage export, two hook fields, and one component's render (3 files). Verified via `npm run build` (clean, 12/12 static pages, zero TS errors), `npm run lint` (zero new warnings — only pre-existing `<img>` LCP warnings and issues in unrelated mini-apps), and a Playwright smoke test at 375px width with sample data loaded: expanded the panel, toggled to month view and back, confirmed the calendar grid aligns correctly (June 1 lands under Monday), today is ringed, days 25-30 render dim as future, and zero console errors or warnings were emitted.
+
 ## 2026-06-23 07:05 — General — Daily Quests: Perfect Day toast + 7-day streak strip
 
 **Files**: app/apps/game-analytics/hooks/useDailyQuests.ts, app/apps/game-analytics/components/DailyQuestPanel.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json

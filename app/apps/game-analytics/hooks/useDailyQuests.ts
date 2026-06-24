@@ -3,18 +3,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Game } from '../lib/types';
 import { getDailyQuestSet, DailyQuestSet } from '../lib/calculations';
-import { recordQuestDay, getQuestStreak, getQuestHistory, QuestDayRecord } from '../lib/quest-storage';
+import { recordQuestDay, getQuestStreak, getQuestHistory, getBestStreak, QuestDayRecord } from '../lib/quest-storage';
 
 export interface QuestHistoryDay {
   date: string;
   completed: number;
   total: number;
   isToday: boolean;
+  isFuture: boolean;
 }
 
 export function useDailyQuests(games: Game[], userId: string) {
   const questSet: DailyQuestSet = useMemo(() => getDailyQuestSet(games), [games]);
   const [streak, setStreak] = useState(0);
+  const [bestStreak, setBestStreak] = useState(0);
   const [history, setHistory] = useState<QuestDayRecord[]>([]);
   const [showPerfectDayToast, setShowPerfectDayToast] = useState(false);
 
@@ -31,6 +33,7 @@ export function useDailyQuests(games: Game[], userId: string) {
       totalCount: questSet.quests.length,
     });
     setStreak(getQuestStreak(userId, questSet.date));
+    setBestStreak(getBestStreak(userId));
     setHistory(getQuestHistory(userId));
 
     const prev = prevRef.current;
@@ -61,10 +64,41 @@ export function useDailyQuests(games: Game[], userId: string) {
         completed: record?.completedCount ?? 0,
         total: record?.totalCount ?? 0,
         isToday,
+        isFuture: false,
       });
     }
     return days;
   }, [history, questSet.date, questSet.completedCount, questSet.quests.length]);
 
-  return { questSet, streak, last7Days, showPerfectDayToast, dismissPerfectDayToast };
+  // Every day of the current calendar month (1st through last day), for the
+  // expandable full-month calendar view. Days after today have no data yet
+  // (`total: 0`) and are flagged `isFuture` so they render as empty/upcoming
+  // rather than "missed."
+  const monthDays: QuestHistoryDay[] = useMemo(() => {
+    const byDate = new Map(history.map(r => [r.date, r]));
+    const todayDate = new Date(`${questSet.date}T00:00:00`);
+    const year = todayDate.getFullYear();
+    const month = todayDate.getMonth();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+    const days: QuestHistoryDay[] = [];
+    for (let dayNum = 1; dayNum <= daysInMonth; dayNum++) {
+      const dStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
+      const isToday = dStr === questSet.date;
+      const isFuture = dStr > questSet.date;
+      const record: QuestDayRecord | undefined = isToday
+        ? { date: dStr, completedCount: questSet.completedCount, totalCount: questSet.quests.length }
+        : byDate.get(dStr);
+      days.push({
+        date: dStr,
+        completed: record?.completedCount ?? 0,
+        total: record?.totalCount ?? 0,
+        isToday,
+        isFuture,
+      });
+    }
+    return days;
+  }, [history, questSet.date, questSet.completedCount, questSet.quests.length]);
+
+  return { questSet, streak, bestStreak, last7Days, monthDays, showPerfectDayToast, dismissPerfectDayToast };
 }
