@@ -15492,3 +15492,115 @@ export function getDailyQuestSet(games: Game[]): DailyQuestSet {
   const completedCount = quests.filter(q => q.completed).length;
   return { date: dateStr, quests, completedCount, allComplete: quests.length > 0 && completedCount === quests.length };
 }
+
+// ── You vs. The Critics: Your Rating vs. Metacritic ─────────────────────────
+
+export type CriticVerdict = 'aligned' | 'underrated' | 'overrated' | 'contrarian-love' | 'contrarian-hate';
+
+export interface CriticComparisonEntry {
+  gameId: string;
+  gameName: string;
+  yourRating: number;   // raw 1-10 scale
+  yourScore: number;    // normalized to 0-100 (yourRating * 10)
+  metacritic: number;   // 0-100
+  delta: number;        // yourScore - metacritic; positive = you liked it more than critics did
+  verdict: CriticVerdict;
+  verdictLabel: string;
+}
+
+function classifyCriticDelta(delta: number): { verdict: CriticVerdict; verdictLabel: string } {
+  if (delta > 25) return { verdict: 'contrarian-love', verdictLabel: 'Your hidden gem — critics slept on it' };
+  if (delta > 8) return { verdict: 'underrated', verdictLabel: 'You rated it higher than critics did' };
+  if (delta < -25) return { verdict: 'contrarian-hate', verdictLabel: "Critical darling that didn't click with you" };
+  if (delta < -8) return { verdict: 'overrated', verdictLabel: 'Critics loved it more than you did' };
+  return { verdict: 'aligned', verdictLabel: 'Right in line with critic consensus' };
+}
+
+/**
+ * Build per-game critic comparisons from a pre-fetched name -> Metacritic score map
+ * (the async RAWG lookup happens in useCriticComparison; this stays pure/sync).
+ */
+export function buildCriticComparisons(
+  games: Game[],
+  metacriticByName: Map<string, number | null>
+): CriticComparisonEntry[] {
+  const entries: CriticComparisonEntry[] = [];
+
+  for (const game of games) {
+    if (game.status === 'Wishlist') continue;
+    if (!game.rating || game.rating <= 0) continue;
+
+    const metacritic = metacriticByName.get(game.name.toLowerCase().trim());
+    if (metacritic == null) continue;
+
+    const yourScore = game.rating * 10;
+    const delta = Math.round(yourScore - metacritic);
+    const { verdict, verdictLabel } = classifyCriticDelta(delta);
+
+    entries.push({
+      gameId: game.id,
+      gameName: game.name,
+      yourRating: game.rating,
+      yourScore,
+      metacritic,
+      delta,
+      verdict,
+      verdictLabel,
+    });
+  }
+
+  return entries.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
+}
+
+export interface CriticAgreementSummary {
+  comparisons: CriticComparisonEntry[];
+  count: number;
+  avgDelta: number;
+  agreementRate: number; // % of games within 8 points of critic score
+  personality: string;
+  personalityDescription: string;
+  biggestUnderrated: CriticComparisonEntry | null; // you loved it, critics shrugged
+  biggestOverrated: CriticComparisonEntry | null;   // critics loved it, you shrugged
+}
+
+export function getCriticAgreementSummary(comparisons: CriticComparisonEntry[]): CriticAgreementSummary | null {
+  if (comparisons.length === 0) return null;
+
+  const avgDelta = comparisons.reduce((sum, c) => sum + c.delta, 0) / comparisons.length;
+  const aligned = comparisons.filter(c => Math.abs(c.delta) <= 8).length;
+  const agreementRate = Math.round((aligned / comparisons.length) * 100);
+
+  const underratedByYou = comparisons.filter(c => c.delta > 8).sort((a, b) => b.delta - a.delta);
+  const overratedByYou = comparisons.filter(c => c.delta < -8).sort((a, b) => a.delta - b.delta);
+
+  let personality: string;
+  let personalityDescription: string;
+
+  if (agreementRate >= 70) {
+    personality = 'Mainstream Taste';
+    personalityDescription = 'Your ratings track closely with critic consensus — you and the critics mostly agree.';
+  } else if (agreementRate < 35) {
+    personality = 'True Contrarian';
+    personalityDescription = "Your taste rarely lines up with critic consensus — you march to your own beat.";
+  } else if (avgDelta > 10) {
+    personality = 'Generous Critic';
+    personalityDescription = "You rate games kinder than the critics do — you find the good in games others wrote off.";
+  } else if (avgDelta < -10) {
+    personality = 'Tough Crowd';
+    personalityDescription = "You're harder to please than the critics — high scores don't sway you easily.";
+  } else {
+    personality = 'Independent Thinker';
+    personalityDescription = 'You agree with critics about as often as you disagree — a healthy mix of both.';
+  }
+
+  return {
+    comparisons,
+    count: comparisons.length,
+    avgDelta: Math.round(avgDelta),
+    agreementRate,
+    personality,
+    personalityDescription,
+    biggestUnderrated: underratedByYou[0] || null,
+    biggestOverrated: overratedByYou[0] || null,
+  };
+}

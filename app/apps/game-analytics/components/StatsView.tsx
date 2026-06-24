@@ -59,6 +59,7 @@ import { GamingHeatmap } from './GamingHeatmap';
 import { ExpandedStatsPanel } from './ExpandedStatsPanel';
 import { InsightsPanel } from './InsightsPanel';
 import { AnalyticsPanel } from './AnalyticsPanel';
+import { CriticComparisonPanel } from './CriticComparisonPanel';
 import { TrophyRoom } from './TrophyRoom';
 import { TrophyRoomV2 } from './TrophyRoomV2';
 import { TrophyProgress, TrophyScoreSummary } from '../lib/trophy-calculations';
@@ -1008,6 +1009,9 @@ export function StatsView({ games, summary, budgets = [], onSetBudget, trophies,
         avgCostPerHour={summary.averageCostPerHour}
         budgets={budgets}
       />
+
+      {/* You vs. The Critics — your ratings against Metacritic */}
+      <CriticComparisonPanel games={games} />
 
       {/* Advanced Analytics Panel (Phase 2) */}
       <AnalyticsPanel games={games} />

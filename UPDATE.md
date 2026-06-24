@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-24 08:15 — Stats — You vs. The Critics (Metacritic comparison)
+
+**Files**: app/apps/game-analytics/lib/calculations.ts, app/apps/game-analytics/hooks/useCriticComparison.ts (new), app/apps/game-analytics/components/CriticComparisonPanel.tsx (new), app/apps/game-analytics/components/StatsView.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Confirmed via grep that none of the 237+ exports already in `calculations.ts` compared the user's own ratings against critic scores, and that `useGameThumbnails.ts`'s existing RAWG lookups already fetch `metacritic` per game but silently discard it — a clean, reusable data source going unused. Added "You vs. The Critics": new pure `buildCriticComparisons(games, metacriticByName)` pairs each owned, rated game's normalized score (`rating * 10`) against its Metacritic score and classifies the gap (aligned/underrated/overrated/contrarian-love/contrarian-hate); `getCriticAgreementSummary(comparisons)` rolls that up into an agreement rate, average delta, a "personality" label (Mainstream Taste / True Contrarian / Generous Critic / Tough Crowd / Independent Thinker) with description, and the single biggest hidden gem + biggest critics'-darling-you-didn't-buy-into. New `useCriticComparison` hook fetches scores via the existing 7-day-cached `batchFetchRAWGData` (same calls `useGameThumbnails` already triggers, so most names resolve instantly from cache) — no new API integration, no new storage layer. New `CriticComparisonPanel.tsx` renders the summary as a gradient card (styled to match `InsightsPanel`) with an expandable full list, slotted into `StatsView` between `InsightsPanel` and `AnalyticsPanel`. No `lib/types.ts`, storage, or existing function signature changes — purely additive. Verified via `npm install` + `npm run build` (clean, 12/12 static pages, zero TS errors), `npm run lint` (zero issues attributable to the new files), and an HTTP-level dev-server smoke test (`/apps/game-analytics` → 200, clean compile log, no error overlay; no headless browser available in this sandbox to inspect live client console output).
+
+FOLLOW-UP: Could surface the "personality" label as a Gamer Card stat and/or add a Library Rank-style badge on individual game cards showing their critic delta at a glance.
+
 ## 2026-06-23 07:05 — General — Daily Quests: Perfect Day toast + 7-day streak strip
 
 **Files**: app/apps/game-analytics/hooks/useDailyQuests.ts, app/apps/game-analytics/components/DailyQuestPanel.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json
