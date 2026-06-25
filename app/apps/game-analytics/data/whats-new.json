@@ -3,6 +3,12 @@
     {
       "date": "2026-06-25",
       "area": "Games",
+      "title": "Game Night: find what you and a friend can co-op tonight",
+      "body": "Want to play something together with a friend but never know what you both actually own? Try Game Night. Generate your code, send it to a friend, paste theirs back, and instantly see every game you both own, a compatibility score, and your shared genres. Then hit \"Spin\" to randomly pick tonight's game from everything you haven't both already finished — like a slot machine for game night. Find it from the \"More\" menu or the command palette."
+    },
+    {
+      "date": "2026-06-25",
+      "area": "Games",
       "title": "Time Capsule: write a note to future-you",
       "body": "There's a new way to leave yourself a message: seal a prediction or note in a Time Capsule, pick a date for it to reopen (a month, a few months, even a year out), and tag a few games you want to keep an eye on. When the date arrives, you'll see a banner letting you know it's ready, and opening it up shows your original note side-by-side with what actually happened to those games — how many more hours you put in, whether you finished them, all of it. Find it from the \"More\" menu or the command palette."
     },

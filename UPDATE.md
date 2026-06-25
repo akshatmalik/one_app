@@ -5,6 +5,13 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-25 20:30 — Games — Game Night (Co-Op Match Finder)
+
+**Files**: app/apps/game-analytics/lib/coop-match.ts (new), app/apps/game-analytics/components/CoOpMatchModal.tsx (new), app/apps/game-analytics/page.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Every existing comparison/sharing feature (`versus-codes.ts`'s "Rival Check") is explicitly stats-only by design and documents that it deliberately never shares the underlying game list — there was no feature for two players to find out what they can actually co-op together. Added "Game Night": a new opt-in code-sharing module (`coop-match.ts`) that builds a compact snapshot of a player's owned games (name/genre/platform/status/hours/rating only — no price, notes, reviews, or dates) and encodes it as a shareable base64url code using the same pattern as `versus-codes.ts`; the receiving player pastes a friend's code, and `computeCoOpMatches` finds shared games, classifies each pairing's relation (both-unplayed/both-playing/mismatched-progress/one-finished/both-finished), scores a compatibility percentage, and surfaces shared genres. `CoOpMatchModal.tsx` (new) presents this with a "spin the wheel" randomizer restricted to games neither player has finished, for picking tonight's co-op game. Wired into the existing Command Palette and bottom "More" menu in `page.tsx`. Zero changes to `lib/types.ts`, storage/repository code, or any existing `calculations.ts` function — two new self-contained files plus wiring-only edits. Verified via `npm run build` (clean, zero TS errors), `npm run lint` (zero issues attributable to either new file), and a Playwright smoke test at 375px width (open bottom "More" menu → Game Night → modal renders code/copy/paste flow correctly) with zero new console errors/warnings — the one console error observed (a 404) reproduces identically on a fresh page load before the modal is ever opened, confirmed unrelated via a baseline-only run.
+
 ## 2026-06-25 15:34 — Games — Gaming Time Capsule
 
 **Files**: app/apps/game-analytics/lib/timecapsule-storage.ts (new), app/apps/game-analytics/hooks/useTimeCapsules.ts (new), app/apps/game-analytics/components/TimeCapsuleModal.tsx (new), app/apps/game-analytics/page.tsx, app/apps/game-analytics/components/TodayDashboard.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json
