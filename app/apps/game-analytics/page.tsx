@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, CalendarClock, CalendarPlus, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical, Download, Upload, Gift, ShoppingCart, Search, X, Moon, CreditCard, Swords, Inbox, Play, History, RefreshCw, Crown, Users, PiggyBank, Radar } from 'lucide-react';
+import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, CalendarClock, CalendarPlus, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical, Download, Upload, Gift, ShoppingCart, Search, X, Moon, CreditCard, Swords, Inbox, Play, History, RefreshCw, Crown, Users, PiggyBank, Radar, Home } from 'lucide-react';
 import { useGames } from './hooks/useGames';
 import { useAnalytics, GameWithMetrics } from './hooks/useAnalytics';
 import { useBudget } from './hooks/useBudget';
@@ -30,7 +30,7 @@ import { purchaseQueueRepository } from './lib/purchase-queue-storage';
 import { useAuthContext } from '@/lib/AuthContext';
 import { useToast } from '@/components/Toast';
 import { getROIRating, getWeekStatsForOffset, getGamesPlayedInTimeRange, getCompletionProbability, getGameHealthDot, getRelativeTime, getDaysContext, getSessionMomentum, getValueTrajectory, getGameSmartOneLiner, getFranchiseInfo, getProgressPercent, getShelfLife, parseLocalDate, getCardRarity, getRelationshipStatus, getGameStreak, getHeroNumber, getCardFreshness, getGameSections, getCardBackData, getContextualWhisper, getLibraryRank, getCardMoodPulse, getProgressRingData, getStatPopoverData, getWeekRecapData, getSmartNudges, getGamingCreditScore, getRotationStats, getSpendingForecast, getSpendingByMonth, getShelfLifeExpiry, formatRating, getRatingRank, getYearInReviewFullData, getBacklogTriageCandidates, GameAlert, getReplayCandidates, getWishlistAffordabilityPlan } from './lib/calculations';
-import { OnThisDayCard } from './components/OnThisDayCard';
+import { TodayDashboard } from './components/TodayDashboard';
 import { ActivityPulse } from './components/ActivityPulse';
 import { RandomPicker } from './components/RandomPicker';
 import { BulkWishlistModal } from './components/BulkWishlistModal';
@@ -58,8 +58,6 @@ import { YearStoryMode } from './components/YearStoryMode';
 import { GamerCard } from './components/GamerCard';
 import { MeVsMe } from './components/MeVsMe';
 import { VersusModal } from './components/VersusModal';
-import { FortuneCookie } from './components/FortuneCookie';
-import { DailyQuestPanel } from './components/DailyQuestPanel';
 import { SubscriptionSyncBanner } from './components/SubscriptionSyncBanner';
 import { loadSubscriptionSettings, hasNewDrop } from './lib/subscription-settings';
 import { ReviewNudgeBanner } from './components/ReviewNudgeBanner';
@@ -83,7 +81,7 @@ import { GlobalCommandPalette, PaletteCommand } from './components/GlobalCommand
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist' | 'ps-plus';
-type TabMode = 'games' | 'timeline' | 'stats' | 'ai-coach' | 'up-next' | 'discover' | 'leaderboard' | 'buy-queue' | 'estimator';
+type TabMode = 'today' | 'games' | 'timeline' | 'stats' | 'ai-coach' | 'up-next' | 'discover' | 'leaderboard' | 'buy-queue' | 'estimator';
 type CardViewMode = 'poster' | 'compact';
 
 function getValueColor(rating: string): string {
@@ -246,7 +244,7 @@ export default function GameAnalyticsPage() {
     // "Continue where you left off" — restore the last viewed tab.
     if (typeof window === 'undefined') return 'games';
     const saved = localStorage.getItem('ga-last-tab') as TabMode | null;
-    const valid: TabMode[] = ['games', 'timeline', 'stats', 'ai-coach', 'up-next', 'discover', 'leaderboard', 'buy-queue', 'estimator'];
+    const valid: TabMode[] = ['today', 'games', 'timeline', 'stats', 'ai-coach', 'up-next', 'discover', 'leaderboard', 'buy-queue', 'estimator'];
     return saved && valid.includes(saved) ? saved : 'games';
   });
   useEffect(() => {
@@ -1268,14 +1266,20 @@ export default function GameAnalyticsPage() {
       {/* Main Content */}
       <div className="flex-1 px-6 py-6">
         <div className="max-w-6xl mx-auto">
-          {/* On This Day */}
-          {games.length > 0 && <OnThisDayCard games={games} />}
-
-          {/* Daily Fortune Cookie */}
-          {games.length > 0 && <div className="mb-4"><FortuneCookie games={games} replayCandidate={topReplayCandidate} wishlistNextAffordable={wishlistNextAffordable} /></div>}
-
-          {/* Daily Quests */}
-          {games.length > 0 && <DailyQuestPanel games={games} userId={user?.uid ?? 'local-user'} />}
+          {/* Today dashboard — daily-engagement widgets live here now instead of cluttering every tab */}
+          {tabMode === 'today' && (
+            <div className="mb-4">
+              <TodayDashboard
+                games={games}
+                userId={user?.uid ?? 'local-user'}
+                replayCandidate={topReplayCandidate}
+                wishlistNextAffordable={wishlistNextAffordable}
+                alerts={alerts}
+                onAlertAction={handleAlertAction}
+                onPlayTonight={() => setShowPlayTonight(true)}
+              />
+            </div>
+          )}
 
           {/* New month's PS Plus games nudge */}
           <SubscriptionSyncBanner
@@ -1305,6 +1309,7 @@ export default function GameAnalyticsPage() {
               {/* Row 1: Games, Timeline, Stats, AI Coach */}
               <div className="flex items-center gap-1.5">
                 {([
+                  { id: 'today',    icon: <Home size={16} />,          title: 'Today' },
                   { id: 'games',    icon: <List size={16} />,          title: 'Games' },
                   { id: 'timeline', icon: <Calendar size={16} />,      title: 'Timeline' },
                   { id: 'stats',    icon: <BarChart3 size={16} />,     title: 'Stats' },

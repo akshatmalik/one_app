@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-25 05:20 — Games — "Today" dashboard tab
+
+**Files**: app/apps/game-analytics/components/TodayDashboard.tsx (new), app/apps/game-analytics/page.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+`OnThisDayCard`, `FortuneCookie`, and `DailyQuestPanel` were rendered unconditionally before the `tabMode` switch even began — every visitor saw all three widgets cluttering the top of every single tab (Games, Timeline, Stats, AI Coach, Up Next), regardless of relevance. Added a new "Today" tab (Home icon, first in the tab bar, persisted via the existing `ga-last-tab` localStorage gate) backed by a new self-contained `TodayDashboard.tsx` that composes those three existing widgets verbatim (zero changes to their internals) alongside new elements: a time-of-day greeting + today's date, the existing `ActivityPulse` indicator (previously dead-imported and unused in `page.tsx`), a "Play Tonight" quick-action button reusing the existing `showPlayTonight` modal trigger, and a top-severity alert teaser built from the existing `useAlerts` feed (reusing `GameAlert`/`ALERT_SEVERITY_ORDER` from `calculations.ts` and the existing `handleAlertAction` router — no new alert logic). `page.tsx` now gates the three widgets to render only when `tabMode === 'today'`, removing them from every other tab. No `lib/types.ts`, storage/repository, or existing `calculations.ts` function-body changes — purely additive (2 files touched/created). Verified via `npm install` + `npm run build` (clean, 12/12 static pages, zero TS errors), `npm run lint` (zero issues attributable to either file — only pre-existing unrelated `no-img-element` warnings elsewhere in `page.tsx`), and a Playwright smoke test at 375px (load sample data → Today tab renders greeting, activity pulse, top alert teaser, On This Day, Fortune Cookie, and Daily Quests correctly) with zero console errors/warnings attributable to this change — the one console message observed (a `favicon.ico` 404) reproduces identically on a fresh page load before the Today tab is ever clicked, and is unrelated to this feature.
+
+FOLLOW-UP: Could add a couple more daily teasers to the dashboard going forward — e.g. a Queue Shame Timer highlight or a Replay Radar suggestion — now that there's a dedicated home for "things to glance at today" instead of bolting them onto every tab.
+
 ## 2026-06-25 09:40 — Stats — Stats History (KPI trends over time)
 
 **Files**: app/apps/game-analytics/lib/kpi-history-storage.ts (new), app/apps/game-analytics/hooks/useKpiHistory.ts (new), app/apps/game-analytics/components/KpiTrendsPanel.tsx (new), app/apps/game-analytics/components/StatsView.tsx, app/apps/game-analytics/page.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json
