@@ -5,6 +5,14 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-25 15:34 — Games — Gaming Time Capsule
+
+**Files**: app/apps/game-analytics/lib/timecapsule-storage.ts (new), app/apps/game-analytics/hooks/useTimeCapsules.ts (new), app/apps/game-analytics/components/TimeCapsuleModal.tsx (new), app/apps/game-analytics/page.tsx, app/apps/game-analytics/components/TodayDashboard.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json
+**Risk**: risky
+**Snapshot tag**: master-stable-2026-06-25-1534
+
+Every existing insight in the app looks backward (retrospectives, eulogies, week recaps) or has the system predict forward on the user's behalf — nowhere does the *user* get to write their own message to future-them. Added "Time Capsule": a new device-local storage module (`timecapsule-storage.ts`, same `'use client'`/SSR-guarded/try-catch'd localStorage pattern as `queue-preferences.ts`, capped at 50 capsules per user) lets a player write a free-text prediction or note, seal it until a chosen future date (with quick presets for 1/3/6 months and 1 year), and optionally tag a few games to track; once the seal date passes, reopening the capsule shows the original note alongside each tagged game's then-vs-now hours/status delta. Wired in via a new `useTimeCapsules` hook and `TimeCapsuleModal.tsx` component, reachable from the command palette, the bottom "More" menu, and a new due-capsule banner on the "Today" dashboard tab (added the same pattern as the existing top-alert banner in `TodayDashboard.tsx`). Classified risky only because it touches 5 files (3 new, 2 edited) crossing the file-count threshold — no `lib/types.ts`, repository/Firestore schema, or existing `calculations.ts` function body was changed; storage is entirely new and additive. Verified via `npm run build` (clean, zero TS errors), `npm run lint` (zero new issues — all reported warnings are pre-existing and unrelated), and a Playwright smoke test at 375px width covering the full flow (open via bottom "More" menu → modal renders with note field, date presets, game tagging → seal a capsule → capsule appears under "Still sealed") with zero new console errors/warnings.
+
 ## 2026-06-25 05:20 — Games — "Today" dashboard tab
 
 **Files**: app/apps/game-analytics/components/TodayDashboard.tsx (new), app/apps/game-analytics/page.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json

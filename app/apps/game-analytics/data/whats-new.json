@@ -3,6 +3,12 @@
     {
       "date": "2026-06-25",
       "area": "Games",
+      "title": "Time Capsule: write a note to future-you",
+      "body": "There's a new way to leave yourself a message: seal a prediction or note in a Time Capsule, pick a date for it to reopen (a month, a few months, even a year out), and tag a few games you want to keep an eye on. When the date arrives, you'll see a banner letting you know it's ready, and opening it up shows your original note side-by-side with what actually happened to those games — how many more hours you put in, whether you finished them, all of it. Find it from the \"More\" menu or the command palette."
+    },
+    {
+      "date": "2026-06-25",
+      "area": "Games",
       "title": "New \"Today\" tab: your daily gaming dashboard",
       "body": "There's a brand new \"Today\" tab (look for the home icon, first in the row) that pulls together everything worth checking each day in one place: a friendly greeting, your current activity vibe, a one-tap \"Play Tonight\" button, your most important alert if you have one, your daily fortune cookie, On This Day memories, and your Daily Quests — all in one spot instead of scattered across every tab. The other tabs are cleaner now too, since those widgets used to show up everywhere."
     },

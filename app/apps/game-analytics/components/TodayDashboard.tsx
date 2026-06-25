@@ -1,9 +1,10 @@
 'use client';
 
 import { useMemo } from 'react';
-import { Moon, ArrowRight, Bell } from 'lucide-react';
+import { Moon, ArrowRight, Bell, Sparkles } from 'lucide-react';
 import { Game } from '../lib/types';
 import { GameAlert, ReplayCandidate, WishlistAffordabilityItem, ALERT_SEVERITY_ORDER } from '../lib/calculations';
+import { TimeCapsule } from '../lib/timecapsule-storage';
 import { OnThisDayCard } from './OnThisDayCard';
 import { FortuneCookie } from './FortuneCookie';
 import { DailyQuestPanel } from './DailyQuestPanel';
@@ -18,6 +19,8 @@ interface TodayDashboardProps {
   alerts: GameAlert[];
   onAlertAction: (alert: GameAlert) => void;
   onPlayTonight: () => void;
+  dueCapsules?: TimeCapsule[];
+  onOpenTimeCapsule?: () => void;
 }
 
 const SEVERITY_STYLES: Record<GameAlert['severity'], { border: string; bg: string; text: string }> = {
@@ -34,7 +37,7 @@ function getGreeting(): string {
   return 'Good evening';
 }
 
-export function TodayDashboard({ games, userId, replayCandidate, wishlistNextAffordable, alerts, onAlertAction, onPlayTonight }: TodayDashboardProps) {
+export function TodayDashboard({ games, userId, replayCandidate, wishlistNextAffordable, alerts, onAlertAction, onPlayTonight, dueCapsules, onOpenTimeCapsule }: TodayDashboardProps) {
   const greeting = useMemo(() => getGreeting(), []);
   const dateLabel = useMemo(() => new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' }), []);
   const topAlert = useMemo(() => {
@@ -87,6 +90,26 @@ export function TodayDashboard({ games, userId, replayCandidate, wishlistNextAff
           </div>
           <span className="flex-shrink-0 flex items-center gap-1 text-xs text-white/40">
             {topAlert.actionLabel} <ArrowRight size={12} />
+          </span>
+        </button>
+      )}
+
+      {dueCapsules && dueCapsules.length > 0 && onOpenTimeCapsule && (
+        <button
+          onClick={onOpenTimeCapsule}
+          className="w-full flex items-center justify-between gap-3 px-4 py-3 rounded-xl border border-violet-400/30 bg-violet-500/10 text-left transition-colors hover:brightness-110"
+        >
+          <div className="flex items-center gap-3 min-w-0">
+            <Sparkles size={16} className="flex-shrink-0 text-violet-300" />
+            <div className="min-w-0">
+              <p className="text-sm font-medium truncate text-violet-300">
+                {dueCapsules.length === 1 ? 'A time capsule is ready to open' : `${dueCapsules.length} time capsules are ready to open`}
+              </p>
+              <p className="text-xs text-white/40 truncate">&ldquo;{dueCapsules[0].note}&rdquo;</p>
+            </div>
+          </div>
+          <span className="flex-shrink-0 flex items-center gap-1 text-xs text-white/40">
+            Open <ArrowRight size={12} />
           </span>
         </button>
       )}

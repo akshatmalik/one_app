@@ -47,6 +47,7 @@ import { ProgressRing } from './components/ProgressRing';
 import { ExportPanel } from './components/ExportPanel';
 import { ImportModal } from './components/ImportModal';
 import { TimeMachineModal } from './components/TimeMachineModal';
+import { TimeCapsuleModal } from './components/TimeCapsuleModal';
 import { SteamSyncModal } from './components/SteamSyncModal';
 import { AchievementHunterModal } from './components/AchievementHunterModal';
 import { WishlistPlannerModal } from './components/WishlistPlannerModal';
@@ -54,6 +55,7 @@ import { ReplayRadarModal } from './components/ReplayRadarModal';
 import { CalendarSyncModal } from './components/CalendarSyncModal';
 import { loadWishlistPriority, saveWishlistPriority, resolveWishlistOrder } from './lib/wishlist-priority';
 import { useLibrarySnapshots } from './hooks/useLibrarySnapshots';
+import { useTimeCapsules } from './hooks/useTimeCapsules';
 import { YearStoryMode } from './components/YearStoryMode';
 import { GamerCard } from './components/GamerCard';
 import { MeVsMe } from './components/MeVsMe';
@@ -167,6 +169,7 @@ export default function GameAnalyticsPage() {
   const { showToast } = useToast();
   const { games, loading, error, addGame, updateGame, updateManyGames, deleteGame, refresh } = useGames(user?.uid ?? null);
   const librarySnapshots = useLibrarySnapshots(user?.uid ?? null, games, loading, { addGame, updateGame, deleteGame });
+  const timeCapsules = useTimeCapsules(user?.uid ?? null, games);
   const { pending: pendingUndo, showUndo, dismiss: dismissUndo, confirmUndo } = useUndoToast();
   const { gamesWithMetrics, summary } = useAnalytics(games);
   const { budgets, setBudget } = useBudget(user?.uid ?? null);
@@ -266,6 +269,7 @@ export default function GameAnalyticsPage() {
   const [showExport, setShowExport] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [showTimeMachine, setShowTimeMachine] = useState(false);
+  const [showTimeCapsule, setShowTimeCapsule] = useState(false);
   const [showSteamSync, setShowSteamSync] = useState(false);
   const [showAchievementHunter, setShowAchievementHunter] = useState(false);
   const [showWishlistPlanner, setShowWishlistPlanner] = useState(false);
@@ -775,6 +779,7 @@ export default function GameAnalyticsPage() {
     { id: 'action-bulk-wishlist', label: 'Bulk Wishlist', subtitle: 'Add many games to your wishlist at once', group: 'Actions', icon: <Heart size={15} />, onRun: () => setShowBulkWishlist(true) },
     { id: 'action-achievement-hunter', label: 'Achievement Hunter', subtitle: 'Browse earnable badges', group: 'Actions', icon: <Trophy size={15} />, onRun: () => setShowAchievementHunter(true) },
     { id: 'action-time-machine', label: 'Time Machine', subtitle: 'See your library at a past date', group: 'Actions', icon: <History size={15} />, onRun: () => setShowTimeMachine(true) },
+    { id: 'action-time-capsule', label: 'Time Capsule', subtitle: 'Seal a prediction for future-you', group: 'Actions', icon: <Sparkles size={15} />, onRun: () => setShowTimeCapsule(true) },
     { id: 'action-wishlist-planner', label: 'Wishlist Planner', subtitle: 'Plan what to save up for first', group: 'Actions', icon: <PiggyBank size={15} />, onRun: () => setShowWishlistPlanner(true) },
     { id: 'action-replay-radar', label: 'Replay Radar', subtitle: 'Dormant games worth revisiting', group: 'Actions', icon: <Radar size={15} />, onRun: () => setShowReplayRadar(true) },
     { id: 'action-calendar-sync', label: 'Calendar Sync', subtitle: 'Export your play plan, releases & goals to a calendar', group: 'Actions', icon: <CalendarPlus size={15} />, onRun: () => setShowCalendarSync(true) },
@@ -1277,6 +1282,8 @@ export default function GameAnalyticsPage() {
                 alerts={alerts}
                 onAlertAction={handleAlertAction}
                 onPlayTonight={() => setShowPlayTonight(true)}
+                dueCapsules={timeCapsules.due}
+                onOpenTimeCapsule={() => setShowTimeCapsule(true)}
               />
             </div>
           )}
@@ -1379,6 +1386,7 @@ export default function GameAnalyticsPage() {
                           { icon: <RefreshCw size={15} className="text-[#66c0f4]" />, label: 'Sync Steam Library', onClick: () => setShowSteamSync(true) },
                           { icon: <Trophy size={15} className="text-amber-400" />, label: 'Achievement Hunter', onClick: () => setShowAchievementHunter(true) },
                           { icon: <History size={15} className="text-emerald-400" />, label: 'Time Machine', onClick: () => setShowTimeMachine(true) },
+                          { icon: <Sparkles size={15} className="text-violet-400" />, label: 'Time Capsule', onClick: () => setShowTimeCapsule(true) },
                           { icon: <PiggyBank size={15} className="text-emerald-400" />, label: 'Wishlist Planner', onClick: () => setShowWishlistPlanner(true) },
                           { icon: <Radar size={15} className="text-emerald-400" />, label: 'Replay Radar', onClick: () => setShowReplayRadar(true) },
                           { icon: <CalendarPlus size={15} className="text-indigo-400" />, label: 'Calendar Sync', onClick: () => setShowCalendarSync(true) },
@@ -1965,6 +1973,21 @@ export default function GameAnalyticsPage() {
           onDelete={librarySnapshots.removeSnapshot}
           onRestore={librarySnapshots.restoreSnapshot}
           onClose={() => setShowTimeMachine(false)}
+        />
+      )}
+
+      {/* Time Capsule — seal a prediction/note for future-you to reopen */}
+      {showTimeCapsule && (
+        <TimeCapsuleModal
+          games={games}
+          sealed={timeCapsules.sealed}
+          opened={timeCapsules.opened}
+          due={timeCapsules.due}
+          onSeal={timeCapsules.seal}
+          onOpenCapsule={timeCapsules.openCapsule}
+          onDelete={timeCapsules.removeCapsule}
+          getOutcomes={timeCapsules.getOutcomes}
+          onClose={() => setShowTimeCapsule(false)}
         />
       )}
 
