@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import {
   Gift, Loader2, Sparkles, Flame, Check, Heart, X, ListPlus, Bookmark,
   ExternalLink, ChevronDown, ChevronUp, AlertTriangle, Undo2, PiggyBank,
-  Crown, Clock, ShoppingCart, LogOut, RefreshCw, TrendingUp,
+  Crown, Clock, ShoppingCart, LogOut, RefreshCw, TrendingUp, Search,
 } from 'lucide-react';
 import { Game, GameRecommendation, SubscriptionTier } from '../lib/types';
 import { useSubscriptionGames } from '../hooks/useSubscriptionGames';
@@ -46,6 +46,7 @@ export function SubscriptionDropPanel({ games, userId, onAddGame, onAddToQueue, 
   const [showSources, setShowSources] = useState(false);
   const [sortMode, setSortMode] = useState<SortMode>('match');
   const [bucketFilter, setBucketFilter] = useState<BucketFilter>('all');
+  const [searchQuery, setSearchQuery] = useState('');
 
   const syncing = sub.progress.active;
   const latestMonth = latestAvailableMonth();
@@ -79,17 +80,35 @@ export function SubscriptionDropPanel({ games, userId, onAddGame, onAddToQueue, 
   );
   const overlapSavings = overlaps.reduce((s, r) => s + (r.estimatedPrice || 0), 0);
 
+  // Search across name, genre, platform, and the drop's month — lets you find
+  // a specific game once you've backfilled many months of drops.
+  const search = searchQuery.trim().toLowerCase();
+  const matchesSearch = (rec: GameRecommendation): boolean => {
+    if (!search) return true;
+    return (
+      rec.gameName.toLowerCase().includes(search) ||
+      (!!rec.genre && rec.genre.toLowerCase().includes(search)) ||
+      (!!rec.platform && rec.platform.toLowerCase().includes(search)) ||
+      (!!rec.catalogMonth && monthLabel(rec.catalogMonth).toLowerCase().includes(search))
+    );
+  };
+
   // Sorted + filtered available grid (Pick of the Month is shown separately).
   const gridGames = useMemo(() => {
     let list = sub.available.filter(r => r.id !== sub.pickOfMonth?.id);
     if (bucketFilter === 'monthly') list = list.filter(r => r.subscriptionBucket === 'monthly');
     if (bucketFilter === 'catalog') list = list.filter(r => r.subscriptionBucket !== 'monthly');
+    if (search) list = list.filter(matchesSearch);
     const sorted = [...list];
     if (sortMode === 'match') sorted.sort((a, b) => (b.hypeScore || 0) - (a.hypeScore || 0));
     if (sortMode === 'metacritic') sorted.sort((a, b) => (b.metacritic || 0) - (a.metacritic || 0));
     if (sortMode === 'newest') sorted.sort((a, b) => (b.catalogMonth || '').localeCompare(a.catalogMonth || ''));
     return sorted;
-  }, [sub.available, sub.pickOfMonth, bucketFilter, sortMode]);
+  }, [sub.available, sub.pickOfMonth, bucketFilter, sortMode, search]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const pickOfMonthMatches = !sub.pickOfMonth || matchesSearch(sub.pickOfMonth);
+  const filteredSaved = useMemo(() => sub.saved.filter(matchesSearch), [sub.saved, search]); // eslint-disable-line react-hooks/exhaustive-deps
+  const filteredDismissed = useMemo(() => sub.dismissed.filter(matchesSearch), [sub.dismissed, search]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const claimByFor = (rec: GameRecommendation): string | undefined => {
     if (rec.subscriptionBucket !== 'monthly' || rec.catalogMonth !== latestMonth) return undefined;
@@ -369,7 +388,7 @@ export function SubscriptionDropPanel({ games, userId, onAddGame, onAddToQueue, 
       )}
 
       {/* #3 — Pick of the Month */}
-      {sub.pickOfMonth && (
+      {sub.pickOfMonth && pickOfMonthMatches && (
         <div>
           <div className="flex items-center gap-1.5 mb-2">
             <Crown size={13} className="text-amber-400" />
@@ -380,6 +399,28 @@ export function SubscriptionDropPanel({ games, userId, onAddGame, onAddToQueue, 
             claimBy={claimByFor(sub.pickOfMonth)}
             overlap={overlapFor(sub.pickOfMonth)} onRemoveFromBuy={deleteBuyEntry}
           />
+        </div>
+      )}
+
+      {/* Search across all synced drops — name, genre, platform, or month */}
+      {sub.recs.length > 0 && (
+        <div className="relative">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search your PS Plus games…"
+            className="w-full pl-8 pr-8 py-2 bg-white/[0.03] border border-white/10 text-white text-sm rounded-lg placeholder:text-white/25 focus:outline-none focus:border-indigo-500/40 focus:bg-white/[0.05] transition-all"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 transition-colors"
+            >
+              <X size={14} />
+            </button>
+          )}
         </div>
       )}
 
@@ -425,10 +466,10 @@ export function SubscriptionDropPanel({ games, userId, onAddGame, onAddToQueue, 
       )}
 
       {/* Saved */}
-      {sub.saved.length > 0 && (
-        <Section title="Added & saved" count={sub.saved.length}>
+      {filteredSaved.length > 0 && (
+        <Section title="Added & saved" count={filteredSaved.length}>
           <div className="flex flex-wrap gap-1.5">
-            {sub.saved.map(rec => (
+            {filteredSaved.map(rec => (
               <span key={rec.id} className="text-[11px] text-white/45 bg-white/[0.04] rounded-lg px-2.5 py-1.5">
                 {rec.gameName}
                 <span className="text-white/20 ml-1">
@@ -449,17 +490,30 @@ export function SubscriptionDropPanel({ games, userId, onAddGame, onAddToQueue, 
         </div>
       )}
 
+      {/* No search results across any section */}
+      {search && sub.recs.length > 0
+        && gridGames.length === 0 && !pickOfMonthMatches
+        && filteredSaved.length === 0 && filteredDismissed.length === 0 && (
+        <div className="text-center py-8">
+          <Search size={24} className="mx-auto mb-2 text-white/10" />
+          <p className="text-white/30 text-sm">No PS Plus games match &ldquo;{searchQuery.trim()}&rdquo;</p>
+          <button onClick={() => setSearchQuery('')} className="mt-2 text-xs text-indigo-400/70 hover:text-indigo-400 transition-colors">
+            Clear search
+          </button>
+        </div>
+      )}
+
       {/* Dismissed */}
-      {sub.dismissed.length > 0 && (
+      {filteredDismissed.length > 0 && (
         <div>
           <button onClick={() => setShowDismissed(!showDismissed)}
             className="flex items-center gap-1.5 text-xs text-white/20 hover:text-white/40 transition-colors">
             {showDismissed ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
-            Dismissed ({sub.dismissed.length})
+            Dismissed ({filteredDismissed.length})
           </button>
           {showDismissed && (
             <div className="mt-2 space-y-1.5">
-              {sub.dismissed.map(rec => (
+              {filteredDismissed.map(rec => (
                 <div key={rec.id} className="flex items-center justify-between px-3 py-2 bg-white/[0.02] rounded-lg">
                   <span className="text-xs text-white/25 line-through">{rec.gameName}</span>
                   <button onClick={() => sub.undoDismiss(rec.id)}
