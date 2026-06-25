@@ -82,7 +82,7 @@ import { UndoToast } from './components/UndoToast';
 import { GlobalCommandPalette, PaletteCommand } from './components/GlobalCommandPalette';
 import clsx from 'clsx';
 
-type ViewMode = 'all' | 'owned' | 'wishlist';
+type ViewMode = 'all' | 'owned' | 'wishlist' | 'ps-plus';
 type TabMode = 'games' | 'timeline' | 'stats' | 'ai-coach' | 'up-next' | 'discover' | 'leaderboard' | 'buy-queue' | 'estimator';
 type CardViewMode = 'poster' | 'compact';
 
@@ -711,6 +711,7 @@ export default function GameAnalyticsPage() {
     .filter(g => {
       if (viewMode === 'owned') return g.status !== 'Wishlist';
       if (viewMode === 'wishlist') return g.status === 'Wishlist';
+      if (viewMode === 'ps-plus') return g.acquiredFree && g.subscriptionSource === 'PS Plus';
       return true;
     })
     .filter(g => {
@@ -1418,7 +1419,7 @@ export default function GameAnalyticsPage() {
                       <p className="text-[11px] text-white/30 px-1">
                         {filteredGames.length === 0
                           ? 'No matches'
-                          : `${filteredGames.length} of ${gamesWithMetrics.filter(g => viewMode === 'owned' ? g.status !== 'Wishlist' : viewMode === 'wishlist' ? g.status === 'Wishlist' : true).length} game${filteredGames.length !== 1 ? 's' : ''}`
+                          : `${filteredGames.length} of ${gamesWithMetrics.filter(g => viewMode === 'owned' ? g.status !== 'Wishlist' : viewMode === 'wishlist' ? g.status === 'Wishlist' : viewMode === 'ps-plus' ? (g.acquiredFree && g.subscriptionSource === 'PS Plus') : true).length} game${filteredGames.length !== 1 ? 's' : ''}`
                         }
                       </p>
                     )}
@@ -1426,18 +1427,23 @@ export default function GameAnalyticsPage() {
                 )}
               <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
                 <div className="flex items-center gap-1 bg-white/[0.02] rounded-lg p-1">
-                  {(['all', 'owned', 'wishlist'] as ViewMode[]).map((mode) => (
+                  {([
+                    { id: 'all' as ViewMode, label: 'All' },
+                    { id: 'owned' as ViewMode, label: 'Owned' },
+                    { id: 'wishlist' as ViewMode, label: 'Wishlist' },
+                    ...(games.some(g => g.acquiredFree && g.subscriptionSource === 'PS Plus') ? [{ id: 'ps-plus' as ViewMode, label: 'PS Plus' }] : []),
+                  ]).map(({ id, label }) => (
                     <button
-                      key={mode}
-                      onClick={() => setViewMode(mode)}
+                      key={id}
+                      onClick={() => setViewMode(id)}
                       className={clsx(
-                        'px-3 py-1 rounded-md text-xs font-medium transition-all capitalize',
-                        viewMode === mode
+                        'px-3 py-1 rounded-md text-xs font-medium transition-all',
+                        viewMode === id
                           ? 'bg-white/10 text-white'
                           : 'text-white/40 hover:text-white/60'
                       )}
                     >
-                      {mode}
+                      {label}
                     </button>
                   ))}
                 </div>
