@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, CalendarClock, CalendarPlus, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical, Download, Upload, Gift, ShoppingCart, Search, X, Moon, CreditCard, Swords, Inbox, Play, History, RefreshCw, Crown, Users, PiggyBank, Radar, Home } from 'lucide-react';
+import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, CalendarClock, CalendarPlus, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical, Download, Upload, Gift, ShoppingCart, Search, X, Moon, CreditCard, Swords, Inbox, Play, History, RefreshCw, Crown, Users, PiggyBank, Radar, Home, Folder } from 'lucide-react';
 import { useGames } from './hooks/useGames';
 import { useAnalytics, GameWithMetrics } from './hooks/useAnalytics';
 import { useBudget } from './hooks/useBudget';
@@ -52,6 +52,8 @@ import { AchievementHunterModal } from './components/AchievementHunterModal';
 import { WishlistPlannerModal } from './components/WishlistPlannerModal';
 import { ReplayRadarModal } from './components/ReplayRadarModal';
 import { CalendarSyncModal } from './components/CalendarSyncModal';
+import { CollectionsModal } from './components/CollectionsModal';
+import { useCollections } from './hooks/useCollections';
 import { loadWishlistPriority, saveWishlistPriority, resolveWishlistOrder } from './lib/wishlist-priority';
 import { useLibrarySnapshots } from './hooks/useLibrarySnapshots';
 import { YearStoryMode } from './components/YearStoryMode';
@@ -195,6 +197,15 @@ export default function GameAnalyticsPage() {
     toggleCategoryMute: toggleAlertCategoryMute,
   } = useAlerts(games, budgets, goals, user?.uid ?? null, alertsLiveSession, purchaseQueueEntries, allTrophies);
   const { rankings: allTimeRankings } = useRankings(user?.uid ?? null, 'all', 'all');
+  const {
+    collections,
+    create: createCollection,
+    rename: renameCollection,
+    remove: removeCollection,
+    addGame: addGameToCollection,
+    removeGame: removeGameFromCollection,
+    pruneGame: pruneGameFromCollections,
+  } = useCollections(user?.uid ?? null);
   const { toastQueue: genreToastQueue, dismissToast: dismissGenreToast } = useGenreLevelUps(games, user?.uid ?? null);
   const { assignments: allTimeTiers } = useTierAssignments(user?.uid ?? null, 'all');
   const eloByGameId = useMemo(() => {
@@ -271,6 +282,8 @@ export default function GameAnalyticsPage() {
   const [showWishlistPlanner, setShowWishlistPlanner] = useState(false);
   const [showReplayRadar, setShowReplayRadar] = useState(false);
   const [showCalendarSync, setShowCalendarSync] = useState(false);
+  const [showCollections, setShowCollections] = useState(false);
+  const [activeCollectionId, setActiveCollectionId] = useState<string | null>(null);
   const [wishlistPriorityOrder, setWishlistPriorityOrder] = useState<string[]>([]);
   const [wrappedYear, setWrappedYear] = useState<number | null>(null);
   const [showGamerCard, setShowGamerCard] = useState(false);
@@ -446,6 +459,7 @@ export default function GameAnalyticsPage() {
 
     try {
       await deleteGame(id);
+      pruneGameFromCollections(id);
       showUndo({
         message: `Deleted "${gameName}"`,
         onUndo: async () => {
@@ -705,6 +719,8 @@ export default function GameAnalyticsPage() {
     );
   }
 
+  const activeCollection = activeCollectionId ? collections.find(c => c.id === activeCollectionId) ?? null : null;
+
   const filteredGames = gamesWithMetrics
     .filter(g => {
       if (viewMode === 'owned') return g.status !== 'Wishlist';
@@ -712,6 +728,7 @@ export default function GameAnalyticsPage() {
       if (viewMode === 'ps-plus') return g.acquiredFree && g.subscriptionSource === 'PS Plus';
       return true;
     })
+    .filter(g => !activeCollection || activeCollection.gameIds.includes(g.id))
     .filter(g => {
       if (!searchQuery.trim()) return true;
       const q = searchQuery.trim().toLowerCase();
@@ -776,6 +793,7 @@ export default function GameAnalyticsPage() {
     { id: 'action-achievement-hunter', label: 'Achievement Hunter', subtitle: 'Browse earnable badges', group: 'Actions', icon: <Trophy size={15} />, onRun: () => setShowAchievementHunter(true) },
     { id: 'action-time-machine', label: 'Time Machine', subtitle: 'See your library at a past date', group: 'Actions', icon: <History size={15} />, onRun: () => setShowTimeMachine(true) },
     { id: 'action-wishlist-planner', label: 'Wishlist Planner', subtitle: 'Plan what to save up for first', group: 'Actions', icon: <PiggyBank size={15} />, onRun: () => setShowWishlistPlanner(true) },
+    { id: 'action-collections', label: 'Collections', subtitle: 'Custom lists like "Couch Co-op" or "Comfort Replays"', group: 'Actions', icon: <Folder size={15} />, onRun: () => setShowCollections(true) },
     { id: 'action-replay-radar', label: 'Replay Radar', subtitle: 'Dormant games worth revisiting', group: 'Actions', icon: <Radar size={15} />, onRun: () => setShowReplayRadar(true) },
     { id: 'action-calendar-sync', label: 'Calendar Sync', subtitle: 'Export your play plan, releases & goals to a calendar', group: 'Actions', icon: <CalendarPlus size={15} />, onRun: () => setShowCalendarSync(true) },
     { id: 'action-steam-sync', label: 'Sync Steam Library', subtitle: 'Import owned games & playtime from Steam', group: 'Actions', icon: <RefreshCw size={15} />, onRun: () => setShowSteamSync(true) },
@@ -1379,6 +1397,7 @@ export default function GameAnalyticsPage() {
                           { icon: <RefreshCw size={15} className="text-[#66c0f4]" />, label: 'Sync Steam Library', onClick: () => setShowSteamSync(true) },
                           { icon: <Trophy size={15} className="text-amber-400" />, label: 'Achievement Hunter', onClick: () => setShowAchievementHunter(true) },
                           { icon: <History size={15} className="text-emerald-400" />, label: 'Time Machine', onClick: () => setShowTimeMachine(true) },
+                          { icon: <Folder size={15} className="text-purple-400" />, label: 'Collections', onClick: () => setShowCollections(true) },
                           { icon: <PiggyBank size={15} className="text-emerald-400" />, label: 'Wishlist Planner', onClick: () => setShowWishlistPlanner(true) },
                           { icon: <Radar size={15} className="text-emerald-400" />, label: 'Replay Radar', onClick: () => setShowReplayRadar(true) },
                           { icon: <CalendarPlus size={15} className="text-indigo-400" />, label: 'Calendar Sync', onClick: () => setShowCalendarSync(true) },
@@ -1534,6 +1553,39 @@ export default function GameAnalyticsPage() {
                   </div>
                 </div>
               </div>
+              {/* Collections chip row — only shown once at least one collection exists */}
+              {collections.length > 0 && (
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <Folder size={12} className="text-white/25 shrink-0" />
+                  <button
+                    onClick={() => setActiveCollectionId(null)}
+                    className={clsx(
+                      'px-2.5 py-1 rounded-full text-[11px] font-medium transition-all',
+                      activeCollectionId === null ? 'bg-white/10 text-white' : 'bg-white/[0.02] text-white/40 hover:text-white/60'
+                    )}
+                  >
+                    All
+                  </button>
+                  {collections.map(c => (
+                    <button
+                      key={c.id}
+                      onClick={() => setActiveCollectionId(activeCollectionId === c.id ? null : c.id)}
+                      className={clsx(
+                        'px-2.5 py-1 rounded-full text-[11px] font-medium transition-all whitespace-nowrap',
+                        activeCollectionId === c.id ? 'bg-purple-500/20 text-purple-300 ring-1 ring-purple-400/40' : 'bg-white/[0.02] text-white/40 hover:text-white/60'
+                      )}
+                    >
+                      {c.emoji} {c.name} <span className="opacity-50">{c.gameIds.length}</span>
+                    </button>
+                  ))}
+                  <button
+                    onClick={() => setShowCollections(true)}
+                    className="px-2.5 py-1 rounded-full text-[11px] font-medium bg-white/[0.02] text-white/30 hover:text-white/60 transition-all"
+                  >
+                    Manage
+                  </button>
+                </div>
+              )}
             </div>
             )}
           </div>
@@ -1984,6 +2036,23 @@ export default function GameAnalyticsPage() {
             }
           }}
           onClose={() => setShowWishlistPlanner(false)}
+        />
+      )}
+
+      {/* Collections — user-defined custom lists for grouping games any way you like */}
+      {showCollections && (
+        <CollectionsModal
+          collections={collections}
+          games={games}
+          onCreate={createCollection}
+          onRename={renameCollection}
+          onDelete={id => {
+            removeCollection(id);
+            if (activeCollectionId === id) setActiveCollectionId(null);
+          }}
+          onAddGame={addGameToCollection}
+          onRemoveGame={removeGameFromCollection}
+          onClose={() => setShowCollections(false)}
         />
       )}
 

@@ -3,6 +3,12 @@
     {
       "date": "2026-06-25",
       "area": "Games",
+      "title": "Collections: build your own custom lists",
+      "body": "You can now group your games any way you want with Collections — open ⋮ → \"Collections\" (or find it with ⌘K) to build lists like \"Couch Co-op,\" \"Comfort Replays,\" or whatever makes sense for you. Pick an emoji, name it, and search your library to add games. Once you've got a collection going, a chip for it shows up above your Games tab so you can filter down to just those titles with one tap. Renaming and deleting collections is just as easy, and deleting one only removes the list — never the games inside it."
+    },
+    {
+      "date": "2026-06-25",
+      "area": "Games",
       "title": "New \"Today\" tab: your daily gaming dashboard",
       "body": "There's a brand new \"Today\" tab (look for the home icon, first in the row) that pulls together everything worth checking each day in one place: a friendly greeting, your current activity vibe, a one-tap \"Play Tonight\" button, your most important alert if you have one, your daily fortune cookie, On This Day memories, and your Daily Quests — all in one spot instead of scattered across every tab. The other tabs are cleaner now too, since those widgets used to show up everywhere."
     },
