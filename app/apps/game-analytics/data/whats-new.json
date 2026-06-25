@@ -1,6 +1,12 @@
 {
   "entries": [
     {
+      "date": "2026-06-25",
+      "area": "Stats",
+      "title": "Stats History: watch your numbers move over time",
+      "body": "Your Stats tab now keeps a running history instead of just showing today's snapshot. There's a new \"Stats History\" chart where you can flip between Credit Score, Cost/Hour, Completion %, Total Hours, and Library Size, pick a 30-day, 90-day, or all-time window, and see exactly how each one has trended — plus a quick headline like \"Credit Score rose from 612 to 776 over the last 30d.\" It quietly logs a snapshot once a day, so check back over the next few days and you'll start seeing your own trend lines take shape."
+    },
+    {
       "date": "2026-06-24",
       "area": "Stats",
       "title": "You vs. The Critics: see how your ratings stack up against Metacritic",

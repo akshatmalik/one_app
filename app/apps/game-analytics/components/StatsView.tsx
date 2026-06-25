@@ -69,6 +69,7 @@ import { WhatIfSimulator } from './WhatIfSimulator';
 import { PlayedSummary, BoughtSummary } from './RangeGlance';
 import { GoalsPanel } from './GoalsPanel';
 import { GenreMasteryPanel } from './GenreMasteryPanel';
+import { KpiTrendsPanel } from './KpiTrendsPanel';
 import clsx from 'clsx';
 
 interface StatsViewProps {
@@ -80,6 +81,7 @@ interface StatsViewProps {
   trophySummary?: TrophyScoreSummary;
   pinnedTrophyIds?: string[];
   onToggleTrophyPin?: (trophyId: string) => void;
+  userId?: string;
 }
 
 const STATUS_COLORS: Record<GameStatus, string> = {
@@ -92,7 +94,7 @@ const STATUS_COLORS: Record<GameStatus, string> = {
 
 const CHART_COLORS = ['#8b5cf6', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#3b82f6', '#84cc16'];
 
-export function StatsView({ games, summary, budgets = [], onSetBudget, trophies, trophySummary, pinnedTrophyIds = [], onToggleTrophyPin }: StatsViewProps) {
+export function StatsView({ games, summary, budgets = [], onSetBudget, trophies, trophySummary, pinnedTrophyIds = [], onToggleTrophyPin, userId = '' }: StatsViewProps) {
   const currentYear = new Date().getFullYear();
   const [selectedPeriod, setSelectedPeriod] = useState<'all' | number>(currentYear);
   const [isEditingBudget, setIsEditingBudget] = useState(false);
@@ -1001,6 +1003,9 @@ export function StatsView({ games, summary, budgets = [], onSetBudget, trophies,
 
       {/* Genre Mastery — RPG-style per-genre leveling */}
       <GenreMasteryPanel games={games} />
+
+      {/* Stats History — KPI trends over time */}
+      <KpiTrendsPanel games={games} userId={userId} />
 
       {/* Deep Insights Panel (Phase 1 Enhancements) */}
       <InsightsPanel

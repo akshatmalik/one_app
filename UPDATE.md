@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-25 09:40 — Stats — Stats History (KPI trends over time)
+
+**Files**: app/apps/game-analytics/lib/kpi-history-storage.ts (new), app/apps/game-analytics/hooks/useKpiHistory.ts (new), app/apps/game-analytics/components/KpiTrendsPanel.tsx (new), app/apps/game-analytics/components/StatsView.tsx, app/apps/game-analytics/page.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+The Stats tab has dozens of rich snapshots of *where you are right now* (Gaming Credit Score, Library Health, completion rate, cost-per-hour) but nothing showed *where you've been* — every metric was a single point with no history. Added "Stats History": a new device-local KPI snapshot log, written in the same pattern as `quest-storage.ts`/`queue-preferences.ts` (`'use client'`, SSR-guarded, try/catch'd localStorage, capped at 400 days, keyed per-user). New `useKpiHistory` hook computes today's snapshot purely by calling three pre-existing, untouched `calculations.ts` exports (`getGamingCreditScore`, `getLibraryHealth`, `calculateSummary`) and records it once per day (fingerprinted via a ref so it doesn't write on every render), then returns the full history. New `KpiTrendsPanel.tsx` renders a metric-switchable (Credit Score / Cost-per-Hour / Completion % / Total Hours / Library Size) Recharts line chart with a 30d/90d/All range toggle and a plain-English trend headline ("Credit Score rose from 612 to 776 over the last 30d"), styled to match `InsightsPanel`'s existing gradient-card conventions; shows a friendly cold-start message until at least 2 days of history exist. Slotted into `StatsView` directly above `InsightsPanel`; `page.tsx` passes the already-available `user?.uid` through as the new `userId` prop. Zero changes to `lib/types.ts`, the repository/storage layer, or any existing `calculations.ts` function body. Verified via `npm install` + `npm run build` (clean, 12/12 static pages, zero TS errors), `npm run lint` (zero issues attributable to any of the new/touched files), and a Playwright smoke test at 375px width (load sample data → Stats tab → "Stats History" panel confirmed present and rendering its cold-start state) with zero console errors/warnings attributable to this change — the one console error present (`404` on a resource fetch) reproduces identically before this change is even exercised (only appears after loading sample data, never on a fresh page load) and is unrelated to this panel, which renders no images.
+
+FOLLOW-UP: Once a few days of real history accumulate, could add a "best week/month" callout and a small delta badge next to the Gaming Credit Score hero card itself ("+24 this week") sourced from the same snapshot log.
+
 ## 2026-06-24 08:15 — Stats — You vs. The Critics (Metacritic comparison)
 
 **Files**: app/apps/game-analytics/lib/calculations.ts, app/apps/game-analytics/hooks/useCriticComparison.ts (new), app/apps/game-analytics/components/CriticComparisonPanel.tsx (new), app/apps/game-analytics/components/StatsView.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json

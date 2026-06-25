@@ -1626,6 +1626,7 @@ export default function GameAnalyticsPage() {
               games={gamesWithMetrics}
               summary={summary}
               budgets={budgets}
+              userId={user?.uid ?? ''}
               onSetBudget={async (year, amount) => {
                 try {
                   await setBudget(year, amount);
