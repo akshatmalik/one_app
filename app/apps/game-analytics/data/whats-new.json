@@ -2,6 +2,12 @@
   "entries": [
     {
       "date": "2026-06-26",
+      "area": "Stats",
+      "title": "You vs. The Average Gamer: see your Gamer Index",
+      "body": "There's a new \"You vs. The Average Gamer\" panel in Stats that scores you across 9 categories — cost per hour, completion rate, backlog size, hours played per week, average rating, genre diversity, yearly spend, how fast you start games after buying them, and session length. Each one shows your number stacked right against a typical gamer's, with a verdict on whether you're ahead, behind, or right on par. It all rolls up into a single \"Gamer Index\" score (0-100) with a fun label like Elite Gamer or Your Own Lane, plus a callout for your single strongest edge and your biggest gap."
+    },
+    {
+      "date": "2026-06-26",
       "area": "Up Next",
       "title": "Weekly Plan Autopilot: let your queue schedule itself",
       "body": "Tell it how many hours you've got this week and Weekly Plan Autopilot builds you a day-by-day schedule, picking which game goes on which day based on how well it matches your mood, how long it's been waiting in your queue, and which days you actually tend to play. Check off sessions as you finish them and watch your weekly adherence score build up over time."

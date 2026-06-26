@@ -15737,3 +15737,186 @@ export function getCriticAgreementSummary(comparisons: CriticComparisonEntry[]):
     biggestOverrated: overratedByYou[0] || null,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Population Benchmark Mode — "How You Compare to the Average Gamer"
+// The benchmark figures below are general, rounded estimates inspired by
+// commonly cited gaming-industry survey ranges (completion rates, backlog
+// sizes, spend, etc.) — presented as a fun frame of reference, not as
+// rigorously sourced statistics. Same spirit as the Guilt-Free Gaming
+// Calculator's entertainment cost comparisons.
+// ---------------------------------------------------------------------------
+
+export type BenchmarkVerdict = 'ahead' | 'behind' | 'on par';
+
+export interface PopulationBenchmarkDimension {
+  key: string;
+  label: string;
+  you: number;
+  average: number;
+  unit: string;
+  higherIsBetter: boolean;
+  percentDelta: number;
+  verdict: BenchmarkVerdict;
+  insight: string;
+}
+
+export interface PopulationBenchmarkData {
+  dimensions: PopulationBenchmarkDimension[];
+  gamerIndex: number;
+  gamerIndexLabel: string;
+  headline: string;
+  strongestDimension: PopulationBenchmarkDimension | null;
+  weakestDimension: PopulationBenchmarkDimension | null;
+}
+
+const AVERAGE_GAMER_BENCHMARKS = {
+  costPerHour: 4.5,
+  completionRate: 38,
+  backlogSize: 12,
+  hoursPerWeek: 7,
+  avgRating: 7.2,
+  genreDiversity: 4,
+  yearlySpend: 200,
+  firstPlayDays: 45,
+  sessionLengthHours: 1.5,
+};
+
+function buildBenchmarkDimension(
+  key: string,
+  label: string,
+  you: number,
+  average: number,
+  unit: string,
+  higherIsBetter: boolean,
+  insightFn: (you: number, average: number, verdict: BenchmarkVerdict) => string
+): PopulationBenchmarkDimension {
+  const safeAverage = average === 0 ? 1 : average;
+  const percentDelta = Math.round(((you - average) / safeAverage) * 100);
+  const withinNoise = Math.abs(percentDelta) < 8;
+  const isAhead = higherIsBetter ? you > average : you < average;
+  const verdict: BenchmarkVerdict = withinNoise ? 'on par' : isAhead ? 'ahead' : 'behind';
+  return {
+    key,
+    label,
+    you: Math.round(you * 100) / 100,
+    average,
+    unit,
+    higherIsBetter,
+    percentDelta,
+    verdict,
+    insight: insightFn(you, average, verdict),
+  };
+}
+
+export function getPopulationBenchmarks(games: Game[], summary: AnalyticsSummary): PopulationBenchmarkData {
+  const b = AVERAGE_GAMER_BENCHMARKS;
+  const ownedGames = games.filter(g => g.status !== 'Wishlist');
+  const backlogSize = ownedGames.filter(g => g.status === 'Not Started').length;
+  const genreStats = getGenreDiversity(games);
+  const hoursPerWeek = getGamingVelocity(games, 90) * 7;
+
+  const purchaseYears = new Set(
+    ownedGames.filter(g => g.datePurchased).map(g => g.datePurchased!.split('-')[0])
+  );
+  const yearlySpend = summary.totalSpent / Math.max(1, purchaseYears.size);
+
+  // No "date added to wishlist" is tracked, so the closest proxy for buying
+  // discipline is how long a game sits before its first recorded session.
+  const startedGames = ownedGames.filter(g => g.datePurchased && g.startDate);
+  const firstPlayDays = startedGames.length > 0
+    ? startedGames.reduce((sum, g) => {
+        const purchased = parseLocalDate(g.datePurchased!).getTime();
+        const started = parseLocalDate(g.startDate!).getTime();
+        return sum + Math.max(0, (started - purchased) / (1000 * 60 * 60 * 24));
+      }, 0) / startedGames.length
+    : b.firstPlayDays;
+
+  const allLogs = getAllPlayLogs(games);
+  const sessionLengthHours = allLogs.length > 0
+    ? allLogs.reduce((sum, l) => sum + l.log.hours, 0) / allLogs.length
+    : b.sessionLengthHours;
+
+  const dimensions: PopulationBenchmarkDimension[] = [
+    buildBenchmarkDimension('costPerHour', 'Cost per Hour', summary.averageCostPerHour, b.costPerHour, '$/hr', false,
+      (you, avg, v) => v === 'ahead'
+        ? `You squeeze more value per dollar than most — $${you.toFixed(2)}/hr vs the ~$${avg.toFixed(2)}/hr average gamer.`
+        : v === 'behind'
+        ? `Your library runs pricier per hour than average — $${you.toFixed(2)}/hr vs ~$${avg.toFixed(2)}/hr.`
+        : `Right in line with the average gamer's $${avg.toFixed(2)}/hr.`),
+    buildBenchmarkDimension('completionRate', 'Completion Rate', summary.completionRate, b.completionRate, '%', true,
+      (you, avg, v) => v === 'ahead'
+        ? `You finish what you start — ${you.toFixed(0)}% completion vs the ~${avg}% average.`
+        : v === 'behind'
+        ? `Most gamers finish more often — your ${you.toFixed(0)}% trails the ~${avg}% average.`
+        : `Matching the typical ~${avg}% completion rate.`),
+    buildBenchmarkDimension('backlogSize', 'Backlog Size', backlogSize, b.backlogSize, 'games', false,
+      (you, avg, v) => v === 'ahead'
+        ? `A lean backlog — only ${Math.round(you)} unstarted games vs the ~${avg}-game average.`
+        : v === 'behind'
+        ? `Your backlog runs deep — ${Math.round(you)} unstarted games vs the ~${avg}-game average.`
+        : `A typical-sized backlog, about ${avg} games unstarted.`),
+    buildBenchmarkDimension('hoursPerWeek', 'Hours per Week', hoursPerWeek, b.hoursPerWeek, 'hrs/wk', true,
+      (you, avg, v) => v === 'ahead'
+        ? `You're playing more than most — ${you.toFixed(1)} hrs/wk vs the ~${avg}-hr average.`
+        : v === 'behind'
+        ? `Lighter play schedule than average — ${you.toFixed(1)} hrs/wk vs ~${avg} hrs/wk.`
+        : `A typical pace, around ${avg} hours a week.`),
+    buildBenchmarkDimension('avgRating', 'Average Rating', summary.averageRating, b.avgRating, '/10', true,
+      (you, avg, v) => v === 'ahead'
+        ? `You rate generously — ${you.toFixed(1)}/10 average vs the ~${avg}/10 typical gamer.`
+        : v === 'behind'
+        ? `A tougher critic than most — ${you.toFixed(1)}/10 vs the ~${avg}/10 average.`
+        : `Right around the typical ${avg}/10 average rating.`),
+    buildBenchmarkDimension('genreDiversity', 'Genre Diversity', genreStats.uniqueGenres, b.genreDiversity, 'genres', true,
+      (you, avg, v) => v === 'ahead'
+        ? `You range wider than most — ${Math.round(you)} genres vs the ~${avg}-genre average.`
+        : v === 'behind'
+        ? `You stick to your lane — ${Math.round(you)} genres vs the ~${avg}-genre average.`
+        : `A typical genre spread, around ${avg} genres.`),
+    buildBenchmarkDimension('yearlySpend', 'Yearly Spend', yearlySpend, b.yearlySpend, '$/yr', false,
+      (you, avg, v) => v === 'ahead'
+        ? `You spend less than most — ~$${you.toFixed(0)}/yr vs the ~$${avg}/yr average gamer.`
+        : v === 'behind'
+        ? `You spend more than most — ~$${you.toFixed(0)}/yr vs the ~$${avg}/yr average.`
+        : `Spending close to the ~$${avg}/yr average.`),
+    buildBenchmarkDimension('firstPlayDays', 'Time to First Play', firstPlayDays, b.firstPlayDays, 'days', false,
+      (you, avg, v) => v === 'ahead'
+        ? `You dive in fast — ${Math.round(you)} days from purchase to first play vs the ~${avg}-day average.`
+        : v === 'behind'
+        ? `Games sit a while before you start them — ${Math.round(you)} days vs the ~${avg}-day average.`
+        : `About average — ${Math.round(you)} days from purchase to first play.`),
+    buildBenchmarkDimension('sessionLengthHours', 'Session Length', sessionLengthHours, b.sessionLengthHours, 'hrs', true,
+      (you, avg, v) => v === 'ahead'
+        ? `Marathon sessions — ${you.toFixed(1)} hrs on average vs the ~${avg}-hr typical session.`
+        : v === 'behind'
+        ? `Shorter sessions than most — ${you.toFixed(1)} hrs vs the ~${avg}-hr average.`
+        : `A typical session length, around ${avg} hours.`),
+  ];
+
+  const aheadCount = dimensions.filter(d => d.verdict === 'ahead').length;
+  const gamerIndex = Math.round((aheadCount / dimensions.length) * 100);
+  const gamerIndexLabel = gamerIndex >= 75 ? 'Elite Gamer'
+    : gamerIndex >= 55 ? 'Above Average'
+    : gamerIndex >= 35 ? 'Right in the Pack'
+    : gamerIndex >= 15 ? 'Outside the Norm'
+    : 'Your Own Lane';
+
+  const strongestDimension = dimensions
+    .filter(d => d.verdict === 'ahead')
+    .sort((a, c) => Math.abs(c.percentDelta) - Math.abs(a.percentDelta))[0] || null;
+  const weakestDimension = dimensions
+    .filter(d => d.verdict === 'behind')
+    .sort((a, c) => Math.abs(c.percentDelta) - Math.abs(a.percentDelta))[0] || null;
+
+  const headline = `You're outperforming the average gamer in ${aheadCount} of ${dimensions.length} categories.`;
+
+  return {
+    dimensions,
+    gamerIndex,
+    gamerIndexLabel,
+    headline,
+    strongestDimension,
+    weakestDimension,
+  };
+}

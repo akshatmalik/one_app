@@ -60,6 +60,7 @@ import { ExpandedStatsPanel } from './ExpandedStatsPanel';
 import { InsightsPanel } from './InsightsPanel';
 import { AnalyticsPanel } from './AnalyticsPanel';
 import { CriticComparisonPanel } from './CriticComparisonPanel';
+import { PopulationBenchmarkPanel } from './PopulationBenchmarkPanel';
 import { TrophyRoom } from './TrophyRoom';
 import { TrophyRoomV2 } from './TrophyRoomV2';
 import { TrophyProgress, TrophyScoreSummary } from '../lib/trophy-calculations';
@@ -1017,6 +1018,9 @@ export function StatsView({ games, summary, budgets = [], onSetBudget, trophies,
 
       {/* You vs. The Critics — your ratings against Metacritic */}
       <CriticComparisonPanel games={games} />
+
+      {/* You vs. The Average Gamer — population benchmark comparison */}
+      <PopulationBenchmarkPanel games={games} summary={summary} />
 
       {/* Advanced Analytics Panel (Phase 2) */}
       <AnalyticsPanel games={games} />
