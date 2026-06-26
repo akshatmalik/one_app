@@ -5,6 +5,13 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-26 00:30 — Stats — Session Vibes (mood-tagged session insights)
+
+**Files**: app/apps/game-analytics/components/FunStatsPanel.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+The "Quick Check-In" flow has captured an optional mood tag (🔥great/👍good/😐meh/💪grind) on every play session since it shipped, and `calculations.ts` already had a fully-implemented `getMoodAnalysis()` aggregating that data (mood distribution, the mood most correlated with high-rated games, and the longest session by mood) — but nothing in the UI ever called it, so months of mood data sat unused. Added a new "Session Vibes" `StatPanelCard` to `FunStatsPanel.tsx` that surfaces this directly: a 4-up mood-percentage grid, a callout for which mood lines up with your highest-rated games, and the longest session tagged by mood, with an italic insight line. Purely additive — only imports and calls the existing, untouched `getMoodAnalysis` export; zero changes to `lib/types.ts`, storage, or any `calculations.ts` function body. Verified via `npm install` + `npm run build` (clean, zero TS errors) and `npm run lint` (zero new issues — only pre-existing `<img>` warnings in the same file, predating this change). Playwright smoke test at 375px width confirmed the card renders with correct percentages and correlation callouts against injected mood-tagged play logs; an initial run using a single game (so every mood tied at the same average rating) surfaced an apparent mismatch between a manual trace and the rendered "best mood" pick, which was conclusively traced to insertion-order tie-breaking on a degenerate fixture rather than a logic bug — re-tested with multiple games at distinct ratings and the correlation now resolves unambiguously and correctly. The one console message observed (a 404) was confirmed unrelated via a clean baseline page load with no test data, where it never appears.
+
 ## 2026-06-25 20:30 — Games — Game Night (Co-Op Match Finder)
 
 **Files**: app/apps/game-analytics/lib/coop-match.ts (new), app/apps/game-analytics/components/CoOpMatchModal.tsx (new), app/apps/game-analytics/page.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json

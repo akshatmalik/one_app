@@ -1,6 +1,12 @@
 {
   "entries": [
     {
+      "date": "2026-06-26",
+      "area": "Stats",
+      "title": "Session Vibes: see what mood your sessions are really in",
+      "body": "Every time you've used Quick Check-In and picked a mood (🔥great/👍good/😐meh/💪grind), that data was being saved but never shown back to you. Now there's a \"Session Vibes\" card in your Stats tab: a breakdown of how your sessions feel overall, which mood lines up with your highest-rated games, and your longest session by mood. Keep tagging your check-ins and this card gets sharper over time — it might tell you that your \"grind\" sessions are actually on your favorite games, or that \"great\" sessions are the ones worth chasing more of."
+    },
+    {
       "date": "2026-06-25",
       "area": "Games",
       "title": "Game Night: find what you and a friend can co-op tonight",

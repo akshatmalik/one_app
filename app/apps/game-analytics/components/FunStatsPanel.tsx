@@ -37,6 +37,7 @@ import {
   getFinishingSprintScore,
   getReturnRate,
   getParallelUniverseImpact,
+  getMoodAnalysis,
 } from '../lib/calculations';
 import { GameListModal } from './GameListModal';
 import { GameGraveyard } from './GameGraveyard';
@@ -85,6 +86,7 @@ export function FunStatsPanel({ games }: FunStatsPanelProps) {
   const pauseStats = getPauseStats(games);
   const finishingSprint = getFinishingSprintScore(games);
   const returnRate = getReturnRate(games);
+  const moodAnalysis = getMoodAnalysis(games);
 
   // Parallel universe: find the game that most distorts your stats
   const ownedWithHours = games.filter(g => g.status !== 'Wishlist' && getTotalHours(g) > 0);
@@ -657,6 +659,56 @@ export function FunStatsPanel({ games }: FunStatsPanelProps) {
             {finishingSprint.avgSprintPercent >= 40
               ? 'You tend to sprint to the finish line!'
               : 'You maintain a steady pace throughout'}
+          </p>
+        </StatPanelCard>
+      )}
+
+      {/* Session Vibes — mood tags from Quick Check-In */}
+      {moodAnalysis.totalTaggedSessions > 0 && (
+        <StatPanelCard
+          icon={<Heart size={16} className="text-pink-400" />}
+          title="Session Vibes"
+          subtitle="How your sessions felt"
+          gradient="from-pink-500/10 to-purple-500/10 border-pink-500/20"
+        >
+          <div className="p-3 bg-white/5 rounded-lg">
+            <div className="grid grid-cols-4 gap-2 text-center text-xs mb-3">
+              {(['great', 'good', 'meh', 'grind'] as const).map(mood => {
+                const entry = moodAnalysis.moodDistribution.find(m => m.mood === mood);
+                const emoji = { great: '🔥', good: '👍', meh: '😐', grind: '💪' }[mood];
+                return (
+                  <div key={mood} className="p-2 bg-white/5 rounded-lg">
+                    <div className="text-lg">{emoji}</div>
+                    <div className="text-sm font-semibold text-pink-200">{entry?.percent ?? 0}%</div>
+                    <div className="text-white/30 capitalize">{mood}</div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="grid grid-cols-2 gap-3 text-center text-xs">
+              {moodAnalysis.bestMoodForRating && (
+                <div className="p-2 bg-white/5 rounded-lg">
+                  <div className="text-sm font-medium text-pink-200 capitalize">
+                    {{ great: '🔥', good: '👍', meh: '😐', grind: '💪' }[moodAnalysis.bestMoodForRating.mood]}{' '}
+                    {moodAnalysis.bestMoodForRating.mood} sessions
+                  </div>
+                  <div className="text-white/30">avg {moodAnalysis.bestMoodForRating.avgGameRating}/10 rated game</div>
+                </div>
+              )}
+              {moodAnalysis.longestSessionMood && (
+                <div className="p-2 bg-white/5 rounded-lg">
+                  <div className="text-sm font-medium text-purple-200 truncate">
+                    {moodAnalysis.longestSessionMood.hours}h on {moodAnalysis.longestSessionMood.game}
+                  </div>
+                  <div className="text-white/30">longest {moodAnalysis.longestSessionMood.mood} session</div>
+                </div>
+              )}
+            </div>
+          </div>
+          <p className="text-xs text-pink-400/70 mt-3 italic">
+            {moodAnalysis.bestMoodForRating
+              ? `Your "${moodAnalysis.bestMoodForRating.mood}" sessions line up with your highest-rated games.`
+              : `${moodAnalysis.totalTaggedSessions} of ${moodAnalysis.totalSessions} sessions tagged with a mood so far.`}
           </p>
         </StatPanelCard>
       )}
