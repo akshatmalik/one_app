@@ -1287,6 +1287,8 @@ export default function GameAnalyticsPage() {
                 onPlayTonight={() => setShowPlayTonight(true)}
                 dueCapsules={timeCapsules.due}
                 onOpenTimeCapsule={() => setShowTimeCapsule(true)}
+                onOpenReplayRadar={() => setShowReplayRadar(true)}
+                onOpenQueue={() => setTabMode('up-next')}
               />
             </div>
           )}

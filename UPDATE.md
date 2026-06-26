@@ -5,6 +5,13 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-26 00:05 — Today Dashboard — Replay Radar & Queue Shame teasers
+
+**Files**: app/apps/game-analytics/components/TodayDashboard.tsx, app/apps/game-analytics/page.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Direct follow-up to the "Today" dashboard tab FOLLOW-UP from 2026-06-25 05:20, which explicitly called for adding a Queue Shame Timer highlight and a Replay Radar suggestion to the Today tab now that there's a dedicated home for "things to glance at today." Both signals already existed as pure read-only calculations (`getReplayCandidates` and `getQueueShameData` in `calculations.ts`, both untouched) but were previously buried inside the Replay Radar modal and the Up Next queue cards respectively — nothing surfaced them proactively. Added two new conditional teaser cards to `TodayDashboard.tsx`, styled identically to the existing top-alert and time-capsule banners: an emerald Replay Radar teaser showing the single top dormant-but-worth-revisiting game (only rendered when one exists), and a tier-colored Queue Shame teaser showing the single most "embarrassing" or "hall of shame" queued game (a new `worstQueueShame` memo ranks all queued games via `getQueueShameData`, skipping the `'fresh'` tier). Both teasers tap through to existing destinations — the Replay Radar modal and the Up Next tab — via two new optional callback props (`onOpenReplayRadar`, `onOpenQueue`) wired from `page.tsx`'s existing `setShowReplayRadar`/`setTabMode` state setters; no new state or routing logic was introduced. Zero changes to `lib/types.ts`, storage/repository code, or any existing `calculations.ts` function body — one component extended, one call site given two new prop wires. Verified via `npm install` + `npm run build` (clean, 12/12 static pages, zero TS errors), `npm run lint` (zero issues attributable to either touched file — only pre-existing unrelated warnings elsewhere), and a Playwright smoke test at 375px width (load sample data → Today tab → both the Replay Radar and Queue Shame teaser cards render with correct game name/headline/tier text and route to the right destination on tap) with zero new console errors/warnings — the one console message observed (a resource 404) reproduces identically on a fresh page load before the Today tab is ever opened, confirmed unrelated via a baseline-only run.
+
 ## 2026-06-25 20:30 — Games — Game Night (Co-Op Match Finder)
 
 **Files**: app/apps/game-analytics/lib/coop-match.ts (new), app/apps/game-analytics/components/CoOpMatchModal.tsx (new), app/apps/game-analytics/page.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json

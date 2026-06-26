@@ -1,6 +1,12 @@
 {
   "entries": [
     {
+      "date": "2026-06-26",
+      "area": "Games",
+      "title": "Today tab now nudges you toward replays and queue guilt",
+      "body": "The Today tab has two new daily nudges. If you've got a dormant game worth revisiting, you'll see a Replay Radar suggestion right at the top — tap it to jump straight into the full Replay Radar view. And if something's been sitting in your Up Next queue getting embarrassingly old, you'll see it called out by name with its shame tier, with a tap straight through to your queue."
+    },
+    {
       "date": "2026-06-25",
       "area": "Games",
       "title": "Game Night: find what you and a friend can co-op tonight",

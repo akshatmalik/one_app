@@ -1,9 +1,9 @@
 'use client';
 
 import { useMemo } from 'react';
-import { Moon, ArrowRight, Bell, Sparkles } from 'lucide-react';
+import { Moon, ArrowRight, Bell, Sparkles, Radar, Hourglass } from 'lucide-react';
 import { Game } from '../lib/types';
-import { GameAlert, ReplayCandidate, WishlistAffordabilityItem, ALERT_SEVERITY_ORDER } from '../lib/calculations';
+import { GameAlert, ReplayCandidate, WishlistAffordabilityItem, ALERT_SEVERITY_ORDER, getQueueShameData, QueueShameTier } from '../lib/calculations';
 import { TimeCapsule } from '../lib/timecapsule-storage';
 import { OnThisDayCard } from './OnThisDayCard';
 import { FortuneCookie } from './FortuneCookie';
@@ -21,7 +21,17 @@ interface TodayDashboardProps {
   onPlayTonight: () => void;
   dueCapsules?: TimeCapsule[];
   onOpenTimeCapsule?: () => void;
+  onOpenReplayRadar?: () => void;
+  onOpenQueue?: () => void;
 }
+
+const SHAME_TIER_RANK: Record<QueueShameTier, number> = {
+  fresh: 0,
+  warming: 1,
+  getting_awkward: 2,
+  embarrassing: 3,
+  hall_of_shame: 4,
+};
 
 const SEVERITY_STYLES: Record<GameAlert['severity'], { border: string; bg: string; text: string }> = {
   critical: { border: 'border-red-500/30', bg: 'bg-red-500/10', text: 'text-red-300' },
@@ -37,13 +47,25 @@ function getGreeting(): string {
   return 'Good evening';
 }
 
-export function TodayDashboard({ games, userId, replayCandidate, wishlistNextAffordable, alerts, onAlertAction, onPlayTonight, dueCapsules, onOpenTimeCapsule }: TodayDashboardProps) {
+export function TodayDashboard({ games, userId, replayCandidate, wishlistNextAffordable, alerts, onAlertAction, onPlayTonight, dueCapsules, onOpenTimeCapsule, onOpenReplayRadar, onOpenQueue }: TodayDashboardProps) {
   const greeting = useMemo(() => getGreeting(), []);
   const dateLabel = useMemo(() => new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' }), []);
   const topAlert = useMemo(() => {
     if (alerts.length === 0) return undefined;
     return [...alerts].sort((a, b) => ALERT_SEVERITY_ORDER[a.severity] - ALERT_SEVERITY_ORDER[b.severity])[0];
   }, [alerts]);
+
+  const worstQueueShame = useMemo(() => {
+    let worst: { game: Game; shame: NonNullable<ReturnType<typeof getQueueShameData>> } | null = null;
+    for (const g of games) {
+      const shame = getQueueShameData(g, games);
+      if (!shame || shame.tier === 'fresh') continue;
+      if (!worst || SHAME_TIER_RANK[shame.tier] > SHAME_TIER_RANK[worst.shame.tier]) {
+        worst = { game: g, shame };
+      }
+    }
+    return worst;
+  }, [games]);
 
   if (games.length === 0) {
     return (
@@ -110,6 +132,45 @@ export function TodayDashboard({ games, userId, replayCandidate, wishlistNextAff
           </div>
           <span className="flex-shrink-0 flex items-center gap-1 text-xs text-white/40">
             Open <ArrowRight size={12} />
+          </span>
+        </button>
+      )}
+
+      {replayCandidate && onOpenReplayRadar && (
+        <button
+          onClick={onOpenReplayRadar}
+          className="w-full flex items-center justify-between gap-3 px-4 py-3 rounded-xl border border-emerald-400/30 bg-emerald-500/10 text-left transition-colors hover:brightness-110"
+        >
+          <div className="flex items-center gap-3 min-w-0">
+            <Radar size={16} className="flex-shrink-0 text-emerald-300" />
+            <div className="min-w-0">
+              <p className="text-sm font-medium truncate text-emerald-300">Worth revisiting: {replayCandidate.game.name}</p>
+              <p className="text-xs text-white/40 truncate">{replayCandidate.headline}</p>
+            </div>
+          </div>
+          <span className="flex-shrink-0 flex items-center gap-1 text-xs text-white/40">
+            Replay Radar <ArrowRight size={12} />
+          </span>
+        </button>
+      )}
+
+      {worstQueueShame && onOpenQueue && (
+        <button
+          onClick={onOpenQueue}
+          className="w-full flex items-center justify-between gap-3 px-4 py-3 rounded-xl border text-left transition-colors hover:brightness-110"
+          style={{ borderColor: `${worstQueueShame.shame.color}4d`, backgroundColor: `${worstQueueShame.shame.color}1a` }}
+        >
+          <div className="flex items-center gap-3 min-w-0">
+            <Hourglass size={16} className="flex-shrink-0" style={{ color: worstQueueShame.shame.color }} />
+            <div className="min-w-0">
+              <p className="text-sm font-medium truncate" style={{ color: worstQueueShame.shame.color }}>
+                {worstQueueShame.shame.icon} {worstQueueShame.game.name} — {worstQueueShame.shame.tierLabel}
+              </p>
+              <p className="text-xs text-white/40 truncate">{worstQueueShame.shame.message}</p>
+            </div>
+          </div>
+          <span className="flex-shrink-0 flex items-center gap-1 text-xs text-white/40">
+            View Queue <ArrowRight size={12} />
           </span>
         </button>
       )}
