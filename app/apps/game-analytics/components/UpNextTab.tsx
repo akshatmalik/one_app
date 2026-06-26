@@ -25,8 +25,10 @@ import {
 import { QueueGameCard } from './QueueGameCard';
 import { QueueTimelineStrip } from './QueueTimelineStrip';
 import { SuggestedNextRail } from './SuggestedNextRail';
+import { WeeklyPlanPanel } from './WeeklyPlanPanel';
 import { GameWithMetrics } from '../hooks/useAnalytics';
 import { useQueuePreferences } from '../hooks/useQueuePreferences';
+import { useWeeklyPlan } from '../hooks/useWeeklyPlan';
 import { Game, PurchaseQueueEntry } from '../lib/types';
 import {
   getQueueSmartChirps, getQueueRivalry, getEstimatedHoursToReach,
@@ -116,6 +118,13 @@ export function UpNextTab({
 
   // Suggestion tuning (thumbs up/down)
   const { prefs, like, dislike, stateOf } = useQueuePreferences(userId);
+
+  // Weekly Plan Autopilot — auto-scheduled day-by-day plan from the queue
+  const weeklyPlan = useWeeklyPlan(userId, queuedGames, allGames);
+  const hasWeeklyPlanCandidates = useMemo(
+    () => queuedGames.some(g => g.queuePosition != null && (g.status === 'Not Started' || g.status === 'In Progress')),
+    [queuedGames]
+  );
 
   // Shared planning pace — same localStorage settings the Estimator tab uses, so
   // adjusting it here keeps both surfaces in sync.
@@ -397,6 +406,19 @@ export function UpNextTab({
           </div>
         </div>
       )}
+
+      {/* Weekly Plan Autopilot — auto-generated day-by-day schedule from the queue */}
+      <WeeklyPlanPanel
+        plan={weeklyPlan.plan}
+        history={weeklyPlan.history}
+        hoursBudget={weeklyPlan.hoursBudget}
+        onGenerate={weeklyPlan.generate}
+        onToggleDone={weeklyPlan.toggleDone}
+        onClear={weeklyPlan.clearPlan}
+        adherence={weeklyPlan.adherence}
+        lastWeekAdherence={weeklyPlan.lastWeekAdherence}
+        hasCandidates={hasWeeklyPlanCandidates}
+      />
 
       {/* Projected completion timeline (re-flows live as you reorder) + shared pace */}
       {activeQueue.length > 0 && (

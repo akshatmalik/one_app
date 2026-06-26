@@ -2,6 +2,12 @@
   "entries": [
     {
       "date": "2026-06-26",
+      "area": "Up Next",
+      "title": "Weekly Plan Autopilot: let your queue schedule itself",
+      "body": "Tell it how many hours you've got this week and Weekly Plan Autopilot builds you a day-by-day schedule, picking which game goes on which day based on how well it matches your mood, how long it's been waiting in your queue, and which days you actually tend to play. Check off sessions as you finish them and watch your weekly adherence score build up over time."
+    },
+    {
+      "date": "2026-06-26",
       "area": "Games",
       "title": "Today tab now nudges you toward replays and queue guilt",
       "body": "The Today tab has two new daily nudges. If you've got a dormant game worth revisiting, you'll see a Replay Radar suggestion right at the top — tap it to jump straight into the full Replay Radar view. And if something's been sitting in your Up Next queue getting embarrassingly old, you'll see it called out by name with its shame tier, with a tap straight through to your queue."

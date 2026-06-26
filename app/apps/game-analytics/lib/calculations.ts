@@ -11447,6 +11447,139 @@ export function getQueueShameData(game: Game, allGames: Game[]): QueueShameData 
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// WEEKLY PLAN AUTOPILOT (Up Next tab)
+// Auto-generates a day-by-day play schedule from the queue, weighted by
+// Game Chemistry + Queue Shame urgency, distributed across days using the
+// user's own historical day-of-week play rhythm (getPlayPatterns).
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface WeeklyPlanEntry {
+  dayIndex: number;   // 0=Sun..6=Sat (matches Date.getDay())
+  day: string;        // 'Mon'
+  date: string;       // YYYY-MM-DD for that day in the plan's week
+  gameId: string;
+  gameName: string;
+  thumbnail?: string;
+  plannedHours: number;
+  chemistryScore: number;
+  reason: string;
+}
+
+export interface WeeklyPlanSummary {
+  totalPlannedHours: number;
+  gamesFeatured: number;
+  weekStart: string; // YYYY-MM-DD, Monday
+  weekEnd: string;   // YYYY-MM-DD, Sunday
+}
+
+export interface WeeklyPlanResult {
+  entries: WeeklyPlanEntry[];
+  summary: WeeklyPlanSummary;
+}
+
+function formatLocalISODate(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+export function generateWeeklyPlan(
+  queueGames: Game[],
+  allGames: Game[],
+  weeklyHoursBudget: number,
+  weekStartDate: Date
+): WeeklyPlanResult {
+  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+  const monday = new Date(weekStartDate);
+  const dow = monday.getDay();
+  monday.setDate(monday.getDate() + (dow === 0 ? -6 : 1 - dow));
+  monday.setHours(0, 0, 0, 0);
+
+  const weekDates: Date[] = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i);
+    return d;
+  });
+
+  const summaryBase = { weekStart: formatLocalISODate(monday), weekEnd: formatLocalISODate(weekDates[6]) };
+
+  const candidates = queueGames.filter(g =>
+    g.queuePosition != null && (g.status === 'Not Started' || g.status === 'In Progress')
+  );
+
+  if (candidates.length === 0 || weeklyHoursBudget <= 0) {
+    return { entries: [], summary: { totalPlannedHours: 0, gamesFeatured: 0, ...summaryBase } };
+  }
+
+  const shameUrgencyBonus: Record<QueueShameTier, number> = {
+    fresh: 0, warming: 8, getting_awkward: 18, embarrassing: 28, hall_of_shame: 38,
+  };
+
+  const scored = candidates.map(game => {
+    const chemistry = getGameChemistry(game, allGames);
+    const shame = getQueueShameData(game, allGames);
+    const urgency = shame ? (shameUrgencyBonus[shame.tier] ?? 0) : 0;
+    return { game, chemistry, priority: chemistry.score * 0.7 + urgency * 0.8 };
+  }).sort((a, b) => b.priority - a.priority);
+
+  const featured = scored.slice(0, Math.min(4, scored.length));
+  const totalPriority = featured.reduce((s, f) => s + f.priority, 0) || 1;
+
+  const remaining = new Map<string, number>(
+    featured.map(f => [f.game.id, (f.priority / totalPriority) * weeklyHoursBudget])
+  );
+
+  // Distribute the weekly budget across days using the user's real day-of-week rhythm
+  const pattern = getPlayPatterns(allGames);
+  const totalPct = pattern.dayOfWeek.reduce((s, d) => s + d.percentage, 0);
+  const dayWeights = pattern.dayOfWeek.map(d => (totalPct > 0 ? d.percentage / totalPct : 1 / 7));
+  const dayBudgets = weekDates.map(d => Math.round(weeklyHoursBudget * dayWeights[d.getDay()] * 2) / 2);
+
+  const order = dayBudgets
+    .map((budget, i) => ({ budget, i }))
+    .sort((a, b) => b.budget - a.budget);
+
+  const entries: WeeklyPlanEntry[] = [];
+  for (const { budget, i } of order) {
+    if (budget <= 0) continue;
+    let best = featured[0];
+    let bestRemaining = -Infinity;
+    for (const f of featured) {
+      const r = remaining.get(f.game.id) ?? 0;
+      if (r > bestRemaining) { bestRemaining = r; best = f; }
+    }
+    if (bestRemaining <= 0) break;
+
+    const plannedHours = Math.min(budget, Math.max(0.5, bestRemaining));
+    remaining.set(best.game.id, (remaining.get(best.game.id) ?? 0) - plannedHours);
+
+    const date = weekDates[i];
+    entries.push({
+      dayIndex: date.getDay(),
+      day: dayNames[date.getDay()],
+      date: formatLocalISODate(date),
+      gameId: best.game.id,
+      gameName: best.game.name,
+      thumbnail: best.game.thumbnail,
+      plannedHours: Math.round(plannedHours * 10) / 10,
+      chemistryScore: best.chemistry.score,
+      reason: best.chemistry.justification,
+    });
+  }
+
+  entries.sort((a, b) => a.date.localeCompare(b.date));
+  const totalPlannedHours = Math.round(entries.reduce((s, e) => s + e.plannedHours, 0) * 10) / 10;
+
+  return {
+    entries,
+    summary: {
+      totalPlannedHours,
+      gamesFeatured: new Set(entries.map(e => e.gameId)).size,
+      ...summaryBase,
+    },
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // 5. PARALLEL UNIVERSE IMPACT SCORE
 // ─────────────────────────────────────────────────────────────────────────────
 

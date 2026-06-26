@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-26 10:23 — Up Next — Weekly Plan Autopilot
+
+**Files**: app/apps/game-analytics/lib/calculations.ts, app/apps/game-analytics/lib/weekly-plan-storage.ts (new), app/apps/game-analytics/hooks/useWeeklyPlan.ts (new), app/apps/game-analytics/components/WeeklyPlanPanel.tsx (new), app/apps/game-analytics/components/UpNextTab.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+The Up Next tab already scores every queued game's Chemistry and tracks its Queue Shame, but a player still had to manually decide which game to play on which day — nothing turned the queue into an actual schedule. Added "Weekly Plan Autopilot": a new `generateWeeklyPlan()` in `calculations.ts` (purely additive, reuses the existing untouched `getGameChemistry`, `getQueueShameData`, and `getPlayPatterns` functions) that takes the queue plus a weekly hours budget and produces a day-by-day plan for the week ahead, weighting which games go on which day by Chemistry score, Queue Shame urgency, and the player's own historical day-of-week play rhythm. A new device-local `weekly-plan-storage.ts` + `useWeeklyPlan` hook persist the plan and a rolling history of past weeks' adherence, and the new `WeeklyPlanPanel` (wired into `UpNextTab.tsx` right below the Queue Summary) lets the player generate/regenerate the plan, check off sessions as done, and see this week's and last week's adherence percentage. Zero changes to `lib/types.ts`, the repository/storage layer, or any existing `calculations.ts` function body — exactly 5 files touched (3 new), all within `app/apps/game-analytics/**`. Verified via `npm install` + `npm run build` (clean, zero TS errors), `npm run lint` (zero issues attributable to any of the 5 touched/new files), and a Playwright smoke test at 375px width on the Up Next tab (Weekly Plan panel renders, "Plan My Week" generates a day-by-day list with reasons and planned hours) with zero new console errors/warnings — the one console message observed (a resource 404) reproduces identically on a fresh page load before the Up Next tab is ever opened, confirmed unrelated via a baseline-only run.
+
+FOLLOW-UP: Once a few weeks of adherence history accumulate, could surface a "best week" callout and let the player manually swap which game lands on a given day instead of only regenerating the whole plan.
+
 ## 2026-06-26 00:05 — Today Dashboard — Replay Radar & Queue Shame teasers
 
 **Files**: app/apps/game-analytics/components/TodayDashboard.tsx, app/apps/game-analytics/page.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json
