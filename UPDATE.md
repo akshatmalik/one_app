@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-27 00:00 — Games — Gift Finder
+
+**Files**: app/apps/game-analytics/lib/gift-codes.ts (new), app/apps/game-analytics/lib/gift-tracker-storage.ts (new), app/apps/game-analytics/components/GiftFinderModal.tsx (new), app/apps/game-analytics/page.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Wishlist Planner only helps the player plan their own purchases — nothing in the app helps a friend buy *them* a gift, or helps the player pick a gift for a friend. Added "Gift Finder": `lib/gift-codes.ts` builds a `GiftSnapshot` from the player's wishlist (name, genre, platform, price, priority rank only — no personal data) and encodes it as a base64url string, following the exact same shareable-code pattern as `versus-codes.ts` and `coop-match.ts`. The friend pastes that code back along with their gift budget, and `findBestGiftBundle()` runs an exact 0/1 knapsack (whole-dollar weights, priority-derived want-scores as values) to pick the gift bundle that maximizes how much the friend wants the items within budget — not just the cheapest fit. A new device-local `gift-tracker-storage.ts` (same localStorage-only precedent as `queue-preferences.ts`) remembers which items have already been gifted to a given friend so re-pasting their code later doesn't re-suggest something already bought. `GiftFinderModal.tsx` is a new bottom-sheet modal (same pattern as `CoOpMatchModal`/`VersusModal`) wired into the Command Palette and "More" menu in `page.tsx`. Zero changes to `lib/types.ts`, the repository/storage layer, or any existing `calculations.ts` function body — exactly 4 files touched (3 new). Verified via `npm run build` (clean, 12/12 static pages, zero TS errors), `npm run lint` (zero issues attributable to any of the 4 touched/new files), and a Playwright smoke test at 375px width (Load Samples → command palette → Gift Finder → generated code → paste own code back + budget → "Find the Best Gift" → results phase renders the optimized bundle and full ranked wishlist) with zero new console errors/warnings — the one console message observed (a resource 404) is not attributable to any tracked network response and matches the pre-existing unrelated 404 noted in prior entries.
+
+FOLLOW-UP: Could let the gift-giver mark multiple friends at once (currently one friend's code at a time) or add a "remind me before their birthday" date field to the snapshot for recurring gift planning.
+
 ## 2026-06-26 11:47 — Stats — Population Benchmark Mode
 
 **Files**: app/apps/game-analytics/lib/calculations.ts, app/apps/game-analytics/components/PopulationBenchmarkPanel.tsx (new), app/apps/game-analytics/components/StatsView.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json

@@ -61,6 +61,7 @@ import { GamerCard } from './components/GamerCard';
 import { MeVsMe } from './components/MeVsMe';
 import { VersusModal } from './components/VersusModal';
 import { CoOpMatchModal } from './components/CoOpMatchModal';
+import { GiftFinderModal } from './components/GiftFinderModal';
 import { SubscriptionSyncBanner } from './components/SubscriptionSyncBanner';
 import { loadSubscriptionSettings, hasNewDrop } from './lib/subscription-settings';
 import { ReviewNudgeBanner } from './components/ReviewNudgeBanner';
@@ -282,6 +283,7 @@ export default function GameAnalyticsPage() {
   const [showMeVsMe, setShowMeVsMe] = useState(false);
   const [showVersusModal, setShowVersusModal] = useState(false);
   const [showCoOpMatch, setShowCoOpMatch] = useState(false);
+  const [showGiftFinder, setShowGiftFinder] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [showAwardsHub, setShowAwardsHub] = useState(false);
   const [detailGame, setDetailGame] = useState<GameWithMetrics | null>(null);
@@ -793,6 +795,7 @@ export default function GameAnalyticsPage() {
     { id: 'recap-me-vs-me', label: 'Me vs Me', subtitle: 'Compare yourself over time', group: 'Recap & Share', icon: <Swords size={15} />, onRun: () => setShowMeVsMe(true) },
     { id: 'recap-rival-check', label: 'Rival Check', subtitle: 'Compare against a friend', group: 'Recap & Share', icon: <Users size={15} />, onRun: () => setShowVersusModal(true) },
     { id: 'recap-game-night', label: 'Game Night', subtitle: 'Find what you and a friend can play together', group: 'Recap & Share', icon: <Users2 size={15} />, onRun: () => setShowCoOpMatch(true) },
+    { id: 'recap-gift-finder', label: 'Gift Finder', subtitle: 'Share your wishlist, find the perfect gift for a friend', group: 'Recap & Share', icon: <Gift size={15} />, onRun: () => setShowGiftFinder(true) },
     { id: 'recap-yearly-wrapped', label: 'Yearly Wrapped', subtitle: 'Your year in gaming, story-mode', group: 'Recap & Share', icon: <Gift size={15} />, onRun: () => setWrappedYear(new Date().getFullYear()) },
     { id: 'recap-awards-hub', label: 'Awards Hub', subtitle: 'Oscar-style monthly & yearly awards', group: 'Recap & Share', icon: <Star size={15} />, onRun: () => setShowAwardsHub(true) },
     // Data
@@ -1385,6 +1388,7 @@ export default function GameAnalyticsPage() {
                           { icon: <Swords size={15} className="text-pink-400" />, label: 'Me vs Me', onClick: () => setShowMeVsMe(true) },
                           { icon: <Users size={15} className="text-emerald-400" />, label: 'Rival Check', onClick: () => setShowVersusModal(true) },
                           { icon: <Users2 size={15} className="text-orange-400" />, label: 'Game Night', onClick: () => setShowCoOpMatch(true) },
+                          { icon: <Gift size={15} className="text-rose-400" />, label: 'Gift Finder', onClick: () => setShowGiftFinder(true) },
                           { icon: <Gift size={15} className="text-purple-400" />, label: 'Yearly Wrapped', onClick: () => setWrappedYear(new Date().getFullYear()) },
                           { icon: <Star size={15} className="text-amber-400" />, label: 'Awards Hub', onClick: () => setShowAwardsHub(true) },
                           { icon: <Download size={15} className="text-white/50" />, label: 'Export data', onClick: () => setShowExport(true) },
@@ -2075,6 +2079,11 @@ export default function GameAnalyticsPage() {
       {/* Game Night — share an actual game-list code, find what you can co-op tonight */}
       {showCoOpMatch && (
         <CoOpMatchModal games={games} onClose={() => setShowCoOpMatch(false)} />
+      )}
+
+      {/* Gift Finder — share a wishlist code, get a budget-optimized gift pick for a friend */}
+      {showGiftFinder && (
+        <GiftFinderModal wishlistGames={wishlistOrderedGames} userId={user?.uid ?? null} onClose={() => setShowGiftFinder(false)} />
       )}
 
       {/* Awards Hub */}
