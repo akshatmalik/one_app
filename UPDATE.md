@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-27 15:22 — Games — Tier List Maker
+
+**Files**: app/apps/game-analytics/lib/calculations.ts, app/apps/game-analytics/lib/tierlist-storage.ts (new), app/apps/game-analytics/components/TierListMaker.tsx (new), app/apps/game-analytics/page.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Players already get rarity borders, relationship statuses, and dozens of computed stats per game, but had no way to express their own subjective S/A/B/C/D/F gut-ranking of their library — the kind of tier list gamers make for every franchise they love. Added a "Tier List Maker": a new `getAutoTierRank(game)` in `calculations.ts` (purely additive, reuses the existing untouched `getCardRarity` composite score to auto-seed a sensible starting ranking) plus a new device-local `tierlist-storage.ts` (same precedent as `kpi-history-storage.ts` — boards are arrangements of existing game ids, not canonical data, so they stay out of Firestore) for saving/loading/deleting named boards. The new `TierListMaker.tsx` modal renders all six tier rows with full drag-and-drop via `@dnd-kit` (multi-container pattern: each tier is a droppable zone wrapping its own sortable horizontal list, with a `DragOverlay` showing the dragged game's thumbnail), an Auto-Rank reset, Save/Load/Delete for named boards, and PNG export/share via the existing `ShareButton` component. Wired into `page.tsx`'s "More actions" command palette as a new "Tier List" entry, visible whenever the library has any non-Wishlist games. Zero changes to `lib/types.ts`, the Hybrid/Firebase repository layer, or any existing `calculations.ts` function body — exactly 4 files touched (2 new). Verified via `npm run build` (clean, 12/12 static pages, zero TS errors), `npm run lint` (zero issues attributable to any of the 4 touched/new files — only pre-existing unrelated warnings elsewhere), and a Playwright smoke test at 375px width (load sample data → command palette → "Tier List" → modal renders all tiers populated, Save → name board → Save → Load list shows the saved board) with zero new console errors/warnings — the one console message observed (a resource 404) reproduces identically on a fresh page load before any interaction, confirmed unrelated.
+
+FOLLOW-UP: Could add a "Share as comparison" mode showing two saved boards side-by-side, or let the auto-rank reset target a specific genre/platform subset instead of the whole library.
+
 ## 2026-06-27 — Stats — Population Benchmark Mode: gamer profile selector
 
 **Files**: app/apps/game-analytics/lib/calculations.ts, app/apps/game-analytics/components/PopulationBenchmarkPanel.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json

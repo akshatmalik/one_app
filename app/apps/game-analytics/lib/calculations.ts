@@ -15995,3 +15995,31 @@ export function getPopulationBenchmarks(
     profileDescription: profileMeta.description,
   };
 }
+
+// ============================================================
+// TIER LIST MAKER — auto-seed ranking
+// ============================================================
+
+export type TierLetter = 'S' | 'A' | 'B' | 'C' | 'D' | 'F';
+
+export interface AutoTierRank {
+  tier: TierLetter;
+  score: number;
+}
+
+/**
+ * Maps a game to an S/A/B/C/D/F tier using the same composite weighting as
+ * getCardRarity (rating 40%, value 30%, hours 20%, completion 10%), so the
+ * tier list auto-seeds in a way that's consistent with the rarity borders
+ * gamers already see on their cards.
+ */
+export function getAutoTierRank(game: Game): AutoTierRank {
+  const { score } = getCardRarity(game);
+
+  if (score >= 85) return { tier: 'S', score };
+  if (score >= 70) return { tier: 'A', score };
+  if (score >= 50) return { tier: 'B', score };
+  if (score >= 30) return { tier: 'C', score };
+  if (score >= 15) return { tier: 'D', score };
+  return { tier: 'F', score };
+}

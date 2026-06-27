@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, CalendarClock, CalendarPlus, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical, Download, Upload, Gift, ShoppingCart, Search, X, Moon, CreditCard, Swords, Inbox, Play, History, RefreshCw, Crown, Users, Users2, PiggyBank, Radar, Home } from 'lucide-react';
+import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, CalendarClock, CalendarPlus, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical, Download, Upload, Gift, ShoppingCart, Search, X, Moon, CreditCard, Swords, Inbox, Play, History, RefreshCw, Crown, Users, Users2, PiggyBank, Radar, Home, LayoutGrid } from 'lucide-react';
 import { useGames } from './hooks/useGames';
 import { useAnalytics, GameWithMetrics } from './hooks/useAnalytics';
 import { useBudget } from './hooks/useBudget';
@@ -33,6 +33,7 @@ import { getROIRating, getWeekStatsForOffset, getGamesPlayedInTimeRange, getComp
 import { TodayDashboard } from './components/TodayDashboard';
 import { ActivityPulse } from './components/ActivityPulse';
 import { RandomPicker } from './components/RandomPicker';
+import { TierListMaker } from './components/TierListMaker';
 import { BulkWishlistModal } from './components/BulkWishlistModal';
 import { GameBottomSheet } from './components/GameBottomSheet';
 import { LiveSessionBar } from './components/LiveSessionBar';
@@ -266,6 +267,7 @@ export default function GameAnalyticsPage() {
   }, [user?.uid]);
   const [sortBy, setSortBy] = useState<'name' | 'price' | 'hours' | 'rating' | 'costPerHour' | 'dateAdded' | 'recentlyPlayed'>('recentlyPlayed');
   const [showRandomPicker, setShowRandomPicker] = useState(false);
+  const [showTierListMaker, setShowTierListMaker] = useState(false);
   const [showBulkWishlist, setShowBulkWishlist] = useState(false);
   const [showExport, setShowExport] = useState(false);
   const [showImport, setShowImport] = useState(false);
@@ -882,6 +884,14 @@ export default function GameAnalyticsPage() {
                           className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white/70 hover:text-white hover:bg-white/5 transition-all"
                         >
                           <Sparkles size={14} /> Random Pick
+                        </button>
+                      )}
+                      {games.filter(g => g.status !== 'Wishlist').length > 0 && (
+                        <button
+                          onClick={() => { setShowTierListMaker(true); setShowCommandPalette(false); }}
+                          className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white/70 hover:text-white hover:bg-white/5 transition-all"
+                        >
+                          <LayoutGrid size={14} className="text-amber-400" /> Tier List
                         </button>
                       )}
                       {backlogTriageCandidates.length > 0 && (
@@ -1851,6 +1861,14 @@ export default function GameAnalyticsPage() {
         <RandomPicker
           games={games}
           onClose={() => setShowRandomPicker(false)}
+        />
+      )}
+
+      {/* Tier List Maker */}
+      {showTierListMaker && (
+        <TierListMaker
+          games={games}
+          onClose={() => setShowTierListMaker(false)}
         />
       )}
 

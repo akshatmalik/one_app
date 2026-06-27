@@ -2,6 +2,12 @@
   "entries": [
     {
       "date": "2026-06-27",
+      "area": "Games",
+      "title": "Tier List Maker: rank your whole library S to F",
+      "body": "There's a new Tier List Maker in the More menu. It auto-sorts your library into S/A/B/C/D/F tiers to start, then you drag and drop any game into the tier where it actually belongs by your own gut feeling. Save as many named tier lists as you want, reload them anytime, and share or download your finished board as an image."
+    },
+    {
+      "date": "2026-06-27",
       "area": "Stats",
       "title": "Pick your gamer profile to compare against",
       "body": "The \"You vs. The Average Gamer\" panel in Stats now lets you switch who you're being compared to. Tap a pill to compare yourself against a Casual Gamer, a Hardcore Gamer, or a Completionist instead of the broad average — your Gamer Index, every category bar, and all the insight text update instantly to match."
