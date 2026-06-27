@@ -1,7 +1,7 @@
 'use client';
 
-import { useRef } from 'react';
-import { X, Trophy, Gamepad2, Clock, Star } from 'lucide-react';
+import { useMemo, useRef } from 'react';
+import { X, Trophy, Gamepad2, Clock, Star, Scale } from 'lucide-react';
 import { Game } from '../lib/types';
 import {
   getGamingPersonality,
@@ -10,7 +10,9 @@ import {
   getActivityPulse,
   getTotalHours,
   getGenreMastery,
+  getCriticAgreementSummary,
 } from '../lib/calculations';
+import { useCriticComparison } from '../hooks/useCriticComparison';
 import { formatHours, formatNumber, formatCostPerHour } from '../lib/format';
 import { ShareButton } from './ShareButton';
 
@@ -33,6 +35,10 @@ export function GamerCard({ games, displayName, onClose }: GamerCardProps) {
   const lifetime = getLifetimeStats(games);
   const pulse = getActivityPulse(games);
   const mainClass = getGenreMastery(games).mainClass;
+
+  const { comparisons } = useCriticComparison(games);
+  const criticSummary = useMemo(() => getCriticAgreementSummary(comparisons), [comparisons]);
+  const criticBadge = criticSummary && criticSummary.count >= 3 ? criticSummary.personality : null;
 
   const topGames = [...games]
     .filter(g => g.status !== 'Wishlist')
@@ -65,6 +71,11 @@ export function GamerCard({ games, displayName, onClose }: GamerCardProps) {
               {mainClass && (
                 <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-rose-500/15 text-rose-300 border border-rose-500/20">
                   ⚔️ Lvl {mainClass.level} {mainClass.genre} {mainClass.rank}
+                </span>
+              )}
+              {criticBadge && (
+                <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-cyan-500/15 text-cyan-300 border border-cyan-500/20">
+                  <Scale size={10} /> {criticBadge}
                 </span>
               )}
             </div>

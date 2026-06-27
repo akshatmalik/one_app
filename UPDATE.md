@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-27 00:13 — Gamer Card — Critic Personality badge
+
+**Files**: app/apps/game-analytics/components/GamerCard.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Closes the FOLLOW-UP from the 2026-06-24 08:15 "You vs. The Critics" entry, which suggested surfacing the critic "personality" label as a Gamer Card stat. `GamerCard.tsx` already builds its archetype/credit-score/lifetime-stats snapshot entirely from synchronous calculations, with no async data — `useCriticComparison` (the existing RAWG-backed hook, untouched) and `getCriticAgreementSummary` (the existing pure calculation, untouched) were only ever wired into `CriticComparisonPanel.tsx` on the Stats tab. Wired both into `GamerCard.tsx`: when the card opens, it fetches Metacritic scores for the player's rated games (same 7-day RAWG cache `useGameThumbnails` already warms) and, once at least 3 games have a critic match, shows a small cyan pill next to the gamer archetype and genre-mastery badges — e.g. "⚖ Mainstream Taste" or "⚖ True Contrarian" — so the shareable card now captures not just *how much* someone games but *how their taste compares to critics*. Below the 3-game threshold the pill simply doesn't render, so small libraries see no change. Zero changes to `lib/types.ts`, the repository/storage layer, or the body of any existing `calculations.ts` function — exactly one component file edited, reusing two pre-existing exports verbatim. Verified via `npm install` + `npm run build` (clean, 12/12 static pages, zero TS errors), `npm run lint` (zero issues attributable to `GamerCard.tsx` — only pre-existing unrelated warnings/errors in other mini-apps), and a dev-server check (`/apps/game-analytics` returns 200, no new console errors on load).
+
+FOLLOW-UP: Could extend the ShareButton's `shareText` to mention the critic personality alongside the archetype/credit-score, and/or add a tiny "critic delta" indicator to individual game cards in the Games tab (would require editing `page.tsx`'s inline card markup directly, since no dedicated card component file exists — a larger, separate change).
+
 ## 2026-06-26 11:47 — Stats — Population Benchmark Mode
 
 **Files**: app/apps/game-analytics/lib/calculations.ts, app/apps/game-analytics/components/PopulationBenchmarkPanel.tsx (new), app/apps/game-analytics/components/StatsView.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json
