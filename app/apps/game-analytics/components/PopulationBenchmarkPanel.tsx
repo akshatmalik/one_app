@@ -1,9 +1,9 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Users, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { Game, AnalyticsSummary } from '../lib/types';
-import { getPopulationBenchmarks, PopulationBenchmarkDimension } from '../lib/calculations';
+import { getPopulationBenchmarks, PopulationBenchmarkDimension, GamerProfile, GAMER_PROFILES } from '../lib/calculations';
 
 interface PopulationBenchmarkPanelProps {
   games: Game[];
@@ -64,7 +64,8 @@ function DimensionBar({ dimension }: { dimension: PopulationBenchmarkDimension }
 }
 
 export function PopulationBenchmarkPanel({ games, summary }: PopulationBenchmarkPanelProps) {
-  const data = useMemo(() => getPopulationBenchmarks(games, summary), [games, summary]);
+  const [profile, setProfile] = useState<GamerProfile>('average');
+  const data = useMemo(() => getPopulationBenchmarks(games, summary, profile), [games, summary, profile]);
 
   const ownedCount = games.filter(g => g.status !== 'Wishlist').length;
   if (ownedCount === 0) return null;
@@ -73,13 +74,32 @@ export function PopulationBenchmarkPanel({ games, summary }: PopulationBenchmark
     <div className="p-4 bg-gradient-to-br from-indigo-500/10 to-purple-500/10 border border-indigo-500/20 rounded-xl">
       <h4 className="text-sm font-medium text-white/70 flex items-center gap-2 mb-3">
         <Users size={14} className="text-indigo-400" />
-        You vs. The Average Gamer
+        You vs. The {data.profileLabel}
       </h4>
+
+      <div className="flex gap-1.5 mb-3 overflow-x-auto pb-0.5 -mx-0.5 px-0.5">
+        {GAMER_PROFILES.map(p => (
+          <button
+            key={p.key}
+            type="button"
+            onClick={() => setProfile(p.key)}
+            title={p.description}
+            className={`shrink-0 text-[10px] font-medium px-2.5 py-1 rounded-full border transition-colors ${
+              profile === p.key
+                ? 'bg-indigo-500/30 border-indigo-400/50 text-white'
+                : 'bg-white/5 border-white/10 text-white/50 hover:text-white/70 hover:border-white/20'
+            }`}
+          >
+            {p.label}
+          </button>
+        ))}
+      </div>
 
       <div className="text-center mb-3 p-3 bg-white/5 rounded-lg">
         <div className="text-2xl font-black text-indigo-400">{data.gamerIndex}</div>
         <div className="text-xs font-medium text-white/70 mt-0.5">{data.gamerIndexLabel}</div>
         <div className="text-[10px] text-white/40 mt-1.5">{data.headline}</div>
+        <div className="text-[9px] text-white/30 mt-1 italic">{data.profileDescription}</div>
       </div>
 
       {(data.strongestDimension || data.weakestDimension) && (
@@ -106,7 +126,7 @@ export function PopulationBenchmarkPanel({ games, summary }: PopulationBenchmark
       </div>
 
       <p className="text-[9px] text-white/25 mt-3 text-center leading-snug">
-        &quot;Average gamer&quot; figures are general, rounded estimates for fun comparison — not precisely sourced data.
+        &quot;{data.profileLabel}&quot; figures are general, rounded estimates for fun comparison — not precisely sourced data.
       </p>
     </div>
   );

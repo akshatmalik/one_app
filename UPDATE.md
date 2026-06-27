@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-27 — Stats — Population Benchmark Mode: gamer profile selector
+
+**Files**: app/apps/game-analytics/lib/calculations.ts, app/apps/game-analytics/components/PopulationBenchmarkPanel.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Direct follow-up to the Population Benchmark Mode FOLLOW-UP from 2026-06-26 11:47, which called for letting advanced users pick a "gamer profile" to compare against instead of one fixed average. `getPopulationBenchmarks(games, summary)` gained a third, optional `profile: GamerProfile = 'average'` parameter (purely additive — every existing call site keeps working unchanged) backed by a new `GAMER_PROFILE_BENCHMARKS` record with four labeled benchmark sets (Average Gamer, Casual Gamer, Hardcore Gamer, Completionist), each with its own cost-per-hour, completion rate, backlog size, hours/week, rating, genre diversity, yearly spend, time-to-first-play, and session-length targets. All 9 dimension insight strings now interpolate the chosen profile's noun ("the hardcore gamer", "a completionist", etc.) instead of a hardcoded "average gamer", and the returned data carries the active `profile`, `profileLabel`, and `profileDescription` for the UI. `PopulationBenchmarkPanel.tsx` adds a horizontally-scrollable pill selector above the hero stat block (Average/Casual/Hardcore/Completionist, each with a `title` tooltip description), switching the whole comparison — heading, Gamer Index, every dimension bar and insight, and the disclaimer — to the selected profile via local `useState`, no storage changes. Zero changes to `lib/types.ts`, the repository/storage layer, or any existing function body beyond the additive parameter — exactly 2 files touched. Verified via `npm install` + `npm run build` (clean, 12/12 static pages, zero TS errors), `npm run lint` (zero issues attributable to either touched file — only pre-existing unrelated warnings elsewhere), and a Playwright smoke test at 375px width (load sample data → Stats tab → "You vs. The..." panel renders, all 4 profile pills clickable, Completionist profile shows correctly recalculated Gamer Index and dimension insights referencing "the completionist") with zero new console errors/warnings — the one console message observed (a `favicon.ico` 404) reproduces identically on a fresh page load before any interaction, confirmed unrelated.
+
+FOLLOW-UP: Could let the player tap a dimension to see the underlying data trend (e.g. cost-per-hour over time) instead of just the single current snapshot.
+
 ## 2026-06-26 11:47 — Stats — Population Benchmark Mode
 
 **Files**: app/apps/game-analytics/lib/calculations.ts, app/apps/game-analytics/components/PopulationBenchmarkPanel.tsx (new), app/apps/game-analytics/components/StatsView.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json
