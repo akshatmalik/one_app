@@ -3,6 +3,12 @@
     {
       "date": "2026-06-27",
       "area": "Stats",
+      "title": "Mood & Vibe Lab: see how your sessions actually feel",
+      "body": "When you tag a play session with how it felt (Great, Good, Meh, Grind) or what mode you were in (Wind-Down, Competitive, Exploration, Story, Achievement Hunting, Social), that data used to just sit there unused. Now there's a Mood & Vibe Lab section in Stats that breaks it all down — which mood you log most, which game gives you your longest \"grind\" sessions, and which vibe dominates your time, with the specific game behind it. Start tagging sessions when you log time to watch the picture build."
+    },
+    {
+      "date": "2026-06-27",
+      "area": "Stats",
       "title": "Pick your gamer profile to compare against",
       "body": "The \"You vs. The Average Gamer\" panel in Stats now lets you switch who you're being compared to. Tap a pill to compare yourself against a Casual Gamer, a Hardcore Gamer, or a Completionist instead of the broad average — your Gamer Index, every category bar, and all the insight text update instantly to match."
     },

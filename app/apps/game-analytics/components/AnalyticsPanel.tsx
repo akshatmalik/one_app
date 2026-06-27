@@ -8,9 +8,9 @@ import {
 import {
   Brain, Calendar, Skull, Grid3X3, TrendingDown,
   Filter, Ruler, Hourglass, ArrowRightLeft, Activity,
-  AlertTriangle, LayoutGrid, Zap, Link2, Leaf, Users,
+  AlertTriangle, LayoutGrid, Zap, Link2, Leaf, Users, Smile, Sparkles,
 } from 'lucide-react';
-import { Game } from '../lib/types';
+import { Game, SessionMood } from '../lib/types';
 import {
   getGenreSatisfactionMatrix,
   getPlayPatterns,
@@ -27,6 +27,8 @@ import {
   getCrossGenreAffinity,
   getSeasonalGenreDrift,
   getSocialGamingStats,
+  getMoodAnalysis,
+  getVibeAnalysis,
 } from '../lib/calculations';
 import clsx from 'clsx';
 
@@ -39,6 +41,13 @@ const QUADRANT_COLORS: Record<GenreSatisfactionPoint['quadrant'], string> = {
   'Love but Skip': '#f59e0b',
   'Guilty Pleasure': '#8b5cf6',
   'Why Buy These?': '#ef4444',
+};
+
+const MOOD_META: Record<SessionMood, { label: string; emoji: string; color: string }> = {
+  great: { label: 'Great', emoji: '🤩', color: '#10b981' },
+  good: { label: 'Good', emoji: '🙂', color: '#3b82f6' },
+  meh: { label: 'Meh', emoji: '😐', color: '#f59e0b' },
+  grind: { label: 'Grind', emoji: '😤', color: '#ef4444' },
 };
 
 export function AnalyticsPanel({ games }: AnalyticsPanelProps) {
@@ -56,6 +65,8 @@ export function AnalyticsPanel({ games }: AnalyticsPanelProps) {
   const genreAffinity = useMemo(() => getCrossGenreAffinity(games), [games]);
   const seasonalDrift = useMemo(() => getSeasonalGenreDrift(games), [games]);
   const socialStats = useMemo(() => getSocialGamingStats(games), [games]);
+  const moodAnalysis = useMemo(() => getMoodAnalysis(games), [games]);
+  const vibeAnalysis = useMemo(() => getVibeAnalysis(games), [games]);
 
   const ownedGames = games.filter(g => g.status !== 'Wishlist');
   if (ownedGames.length === 0) return null;
@@ -941,6 +952,110 @@ export function AnalyticsPanel({ games }: AnalyticsPanelProps) {
               )}
             </>
           )}
+        </div>
+      )}
+
+      {/* Mood & Vibe Lab */}
+      {hasPlayLogs && (
+        <div className="p-4 bg-gradient-to-br from-pink-500/10 to-violet-500/10 border border-pink-500/20 rounded-xl">
+          <h4 className="text-sm font-medium text-white/70 flex items-center gap-2 mb-3">
+            <Smile size={14} className="text-pink-400" />
+            Mood & Vibe Lab
+          </h4>
+
+          {/* Mood sub-section */}
+          <div className="mb-4">
+            <div className="text-xs font-medium text-white/50 mb-2">How sessions feel</div>
+            {moodAnalysis.totalTaggedSessions === 0 ? (
+              <div className="text-center py-3">
+                <p className="text-xs text-white/40">
+                  Tag a session&apos;s mood (Great, Good, Meh, Grind) when logging time to see how you&apos;re feeling about your gaming.
+                </p>
+              </div>
+            ) : (
+              <>
+                <div className="space-y-1.5">
+                  {moodAnalysis.moodDistribution.filter(m => m.count > 0).map(m => (
+                    <div key={m.mood} className="flex items-center gap-3 p-2 bg-white/5 rounded-lg">
+                      <span className="text-sm">{MOOD_META[m.mood].emoji}</span>
+                      <div className="flex-1">
+                        <div className="text-xs font-medium text-white/70">{MOOD_META[m.mood].label}</div>
+                        <div className="text-[10px] text-white/40">avg {m.avgHours.toFixed(1)}h/session</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-sm font-bold" style={{ color: MOOD_META[m.mood].color }}>{m.percent}%</div>
+                        <div className="text-[10px] text-white/40">{m.count} session{m.count !== 1 ? 's' : ''}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {moodAnalysis.bestMoodForRating && (
+                  <div className="mt-2 text-[11px] text-white/50">
+                    Games you rate highest tend to be tagged{' '}
+                    <span style={{ color: MOOD_META[moodAnalysis.bestMoodForRating.mood].color }}>
+                      {MOOD_META[moodAnalysis.bestMoodForRating.mood].emoji} {MOOD_META[moodAnalysis.bestMoodForRating.mood].label}
+                    </span>{' '}
+                    ({moodAnalysis.bestMoodForRating.avgGameRating.toFixed(1)}/10 avg).
+                  </div>
+                )}
+                {moodAnalysis.longestSessionMood && (
+                  <div className="mt-1 text-[11px] text-white/50">
+                    Longest session was a {moodAnalysis.longestSessionMood.hours.toFixed(1)}h{' '}
+                    <span style={{ color: MOOD_META[moodAnalysis.longestSessionMood.mood].color }}>
+                      {MOOD_META[moodAnalysis.longestSessionMood.mood].emoji} {MOOD_META[moodAnalysis.longestSessionMood.mood].label}
+                    </span>{' '}
+                    grind on {moodAnalysis.longestSessionMood.game}.
+                  </div>
+                )}
+                {moodAnalysis.totalTaggedSessions < moodAnalysis.totalSessions && (
+                  <div className="mt-1.5 text-[10px] text-white/25 text-center">
+                    Based on {moodAnalysis.totalTaggedSessions} of {moodAnalysis.totalSessions} sessions tagged
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+
+          {/* Vibe sub-section */}
+          <div>
+            <div className="text-xs font-medium text-white/50 mb-2 flex items-center gap-1">
+              <Sparkles size={11} className="text-violet-400" />
+              What mode you play in
+            </div>
+            {!vibeAnalysis.hasData ? (
+              <div className="text-center py-3">
+                <p className="text-xs text-white/40">
+                  Tag a session&apos;s vibe (Wind-Down, Competitive, Exploration, Story, Achievement Hunting, Social) when logging time to see what mode you play in most.
+                </p>
+              </div>
+            ) : (
+              <>
+                <div className="space-y-1.5">
+                  {vibeAnalysis.breakdown.map(v => (
+                    <div key={v.vibe} className="flex items-center gap-3 p-2 bg-white/5 rounded-lg">
+                      <span className="text-sm">{v.emoji}</span>
+                      <div className="flex-1">
+                        <div className="text-xs font-medium text-white/70">{v.label}</div>
+                        <div className="text-[10px] text-white/40">{v.sessions} session{v.sessions !== 1 ? 's' : ''}</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-sm font-bold text-violet-400">{v.hours}h</div>
+                        <div className="text-[10px] text-white/40">{v.percent}%</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-3 text-xs text-white/50 text-center">
+                  {vibeAnalysis.insight}
+                </div>
+                {vibeAnalysis.taggedSessions < vibeAnalysis.totalSessions && (
+                  <div className="mt-1.5 text-[10px] text-white/25 text-center">
+                    Based on {vibeAnalysis.taggedSessions} of {vibeAnalysis.totalSessions} sessions tagged
+                  </div>
+                )}
+              </>
+            )}
+          </div>
         </div>
       )}
     </div>

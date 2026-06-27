@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-27 — Stats — Mood & Vibe Lab
+
+**Files**: app/apps/game-analytics/lib/calculations.ts, app/apps/game-analytics/components/AnalyticsPanel.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+`PlayLog.mood` and `PlayLog.vibe` have been capturable per-session since QuickCheckIn/PlayLogModal shipped, but `getMoodAnalysis` sat completely orphaned in `calculations.ts` (never imported anywhere) and there was no equivalent for `vibe` at all. Added a new "Mood & Vibe Lab" section to `AnalyticsPanel.tsx`, following the same structural pattern as the existing Social Gaming Breakdown: a new `getVibeAnalysis(games)` (purely additive, mirrors `getSocialGamingStats`'s per-tag aggregation pattern) breaks down tagged hours/sessions by the six `SessionVibe` values (Wind-Down, Competitive, Exploration, Story, Achievement Hunting, Social), surfaces the dominant vibe and its top game, and generates a one-line insight; the panel wires this up alongside the pre-existing `getMoodAnalysis` (mood distribution by Great/Good/Meh/Grind, best-rated mood, longest-session mood) in one combined gradient card, each half with its own graceful "tag a session to see this" empty state. Zero changes to `lib/types.ts`, the repository/storage layer, or any existing function body — exactly 2 files touched. Verified via `npm run build` (clean, 12/12 static pages, zero TS errors), `npm run lint` (initially caught 2 unescaped-apostrophe `react/no-unescaped-entities` errors in the new empty-state copy, fixed with `&apos;` — zero issues remaining in either touched file), and a Playwright smoke test at 375px width (load sample data → Stats tab → scroll to the new "Mood & Vibe Lab" card → renders both empty states correctly, since sample data has no mood/vibe tags) with zero new console errors/warnings.
+
+FOLLOW-UP: Once real mood/vibe-tagged session data accumulates, consider surfacing a "mood trend over time" line and pulling the dominant vibe into the Daily Fortune Cookie / weekly digest narrative.
+
 ## 2026-06-27 — Stats — Population Benchmark Mode: gamer profile selector
 
 **Files**: app/apps/game-analytics/lib/calculations.ts, app/apps/game-analytics/components/PopulationBenchmarkPanel.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json

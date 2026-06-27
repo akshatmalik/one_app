@@ -1,4 +1,4 @@
-import { Game, GameStatus, GameMetrics, AnalyticsSummary, TasteProfile, SessionMood, SessionContext, BudgetSettings, GamingGoal } from './types';
+import { Game, GameStatus, GameMetrics, AnalyticsSummary, TasteProfile, SessionMood, SessionContext, SessionVibe, BudgetSettings, GamingGoal } from './types';
 
 /**
  * Parse a YYYY-MM-DD date string as local time instead of UTC.
@@ -14895,6 +14895,123 @@ export function getSocialGamingStats(games: Game[]): SocialGamingStats {
     socialPercent,
     breakdown,
     topSocialGame,
+    insight,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MOOD & VIBE LAB — surfaces PlayLog.mood and PlayLog.vibe tags, captured at
+// log time via QuickCheckIn/PlayLogModal but never analyzed anywhere until now.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface VibeBreakdown {
+  vibe: SessionVibe;
+  label: string;
+  emoji: string;
+  hours: number;
+  sessions: number;
+  percent: number; // % of tagged hours
+}
+
+export interface VibeAnalysis {
+  hasData: boolean;
+  taggedSessions: number;
+  totalSessions: number;
+  taggedHours: number;
+  breakdown: VibeBreakdown[];
+  dominantVibe: SessionVibe | null;
+  topGameByVibe: Record<string, { game: string; hours: number }>; // keyed by vibe
+  insight: string;
+}
+
+const VIBE_META: Record<SessionVibe, { label: string; emoji: string }> = {
+  'wind-down': { label: 'Wind-Down', emoji: '🌙' },
+  competitive: { label: 'Competitive', emoji: '🔥' },
+  exploration: { label: 'Exploration', emoji: '🧭' },
+  story: { label: 'Story', emoji: '📖' },
+  'achievement-hunting': { label: 'Achievement Hunting', emoji: '🏆' },
+  social: { label: 'Social', emoji: '🎉' },
+};
+
+const ALL_VIBES: SessionVibe[] = ['wind-down', 'competitive', 'exploration', 'story', 'achievement-hunting', 'social'];
+
+/**
+ * Surfaces what mode you tend to play in — using the per-session vibe tag
+ * (wind-down / competitive / exploration / story / achievement-hunting / social).
+ * Entirely derived from existing PlayLog.vibe data.
+ */
+export function getVibeAnalysis(games: Game[]): VibeAnalysis {
+  const allLogs = getAllPlayLogs(games);
+  const totalSessions = allLogs.length;
+  const tagged = allLogs.filter(({ log }) => !!log.vibe);
+  const taggedSessions = tagged.length;
+  const taggedHours = tagged.reduce((sum, { log }) => sum + log.hours, 0);
+
+  if (taggedSessions === 0) {
+    return {
+      hasData: false,
+      taggedSessions: 0,
+      totalSessions,
+      taggedHours: 0,
+      breakdown: [],
+      dominantVibe: null,
+      topGameByVibe: {},
+      insight: 'Tag a session with its vibe when logging time to see what mode you play in most.',
+    };
+  }
+
+  const hoursByVibe = ALL_VIBES.reduce((acc, v) => ({ ...acc, [v]: 0 }), {} as Record<SessionVibe, number>);
+  const sessionsByVibe = ALL_VIBES.reduce((acc, v) => ({ ...acc, [v]: 0 }), {} as Record<SessionVibe, number>);
+  const gameHoursByVibe: Record<SessionVibe, Map<string, number>> = ALL_VIBES.reduce(
+    (acc, v) => ({ ...acc, [v]: new Map<string, number>() }),
+    {} as Record<SessionVibe, Map<string, number>>
+  );
+
+  tagged.forEach(({ game, log }) => {
+    const v = log.vibe as SessionVibe;
+    hoursByVibe[v] += log.hours;
+    sessionsByVibe[v] += 1;
+    gameHoursByVibe[v].set(game.id, (gameHoursByVibe[v].get(game.id) || 0) + log.hours);
+  });
+
+  const breakdown: VibeBreakdown[] = ALL_VIBES
+    .filter(v => hoursByVibe[v] > 0)
+    .map(v => ({
+      vibe: v,
+      label: VIBE_META[v].label,
+      emoji: VIBE_META[v].emoji,
+      hours: Math.round(hoursByVibe[v] * 10) / 10,
+      sessions: sessionsByVibe[v],
+      percent: taggedHours > 0 ? Math.round((hoursByVibe[v] / taggedHours) * 100) : 0,
+    }))
+    .sort((a, b) => b.hours - a.hours);
+
+  const dominantVibe = breakdown[0]?.vibe ?? null;
+
+  const topGameByVibe: Record<string, { game: string; hours: number }> = {};
+  ALL_VIBES.forEach(v => {
+    let best: { game: string; hours: number } | null = null;
+    gameHoursByVibe[v].forEach((hours, gameId) => {
+      const game = games.find(g => g.id === gameId);
+      if (game && (!best || hours > best.hours)) {
+        best = { game: game.name, hours: Math.round(hours * 10) / 10 };
+      }
+    });
+    if (best) topGameByVibe[v] = best;
+  });
+
+  const insight = dominantVibe
+    ? `${VIBE_META[dominantVibe].label} is your go-to mode — ${breakdown[0].percent}% of tagged sessions (${breakdown[0].hours}h)${topGameByVibe[dominantVibe] ? `, mostly on ${topGameByVibe[dominantVibe].game}` : ''}.`
+    : `${taggedHours.toFixed(1)}h tagged so far — not enough yet for a clear pattern.`;
+
+  return {
+    hasData: true,
+    taggedSessions,
+    totalSessions,
+    taggedHours: Math.round(taggedHours * 10) / 10,
+    breakdown,
+    dominantVibe,
+    topGameByVibe,
     insight,
   };
 }
