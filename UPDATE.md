@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-28 — Stats — Population Benchmark dimension trend drill-down
+
+**Files**: app/apps/game-analytics/lib/kpi-history-storage.ts, app/apps/game-analytics/hooks/useKpiHistory.ts, app/apps/game-analytics/components/PopulationBenchmarkPanel.tsx, app/apps/game-analytics/components/StatsView.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Direct follow-up to the FOLLOW-UP raised on both 2026-06-26 11:47 and 2026-06-27: every Population Benchmark dimension only ever showed today's snapshot against the chosen gamer profile, with no way to see whether the player's standing was improving or slipping. `KpiSnapshot` in `kpi-history-storage.ts` gained 6 new **optional** fields (`backlogSize`, `hoursPerWeek`, `genreDiversity`, `yearlySpend`, `firstPlayDays`, `sessionLengthHours`) alongside the 3 it already tracked, so the existing daily snapshot log now captures all 9 benchmark dimensions instead of just 3 — purely additive, so snapshots recorded before today simply lack the new fields rather than breaking. `useKpiHistory.ts` computes these 6 new values using the same formulas `getPopulationBenchmarks` already uses internally (re-derived from already-exported pure helpers like `getGenreDiversity`, `getGamingVelocity`, `getAllPlayLogs`, and `parseLocalDate` — the function body of `getPopulationBenchmarks` itself was never touched). `PopulationBenchmarkPanel.tsx` now lets the player tap any dimension bar to expand a small inline trend line chart (mirroring the existing Stats History chart styling) built from this snapshot history, with a friendly "we'll plot this once a few more days build up" message until at least 2 days of history exist; `StatsView.tsx` got one new prop wire (`userId`) so the panel can read the player's own snapshot log. Zero changes to `lib/types.ts`, the repository/storage layer, or any existing `calculations.ts` function body — exactly 3 substantively-changed files plus one single-line wiring edit. Verified via `npm install` + `npm run build` (clean, 12/12 static pages, zero TS errors), `npm run lint` (zero issues attributable to any touched file — only pre-existing unrelated warnings elsewhere), and a Playwright smoke test at 375px width (load sample data → Stats tab → "You vs. The Average Gamer" panel → tapping any of the 9 dimension bars expands/collapses its trend section correctly) with zero new console errors/warnings — the one console message observed (a `favicon.ico` 404) reproduces identically on a fresh page load before any interaction, confirmed unrelated.
+
+FOLLOW-UP: Once a few days of snapshot history accumulate across all 9 dimensions, could add a small "trending up/down" arrow directly on the collapsed dimension bar (not just inside the expanded chart) so the trend is visible without tapping.
+
 ## 2026-06-27 — Stats — Population Benchmark Mode: gamer profile selector
 
 **Files**: app/apps/game-analytics/lib/calculations.ts, app/apps/game-analytics/components/PopulationBenchmarkPanel.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json

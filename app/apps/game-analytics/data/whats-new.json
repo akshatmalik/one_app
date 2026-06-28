@@ -1,6 +1,12 @@
 {
   "entries": [
     {
+      "date": "2026-06-28",
+      "area": "Stats",
+      "title": "Tap any benchmark category to see how it's trending",
+      "body": "The \"You vs. The Average Gamer\" panel now lets you tap any category — cost per hour, completion rate, backlog size, and the rest — to expand a little chart showing how that number has moved over time, not just where it stands today. Give it a few days and you'll start seeing real trend lines for every category you're being compared on."
+    },
+    {
       "date": "2026-06-27",
       "area": "Stats",
       "title": "Pick your gamer profile to compare against",

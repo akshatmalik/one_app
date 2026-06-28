@@ -1020,7 +1020,7 @@ export function StatsView({ games, summary, budgets = [], onSetBudget, trophies,
       <CriticComparisonPanel games={games} />
 
       {/* You vs. The Average Gamer — population benchmark comparison */}
-      <PopulationBenchmarkPanel games={games} summary={summary} />
+      <PopulationBenchmarkPanel games={games} summary={summary} userId={userId} />
 
       {/* Advanced Analytics Panel (Phase 2) */}
       <AnalyticsPanel games={games} />

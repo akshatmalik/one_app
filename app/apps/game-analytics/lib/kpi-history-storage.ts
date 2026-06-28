@@ -18,6 +18,15 @@ export interface KpiSnapshot {
   librarySize: number;
   avgRating: number;
   activeRate: number;
+  // Added so Population Benchmark Mode dimensions can show a trend over time,
+  // not just today's snapshot. Optional because snapshots recorded before
+  // this field existed won't have it — trend charts simply start later.
+  backlogSize?: number;
+  hoursPerWeek?: number;
+  genreDiversity?: number;
+  yearlySpend?: number;
+  firstPlayDays?: number;
+  sessionLengthHours?: number;
 }
 
 const MAX_HISTORY_DAYS = 400;
