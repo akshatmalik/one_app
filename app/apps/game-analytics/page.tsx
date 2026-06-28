@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, CalendarClock, CalendarPlus, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical, Download, Upload, Gift, ShoppingCart, Search, X, Moon, CreditCard, Swords, Inbox, Play, History, RefreshCw, Crown, Users, Users2, PiggyBank, Radar, Home } from 'lucide-react';
+import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, CalendarClock, CalendarPlus, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical, Download, Upload, Gift, ShoppingCart, Search, X, Moon, CreditCard, Swords, Inbox, Play, History, RefreshCw, Crown, Users, Users2, PiggyBank, Radar, Home, Tv } from 'lucide-react';
 import { useGames } from './hooks/useGames';
 import { useAnalytics, GameWithMetrics } from './hooks/useAnalytics';
 import { useBudget } from './hooks/useBudget';
@@ -53,6 +53,7 @@ import { AchievementHunterModal } from './components/AchievementHunterModal';
 import { WishlistPlannerModal } from './components/WishlistPlannerModal';
 import { ReplayRadarModal } from './components/ReplayRadarModal';
 import { CalendarSyncModal } from './components/CalendarSyncModal';
+import { AmbientModeOverlay } from './components/AmbientModeOverlay';
 import { loadWishlistPriority, saveWishlistPriority, resolveWishlistOrder } from './lib/wishlist-priority';
 import { useLibrarySnapshots } from './hooks/useLibrarySnapshots';
 import { useTimeCapsules } from './hooks/useTimeCapsules';
@@ -276,6 +277,7 @@ export default function GameAnalyticsPage() {
   const [showWishlistPlanner, setShowWishlistPlanner] = useState(false);
   const [showReplayRadar, setShowReplayRadar] = useState(false);
   const [showCalendarSync, setShowCalendarSync] = useState(false);
+  const [showAmbientMode, setShowAmbientMode] = useState(false);
   const [wishlistPriorityOrder, setWishlistPriorityOrder] = useState<string[]>([]);
   const [wrappedYear, setWrappedYear] = useState<number | null>(null);
   const [showGamerCard, setShowGamerCard] = useState(false);
@@ -795,6 +797,7 @@ export default function GameAnalyticsPage() {
     { id: 'recap-game-night', label: 'Game Night', subtitle: 'Find what you and a friend can play together', group: 'Recap & Share', icon: <Users2 size={15} />, onRun: () => setShowCoOpMatch(true) },
     { id: 'recap-yearly-wrapped', label: 'Yearly Wrapped', subtitle: 'Your year in gaming, story-mode', group: 'Recap & Share', icon: <Gift size={15} />, onRun: () => setWrappedYear(new Date().getFullYear()) },
     { id: 'recap-awards-hub', label: 'Awards Hub', subtitle: 'Oscar-style monthly & yearly awards', group: 'Recap & Share', icon: <Star size={15} />, onRun: () => setShowAwardsHub(true) },
+    ...(games.length > 0 ? [{ id: 'recap-ambient-mode', label: 'Ambient Mode', subtitle: 'Full-screen rotating stat showcase for a second screen', group: 'Recap & Share' as const, icon: <Tv size={15} />, onRun: () => setShowAmbientMode(true) }] : []),
     // Data
     { id: 'data-export', label: 'Export Data', subtitle: 'Download your library as a file', group: 'Data', icon: <Download size={15} />, onRun: () => setShowExport(true) },
     { id: 'data-whats-new', label: "What's New", subtitle: 'See recent app updates', group: 'Data', icon: <Sparkles size={15} />, onRun: () => setShowWhatsNew(true) },
@@ -919,6 +922,15 @@ export default function GameAnalyticsPage() {
                   </>
                 )}
               </div>
+              {games.length > 0 && (
+                <button
+                  onClick={() => setShowAmbientMode(true)}
+                  title="Ambient Mode — full-screen stat showcase"
+                  className="flex items-center gap-2 px-3 py-2 bg-white/5 text-white/60 hover:text-white/80 rounded-lg transition-all text-sm"
+                >
+                  <Tv size={16} />
+                </button>
+              )}
               <ErrorLogButton onClick={() => setShowErrorLog(true)} />
               {games.length > 0 && (
                 <AlertsCenter
@@ -2040,6 +2052,15 @@ export default function GameAnalyticsPage() {
           goals={goals}
           upcomingEntries={upcomingEntries}
           onClose={() => setShowCalendarSync(false)}
+        />
+      )}
+
+      {/* Ambient Mode — full-screen auto-rotating stat showcase for a second screen */}
+      {showAmbientMode && (
+        <AmbientModeOverlay
+          games={games}
+          summary={summary}
+          onClose={() => setShowAmbientMode(false)}
         />
       )}
 

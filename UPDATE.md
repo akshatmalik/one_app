@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-28 — Games — Ambient Mode (full-screen stat showcase)
+
+**Files**: app/apps/game-analytics/components/AmbientModeOverlay.tsx (new), app/apps/game-analytics/page.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Every stat surface in the app (Stats tab, Today dashboard, recaps) is built for active scrolling/tapping — nothing was designed to just sit on a TV or second screen and be glanced at, despite the app already having more than enough composable read-only stats to fill one. Added "Ambient Mode": a new full-screen, auto-rotating overlay (`AmbientModeOverlay.tsx`) that composes 9 existing, untouched calculation functions (`getActivityPulse`, `getGamingCreditScore`, `getLifetimeStats`, `getValueChampion`, `getGamingPersonality`, `getCurrentGamingStreak`, `getIfYouStoppedToday`, `getDailyFortune`, plus `summary.totalGames`/`summary.mostPlayed`) into a carousel of large-type "scenes," each on its own gradient background, auto-advancing every 8s with pause/play, arrow-key/swipe-button navigation, and dot indicators — closeable via Escape or a close button. Scenes are conditionally included only when the underlying data is meaningful (e.g. the streak scene only appears if a streak is active, the personality scene only if a personality score exists), so a sparse library still gets a clean, non-empty showcase. Wired into `page.tsx` via a new `Tv` icon button in the header and a new "Ambient Mode" command palette entry (both gated on `games.length > 0`), plus one new boolean state and one conditional render block. Zero changes to `lib/types.ts`, `lib/calculations.ts`, the repository/storage layer, or any existing function body — exactly 1 new file + 1 file given small additive edits. Verified via `npm install` + `npm run build` (clean, 12/12 static pages, zero TS errors), `npm run lint` (zero issues attributable to either file — only pre-existing unrelated warnings elsewhere), and a Playwright smoke test at 375px width (load sample data → header Tv button opens the overlay → scene navigation, pause/play, and Escape-to-close all work, screenshot captured) with zero new console errors/warnings — the console errors observed (a 404 + a TLS cert error + a RAWG fetch failure) trace directly to `useGameThumbnails.ts`'s thumbnail fetch, fire identically on a fresh "Load Samples" click before Ambient Mode is ever opened, and are a pre-existing sandbox network limitation unrelated to this feature (confirmed via a baseline-only run).
+
+FOLLOW-UP: Could add a "customize scenes" toggle to let users pick which scenes appear/in what order, and a QR code scene linking back to the app for genuine second-screen use (scan to add a play session from your phone while the TV shows the showcase).
+
 ## 2026-06-27 — Stats — Population Benchmark Mode: gamer profile selector
 
 **Files**: app/apps/game-analytics/lib/calculations.ts, app/apps/game-analytics/components/PopulationBenchmarkPanel.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json
