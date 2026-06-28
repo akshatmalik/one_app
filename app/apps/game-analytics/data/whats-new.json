@@ -1,6 +1,12 @@
 {
   "entries": [
     {
+      "date": "2026-06-28",
+      "area": "Library",
+      "title": "Squad Challenges: race your friends over a set timeframe",
+      "body": "Rival Check's Squad tab can now run actual head-to-head competitions. Pick a metric (most hours played, biggest credit score gain, most games added, or lowest extra spend), pick a length (7, 14, or 30 days), and everyone's current numbers get frozen as the starting line. From there it's a live leaderboard tracking just the progress made since the challenge started, with a countdown to the finish. Also new: each rival on your squad leaderboard now has a refresh button — paste their updated code any time their stats change instead of removing and re-adding them."
+    },
+    {
       "date": "2026-06-27",
       "area": "Stats",
       "title": "Pick your gamer profile to compare against",

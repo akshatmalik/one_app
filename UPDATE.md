@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-28 — Library — Squad Challenges (time-bound delta competitions)
+
+**Files**: app/apps/game-analytics/lib/squad-challenges.ts (new), app/apps/game-analytics/hooks/useSquadChallenge.ts (new), app/apps/game-analytics/components/VersusModal.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+The Squad Leaderboard inside Rival Check only ever compared everyone's all-time totals — there was no way to compete over a specific stretch of time. Added "Squad Challenges": a new `squad-challenges.ts` module freezes a baseline `VersusSnapshot` for every participant (you + your squad) at challenge-start, then `computeChallengeStandings()` always ranks everyone by "current minus baseline" for a chosen metric (Most Hours Played, Biggest Credit Score Gain, Most Games Added, or Lowest Additional Spend) over a 7/14/30-day window, with a live "Xd left" countdown via `getChallengeStatus()`. A new `useSquadChallenge` hook persists the active challenge device-locally (same `'use client'`/SSR-guarded/try-catch'd localStorage pattern as `squad-storage.ts`), and `VersusModal.tsx`'s Squad tab gained the start-challenge form, a live standings card, and an end/restart flow. This run also closed the 2026-06-22 00:00 FOLLOW-UP by wiring the already-built `refreshSquadMember` storage function to a per-rival refresh action in the leaderboard (a small inline paste box behind a refresh-icon toggle on each member row), so a friend's stats can be updated in place without removing and re-adding them — essential for the challenge standings to actually update as the squad's snapshots change. Zero changes to `lib/types.ts`, the repository/storage layer, or any existing `calculations.ts`/`versus-codes.ts`/`squad-storage.ts` function body — exactly 3 files touched (2 new). Verified via `npm install` + `npm run build` (clean, 12/12 static pages, zero TS errors), `npm run lint` (zero issues attributable to any of the 3 touched/new files), and a Playwright smoke test at 375px width (Rival Check → Squad tab → add a rival from a pasted code → "Start a Squad Challenge" → pick metric/duration → live "Hours Challenge" card renders with ranked standings → tap the refresh icon on the rival's row → paste an updated code → standings update) with zero new console errors/warnings — the one console message observed (a resource 404) reproduces identically on a fresh page load before the modal is ever opened, confirmed unrelated and consistent with prior runs' baseline.
+
+FOLLOW-UP: Could push a milestone-style toast when a challenge ends declaring the winner, and let a finished challenge's final standings get pinned into the Timeline as a one-off event.
+
 ## 2026-06-27 — Stats — Population Benchmark Mode: gamer profile selector
 
 **Files**: app/apps/game-analytics/lib/calculations.ts, app/apps/game-analytics/components/PopulationBenchmarkPanel.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json

@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { X, Users, Copy, Check, Trophy, ClipboardPaste, ArrowLeftRight, Crown, UserPlus } from 'lucide-react';
+import { X, Users, Copy, Check, Trophy, ClipboardPaste, ArrowLeftRight, Crown, UserPlus, Swords, RefreshCw } from 'lucide-react';
 import clsx from 'clsx';
 import { Game } from '../lib/types';
 import {
@@ -10,8 +10,16 @@ import {
   encodeVersusCode,
   decodeVersusCode,
 } from '../lib/versus-codes';
+import {
+  ChallengeMetric,
+  CHALLENGE_METRICS,
+  computeChallengeStandings,
+  getChallengeMetric,
+  getChallengeStatus,
+} from '../lib/squad-challenges';
 import { formatCurrency, formatCostPerHour, formatHours, formatPercent } from '../lib/format';
 import { useSquad } from '../hooks/useSquad';
+import { useSquadChallenge } from '../hooks/useSquadChallenge';
 
 interface Props {
   games: Game[];
@@ -176,6 +184,14 @@ export function VersusModal({ games, userId, onClose }: Props) {
   const [squadPasteValue, setSquadPasteValue] = useState('');
   const [squadPasteError, setSquadPasteError] = useState(false);
   const squad = useSquad(userId);
+  const squadChallenge = useSquadChallenge(userId);
+
+  const [showStartChallenge, setShowStartChallenge] = useState(false);
+  const [challengeMetric, setChallengeMetric] = useState<ChallengeMetric>('hours');
+  const [challengeDuration, setChallengeDuration] = useState(7);
+  const [refreshingMemberId, setRefreshingMemberId] = useState<string | null>(null);
+  const [refreshValue, setRefreshValue] = useState('');
+  const [refreshError, setRefreshError] = useState(false);
 
   const mySnapshot = useMemo(() => buildVersusSnapshot(games, name), [games, name]);
   const myCode = useMemo(() => encodeVersusCode(mySnapshot), [mySnapshot]);
@@ -185,6 +201,17 @@ export function VersusModal({ games, userId, onClose }: Props) {
     [mySnapshot, squad.members]
   );
 
+  const challengeStandings = useMemo(() => {
+    if (!squadChallenge.challenge) return [];
+    const current = [
+      { id: 'me', snapshot: mySnapshot },
+      ...squad.members.map(m => ({ id: m.id, snapshot: m.snapshot })),
+    ];
+    return computeChallengeStandings(squadChallenge.challenge, current);
+  }, [squadChallenge.challenge, mySnapshot, squad.members]);
+
+  const challengeStatus = squadChallenge.challenge ? getChallengeStatus(squadChallenge.challenge) : null;
+
   function handleAddSquadMember() {
     const ok = squad.addFromCode(squadPasteValue);
     if (!ok) {
@@ -193,6 +220,26 @@ export function VersusModal({ games, userId, onClose }: Props) {
     }
     setSquadPasteError(false);
     setSquadPasteValue('');
+  }
+
+  function handleStartChallenge() {
+    const participants = [
+      { id: 'me', name: mySnapshot.name, baseline: mySnapshot },
+      ...squad.members.map(m => ({ id: m.id, name: m.snapshot.name, baseline: m.snapshot })),
+    ];
+    squadChallenge.start(challengeMetric, challengeDuration, participants);
+    setShowStartChallenge(false);
+  }
+
+  function handleRefreshMember(id: string) {
+    const ok = squad.refreshCode(id, refreshValue);
+    if (!ok) {
+      setRefreshError(true);
+      return;
+    }
+    setRefreshError(false);
+    setRefreshValue('');
+    setRefreshingMemberId(null);
   }
 
   async function handleCopy() {
@@ -342,15 +389,51 @@ export function VersusModal({ games, userId, onClose }: Props) {
                         <div className="flex items-center gap-2 shrink-0">
                           <span className="text-sm font-bold text-white tabular-nums">{entry.composite}</span>
                           {!entry.isMe && entry.memberId && (
-                            <button
-                              onClick={() => squad.remove(entry.memberId!)}
-                              className="p-1 text-white/25 hover:text-red-400 transition-colors"
-                            >
-                              <X size={12} />
-                            </button>
+                            <>
+                              <button
+                                onClick={() => {
+                                  setRefreshingMemberId(refreshingMemberId === entry.memberId ? null : entry.memberId!);
+                                  setRefreshValue('');
+                                  setRefreshError(false);
+                                }}
+                                className="p-1 text-white/25 hover:text-emerald-300 transition-colors"
+                              >
+                                <RefreshCw size={12} />
+                              </button>
+                              <button
+                                onClick={() => squad.remove(entry.memberId!)}
+                                className="p-1 text-white/25 hover:text-red-400 transition-colors"
+                              >
+                                <X size={12} />
+                              </button>
+                            </>
                           )}
                         </div>
                       </div>
+                      {refreshingMemberId === entry.memberId && (
+                        <div className="mt-2.5 pt-2.5 border-t border-white/5">
+                          <textarea
+                            value={refreshValue}
+                            onChange={e => { setRefreshValue(e.target.value); setRefreshError(false); }}
+                            placeholder="Paste their updated Rival Check code…"
+                            rows={2}
+                            className={clsx(
+                              'w-full px-2.5 py-1.5 bg-white/[0.04] border rounded-lg text-white text-[11px] placeholder:text-white/25 focus:outline-none transition-all resize-none font-mono',
+                              refreshError ? 'border-red-500/50' : 'border-white/10 focus:border-emerald-500/50'
+                            )}
+                          />
+                          {refreshError && (
+                            <p className="text-[10px] text-red-400 mt-1">That code didn&apos;t decode.</p>
+                          )}
+                          <button
+                            onClick={() => handleRefreshMember(entry.memberId!)}
+                            disabled={!refreshValue.trim()}
+                            className="mt-1.5 w-full py-1.5 rounded-lg bg-white/10 text-white/70 text-[11px] font-semibold hover:bg-white/15 disabled:opacity-30 transition-colors"
+                          >
+                            Update stats
+                          </button>
+                        </div>
+                      )}
                       <div className="grid grid-cols-4 gap-1.5 mt-2.5">
                         {SQUAD_STATS.map(stat => (
                           <div key={stat.key} className="text-center">
@@ -366,6 +449,123 @@ export function VersusModal({ games, userId, onClose }: Props) {
                       </div>
                     </div>
                   ))}
+                </div>
+              )}
+
+              {(squad.members.length > 0 || squadChallenge.challenge) && (
+                <div className="rounded-xl border border-white/5 bg-white/[0.025] p-3.5">
+                  {squadChallenge.challenge && challengeStatus ? (
+                    <>
+                      <div className="flex items-center justify-between gap-2 mb-3">
+                        <div className="flex items-center gap-1.5">
+                          <Swords size={13} className="text-orange-400" />
+                          <p className="text-xs font-bold text-white/90">
+                            {getChallengeMetric(squadChallenge.challenge.metric).shortLabel} Challenge
+                          </p>
+                        </div>
+                        <span className={clsx(
+                          'text-[10px] font-semibold px-2 py-0.5 rounded-full',
+                          challengeStatus.isOver
+                            ? 'bg-white/10 text-white/40'
+                            : challengeStatus.daysLeft <= 1
+                              ? 'bg-red-500/15 text-red-300'
+                              : 'bg-orange-500/15 text-orange-300'
+                        )}>
+                          {challengeStatus.isOver ? 'Final' : challengeStatus.daysLeft <= 1 ? 'Last day' : `${challengeStatus.daysLeft}d left`}
+                        </span>
+                      </div>
+                      <div className="space-y-1.5">
+                        {challengeStandings.map((row, idx) => (
+                          <div key={row.id} className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg bg-white/[0.03]">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="text-[10px] font-bold text-white/40 w-3.5 shrink-0">{idx + 1}</span>
+                              {challengeStatus.isOver && row.isLeader && <Crown size={11} className="text-yellow-300 shrink-0" />}
+                              <p className="text-[11px] font-semibold text-white/80 truncate">
+                                {row.name}{row.isMe && ' (You)'}
+                              </p>
+                            </div>
+                            <span className={clsx(
+                              'text-[11px] font-bold tabular-nums shrink-0',
+                              row.isLeader ? 'text-emerald-300' : 'text-white/50'
+                            )}>
+                              {row.formattedDelta}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                      {challengeStatus.isOver ? (
+                        <button
+                          onClick={() => squadChallenge.end()}
+                          className="mt-3 w-full py-2 rounded-lg bg-orange-500/15 text-orange-300 text-xs font-semibold hover:bg-orange-500/20 transition-colors"
+                        >
+                          Start a new challenge
+                        </button>
+                      ) : (
+                        <p className="text-[10px] text-white/25 mt-2.5 leading-relaxed">
+                          Standings update live as everyone&apos;s stats change — refresh a rival&apos;s code above if their numbers look stale.
+                        </p>
+                      )}
+                    </>
+                  ) : showStartChallenge ? (
+                    <>
+                      <p className="text-xs font-bold text-white/90 mb-2.5">Start a Squad Challenge</p>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        {CHALLENGE_METRICS.map(m => (
+                          <button
+                            key={m.key}
+                            onClick={() => setChallengeMetric(m.key)}
+                            className={clsx(
+                              'px-2 py-2 rounded-lg text-[11px] font-semibold transition-colors text-left',
+                              challengeMetric === m.key
+                                ? 'bg-orange-500/15 text-orange-300 border border-orange-500/30'
+                                : 'bg-white/[0.03] text-white/50 border border-white/5 hover:bg-white/[0.06]'
+                            )}
+                          >
+                            {m.shortLabel}
+                          </button>
+                        ))}
+                      </div>
+                      <p className="text-[10px] text-white/25 mt-2 leading-relaxed">
+                        {getChallengeMetric(challengeMetric).description}
+                      </p>
+                      <p className="text-[10px] text-white/25 font-bold uppercase tracking-wider mt-3 mb-1.5">Duration</p>
+                      <div className="grid grid-cols-3 gap-1.5">
+                        {[7, 14, 30].map(d => (
+                          <button
+                            key={d}
+                            onClick={() => setChallengeDuration(d)}
+                            className={clsx(
+                              'py-1.5 rounded-lg text-[11px] font-semibold transition-colors',
+                              challengeDuration === d ? 'bg-white/15 text-white' : 'bg-white/[0.03] text-white/40 hover:bg-white/[0.06]'
+                            )}
+                          >
+                            {d} days
+                          </button>
+                        ))}
+                      </div>
+                      <div className="flex items-center gap-2 mt-3">
+                        <button
+                          onClick={() => setShowStartChallenge(false)}
+                          className="flex-1 py-2 rounded-lg bg-white/[0.04] text-white/50 text-xs font-semibold hover:bg-white/[0.08] transition-colors"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={handleStartChallenge}
+                          className="flex-1 py-2 rounded-lg bg-orange-500/15 text-orange-300 text-xs font-semibold hover:bg-orange-500/20 transition-colors"
+                        >
+                          Start challenge
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <button
+                      onClick={() => setShowStartChallenge(true)}
+                      className="w-full flex items-center justify-center gap-2 py-2 text-xs font-semibold text-white/50 hover:text-white/80 transition-colors"
+                    >
+                      <Swords size={14} /> Start a Squad Challenge
+                    </button>
+                  )}
                 </div>
               )}
             </div>
