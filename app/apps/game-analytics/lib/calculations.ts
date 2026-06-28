@@ -15995,3 +15995,191 @@ export function getPopulationBenchmarks(
     profileDescription: profileMeta.description,
   };
 }
+
+// ── Portfolio Mode: your library as an investment portfolio ────────────────
+
+export type PortfolioTier = 'star' | 'solid' | 'underperformer' | 'deadCapital';
+
+export interface PortfolioHolding {
+  id: string;
+  name: string;
+  thumbnail?: string;
+  genre?: string;
+  invested: number;
+  hoursPlayed: number;
+  valueDelivered: number;
+  costPerHour: number;
+  roi: number;
+  valueRating: 'Excellent' | 'Good' | 'Fair' | 'Poor';
+  tier: PortfolioTier;
+}
+
+export interface PortfolioAllocation {
+  genre: string;
+  invested: number;
+  percentage: number;
+}
+
+export interface PortfolioValuePoint {
+  month: string;
+  invested: number;
+  cumulativeInvested: number;
+  cumulativeValueDelivered: number;
+}
+
+export interface PortfolioAnalysis {
+  totalInvested: number;
+  totalValueDelivered: number;
+  netGainLoss: number;
+  returnPercentage: number;
+  holdingsCount: number;
+  starPerformers: PortfolioHolding[];
+  underperformers: PortfolioHolding[];
+  deadCapital: PortfolioHolding[];
+  allocation: PortfolioAllocation[];
+  diversificationScore: number;
+  topAllocationGenre: string | null;
+  valueOverTime: PortfolioValuePoint[];
+  rebalancingSuggestions: string[];
+  portfolioGrade: 'A' | 'B' | 'C' | 'D' | 'F';
+}
+
+function classifyPortfolioTier(hoursPlayed: number, valueRating: PortfolioHolding['valueRating'], roi: number): PortfolioTier {
+  if (hoursPlayed === 0) return 'deadCapital';
+  if (valueRating === 'Excellent' || roi >= 8) return 'star';
+  if (valueRating === 'Poor') return 'underperformer';
+  return 'solid';
+}
+
+export function getPortfolioAnalysis(games: Game[]): PortfolioAnalysis {
+  const ownedGames = games.filter(g => g.status !== 'Wishlist');
+
+  const holdings: PortfolioHolding[] = ownedGames.map(game => {
+    const hoursPlayed = getTotalHours(game);
+    const metrics = calculateMetrics(game);
+    const valueDelivered = hoursPlayed * BASELINE_COST;
+    return {
+      id: game.id,
+      name: game.name,
+      thumbnail: game.thumbnail,
+      genre: game.genre,
+      invested: game.price,
+      hoursPlayed,
+      valueDelivered,
+      costPerHour: metrics.costPerHour,
+      roi: metrics.roi,
+      valueRating: metrics.valueRating,
+      tier: classifyPortfolioTier(hoursPlayed, metrics.valueRating, metrics.roi),
+    };
+  });
+
+  const totalInvested = holdings.reduce((sum, h) => sum + h.invested, 0);
+  const totalValueDelivered = holdings.reduce((sum, h) => sum + h.valueDelivered, 0);
+  const netGainLoss = totalValueDelivered - totalInvested;
+  const returnPercentage = totalInvested > 0 ? (netGainLoss / totalInvested) * 100 : 0;
+
+  const starPerformers = holdings
+    .filter(h => h.tier === 'star')
+    .sort((a, b) => b.roi - a.roi)
+    .slice(0, 5);
+
+  const underperformers = holdings
+    .filter(h => h.tier === 'underperformer')
+    .sort((a, b) => b.costPerHour - a.costPerHour)
+    .slice(0, 5);
+
+  const deadCapital = holdings
+    .filter(h => h.tier === 'deadCapital')
+    .sort((a, b) => b.invested - a.invested)
+    .slice(0, 5);
+
+  // Asset allocation by genre (where capital is invested)
+  const investedByGenre: Record<string, number> = {};
+  holdings.forEach(h => {
+    const genre = h.genre || 'Uncategorized';
+    investedByGenre[genre] = (investedByGenre[genre] || 0) + h.invested;
+  });
+  const allocation: PortfolioAllocation[] = Object.entries(investedByGenre)
+    .map(([genre, invested]) => ({
+      genre,
+      invested,
+      percentage: totalInvested > 0 ? (invested / totalInvested) * 100 : 0,
+    }))
+    .sort((a, b) => b.invested - a.invested);
+
+  const topAllocationGenre = allocation[0]?.genre || null;
+  const diversificationScore = allocation.length > 0
+    ? Math.round(100 - allocation[0].percentage)
+    : 0;
+
+  // Value over time: cumulative invested vs cumulative entertainment value delivered
+  const spendingByMonth = getSpendingByMonth(games);
+  const hoursByMonth = getHoursByMonth(games);
+  const allMonths = Array.from(new Set([...Object.keys(spendingByMonth), ...Object.keys(hoursByMonth)])).sort();
+
+  let cumulativeInvested = 0;
+  let cumulativeValueDelivered = 0;
+  const valueOverTime: PortfolioValuePoint[] = allMonths.map(month => {
+    const monthInvested = spendingByMonth[month] || 0;
+    const monthValueDelivered = (hoursByMonth[month] || 0) * BASELINE_COST;
+    cumulativeInvested += monthInvested;
+    cumulativeValueDelivered += monthValueDelivered;
+    return {
+      month,
+      invested: monthInvested,
+      cumulativeInvested,
+      cumulativeValueDelivered,
+    };
+  });
+
+  // Rebalancing suggestions — plain-English nudges based on the holdings
+  const rebalancingSuggestions: string[] = [];
+  if (deadCapital.length > 0) {
+    const deadCapitalTotal = holdings.filter(h => h.tier === 'deadCapital').reduce((sum, h) => sum + h.invested, 0);
+    rebalancingSuggestions.push(
+      `$${deadCapitalTotal.toFixed(0)} is sitting in ${holdings.filter(h => h.tier === 'deadCapital').length} unplayed game(s) earning zero return. Play them or accept the sunk cost.`
+    );
+  }
+  if (allocation.length > 0 && allocation[0].percentage >= 50) {
+    rebalancingSuggestions.push(
+      `${allocation[0].percentage.toFixed(0)}% of your investment is concentrated in ${allocation[0].genre}. Diversifying into other genres could reduce the risk of burnout.`
+    );
+  }
+  if (underperformers.length >= 3) {
+    rebalancingSuggestions.push(
+      `${underperformers.length} games are delivering poor cost-per-hour value. Consider this before buying more titles in similar genres.`
+    );
+  }
+  if (starPerformers.length > 0 && rebalancingSuggestions.length < 3) {
+    rebalancingSuggestions.push(
+      `${starPerformers[0].name} is your best-performing holding — ${starPerformers[0].roi.toFixed(1)} ROI. Look for more like it.`
+    );
+  }
+  if (rebalancingSuggestions.length === 0) {
+    rebalancingSuggestions.push('Your portfolio is well-balanced — no major red flags right now.');
+  }
+
+  // Overall portfolio grade from the return percentage
+  const portfolioGrade: PortfolioAnalysis['portfolioGrade'] =
+    returnPercentage >= 50 ? 'A' :
+    returnPercentage >= 0 ? 'B' :
+    returnPercentage >= -30 ? 'C' :
+    returnPercentage >= -60 ? 'D' : 'F';
+
+  return {
+    totalInvested,
+    totalValueDelivered,
+    netGainLoss,
+    returnPercentage,
+    holdingsCount: holdings.length,
+    starPerformers,
+    underperformers,
+    deadCapital,
+    allocation,
+    diversificationScore,
+    topAllocationGenre,
+    valueOverTime,
+    rebalancingSuggestions,
+    portfolioGrade,
+  };
+}

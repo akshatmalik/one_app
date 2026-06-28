@@ -1,6 +1,12 @@
 {
   "entries": [
     {
+      "date": "2026-06-28",
+      "area": "Stats",
+      "title": "Portfolio Mode: your library as an investment",
+      "body": "There's a new \"Portfolio Mode\" panel in Stats that treats your game library like an investment portfolio. Every game you own is a \"holding\" — what you paid is the amount invested, and the entertainment value of your hours played (at the same $3.50/hr rate as the Guilt-Free Gaming Calculator) is the return. See your overall portfolio grade (A through F), net gain or loss, a chart of invested vs. value delivered over time, how your money is allocated across genres, and ranked lists of your Star Performers, Underperformers, and Dead Capital — plus a few plain-English suggestions for rebalancing your next purchases."
+    },
+    {
       "date": "2026-06-27",
       "area": "Stats",
       "title": "Pick your gamer profile to compare against",
