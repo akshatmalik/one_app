@@ -1,6 +1,12 @@
 {
   "entries": [
     {
+      "date": "2026-06-28",
+      "area": "Stats",
+      "title": "Session Vibe Check: see how your moods break down",
+      "body": "If you've been tagging your play sessions with a mood in Quick Check-In or the play log (great / good / meh / grind), there's now a Session Vibe Check panel in Stats that puts it all together — a bar for each mood showing how often you feel that way and your average session length, plus callouts for which mood lines up with your highest-rated games and your single longest tagged session."
+    },
+    {
       "date": "2026-06-27",
       "area": "Stats",
       "title": "Pick your gamer profile to compare against",

@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-28 — Stats — Session Vibe Check (mood insights panel)
+
+**Files**: app/apps/game-analytics/components/MoodInsightsPanel.tsx (new), app/apps/game-analytics/components/StatsView.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Quick Check-In and the Play Log Modal have let players tag any session with a mood (`great`/`good`/`meh`/`grind`, the `SessionMood` field already on `PlayLog`) since those features shipped, and `getMoodAnalysis(games)` in `calculations.ts` has quietly computed a full mood distribution, mood-vs-rating correlation, longest session by mood, and top game per mood from that data — but nothing in the UI ever rendered it; the function had zero call sites anywhere outside `calculations.ts` itself. Added a new `MoodInsightsPanel.tsx` ("Session Vibe Check") that calls the existing, completely untouched `getMoodAnalysis` and renders a horizontal bar per mood (emoji, % of tagged sessions, avg hours), a "tagged X of Y sessions" footnote, and two callout rows when the data supports them — which mood correlates with your highest-rated games, and your longest single tagged session. Shows a friendly cold-start message ("Tag a play session... to unlock this panel") when `totalTaggedSessions === 0`, matching the empty-state convention used elsewhere (e.g. KpiTrendsPanel). Wired into `StatsView.tsx` directly below `CriticComparisonPanel`. Zero changes to `lib/types.ts`, the repository/storage layer, or any existing `calculations.ts` function body — exactly 2 files touched (1 new). Verified via `npm install` + `npm run build` (clean, 12/12 static pages, zero TS errors), `npm run lint` (zero issues attributable to either touched file — only pre-existing unrelated warnings/errors in other mini-apps), and a Playwright smoke test at 375px width (load sample data → Stats tab → "Session Vibe Check" panel renders its empty-state copy, since the bundled sample games have no mood-tagged play logs) with zero new console errors/warnings.
+
+FOLLOW-UP: Sample/baseline games carry no mood-tagged sessions, so the populated bar-chart/callout branch was verified by code review against `getMoodAnalysis`'s exact return shape rather than a live screenshot — worth a follow-up visual check once real mood-tagged data exists, and worth surfacing the same insight inside the Week/Month recap story screens (e.g. "this week skewed Grind") as a future enhancement.
+
 ## 2026-06-27 — Stats — Population Benchmark Mode: gamer profile selector
 
 **Files**: app/apps/game-analytics/lib/calculations.ts, app/apps/game-analytics/components/PopulationBenchmarkPanel.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json
