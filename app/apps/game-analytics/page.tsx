@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, CalendarClock, CalendarPlus, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical, Download, Upload, Gift, ShoppingCart, Search, X, Moon, CreditCard, Swords, Inbox, Play, History, RefreshCw, Crown, Users, Users2, PiggyBank, Radar, Home } from 'lucide-react';
+import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, CalendarClock, CalendarPlus, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical, Download, Upload, Gift, ShoppingCart, Search, X, Moon, CreditCard, Swords, Inbox, History, RefreshCw, Crown, Users, Users2, PiggyBank, Radar, Home } from 'lucide-react';
 import { useGames } from './hooks/useGames';
 import { useAnalytics, GameWithMetrics } from './hooks/useAnalytics';
 import { useBudget } from './hooks/useBudget';
@@ -243,6 +243,7 @@ export default function GameAnalyticsPage() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingGame, setEditingGame] = useState<GameWithMetrics | null>(null);
   const [playLogGame, setPlayLogGame] = useState<GameWithMetrics | null>(null);
+  const [playLogDefaultDate, setPlayLogDefaultDate] = useState<string | undefined>(undefined);
   const [viewMode, setViewMode] = useState<ViewMode>('all');
   const [tabMode, setTabMode] = useState<TabMode>(() => {
     // "Continue where you left off" — restore the last viewed tab.
@@ -517,8 +518,9 @@ export default function GameAnalyticsPage() {
     }
   }, [showUndo, deleteGame]);
 
-  const handleOpenPlayLog = (game: GameWithMetrics) => {
+  const handleOpenPlayLog = (game: GameWithMetrics, date?: string) => {
     setPlayLogGame(game);
+    setPlayLogDefaultDate(date);
   };
 
   const handleAlertAction = (alert: GameAlert) => {
@@ -1582,8 +1584,8 @@ export default function GameAnalyticsPage() {
                   cardViewMode={cardViewMode}
                   groupBySection={groupBySection}
                   onCardClick={(game) => setDetailGame(game)}
-                  onLogTime={(game) => handleOpenPlayLog(game)}
-                  onQuickLog={handleQuickLog}
+                  onLogTime={(game, date) => handleOpenPlayLog(game, date)}
+                  onQuickLog={(game, hours, date) => handleQuickLog(game, hours, date ? { date } : undefined)}
                   onToggleQueue={async (game) => {
                     try {
                       if (isInQueue(game.id)) {
@@ -1613,8 +1615,6 @@ export default function GameAnalyticsPage() {
                   eloByGameId={eloByGameId}
                   tierAssignments={allTimeTiers}
                   eloTierRanks={eloTierRanks}
-                  onStartTimer={handleStartTimer}
-                  activeTimerGameId={liveSession.activeSession?.gameId ?? null}
                 />
               )}
             </>
@@ -1842,7 +1842,8 @@ export default function GameAnalyticsPage() {
         <PlayLogModal
           game={playLogGame}
           onSave={handleSavePlayLogs}
-          onClose={() => setPlayLogGame(null)}
+          onClose={() => { setPlayLogGame(null); setPlayLogDefaultDate(undefined); }}
+          defaultDate={playLogDefaultDate}
         />
       )}
 
@@ -2307,8 +2308,8 @@ interface GameCardListProps {
   cardViewMode: CardViewMode;
   groupBySection: boolean;
   onCardClick: (game: GameWithMetrics) => void;
-  onLogTime: (game: GameWithMetrics) => void;
-  onQuickLog: (game: GameWithMetrics, hours: number) => void;
+  onLogTime: (game: GameWithMetrics, date?: string) => void;
+  onQuickLog: (game: GameWithMetrics, hours: number, date?: string) => void;
   onToggleQueue: (game: GameWithMetrics) => void;
   onToggleSpecial: (game: GameWithMetrics) => void;
   onDelete: (game: GameWithMetrics) => void;
@@ -2319,8 +2320,6 @@ interface GameCardListProps {
   eloByGameId?: Map<string, GameRanking>;
   tierAssignments?: TierAssignmentMap;
   eloTierRanks?: Map<string, { tier: GameTier; rank: number }>;
-  onStartTimer?: (game: GameWithMetrics) => void;
-  activeTimerGameId?: string | null;
 }
 
 function GameCardList({
@@ -2341,8 +2340,6 @@ function GameCardList({
   eloByGameId = new Map(),
   tierAssignments = {},
   eloTierRanks = new Map(),
-  onStartTimer,
-  activeTimerGameId = null,
 }: GameCardListProps) {
   const sections = useMemo(() => groupBySection ? getGameSections(allGames) : [], [allGames, groupBySection]);
 
@@ -2394,13 +2391,13 @@ function GameCardList({
     if (cardViewMode === 'poster') {
       return (
         <div key={game.id} className={animClass}>
-          <PosterCard game={game} allGames={allGames} idx={idx} onClick={() => onCardClick(game)} onQuickLog={(h) => onQuickLog(game, h)} isInQueue={isInQueue(game.id)} sortBy={sortBy} tintColor={gameColors.get(game.id)} aiQuip={gameQuips[game.id]?.quip} eloRanking={eloRanking} gameTier={gameTier} eloTierRank={eloTierRank} onStartTimer={onStartTimer ? () => onStartTimer(game) : undefined} isTimerActive={activeTimerGameId === game.id} />
+          <PosterCard game={game} allGames={allGames} idx={idx} onClick={() => onCardClick(game)} onQuickLog={(h, d) => onQuickLog(game, h, d)} isInQueue={isInQueue(game.id)} sortBy={sortBy} tintColor={gameColors.get(game.id)} aiQuip={gameQuips[game.id]?.quip} eloRanking={eloRanking} gameTier={gameTier} eloTierRank={eloTierRank} />
         </div>
       );
     }
     return (
       <div key={game.id} className={animClass}>
-        <CompactCard game={game} allGames={allGames} idx={idx} onClick={() => onCardClick(game)} onLogTime={() => onLogTime(game)} onToggleQueue={() => onToggleQueue(game)} onDelete={() => onDelete(game)} isInQueue={isInQueue(game.id)} sortBy={sortBy} tintColor={gameColors.get(game.id)} aiQuip={gameQuips[game.id]?.quip} eloRanking={eloRanking} gameTier={gameTier} eloTierRank={eloTierRank} onStartTimer={onStartTimer ? () => onStartTimer(game) : undefined} isTimerActive={activeTimerGameId === game.id} />
+        <CompactCard game={game} allGames={allGames} idx={idx} onClick={() => onCardClick(game)} onLogTime={(d) => onLogTime(game, d)} onToggleQueue={() => onToggleQueue(game)} onDelete={() => onDelete(game)} isInQueue={isInQueue(game.id)} sortBy={sortBy} tintColor={gameColors.get(game.id)} aiQuip={gameQuips[game.id]?.quip} eloRanking={eloRanking} gameTier={gameTier} eloTierRank={eloTierRank} />
       </div>
     );
   };
@@ -2422,7 +2419,7 @@ function GameCardList({
             <div className="space-y-3">
               {nowPlayingGames.map(g => (
                 <div key={g.id} className={`game-card-animate${enteringCards.has(g.id) ? ' game-card-enter' : ''}`}>
-                  <NowPlayingCard game={g} allGames={allGames} onClick={() => onCardClick(g)} onQuickLog={(h) => onQuickLog(g, h)} sortBy={sortBy} tintColor={gameColors.get(g.id)} eloRanking={eloByGameId.get(g.id)} gameTier={tierAssignments[g.id] as GameTier | undefined} eloTierRank={eloTierRanks.get(g.id)} onStartTimer={onStartTimer ? () => onStartTimer(g) : undefined} isTimerActive={activeTimerGameId === g.id} />
+                  <NowPlayingCard game={g} allGames={allGames} onClick={() => onCardClick(g)} onQuickLog={(h, d) => onQuickLog(g, h, d)} sortBy={sortBy} tintColor={gameColors.get(g.id)} eloRanking={eloByGameId.get(g.id)} gameTier={tierAssignments[g.id] as GameTier | undefined} eloTierRank={eloTierRanks.get(g.id)} />
                 </div>
               ))}
             </div>
@@ -2465,7 +2462,7 @@ function GameCardList({
           <div className="space-y-3">
             {nowPlayingGames.map(g => (
               <div key={g.id} className={`game-card-animate${enteringCards.has(g.id) ? ' game-card-enter' : ''}`}>
-                <NowPlayingCard game={g} allGames={allGames} onClick={() => onCardClick(g)} onQuickLog={(h) => onQuickLog(g, h)} eloRanking={eloByGameId.get(g.id)} gameTier={tierAssignments[g.id] as GameTier | undefined} onStartTimer={onStartTimer ? () => onStartTimer(g) : undefined} isTimerActive={activeTimerGameId === g.id} />
+                <NowPlayingCard game={g} allGames={allGames} onClick={() => onCardClick(g)} onQuickLog={(h, d) => onQuickLog(g, h, d)} eloRanking={eloByGameId.get(g.id)} gameTier={tierAssignments[g.id] as GameTier | undefined} />
               </div>
             ))}
           </div>
@@ -2493,23 +2490,70 @@ function SectionIcon({ id }: { id: string }) {
   return <span className="text-lg">{config.emoji}</span>;
 }
 
+// --- Check-In Date Nav (replaces the Timer button on list cards) ---
+
+function getTodayDateString(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+}
+
+function shiftDateString(dateStr: string, deltaDays: number): string {
+  const d = parseLocalDate(dateStr);
+  d.setDate(d.getDate() + deltaDays);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function formatCheckInDateLabel(dateStr: string): string {
+  const today = getTodayDateString();
+  if (dateStr === today) return 'Today';
+  if (dateStr === shiftDateString(today, -1)) return 'Yesterday';
+  return parseLocalDate(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+function CheckInDateNav({ date, onChange, size = 'sm' }: { date: string; onChange: (date: string) => void; size?: 'sm' | 'xs' }) {
+  const today = getTodayDateString();
+  const isToday = date === today;
+  const iconSize = size === 'xs' ? 11 : 12;
+  return (
+    <div className="flex items-center gap-0.5 px-1 py-1 rounded-lg bg-white/[0.03] border border-white/5" onClick={(e) => e.stopPropagation()}>
+      <button
+        onClick={() => onChange(shiftDateString(date, -1))}
+        className="p-0.5 text-white/30 active:text-white/70 transition-colors"
+        title="Previous day"
+      >
+        <ChevronLeft size={iconSize} />
+      </button>
+      <span className={clsx('font-medium text-white/50 tabular-nums px-0.5', size === 'xs' ? 'text-[10px]' : 'text-[11px]')}>
+        {formatCheckInDateLabel(date)}
+      </span>
+      <button
+        onClick={() => !isToday && onChange(shiftDateString(date, 1))}
+        disabled={isToday}
+        className={clsx('p-0.5 transition-colors', isToday ? 'text-white/10' : 'text-white/30 active:text-white/70')}
+        title="Next day"
+      >
+        <ChevronRight size={iconSize} />
+      </button>
+    </div>
+  );
+}
+
 // --- Now Playing Card ---
 
-function NowPlayingCard({ game, allGames, onClick, onQuickLog, sortBy = 'hours', tintColor, eloRanking, gameTier, eloTierRank, onStartTimer, isTimerActive }: {
+function NowPlayingCard({ game, allGames, onClick, onQuickLog, sortBy = 'hours', tintColor, eloRanking, gameTier, eloTierRank }: {
   game: GameWithMetrics;
   allGames: Game[];
   onClick: () => void;
-  onQuickLog: (hours: number) => void;
+  onQuickLog: (hours: number, date?: string) => void;
   sortBy?: string;
   tintColor?: string;
   eloRanking?: GameRanking;
   gameTier?: GameTier;
   eloTierRank?: { tier: GameTier; rank: number };
-  onStartTimer?: () => void;
-  isTimerActive?: boolean;
 }) {
   const [isFlipped, setIsFlipped] = useState(false);
   const [checkInHours, setCheckInHours] = useState(1);
+  const [checkInDate, setCheckInDate] = useState(() => getTodayDateString());
   const [checkInDone, setCheckInDone] = useState(false);
   const rarity = getCardRarity(game);
   const relationship = getRelationshipStatus(game, allGames);
@@ -2718,9 +2762,9 @@ function NowPlayingCard({ game, allGames, onClick, onQuickLog, sortBy = 'hours',
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                onQuickLog(checkInHours);
+                onQuickLog(checkInHours, checkInDate);
                 setCheckInDone(true);
-                setTimeout(() => { setCheckInDone(false); setCheckInHours(1); }, 1500);
+                setTimeout(() => { setCheckInDone(false); setCheckInHours(1); setCheckInDate(getTodayDateString()); }, 1500);
               }}
               className={clsx(
                 'flex-1 h-7 flex items-center justify-center gap-1 rounded-lg text-xs font-bold transition-all',
@@ -2731,21 +2775,7 @@ function NowPlayingCard({ game, allGames, onClick, onQuickLog, sortBy = 'hours',
             >
               {checkInDone ? <><Check size={11} /> Done!</> : <><Clock size={11} /> Check In</>}
             </button>
-            {onStartTimer && (
-              <button
-                onClick={(e) => { e.stopPropagation(); onStartTimer(); }}
-                disabled={isTimerActive}
-                title="Start a live session timer"
-                className={clsx(
-                  'h-7 px-2.5 flex items-center justify-center gap-1 rounded-lg text-xs font-bold transition-all shrink-0',
-                  isTimerActive
-                    ? 'bg-purple-500/10 text-purple-400/50'
-                    : 'bg-purple-600/20 text-purple-300 active:bg-purple-600/40 border border-purple-500/10'
-                )}
-              >
-                <Play size={11} /> {isTimerActive ? 'Timing' : 'Timer'}
-              </button>
-            )}
+            <CheckInDateNav date={checkInDate} onChange={setCheckInDate} />
           </div>
 
           {/* Mood pulse strip */}
@@ -2777,12 +2807,12 @@ function NowPlayingCard({ game, allGames, onClick, onQuickLog, sortBy = 'hours',
 
 // --- Poster Card ---
 
-function PosterCard({ game, allGames, idx, onClick, onQuickLog, isInQueue, sortBy = 'hours', tintColor, aiQuip, eloRanking, gameTier, eloTierRank, onStartTimer, isTimerActive }: {
+function PosterCard({ game, allGames, idx, onClick, onQuickLog, isInQueue, sortBy = 'hours', tintColor, aiQuip, eloRanking, gameTier, eloTierRank }: {
   game: GameWithMetrics;
   allGames: Game[];
   idx: number;
   onClick: () => void;
-  onQuickLog: (hours: number) => void;
+  onQuickLog: (hours: number, date?: string) => void;
   isInQueue: boolean;
   sortBy?: string;
   tintColor?: string;
@@ -2790,10 +2820,13 @@ function PosterCard({ game, allGames, idx, onClick, onQuickLog, isInQueue, sortB
   eloRanking?: GameRanking;
   gameTier?: GameTier;
   eloTierRank?: { tier: GameTier; rank: number };
-  onStartTimer?: () => void;
-  isTimerActive?: boolean;
 }) {
   const [isFlipped, setIsFlipped] = useState(false);
+  const [checkInDate, setCheckInDate] = useState(() => getTodayDateString());
+  const [checkInDone, setCheckInDone] = useState(false);
+  const avgSessionHours = game.playLogs && game.playLogs.length > 0
+    ? Math.round(game.playLogs.reduce((s, l) => s + l.hours, 0) / game.playLogs.length * 10) / 10
+    : 2;
   const rarity = getCardRarity(game);
   const relationship = getRelationshipStatus(game, allGames);
   const streak = getGameStreak(game);
@@ -2976,19 +3009,22 @@ function PosterCard({ game, allGames, idx, onClick, onQuickLog, isInQueue, sortB
               </span>
             )}
             <div className="flex-1" />
-            {onStartTimer && (
-              <button
-                onClick={(e) => { e.stopPropagation(); onStartTimer(); }}
-                disabled={isTimerActive}
-                title="Start a live session timer"
-                className={clsx(
-                  'w-6 h-6 flex items-center justify-center rounded-lg transition-all',
-                  isTimerActive ? 'text-purple-400/50 bg-purple-500/5' : 'text-white/30 active:text-purple-400 active:bg-purple-500/10'
-                )}
-              >
-                <Play size={11} />
-              </button>
-            )}
+            <CheckInDateNav size="xs" date={checkInDate} onChange={setCheckInDate} />
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onQuickLog(avgSessionHours, checkInDate);
+                setCheckInDone(true);
+                setTimeout(() => { setCheckInDone(false); setCheckInDate(getTodayDateString()); }, 1500);
+              }}
+              title={`Check in — ${avgSessionHours}h`}
+              className={clsx(
+                'w-6 h-6 flex items-center justify-center rounded-lg transition-all',
+                checkInDone ? 'text-emerald-400 bg-emerald-500/10' : 'text-white/30 active:text-blue-400 active:bg-blue-500/10'
+              )}
+            >
+              {checkInDone ? <Check size={11} /> : <Clock size={11} />}
+            </button>
             {/* Momentum sparkline */}
             {momentum.length >= 2 && <MomentumDots sessions={momentum} />}
             {game.platform && <span className="text-[9px] px-1.5 py-0.5 bg-white/5 rounded text-white/30">{game.platform}</span>}
@@ -3156,12 +3192,12 @@ function PosterCardBack({ game, allGames, onFlip, rarity, freshness, relationshi
 
 // --- Compact Card (original layout, fixed) ---
 
-function CompactCard({ game, allGames, idx, onClick, onLogTime, onToggleQueue, onDelete, isInQueue, sortBy = 'hours', tintColor, aiQuip, eloRanking, gameTier, eloTierRank, onStartTimer, isTimerActive }: {
+function CompactCard({ game, allGames, idx, onClick, onLogTime, onToggleQueue, onDelete, isInQueue, sortBy = 'hours', tintColor, aiQuip, eloRanking, gameTier, eloTierRank }: {
   game: GameWithMetrics;
   allGames: Game[];
   idx: number;
   onClick: () => void;
-  onLogTime: () => void;
+  onLogTime: (date?: string) => void;
   onToggleQueue: () => void;
   onDelete: () => void;
   isInQueue: boolean;
@@ -3171,10 +3207,9 @@ function CompactCard({ game, allGames, idx, onClick, onLogTime, onToggleQueue, o
   eloRanking?: GameRanking;
   gameTier?: GameTier;
   eloTierRank?: { tier: GameTier; rank: number };
-  onStartTimer?: () => void;
-  isTimerActive?: boolean;
 }) {
   const [isFlipped, setIsFlipped] = useState(false);
+  const [checkInDate, setCheckInDate] = useState(() => getTodayDateString());
   const rarity = getCardRarity(game);
   const relationship = getRelationshipStatus(game, allGames);
   const streak = getGameStreak(game);
@@ -3414,7 +3449,7 @@ function CompactCard({ game, allGames, idx, onClick, onLogTime, onToggleQueue, o
           {/* Row 5: Action buttons — always visible */}
           <div className="flex items-center gap-1.5 pt-2 border-t border-white/5">
             <button
-              onClick={(e) => { e.stopPropagation(); onLogTime(); }}
+              onClick={(e) => { e.stopPropagation(); onLogTime(checkInDate); setCheckInDate(getTodayDateString()); }}
               className="flex items-center gap-1 px-2.5 py-1.5 text-white/30 active:text-blue-400 active:bg-blue-500/10 rounded-lg transition-all text-xs"
             >
               <Clock size={12} /> Log
@@ -3429,19 +3464,7 @@ function CompactCard({ game, allGames, idx, onClick, onLogTime, onToggleQueue, o
               {isInQueue ? <Check size={12} /> : <ListPlus size={12} />}
               {isInQueue ? 'Queued' : 'Queue'}
             </button>
-            {onStartTimer && (
-              <button
-                onClick={(e) => { e.stopPropagation(); onStartTimer(); }}
-                disabled={isTimerActive}
-                title="Start a live session timer"
-                className={clsx(
-                  'flex items-center gap-1 px-2.5 py-1.5 rounded-lg transition-all text-xs',
-                  isTimerActive ? 'text-purple-400/50 bg-purple-500/5' : 'text-white/30 active:text-purple-400 active:bg-purple-500/10'
-                )}
-              >
-                <Play size={12} /> {isTimerActive ? 'Timing' : 'Timer'}
-              </button>
-            )}
+            <CheckInDateNav size="xs" date={checkInDate} onChange={setCheckInDate} />
             <div className="flex-1" />
             {/* Flip button */}
             <button
