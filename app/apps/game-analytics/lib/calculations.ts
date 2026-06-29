@@ -16172,3 +16172,101 @@ export function getPortfolioAnalysis(games: Game[], summary: AnalyticsSummary): 
     suggestions,
   };
 }
+
+// ── Portfolio Sell Simulator + Allocation Drill-Down ───────────────
+// Answers "what if I sold this game?" by recomputing the whole portfolio
+// analysis with one holding removed, and lets the player see exactly which
+// games make up a genre/platform allocation slice.
+
+const PORTFOLIO_GRADE_RANK: Record<PortfolioGrade, number> = { F: 0, D: 1, C: 2, B: 3, A: 4 };
+
+export interface PortfolioSimulation {
+  gameName: string;
+  beforeGrade: PortfolioGrade;
+  afterGrade: PortfolioGrade;
+  beforeScore: number;
+  afterScore: number;
+  scoreDelta: number;
+  gradeImproved: boolean;
+  gradeWorsened: boolean;
+  diversificationDelta: number;
+  riskDelta: number;
+  backlogValueDelta: number;
+  verdict: string;
+}
+
+export function simulatePortfolioWithoutHolding(
+  games: Game[],
+  summary: AnalyticsSummary,
+  gameName: string
+): PortfolioSimulation | null {
+  const target = games.find(g => g.name === gameName && g.status !== 'Wishlist' && g.price > 0);
+  if (!target) return null;
+
+  const before = getPortfolioAnalysis(games, summary);
+  const remainingGames = games.filter(g => g !== target);
+  const afterSummary = calculateSummary(remainingGames);
+  const after = getPortfolioAnalysis(remainingGames, afterSummary);
+
+  const scoreDelta = after.compositeScore - before.compositeScore;
+  const gradeImproved = PORTFOLIO_GRADE_RANK[after.portfolioGrade] > PORTFOLIO_GRADE_RANK[before.portfolioGrade];
+  const gradeWorsened = PORTFOLIO_GRADE_RANK[after.portfolioGrade] < PORTFOLIO_GRADE_RANK[before.portfolioGrade];
+
+  let verdict: string;
+  if (gradeImproved) {
+    verdict = `Selling ${gameName} would bump your portfolio from a ${before.portfolioGrade} to a ${after.portfolioGrade} — it's dragging your grade down.`;
+  } else if (gradeWorsened) {
+    verdict = `Selling ${gameName} would drop your portfolio from a ${before.portfolioGrade} to a ${after.portfolioGrade} — it's carrying more weight than you'd think.`;
+  } else if (Math.abs(scoreDelta) >= 3) {
+    verdict = scoreDelta > 0
+      ? `Selling ${gameName} would nudge your composite score up ${scoreDelta} points, but not enough to change your grade.`
+      : `Selling ${gameName} would cost you ${Math.abs(scoreDelta)} composite points, but your grade would hold.`;
+  } else {
+    verdict = `Selling ${gameName} would barely move the needle — your portfolio grade and score stay about the same.`;
+  }
+
+  return {
+    gameName,
+    beforeGrade: before.portfolioGrade,
+    afterGrade: after.portfolioGrade,
+    beforeScore: before.compositeScore,
+    afterScore: after.compositeScore,
+    scoreDelta,
+    gradeImproved,
+    gradeWorsened,
+    diversificationDelta: after.diversificationScore - before.diversificationScore,
+    riskDelta: after.riskScore - before.riskScore,
+    backlogValueDelta: after.backlogValue - before.backlogValue,
+    verdict,
+  };
+}
+
+export interface PortfolioSliceHolding {
+  name: string;
+  invested: number;
+  hours: number;
+  roi: number;
+}
+
+export function getPortfolioSliceHoldings(
+  games: Game[],
+  dimension: 'genre' | 'platform',
+  sliceName: string
+): PortfolioSliceHolding[] {
+  const matches = games.filter(g => {
+    if (g.status === 'Wishlist' || g.price <= 0) return false;
+    return dimension === 'genre' ? g.genre === sliceName : g.platform === sliceName;
+  });
+
+  return matches
+    .map(game => {
+      const metrics = calculateMetrics(game);
+      return {
+        name: game.name,
+        invested: game.price,
+        hours: getTotalHours(game),
+        roi: metrics.roi,
+      };
+    })
+    .sort((a, b) => b.invested - a.invested);
+}

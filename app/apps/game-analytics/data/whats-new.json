@@ -3,6 +3,12 @@
     {
       "date": "2026-06-29",
       "area": "Stats",
+      "title": "Tap into your portfolio: drill down and simulate selling",
+      "body": "The Game Investment Portfolio card just got interactive. Tap any allocation bar (by genre or platform) to see exactly which games make it up. Tap a Top Performer or Underperformer to pull up a Sell Simulator showing how your portfolio grade and score would change if you sold it — handy for deciding what's actually worth keeping in your library."
+    },
+    {
+      "date": "2026-06-29",
+      "area": "Stats",
       "title": "Your library, scored like an investment portfolio",
       "body": "There's a new Game Investment Portfolio card in Stats that grades your whole game collection A through F, based on how well your games are paying off, how varied your spending is across genres and platforms, and how much money is sitting unplayed in your backlog. You'll see your best and worst \"investments\" by return, an allocation breakdown you can flip between genre and platform, and a few straight-talking suggestions on what to fix first."
     },

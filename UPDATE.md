@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-29 17:40 — Stats — Portfolio Sell Simulator & Allocation Drill-Down
+
+**Files**: app/apps/game-analytics/lib/calculations.ts, app/apps/game-analytics/components/PortfolioPanel.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+Direct follow-up to the Game Investment Portfolio FOLLOW-UP from earlier today, which called for letting the player drill into an allocation slice and simulate selling a holding. Added two purely additive functions to `calculations.ts`: `getPortfolioSliceHoldings(games, dimension, sliceName)` filters paid owned games down to one genre/platform slice and returns each holding's invested $, hours, and ROI (sorted by invested $ descending); `simulatePortfolioWithoutHolding(games, summary, gameName)` recomputes the entire portfolio via the existing untouched `getPortfolioAnalysis` and `calculateSummary` with the target game removed, returning a before/after grade and composite score, diversification/risk/backlog deltas, and a plain-English verdict sentence. Neither function edits `getPortfolioAnalysis` or any other existing function body — both simply call existing exports with a filtered game list. `PortfolioPanel.tsx` makes `AllocationBar` and `HoldingRow` clickable: tapping an allocation bar (genre or platform) opens an inline drill-down list of the games behind that slice; tapping a Top Performer or Underperformer opens a Sell Simulator card showing before→after grade badges connected by an arrow, the composite score delta, and the verdict text, with a dismiss button on each. Zero changes to `lib/types.ts`, the repository/storage layer, or any existing `calculations.ts` function body — exactly 2 files touched. Verified via `npm install` + `npm run build` (clean, zero TS errors), `npm run lint` (zero issues attributable to either touched file — only pre-existing unrelated warnings elsewhere), and a Playwright smoke test at 375px width (load sample data → Stats tab → Game Investment Portfolio panel → tap an allocation slice opens the drill-down list → tap a Top Performer opens the Sell Simulator with a computed grade delta and verdict) with zero new console errors/warnings — the only console messages observed were pre-existing RAWG thumbnail-fetch network failures unrelated to this change.
+
+FOLLOW-UP: Could extend the sell simulator to a multi-select "what if I sold these N games" scenario, or let the player tap a drill-down holding to jump straight into its own Sell Simulator.
+
 ## 2026-06-29 — Stats — Game Investment Portfolio
 
 **Files**: app/apps/game-analytics/lib/calculations.ts, app/apps/game-analytics/components/PortfolioPanel.tsx (new), app/apps/game-analytics/components/StatsView.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json

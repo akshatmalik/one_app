@@ -1,9 +1,15 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Briefcase, TrendingUp, TrendingDown, ShieldAlert, PieChart as PieChartIcon } from 'lucide-react';
+import { Briefcase, TrendingUp, TrendingDown, ShieldAlert, PieChart as PieChartIcon, X, ArrowRight } from 'lucide-react';
 import { Game, AnalyticsSummary } from '../lib/types';
-import { getPortfolioAnalysis, PortfolioAllocation, PortfolioHolding } from '../lib/calculations';
+import {
+  getPortfolioAnalysis,
+  simulatePortfolioWithoutHolding,
+  getPortfolioSliceHoldings,
+  PortfolioAllocation,
+  PortfolioHolding,
+} from '../lib/calculations';
 
 interface PortfolioPanelProps {
   games: Game[];
@@ -18,9 +24,21 @@ const GRADE_COLORS: Record<string, string> = {
   F: '#ef4444',
 };
 
-function AllocationBar({ allocation, color }: { allocation: PortfolioAllocation; color: string }) {
+function AllocationBar({
+  allocation,
+  color,
+  onSelect,
+}: {
+  allocation: PortfolioAllocation;
+  color: string;
+  onSelect: (name: string) => void;
+}) {
   return (
-    <div className="flex items-center gap-2 py-1">
+    <button
+      type="button"
+      onClick={() => onSelect(allocation.name)}
+      className="flex items-center gap-2 py-1 w-full text-left hover:bg-white/5 rounded transition-colors -mx-1 px-1"
+    >
       <span className="text-[10px] text-white/60 w-20 shrink-0 truncate" title={allocation.name}>
         {allocation.name}
       </span>
@@ -30,20 +48,32 @@ function AllocationBar({ allocation, color }: { allocation: PortfolioAllocation;
       <span className="text-[10px] text-white/40 w-12 shrink-0 text-right">
         {allocation.percentage}%
       </span>
-    </div>
+    </button>
   );
 }
 
-function HoldingRow({ holding, tone }: { holding: PortfolioHolding; tone: 'good' | 'bad' }) {
+function HoldingRow({
+  holding,
+  tone,
+  onSelect,
+}: {
+  holding: PortfolioHolding;
+  tone: 'good' | 'bad';
+  onSelect: (name: string) => void;
+}) {
   const color = tone === 'good' ? '#22c55e' : '#ef4444';
   return (
-    <div className="flex items-center justify-between gap-2 py-1.5 border-b border-white/5 last:border-0">
+    <button
+      type="button"
+      onClick={() => onSelect(holding.name)}
+      className="flex items-center justify-between gap-2 py-1.5 border-b border-white/5 last:border-0 w-full text-left hover:bg-white/5 transition-colors rounded"
+    >
       <span className="text-xs text-white/70 truncate" title={holding.name}>{holding.name}</span>
       <div className="flex items-center gap-1.5 shrink-0">
         <span className="text-[10px] text-white/30">${holding.price.toFixed(0)} · {holding.hours.toFixed(0)}h</span>
         <span className="text-xs font-bold" style={{ color }}>{holding.roi.toFixed(1)} ROI</span>
       </div>
-    </div>
+    </button>
   );
 }
 
@@ -51,7 +81,19 @@ const ALLOCATION_COLORS = ['#8b5cf6', '#06b6d4', '#10b981', '#f59e0b', '#ec4899'
 
 export function PortfolioPanel({ games, summary }: PortfolioPanelProps) {
   const [allocationView, setAllocationView] = useState<'genre' | 'platform'>('genre');
+  const [selectedSlice, setSelectedSlice] = useState<string | null>(null);
+  const [sellSimGame, setSellSimGame] = useState<string | null>(null);
   const data = useMemo(() => getPortfolioAnalysis(games, summary), [games, summary]);
+
+  const sliceHoldings = useMemo(
+    () => (selectedSlice ? getPortfolioSliceHoldings(games, allocationView, selectedSlice) : []),
+    [games, allocationView, selectedSlice]
+  );
+
+  const simulation = useMemo(
+    () => (sellSimGame ? simulatePortfolioWithoutHolding(games, summary, sellSimGame) : null),
+    [games, summary, sellSimGame]
+  );
 
   if (data.holdingsCount === 0) return null;
 
@@ -111,7 +153,7 @@ export function PortfolioPanel({ games, summary }: PortfolioPanelProps) {
                 <button
                   key={v}
                   type="button"
-                  onClick={() => setAllocationView(v)}
+                  onClick={() => { setAllocationView(v); setSelectedSlice(null); }}
                   className={`text-[9px] font-medium px-2 py-0.5 rounded-full border transition-colors capitalize ${
                     allocationView === v
                       ? 'bg-emerald-500/30 border-emerald-400/50 text-white'
@@ -124,8 +166,37 @@ export function PortfolioPanel({ games, summary }: PortfolioPanelProps) {
             </div>
           </div>
           {allocations.map((a, i) => (
-            <AllocationBar key={a.name} allocation={a} color={ALLOCATION_COLORS[i % ALLOCATION_COLORS.length]} />
+            <AllocationBar
+              key={a.name}
+              allocation={a}
+              color={ALLOCATION_COLORS[i % ALLOCATION_COLORS.length]}
+              onSelect={setSelectedSlice}
+            />
           ))}
+          {selectedSlice && (
+            <div className="mt-2 p-2.5 bg-black/20 rounded-lg border border-white/10">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[10px] font-medium text-white/60">
+                  {selectedSlice} holdings
+                </span>
+                <button type="button" onClick={() => setSelectedSlice(null)} className="text-white/30 hover:text-white/60">
+                  <X size={12} />
+                </button>
+              </div>
+              {sliceHoldings.length === 0 ? (
+                <p className="text-[10px] text-white/30">No paid holdings in this slice.</p>
+              ) : (
+                <div className="space-y-1">
+                  {sliceHoldings.map(h => (
+                    <div key={h.name} className="flex items-center justify-between gap-2 text-[10px]">
+                      <span className="text-white/60 truncate">{h.name}</span>
+                      <span className="text-white/30 shrink-0">${h.invested.toFixed(0)} · {h.hours.toFixed(0)}h · {h.roi.toFixed(1)} ROI</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -134,7 +205,7 @@ export function PortfolioPanel({ games, summary }: PortfolioPanelProps) {
           <div className="text-[10px] font-medium text-white/50 flex items-center gap-1 mb-1">
             <TrendingUp size={11} className="text-green-400" /> Top Performers
           </div>
-          {data.topPerformers.map(h => <HoldingRow key={h.name} holding={h} tone="good" />)}
+          {data.topPerformers.map(h => <HoldingRow key={h.name} holding={h} tone="good" onSelect={setSellSimGame} />)}
         </div>
       )}
 
@@ -143,7 +214,37 @@ export function PortfolioPanel({ games, summary }: PortfolioPanelProps) {
           <div className="text-[10px] font-medium text-white/50 flex items-center gap-1 mb-1">
             <TrendingDown size={11} className="text-red-400" /> Underperformers
           </div>
-          {data.underperformers.map(h => <HoldingRow key={h.name} holding={h} tone="bad" />)}
+          {data.underperformers.map(h => <HoldingRow key={h.name} holding={h} tone="bad" onSelect={setSellSimGame} />)}
+        </div>
+      )}
+
+      {simulation && (
+        <div className="mb-3 p-3 bg-black/20 rounded-lg border border-white/10">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[10px] font-medium text-white/60">Sell Simulator — {simulation.gameName}</span>
+            <button type="button" onClick={() => setSellSimGame(null)} className="text-white/30 hover:text-white/60">
+              <X size={12} />
+            </button>
+          </div>
+          <div className="flex items-center justify-center gap-3 mb-2">
+            <div
+              className="flex items-center justify-center w-9 h-9 rounded-full text-sm font-black"
+              style={{ backgroundColor: `${GRADE_COLORS[simulation.beforeGrade]}22`, color: GRADE_COLORS[simulation.beforeGrade], border: `1.5px solid ${GRADE_COLORS[simulation.beforeGrade]}55` }}
+            >
+              {simulation.beforeGrade}
+            </div>
+            <ArrowRight size={14} className="text-white/30" />
+            <div
+              className="flex items-center justify-center w-9 h-9 rounded-full text-sm font-black"
+              style={{ backgroundColor: `${GRADE_COLORS[simulation.afterGrade]}22`, color: GRADE_COLORS[simulation.afterGrade], border: `1.5px solid ${GRADE_COLORS[simulation.afterGrade]}55` }}
+            >
+              {simulation.afterGrade}
+            </div>
+            <span className={`text-xs font-bold ${simulation.scoreDelta > 0 ? 'text-green-400' : simulation.scoreDelta < 0 ? 'text-red-400' : 'text-white/40'}`}>
+              {simulation.scoreDelta > 0 ? '+' : ''}{simulation.scoreDelta} pts
+            </span>
+          </div>
+          <p className="text-[10px] text-white/50 leading-snug text-center">{simulation.verdict}</p>
         </div>
       )}
 
