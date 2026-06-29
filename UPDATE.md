@@ -5,6 +5,15 @@ entry below is one run. Newest entries first.
 
 ---
 
+## 2026-06-29 — Stats — Game Investment Portfolio
+
+**Files**: app/apps/game-analytics/lib/calculations.ts, app/apps/game-analytics/components/PortfolioPanel.tsx (new), app/apps/game-analytics/components/StatsView.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json
+**Risk**: not risky
+
+The Stats tab already compares the player against critics, against the general gamer population, and against their own past, but nothing framed the library itself as a portfolio of "investments." Added "Game Investment Portfolio": a new `getPortfolioAnalysis(games, summary)` in `calculations.ts` (purely additive, reuses the existing untouched `calculateMetrics` per-game and several existing `AnalyticsSummary` fields — `totalSpent`, `backlogValue`, `spendingByGenre`, `spendingByPlatform`, `averageCostPerHour`, `completionRate` — rather than recomputing them) that assigns the whole library a letter grade (A-F) from a blend of average ROI, completion rate, and a Herfindahl-Hirschman-style diversification score across genre/platform, then surfaces a Backlog Capital figure (money parked in unplayed games), a Diversification score with a plain-English label, a Risk score, a genre/platform allocation breakdown, the top 5 best- and worst-ROI "holdings," and 2-3 actionable suggestions (e.g. "clear backlog before your next purchase," "your biggest underperformer is X"). New `PortfolioPanel.tsx` renders this as a brokerage-statement-style card (grade badge, hero stats, toggleable genre/platform allocation bars, performer lists, suggestions) wired into `StatsView.tsx` directly below `PopulationBenchmarkPanel`, returning `null` when there are no paid owned games. Zero changes to `lib/types.ts`, the repository/storage layer, or any existing `calculations.ts` function body — exactly 3 files touched (1 new). Verified via `npm install` + `npm run build` (clean, 12/12 static pages, zero TS errors), `npm run lint` (zero issues attributable to any of the 3 touched/new files — only pre-existing unrelated errors in `game-interest-tracker` and `survivor-deckbuilder`), and a Playwright smoke test at 375px width (load sample data → Stats tab → Game Investment Portfolio panel renders with a computed grade, allocation bars, 5 top performers, 5 underperformers, and suggestion text) with zero new console errors/warnings.
+
+FOLLOW-UP: Could let the player tap into a specific genre/platform allocation slice to drill into which games make it up, or add a "what if I sold this game" framing that shows the portfolio grade recalculated without it.
+
 ## 2026-06-27 — Stats — Population Benchmark Mode: gamer profile selector
 
 **Files**: app/apps/game-analytics/lib/calculations.ts, app/apps/game-analytics/components/PopulationBenchmarkPanel.tsx, UPDATE.md, app/apps/game-analytics/data/whats-new.json

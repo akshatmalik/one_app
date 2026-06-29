@@ -15995,3 +15995,180 @@ export function getPopulationBenchmarks(
     profileDescription: profileMeta.description,
   };
 }
+
+// ── Game Investment Portfolio ───────────────────────────────────────
+// Frames your library like a brokerage statement: total capital invested,
+// allocation by genre/platform, a diversification + risk score, and which
+// "holdings" are paying off vs dragging the portfolio down.
+
+export interface PortfolioHolding {
+  name: string;
+  roi: number;
+  costPerHour: number;
+  hours: number;
+  price: number;
+}
+
+export interface PortfolioAllocation {
+  name: string;
+  invested: number;
+  percentage: number; // % of total allocated spend in this breakdown
+}
+
+export type PortfolioGrade = 'A' | 'B' | 'C' | 'D' | 'F';
+
+export interface PortfolioAnalysis {
+  totalInvested: number;
+  holdingsCount: number; // owned, paid games
+  backlogValue: number; // capital sitting in unplayed games
+  backlogPercentage: number; // % of totalInvested sitting unplayed
+  compositeScore: number; // 0-100
+  portfolioGrade: PortfolioGrade;
+  gradeLabel: string;
+  diversificationScore: number; // 0-100, higher = more spread out
+  diversificationLabel: string;
+  riskScore: number; // 0-100, higher = riskier
+  riskLabel: string;
+  allocationByGenre: PortfolioAllocation[];
+  allocationByPlatform: PortfolioAllocation[];
+  topPerformers: PortfolioHolding[];
+  underperformers: PortfolioHolding[];
+  suggestions: string[];
+}
+
+function buildPortfolioAllocation(record: Record<string, number>, limit = 6): PortfolioAllocation[] {
+  const entries = Object.entries(record).filter(([, v]) => v > 0);
+  const total = entries.reduce((sum, [, v]) => sum + v, 0);
+  if (total <= 0) return [];
+  return entries
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, limit)
+    .map(([name, invested]) => ({
+      name,
+      invested,
+      percentage: Math.round((invested / total) * 1000) / 10,
+    }));
+}
+
+// Herfindahl-Hirschman-style concentration index: ranges from ~1/n (spread evenly
+// across n categories) to 1 (100% in one category). Used as a diversification proxy.
+function portfolioConcentrationIndex(record: Record<string, number>): number {
+  const values = Object.values(record).filter(v => v > 0);
+  const total = values.reduce((sum, v) => sum + v, 0);
+  if (total <= 0) return 1;
+  const shares = values.map(v => v / total);
+  return shares.reduce((sum, share) => sum + share * share, 0);
+}
+
+export function getPortfolioAnalysis(games: Game[], summary: AnalyticsSummary): PortfolioAnalysis {
+  const totalInvested = summary.totalSpent;
+  const backlogValue = summary.backlogValue;
+  const backlogPercentage = totalInvested > 0 ? Math.round((backlogValue / totalInvested) * 100) : 0;
+
+  const investedGames = games.filter(g => g.status !== 'Wishlist' && g.price > 0);
+  const holdingsCount = investedGames.length;
+
+  const holdings: PortfolioHolding[] = investedGames.map(game => {
+    const metrics = calculateMetrics(game);
+    return {
+      name: game.name,
+      roi: metrics.roi,
+      costPerHour: metrics.costPerHour,
+      hours: getTotalHours(game),
+      price: game.price,
+    };
+  });
+
+  const playedHoldings = holdings.filter(h => h.hours > 0);
+  const sortedByRoi = [...playedHoldings].sort((a, b) => b.roi - a.roi);
+  const topPerformers = sortedByRoi.slice(0, 5);
+  const topNames = new Set(topPerformers.map(h => h.name));
+  const underperformers = sortedByRoi
+    .filter(h => !topNames.has(h.name))
+    .sort((a, b) => a.roi - b.roi)
+    .slice(0, 5);
+
+  const allocationByGenre = buildPortfolioAllocation(summary.spendingByGenre);
+  const allocationByPlatform = buildPortfolioAllocation(summary.spendingByPlatform);
+
+  const genreHHI = portfolioConcentrationIndex(summary.spendingByGenre);
+  const platformHHI = portfolioConcentrationIndex(summary.spendingByPlatform);
+  const avgHHI = (genreHHI + platformHHI) / 2;
+  const diversificationScore = totalInvested > 0 ? Math.round((1 - avgHHI) * 100) : 0;
+  const diversificationLabel = diversificationScore >= 70 ? 'Well Diversified'
+    : diversificationScore >= 40 ? 'Moderately Diversified'
+    : 'Concentrated';
+
+  const backlogRatio = totalInvested > 0 ? Math.min(1, backlogValue / totalInvested) : 0;
+  const riskScore = Math.round(Math.min(1, backlogRatio * 0.6 + avgHHI * 0.4) * 100);
+  const riskLabel = riskScore >= 70 ? 'High Risk' : riskScore >= 40 ? 'Moderate Risk' : 'Low Risk';
+
+  const valueScore = Math.max(0, Math.min(100, 100 - summary.averageCostPerHour * 15));
+  const completionScore = Math.max(0, Math.min(100, summary.completionRate));
+  const compositeScore = totalInvested > 0
+    ? Math.round(valueScore * 0.3 + completionScore * 0.3 + diversificationScore * 0.2 + (100 - riskScore) * 0.2)
+    : 0;
+
+  const portfolioGrade: PortfolioGrade = compositeScore >= 85 ? 'A'
+    : compositeScore >= 70 ? 'B'
+    : compositeScore >= 55 ? 'C'
+    : compositeScore >= 40 ? 'D'
+    : 'F';
+
+  const gradeLabel = portfolioGrade === 'A' ? 'Blue-Chip Portfolio'
+    : portfolioGrade === 'B' ? 'Solid Holdings'
+    : portfolioGrade === 'C' ? 'Mixed Bag'
+    : portfolioGrade === 'D' ? 'Needs Rebalancing'
+    : 'High-Risk Portfolio';
+
+  const suggestions: string[] = [];
+
+  if (totalInvested > 0 && backlogPercentage >= 25) {
+    suggestions.push(
+      `$${backlogValue.toFixed(0)} (${backlogPercentage}% of your invested capital) is parked in unplayed games. Clearing some backlog before your next purchase puts that capital to work.`
+    );
+  }
+
+  if (totalInvested > 0 && diversificationScore < 45 && allocationByGenre[0]) {
+    suggestions.push(
+      `${allocationByGenre[0].percentage}% of your spending is concentrated in ${allocationByGenre[0].name}. Branching into another genre would lower your concentration risk.`
+    );
+  }
+
+  if (underperformers[0]) {
+    const worst = underperformers[0];
+    suggestions.push(
+      `${worst.name} is your biggest underperformer — $${worst.price.toFixed(0)} for ${worst.hours.toFixed(0)}h played (ROI ${worst.roi.toFixed(1)}). Think twice before buying similar titles.`
+    );
+  }
+
+  if (topPerformers[0]) {
+    const best = topPerformers[0];
+    suggestions.push(
+      `${best.name} is your best-performing holding (ROI ${best.roi.toFixed(1)}). Look for more like it before chasing riskier buys.`
+    );
+  }
+
+  if (suggestions.length === 0) {
+    suggestions.push('Your portfolio looks balanced — no major rebalancing needed right now.');
+  }
+
+  return {
+    totalInvested,
+    holdingsCount,
+    backlogValue,
+    backlogPercentage,
+    compositeScore,
+    portfolioGrade,
+    gradeLabel,
+    diversificationScore,
+    diversificationLabel,
+    riskScore,
+    riskLabel,
+    allocationByGenre,
+    allocationByPlatform,
+    topPerformers,
+    underperformers,
+    suggestions,
+  };
+}
