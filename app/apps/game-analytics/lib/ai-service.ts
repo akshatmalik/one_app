@@ -842,7 +842,7 @@ const READ_FUNCTION_DECLARATIONS: FunctionDeclaration[] = [
       properties: {
         query: Schema.string({ description: 'Partial or full game name to match. Omit to list everything.' }),
         status: Schema.enumString({
-          enum: ['Not Started', 'In Progress', 'Completed', 'Wishlist', 'Abandoned'],
+          enum: ['Not Started', 'In Progress', 'Completed', 'Wishlist', 'Abandoned', 'Pick Up Later'],
           description: 'Optional status filter',
         }),
       },

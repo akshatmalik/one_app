@@ -636,9 +636,10 @@ export function UpNextTab({
                         game.status === 'In Progress' && 'bg-blue-500/20 text-blue-400',
                         game.status === 'Not Started' && 'bg-white/10 text-white/50',
                         game.status === 'Wishlist' && 'bg-purple-500/20 text-purple-400',
-                        game.status === 'Abandoned' && 'bg-red-500/20 text-red-400'
+                        game.status === 'Abandoned' && 'bg-red-500/20 text-red-400',
+                        game.status === 'Pick Up Later' && 'bg-cyan-500/20 text-cyan-400'
                       )}>
-                        {game.status === 'Not Started' ? 'Backlog' : game.status}
+                        {game.status === 'Not Started' ? 'Backlog' : game.status === 'Abandoned' ? 'DNF' : game.status}
                       </span>
                     </div>
                   </div>

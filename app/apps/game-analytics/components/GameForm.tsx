@@ -25,9 +25,10 @@ const SUBSCRIPTION_SOURCES: SubscriptionSource[] = ['PS Plus', 'Game Pass', 'Epi
 const STATUS_CONFIG: { status: GameStatus; label: string; dotClass: string; activeClass: string }[] = [
   { status: 'Not Started', label: 'Backlog', dotClass: 'bg-white/40', activeClass: 'bg-white/10 text-white/80 ring-1 ring-white/20' },
   { status: 'In Progress', label: 'Playing', dotClass: 'bg-blue-400', activeClass: 'bg-blue-500/20 text-blue-400 ring-1 ring-blue-500/50' },
+  { status: 'Pick Up Later', label: 'Pick Up Later', dotClass: 'bg-cyan-400', activeClass: 'bg-cyan-500/20 text-cyan-400 ring-1 ring-cyan-500/50' },
   { status: 'Completed', label: 'Done', dotClass: 'bg-emerald-400', activeClass: 'bg-emerald-500/20 text-emerald-400 ring-1 ring-emerald-500/50' },
   { status: 'Wishlist', label: 'Wishlist', dotClass: 'bg-purple-400', activeClass: 'bg-purple-500/20 text-purple-400 ring-1 ring-purple-500/50' },
-  { status: 'Abandoned', label: 'Dropped', dotClass: 'bg-red-400', activeClass: 'bg-red-500/20 text-red-400 ring-1 ring-red-500/50' },
+  { status: 'Abandoned', label: 'DNF', dotClass: 'bg-red-400', activeClass: 'bg-red-500/20 text-red-400 ring-1 ring-red-500/50' },
 ];
 
 const RATING_LABELS: Record<number, string> = {
@@ -179,7 +180,8 @@ export function GameForm({ onSubmit, onClose, initialGame, allGames = [], existi
   const valueRating = getValueRating(costPerHour);
 
   const isOwned = formData.status !== 'Wishlist';
-  const showPlayDates = isOwned && (formData.status === 'In Progress' || formData.status === 'Completed' || formData.status === 'Abandoned');
+  const showPlayDates = isOwned && (formData.status === 'In Progress' || formData.status === 'Completed' || formData.status === 'Abandoned' || formData.status === 'Pick Up Later');
+  const showEndDate = showPlayDates && formData.status !== 'Pick Up Later';
   const showRating = formData.status !== 'Not Started' && formData.status !== 'Wishlist';
 
   const budgetImpact = useMemo(() => {
@@ -699,10 +701,10 @@ export function GameForm({ onSubmit, onClose, initialGame, allGames = [], existi
                     </div>
                   )}
                 </div>
-                {showPlayDates && (
+                {showEndDate && (
                   <div>
                     <label className="block text-xs font-medium text-white/50 mb-1.5">
-                      {formData.status === 'Abandoned' ? 'Dropped' : 'Finished'}
+                      {formData.status === 'Abandoned' ? 'Dropped (DNF)' : 'Finished'}
                     </label>
                     <input
                       type="date"

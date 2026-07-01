@@ -113,6 +113,7 @@ export function calculateSummary(games: Game[]): AnalyticsSummary {
   const inProgressGames = ownedGames.filter(g => g.status === 'In Progress');
   const notStartedGames = ownedGames.filter(g => g.status === 'Not Started');
   const abandonedGames = ownedGames.filter(g => g.status === 'Abandoned');
+  const pickUpLaterGames = ownedGames.filter(g => g.status === 'Pick Up Later');
   const playedGames = ownedGames.filter(g => getTotalHours(g) > 0);
 
   // Financial calculations
@@ -271,6 +272,7 @@ export function calculateSummary(games: Game[]): AnalyticsSummary {
     inProgressCount: inProgressGames.length,
     notStartedCount: notStartedGames.length,
     abandonedCount: abandonedGames.length,
+    pickUpLaterCount: pickUpLaterGames.length,
 
     // Financial
     totalSpent,
@@ -4950,7 +4952,10 @@ export function getGameHealthDot(game: Game): GameHealthDot {
     return { level: 'none', color: '#10b981', label: 'Completed', daysSinceLastPlay: -1 };
   }
   if (game.status === 'Abandoned') {
-    return { level: 'cold', color: '#ef4444', label: 'Abandoned', daysSinceLastPlay: -1 };
+    return { level: 'cold', color: '#ef4444', label: 'DNF', daysSinceLastPlay: -1 };
+  }
+  if (game.status === 'Pick Up Later') {
+    return { level: 'dormant', color: '#22d3ee', label: 'Paused', daysSinceLastPlay: -1 };
   }
 
   const logs = game.playLogs || [];
@@ -5030,6 +5035,18 @@ export function getDaysContext(game: Game): string {
       return `Playing for ${days} days`;
     }
     return 'In Progress';
+  }
+
+  if (game.status === 'Pick Up Later') {
+    const logs = game.playLogs || [];
+    if (logs.length > 0) {
+      const sorted = [...logs].sort((a, b) => parseLocalDate(b.date).getTime() - parseLocalDate(a.date).getTime());
+      const days = Math.floor((now - parseLocalDate(sorted[0].date).getTime()) / (24 * 60 * 60 * 1000));
+      if (days === 0) return 'Paused today';
+      if (days === 1) return 'Paused since yesterday';
+      return `Paused for ${days} days`;
+    }
+    return 'Pick up later';
   }
 
   if (game.status === 'Not Started') {
@@ -5218,6 +5235,9 @@ export function getGameSmartOneLiner(game: Game, allGames: Game[]): string {
   }
   if (game.status === 'Not Started') {
     return 'Waiting patiently in the backlog';
+  }
+  if (game.status === 'Pick Up Later' && totalHours > 0) {
+    return `${totalHours}h in, paused on purpose — pick it back up whenever`;
   }
 
   return '';
@@ -6743,6 +6763,7 @@ export function getCardRarity(game: Game): CardRarity {
   let completionScore = 0;
   if (game.status === 'Completed') completionScore = 10;
   else if (game.status === 'In Progress') completionScore = 5;
+  else if (game.status === 'Pick Up Later') completionScore = 3;
 
   const score = Math.round(ratingScore + valueScore + hoursScore + completionScore);
 
@@ -6872,6 +6893,16 @@ export function getRelationshipStatus(game: Game, allGames: Game[]): Relationshi
     return { label: "It's Complicated", color: '#a855f7', bgColor: 'rgba(168,85,247,0.15)', cardTint: 'rgba(168,85,247,0.03)' };
   }
 
+  // The Long Pause: paused for 60+ days
+  if (game.status === 'Pick Up Later' && daysSinceLastPlay >= 60) {
+    return { label: 'The Long Pause', color: '#0891b2', bgColor: 'rgba(8,145,178,0.15)', cardTint: 'rgba(8,145,178,0.03)' };
+  }
+
+  // On Hold (generic Pick Up Later)
+  if (game.status === 'Pick Up Later') {
+    return { label: 'On Hold', color: '#22d3ee', bgColor: 'rgba(34,211,238,0.15)', cardTint: 'rgba(34,211,238,0.03)' };
+  }
+
   // Buyer's Remorse: paid $40+, under 2 hours, no session in 30+ days
   if (game.price >= 40 && totalHours < 2 && (daysSinceLastPlay > 30 || (logs.length === 0 && daysSincePurchase > 30)) && game.status !== 'Wishlist') {
     return { label: "Buyer's Remorse", color: '#ef4444', bgColor: 'rgba(239,68,68,0.15)', cardTint: 'rgba(239,68,68,0.03)' };
@@ -6882,9 +6913,9 @@ export function getRelationshipStatus(game: Game, allGames: Game[]): Relationshi
     return { label: 'Ghosted', color: '#6b7280', bgColor: 'rgba(107,114,128,0.15)', cardTint: 'rgba(107,114,128,0.03)' };
   }
 
-  // Abandoned (generic)
+  // Abandoned/DNF (generic)
   if (game.status === 'Abandoned') {
-    return { label: 'Abandoned', color: '#ef4444', bgColor: 'rgba(239,68,68,0.15)', cardTint: 'rgba(239,68,68,0.02)' };
+    return { label: 'DNF', color: '#ef4444', bgColor: 'rgba(239,68,68,0.15)', cardTint: 'rgba(239,68,68,0.02)' };
   }
 
   // The One That Got Away: wishlist 60+ days
@@ -7033,6 +7064,21 @@ export function getHeroNumber(game: Game): HeroNumber {
     };
   }
 
+  if (game.status === 'Pick Up Later') {
+    const logs = game.playLogs || [];
+    const sorted = logs.length > 0
+      ? [...logs].sort((a, b) => parseLocalDate(b.date).getTime() - parseLocalDate(a.date).getTime())
+      : [];
+    const daysSince = sorted.length > 0
+      ? Math.floor((Date.now() - parseLocalDate(sorted[0].date).getTime()) / (24 * 60 * 60 * 1000))
+      : 0;
+    return {
+      value: `${daysSince}d`,
+      label: 'paused',
+      color: '#22d3ee',
+    };
+  }
+
   return { value: '-', label: '', color: '#6b7280' };
 }
 
@@ -7121,6 +7167,17 @@ export function getGameSections(games: Game[]): GameSection[] {
       label: 'Cooling Off',
       insight: `${coolingFiltered.length} game${coolingFiltered.length > 1 ? 's' : ''} losing momentum`,
       gameIds: coolingFiltered.map(g => g.id),
+    });
+  }
+
+  // Paused: intentionally on hold (Pick Up Later)
+  const paused = games.filter(g => g.status === 'Pick Up Later');
+  if (paused.length > 0) {
+    sections.push({
+      id: 'paused',
+      label: 'Paused',
+      insight: `${paused.length} game${paused.length > 1 ? 's' : ''} on hold, waiting to be picked back up`,
+      gameIds: paused.map(g => g.id),
     });
   }
 
@@ -7258,6 +7315,8 @@ export function generateGameBiography(game: Game, allGames: Game[]): string {
     } else {
       parts.push(`Shelved after ${totalHours}h. Sometimes things just don't click.`);
     }
+  } else if (game.status === 'Pick Up Later') {
+    parts.push(`Currently on an intermission after ${totalHours}h — paused on purpose, not given up on.`);
   }
 
   // Value context
@@ -11399,7 +11458,7 @@ export interface QueueShameData {
 export function getQueueShameData(game: Game, allGames: Game[]): QueueShameData | null {
   // Only applies to queued (Not Started / Wishlist) games with a queue position
   if (game.queuePosition == null) return null;
-  if (game.status === 'In Progress' || game.status === 'Completed' || game.status === 'Abandoned') return null;
+  if (game.status === 'In Progress' || game.status === 'Completed' || game.status === 'Abandoned' || game.status === 'Pick Up Later') return null;
 
   // Use datePurchased or createdAt as when it was added
   const addedDate = parseLocalDate(game.datePurchased || game.createdAt);

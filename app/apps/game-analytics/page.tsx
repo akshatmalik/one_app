@@ -1880,7 +1880,17 @@ export default function GameAnalyticsPage() {
             await updateGame(gameId, { status: 'Abandoned' });
             if (before) {
               showUndo({
-                message: `"${before.name}" marked Abandoned`,
+                message: `"${before.name}" marked DNF`,
+                onUndo: async () => { await updateGame(gameId, { status: before.status }); },
+              });
+            }
+          }}
+          onPickUpLater={async (gameId) => {
+            const before = games.find(g => g.id === gameId);
+            await updateGame(gameId, { status: 'Pick Up Later' });
+            if (before) {
+              showUndo({
+                message: `"${before.name}" set to Pick Up Later`,
                 onUndo: async () => { await updateGame(gameId, { status: before.status }); },
               });
             }

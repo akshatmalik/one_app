@@ -101,9 +101,9 @@ export function YearAwardsModal({ year, allGames, rawGames, updateGame, onClose 
     .filter(g => bestSessionInYear(g, year) > 0)
     .sort((a, b) => bestSessionInYear(b, year) - bestSessionInYear(a, year));
 
-  // "One That Got Away" — abandoned or high-playtime neglected games
+  // "One That Got Away" — abandoned/paused or high-playtime neglected games
   const gotAway = allGames
-    .filter(g => g.status === 'Abandoned' || (g.status === 'In Progress' && hoursInYear(g, year) === 0 && (g.playLogs || []).length > 0))
+    .filter(g => g.status === 'Abandoned' || g.status === 'Pick Up Later' || (g.status === 'In Progress' && hoursInYear(g, year) === 0 && (g.playLogs || []).length > 0))
     .sort((a, b) => (b.playLogs || []).reduce((s, l) => s + l.hours, 0) - (a.playLogs || []).reduce((s, l) => s + l.hours, 0));
 
   const categories: AwardCategoryDef[] = [
@@ -162,7 +162,7 @@ export function YearAwardsModal({ year, allGames, rawGames, updateGame, onClose 
       icon: '👻',
       description: 'A game you wish you\'d spent more time on. The one that haunts you.',
       nominees: (gotAway.length > 0 ? gotAway : allGames.filter(g => g.status === 'In Progress')).slice(0, 6)
-        .map(g => toNominee(g, g.status === 'Abandoned' ? `Abandoned after ${(g.playLogs || []).reduce((s, l) => s + l.hours, 0).toFixed(1)}h` : `Still unfinished · ${hoursInYear(g, year).toFixed(1)}h this year`)),
+        .map(g => toNominee(g, g.status === 'Abandoned' ? `DNF after ${(g.playLogs || []).reduce((s, l) => s + l.hours, 0).toFixed(1)}h` : g.status === 'Pick Up Later' ? `Paused after ${(g.playLogs || []).reduce((s, l) => s + l.hours, 0).toFixed(1)}h` : `Still unfinished · ${hoursInYear(g, year).toFixed(1)}h this year`)),
     },
     {
       id: 'legacy',

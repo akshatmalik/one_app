@@ -324,7 +324,7 @@ export function buildYearCategories(
 
   // One that got away
   const gotAway = allGames
-    .filter(g => g.status === 'Abandoned' || (g.status === 'In Progress' && hoursInYear(g, year) === 0 && (g.playLogs || []).length > 0))
+    .filter(g => g.status === 'Abandoned' || g.status === 'Pick Up Later' || (g.status === 'In Progress' && hoursInYear(g, year) === 0 && (g.playLogs || []).length > 0))
     .sort((a, b) => (b.playLogs || []).reduce((s, l) => s + l.hours, 0) - (a.playLogs || []).reduce((s, l) => s + l.hours, 0));
 
   return [
@@ -334,7 +334,7 @@ export function buildYearCategories(
     { id: 'endurance', label: 'The Endurance Award', icon: '⏳', description: 'Most committed. Most hours. The long haul game.', nominees: byHours.slice(0, 6).map(g => toNominee(g, `${hoursInYear(g, year).toFixed(1)}h in ${year}`)) },
     { id: 'best_investment', label: 'Best Investment', icon: '💰', description: 'Best value for money — the most per dollar.', nominees: (bestValue.length > 0 ? bestValue : byHours).slice(0, 6).map(g => { const cph = g.price > 0 ? g.price / hoursInYear(g, year) : 0; return toNominee(g, cph > 0 ? `$${cph.toFixed(2)}/hr · $${g.price} for ${hoursInYear(g, year).toFixed(1)}h` : `${hoursInYear(g, year).toFixed(1)}h · free`); }) },
     { id: 'session_of_year', label: 'Session of the Year', icon: '⚡', description: 'The game that hosted your single greatest gaming moment.', nominees: (sessionChamps.length > 0 ? sessionChamps : byHours).slice(0, 6).map(g => toNominee(g, `Best session: ${bestSessionInYear(g, year).toFixed(1)}h`)) },
-    { id: 'one_that_got_away', label: 'The One That Got Away', icon: '👻', description: "A game you wish you'd spent more time on.", nominees: (gotAway.length > 0 ? gotAway : allGames.filter(g => g.status === 'In Progress')).slice(0, 6).map(g => toNominee(g, g.status === 'Abandoned' ? `Abandoned after ${(g.playLogs || []).reduce((s, l) => s + l.hours, 0).toFixed(1)}h` : `Still unfinished`)) },
+    { id: 'one_that_got_away', label: 'The One That Got Away', icon: '👻', description: "A game you wish you'd spent more time on.", nominees: (gotAway.length > 0 ? gotAway : allGames.filter(g => g.status === 'In Progress')).slice(0, 6).map(g => toNominee(g, g.status === 'Abandoned' ? `Abandoned after ${(g.playLogs || []).reduce((s, l) => s + l.hours, 0).toFixed(1)}h` : g.status === 'Pick Up Later' ? `Paused after ${(g.playLogs || []).reduce((s, l) => s + l.hours, 0).toFixed(1)}h` : `Still unfinished`)) },
     { id: 'legacy', label: 'The Legacy', icon: '🌟', description: 'The game that changed how you think about gaming.', nominees: byHours.slice(0, 8).map(g => toNominee(g)) },
     { id: 'ai_choice', label: 'AI Choice Award', icon: '🤖', description: "The AI's surprising pick you might not have expected.", nominees: byHours.slice(0, 6).map(g => toNominee(g)), isAICategory: true },
   ];

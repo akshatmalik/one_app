@@ -31,7 +31,7 @@ import {
 // ── Constants shared with the schema ─────────────────────────────────────────
 
 export const GAME_STATUSES: GameStatus[] = [
-  'Not Started', 'In Progress', 'Completed', 'Wishlist', 'Abandoned',
+  'Not Started', 'In Progress', 'Completed', 'Wishlist', 'Abandoned', 'Pick Up Later',
 ];
 const SESSION_MOODS: SessionMood[] = ['great', 'good', 'meh', 'grind'];
 const SESSION_VIBES: SessionVibe[] = [

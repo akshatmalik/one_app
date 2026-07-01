@@ -33,7 +33,7 @@ export interface CoOpLibrarySnapshot {
   generatedAt: string;
 }
 
-const PLAYABLE_STATUSES: Game['status'][] = ['Not Started', 'In Progress', 'Completed'];
+const PLAYABLE_STATUSES: Game['status'][] = ['Not Started', 'In Progress', 'Completed', 'Pick Up Later'];
 
 export function buildCoOpSnapshot(games: Game[], name: string): CoOpLibrarySnapshot {
   const entries: CoOpGameEntry[] = games
@@ -127,10 +127,12 @@ function normalize(name: string): string {
 
 function classifyRelation(myStatus: Game['status'], theirStatus: Game['status']): MatchRelation {
   const finished = (s: Game['status']) => s === 'Completed';
+  // 'Pick Up Later' is a paused-but-not-finished game — still counts as "playing" for match purposes.
+  const playing = (s: Game['status']) => s === 'In Progress' || s === 'Pick Up Later';
   if (finished(myStatus) && finished(theirStatus)) return 'both-finished';
   if (finished(myStatus) || finished(theirStatus)) return 'one-finished';
   if (myStatus === 'Not Started' && theirStatus === 'Not Started') return 'both-unplayed';
-  if (myStatus === 'In Progress' && theirStatus === 'In Progress') return 'both-playing';
+  if (playing(myStatus) && playing(theirStatus)) return 'both-playing';
   return 'mismatched-progress';
 }
 

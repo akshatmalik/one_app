@@ -271,7 +271,7 @@ export function GameCompareModal({ game1, allGames, onClose }: Props) {
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-medium text-white/90 truncate">{g.name}</p>
                         <p className="text-[10px] text-white/35">
-                          {g.status} · {g.totalHours > 0 ? `${g.totalHours.toFixed(1)}h` : 'unplayed'}
+                          {g.status === 'Abandoned' ? 'DNF' : g.status} · {g.totalHours > 0 ? `${g.totalHours.toFixed(1)}h` : 'unplayed'}
                           {g.rating > 0 && ` · ${g.rating}/10`}
                         </p>
                       </div>

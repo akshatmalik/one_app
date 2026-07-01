@@ -2,7 +2,7 @@
 
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { GripVertical, X, CheckCircle2, PlayCircle, Calendar, XCircle, Clock, TrendingDown, Zap, Play } from 'lucide-react';
+import { GripVertical, X, CheckCircle2, PlayCircle, Calendar, XCircle, Clock, TrendingDown, Zap, Play, PauseCircle } from 'lucide-react';
 import { GameWithMetrics } from '../hooks/useAnalytics';
 import { getShelfLife, getOneHourProjection, parseLocalDate, getGameChemistry, getQueueShameData } from '../lib/calculations';
 import { Game } from '../lib/types';
@@ -89,6 +89,7 @@ export function QueueGameCard({
       case 'Completed': return <CheckCircle2 size={isHero ? 16 : 14} className="text-emerald-400" />;
       case 'In Progress': return <PlayCircle size={isHero ? 16 : 14} className="text-blue-400" />;
       case 'Abandoned': return <XCircle size={isHero ? 16 : 14} className="text-red-400" />;
+      case 'Pick Up Later': return <PauseCircle size={isHero ? 16 : 14} className="text-cyan-400" />;
       default: return <Calendar size={isHero ? 16 : 14} className="text-white/30" />;
     }
   };
@@ -97,7 +98,8 @@ export function QueueGameCard({
     switch (game.status) {
       case 'Completed': return 'Completed';
       case 'In Progress': return 'Playing';
-      case 'Abandoned': return 'Abandoned';
+      case 'Abandoned': return 'DNF';
+      case 'Pick Up Later': return 'Pick Up Later';
       default: return 'Upcoming';
     }
   };
@@ -107,6 +109,7 @@ export function QueueGameCard({
       case 'Completed': return 'text-emerald-400';
       case 'In Progress': return 'text-blue-400';
       case 'Abandoned': return 'text-red-400';
+      case 'Pick Up Later': return 'text-cyan-400';
       default: return 'text-white/30';
     }
   };

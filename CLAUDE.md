@@ -20,6 +20,7 @@ This document provides comprehensive guidance for AI assistants working with the
 14. [Card Info Enhancements](#card-info-enhancements-approved)
 15. [Stats Overhaul Plan](#stats-overhaul-plan-approved)
 16. [Immersive Experience & Deep Insights Plan](#immersive-experience--deep-insights-plan-approved)
+17. [DNF & Pick Up Later States](#dnf--pick-up-later-states-approved)
 
 ---
 
@@ -2578,6 +2579,47 @@ fortune-fade           — Gentle fade-in for daily fortune cookie
 
 ---
 
+## DNF & Pick Up Later States (Approved)
+
+One new member added to `GameStatus`: `'Pick Up Later'`. `GameStatus` is now `'Not Started' | 'In Progress' | 'Completed' | 'Wishlist' | 'Abandoned' | 'Pick Up Later'`. Approved 2026-07-01.
+
+**Philosophy**: "DNF" (Did Not Finish) and "Abandoned" are the same concept — not two separate statuses. The underlying `GameStatus` value stays `'Abandoned'` (no data migration, no duplicated logic across the ~230 `calculations.ts` functions that already branch on it); the app just presents it to the user as **"DNF"** in the status picker and badges instead of the old "Dropped" label. `'Pick Up Later'`, by contrast, is a genuinely new, separate status — an intentional pause, distinct from actively `In Progress`.
+
+### Semantics
+
+| Status | Meaning |
+|--------|---------|
+| **Abandoned** (relabeled "DNF" in the UI, same value) | You gave up on it — whether you drifted away or made a deliberate call, it's the same bucket. |
+| **Pick Up Later** (new, separate status) | An intentional pause. You're not playing it right now, but you plan to come back — distinct from actively `In Progress` and distinct from `Abandoned`/DNF (no intent to resume there). |
+
+### Visual identity
+
+| Status | Label (GameForm pill) | Dot/badge color | Notes |
+|--------|------------------------|------------------|-------|
+| Abandoned | "DNF" (was "Dropped") | Red (unchanged) | Same status value/color as before, relabeled. |
+| Pick Up Later | "Pick Up Later" | Cyan/teal (`cyan-400` family) | Visually distinct from both "Playing" (blue) and "Backlog" (grey/white) — reads as "paused," not "new" or "stalled." |
+
+### Integration points
+
+- **Core type**: `lib/types.ts` `GameStatus` gains `'Pick Up Later'`. `AnalyticsSummary` gets `pickUpLaterCount`.
+- **Label-only change**: `components/GameForm.tsx` `STATUS_CONFIG` — Abandoned's `label` changes from `'Dropped'` to `'DNF'`. No other file needs an "Abandoned → DNF" change since the underlying value is untouched.
+- **Hardcoded enum arrays** (must move together): `lib/import-service.ts` `VALID_STATUSES`, `lib/ai-actions.ts` `GAME_STATUSES` (+ Gemini function-calling schemas), `lib/ai-service.ts` inline enum, `lib/coop-match.ts` `PLAYABLE_STATUSES` (Pick Up Later counts as shareable/playable-tonight).
+- **Status picker**: `components/GameForm.tsx` `handleStatusChange` — Pick Up Later does NOT stamp `endDate` (it's paused, not over) and keeps existing `startDate`.
+- **Badge/color maps**: `components/StatsView.tsx` & `components/GameCharts.tsx` `STATUS_COLORS`, `components/UpNextTab.tsx` badge map, `components/QueueGameCard.tsx` status icon/label/color switches, `components/PlayTonightModal.tsx` `StatusBadge` — all need a Pick Up Later entry (Abandoned entries already exist, just relabel display text where they render the word "Dropped"/"Abandoned" verbatim).
+- **`lib/calculations.ts` explicit branches needing a Pick Up Later case**: `getCardRarity`, `getRelationshipStatus` (new label joining the existing 15, e.g. "On Hold"), `getHeroNumber` (headline stat: days-paused), `getCardFreshness` (NOT exempt from aging — dust should still nudge a resume), `getGameSections` (own "Paused" section, doesn't join "The Graveyard"), `generateGameBiography` / `getGameVerdicts` (an "intermission" narrative voice), `getCompletionFunnel` / `getLibraryHealth`, `getShelfLifeExpiry`, `getGameHealthDot`, `getDaysContext`, `getGameSmartOneLiner`, `findShelfWarmers`, `getQueueShameData`, `getParallelUniverseImpact`. `generateGameEulogy` stays gated to `'Abandoned'` only (already covers DNF) — Pick Up Later never gets a eulogy, it's not over.
+- **`lib/trophy-calculations.ts`**: ~60 status filters — Pick Up Later generally follows Not Started/backlog treatment for trophy purposes (it's not actively contributing hours right now).
+- **`lib/timeline-estimator.ts`**: Pick Up Later skipped from active pace projections but can inform "resume" suggestions.
+- **`lib/award-categories.ts`**: no change needed — Abandoned-based nominee pools already cover DNF.
+- **`page.tsx` quick actions**: a "Pick Up Later" quick action added alongside the existing "Abandon"/DNF quick action (e.g. in Backlog Triage / card action row), so users don't have to open the full GameForm for the common case.
+
+### New calculation/type additions
+
+```
+AnalyticsSummary.pickUpLaterCount: number
+```
+
+---
+
 ## Resources
 
 - **Next.js Docs**: https://nextjs.org/docs
@@ -2589,6 +2631,11 @@ fortune-fade           — Gentle fade-in for daily fortune cookie
 ---
 
 ## Changelog
+
+### 2026-07-01 (v2.8.0)
+- Added DNF & Pick Up Later States plan (branch `claude/games-dnf-pickup-later-lk280b`)
+- **DNF**: relabeled the existing `'Abandoned'` status to display as "DNF" — same underlying value, no data migration, no new branching logic needed across `calculations.ts`/`trophy-calculations.ts`/`award-categories.ts` since they already handle `'Abandoned'`.
+- **Pick Up Later**: new, separate `GameStatus` value for an intentional pause (distinct from `In Progress`). Touches the status picker, badge/color maps, `AnalyticsSummary.pickUpLaterCount`, and the explicit status-branches in `calculations.ts` (rarity, relationship status, hero number, freshness, sections, biography/verdicts, shelf life expiry, health dot, etc.) and `trophy-calculations.ts`/`timeline-estimator.ts`.
 
 ### 2026-06-11 (v2.7.0)
 - **PS Plus monthly free games → Discover** (branch `claude/ps-plus-monthly-games-y5kis5`)
@@ -2665,6 +2712,6 @@ fortune-fade           — Gentle fade-in for daily fortune cookie
 
 ---
 
-**Last Updated**: 2026-02-21
-**Version**: 2.5.0
+**Last Updated**: 2026-07-01
+**Version**: 2.8.0
 **Maintained by**: AI assistants and contributors
