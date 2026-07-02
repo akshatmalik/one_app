@@ -754,7 +754,8 @@ function calcBacklogZero(games: Game[]): number {
   const owned = games.filter(g => g.status !== 'Wishlist');
   const notStarted = owned.filter(g => g.status === 'Not Started').length;
   const inProgress = owned.filter(g => g.status === 'In Progress').length;
-  return (notStarted === 0 && inProgress === 0 && owned.length > 0) ? 1 : 0;
+  const pickUpLater = owned.filter(g => g.status === 'Pick Up Later').length;
+  return (notStarted === 0 && inProgress === 0 && pickUpLater === 0 && owned.length > 0) ? 1 : 0;
 }
 
 function calcTripleThreat(games: Game[]): number {

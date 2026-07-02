@@ -1,4 +1,6 @@
-export type GameStatus = 'Not Started' | 'In Progress' | 'Completed' | 'Wishlist' | 'Abandoned';
+// 'Abandoned' = DNF (Did Not Finish) — you gave up on it, whether you drifted away or made a deliberate call.
+// 'Pick Up Later' = an intentional pause, distinct from actively 'In Progress'. You plan to resume.
+export type GameStatus = 'Not Started' | 'In Progress' | 'Completed' | 'Wishlist' | 'Abandoned' | 'Pick Up Later';
 
 // ── Gaming Awards ──────────────────────────────────────────────
 
@@ -99,6 +101,7 @@ export interface AnalyticsSummary {
   inProgressCount: number;
   notStartedCount: number;
   abandonedCount: number;
+  pickUpLaterCount: number;
 
   // Financial
   totalSpent: number;

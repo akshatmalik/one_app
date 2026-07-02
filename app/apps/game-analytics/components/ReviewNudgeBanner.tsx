@@ -21,7 +21,7 @@ const reasonStyle: Record<ReviewNudgeReason, { bg: string; text: string; border:
   'just-finished':        { bg: 'from-emerald-500/10 to-teal-500/10',  text: 'text-emerald-300', border: 'border-emerald-500/20', label: 'Just finished' },
   'special-unreviewed':   { bg: 'from-yellow-500/10 to-amber-500/10',  text: 'text-amber-300',   border: 'border-amber-500/20',   label: 'One of your specials' },
   'completed-unreviewed': { bg: 'from-blue-500/10 to-indigo-500/10',   text: 'text-blue-300',    border: 'border-blue-500/20',    label: 'Completed' },
-  'farewell':             { bg: 'from-purple-500/10 to-fuchsia-500/10', text: 'text-purple-300',  border: 'border-purple-500/20',  label: 'Abandoned' },
+  'farewell':             { bg: 'from-purple-500/10 to-fuchsia-500/10', text: 'text-purple-300',  border: 'border-purple-500/20',  label: 'DNF' },
   'rated-no-words':       { bg: 'from-pink-500/10 to-rose-500/10',     text: 'text-pink-300',    border: 'border-pink-500/20',    label: 'Rated, not reviewed' },
   'invested-no-words':    { bg: 'from-cyan-500/10 to-sky-500/10',      text: 'text-cyan-300',    border: 'border-cyan-500/20',    label: 'Hours invested' },
 };

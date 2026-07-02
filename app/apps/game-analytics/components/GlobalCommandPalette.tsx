@@ -298,7 +298,7 @@ function GameRow({ game, active, onHover, onClick }: { game: GameWithMetrics; ac
       )}
       <span className="flex-1 min-w-0">
         <span className="block text-[13px] text-white/85 truncate">{game.name}</span>
-        <span className="block text-[11px] text-white/35 truncate">{game.status}{game.genre ? ` · ${game.genre}` : ''}</span>
+        <span className="block text-[11px] text-white/35 truncate">{game.status === 'Abandoned' ? 'DNF' : game.status}{game.genre ? ` · ${game.genre}` : ''}</span>
       </span>
     </button>
   );

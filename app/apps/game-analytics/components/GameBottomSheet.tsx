@@ -541,7 +541,7 @@ export function GameBottomSheet({
           )}
 
           {/* Completion Probability */}
-          {(game.status === 'In Progress' || game.status === 'Not Started') && (
+          {(game.status === 'In Progress' || game.status === 'Not Started' || game.status === 'Pick Up Later') && (
             <div className="mx-5 mb-4 p-4 bg-white/[0.03] rounded-xl border border-white/5">
               <div className="flex items-center justify-between mb-3">
                 <span className="text-sm font-medium text-white/70">Completion Odds</span>

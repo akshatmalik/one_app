@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useCallback } from 'react';
-import { X, Gamepad2, ListPlus, HeartCrack, Hourglass, Inbox, PartyPopper } from 'lucide-react';
+import { X, Gamepad2, ListPlus, HeartCrack, Hourglass, Inbox, PartyPopper, PauseCircle } from 'lucide-react';
 import { Game } from '../lib/types';
 import { GameWithMetrics } from '../hooks/useAnalytics';
 import { getBacklogTriageCandidates, TriageCandidate } from '../lib/calculations';
@@ -25,7 +25,7 @@ function writeSnoozed(map: Record<string, string>) {
   localStorage.setItem(SNOOZE_KEY, JSON.stringify(map));
 }
 
-type Decision = 'queued' | 'abandoned' | 'snoozed';
+type Decision = 'queued' | 'abandoned' | 'snoozed' | 'pickUpLater';
 
 interface BacklogTriageModalProps {
   games: Game[];
@@ -33,10 +33,11 @@ interface BacklogTriageModalProps {
   onClose: () => void;
   onQueue: (gameId: string) => Promise<void>;
   onAbandon: (gameId: string) => Promise<void>;
+  onPickUpLater: (gameId: string) => Promise<void>;
   onOpenGame: (game: GameWithMetrics) => void;
 }
 
-export function BacklogTriageModal({ games, gamesWithMetrics, onClose, onQueue, onAbandon, onOpenGame }: BacklogTriageModalProps) {
+export function BacklogTriageModal({ games, gamesWithMetrics, onClose, onQueue, onAbandon, onPickUpLater, onOpenGame }: BacklogTriageModalProps) {
   const [snoozed, setSnoozed] = useState<Record<string, string>>(() => readSnoozed());
   const [index, setIndex] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -64,6 +65,8 @@ export function BacklogTriageModal({ games, gamesWithMetrics, onClose, onQueue, 
         await onQueue(current.game.id);
       } else if (decision === 'abandoned') {
         await onAbandon(current.game.id);
+      } else if (decision === 'pickUpLater') {
+        await onPickUpLater(current.game.id);
       } else {
         const next = { ...snoozed, [current.game.id]: new Date(Date.now() + SNOOZE_DAYS * 24 * 60 * 60 * 1000).toISOString() };
         writeSnoozed(next);
@@ -77,11 +80,12 @@ export function BacklogTriageModal({ games, gamesWithMetrics, onClose, onQueue, 
         setBusy(false);
       }, 220);
     }
-  }, [current, busy, onQueue, onAbandon, snoozed]);
+  }, [current, busy, onQueue, onAbandon, onPickUpLater, snoozed]);
 
   const queuedCount = tally.filter(t => t.decision === 'queued').length;
   const abandonedCount = tally.filter(t => t.decision === 'abandoned').length;
   const snoozedCount = tally.filter(t => t.decision === 'snoozed').length;
+  const pickUpLaterCount = tally.filter(t => t.decision === 'pickUpLater').length;
   const hoursDecided = tally.reduce((sum, t) => sum + t.candidate.totalHours, 0);
   const moneyDecided = tally
     .filter(t => t.decision !== 'snoozed')
@@ -111,10 +115,14 @@ export function BacklogTriageModal({ games, gamesWithMetrics, onClose, onQueue, 
             <PartyPopper size={32} className="mx-auto mb-3 text-purple-400" />
             <p className="text-base text-white font-semibold mb-1">Triage complete</p>
             <p className="text-xs text-white/40 mb-5">You made a call on {tally.length} game{tally.length === 1 ? '' : 's'}.</p>
-            <div className="grid grid-cols-3 gap-2 mb-5">
+            <div className="grid grid-cols-4 gap-2 mb-5">
               <div className="bg-white/5 rounded-lg p-3">
                 <div className="text-lg font-bold text-purple-300">{queuedCount}</div>
                 <div className="text-[10px] text-white/40 mt-0.5">Queued</div>
+              </div>
+              <div className="bg-white/5 rounded-lg p-3">
+                <div className="text-lg font-bold text-cyan-300">{pickUpLaterCount}</div>
+                <div className="text-[10px] text-white/40 mt-0.5">Paused</div>
               </div>
               <div className="bg-white/5 rounded-lg p-3">
                 <div className="text-lg font-bold text-rose-300">{abandonedCount}</div>
@@ -186,7 +194,7 @@ export function BacklogTriageModal({ games, gamesWithMetrics, onClose, onQueue, 
               )}
             </button>
 
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-4 gap-2">
               <button
                 onClick={() => act('abandoned', 'left')}
                 disabled={busy}
@@ -194,6 +202,14 @@ export function BacklogTriageModal({ games, gamesWithMetrics, onClose, onQueue, 
               >
                 <HeartCrack size={18} />
                 <span className="text-[11px] font-medium">Let it go</span>
+              </button>
+              <button
+                onClick={() => act('pickUpLater', 'up')}
+                disabled={busy}
+                className="flex flex-col items-center gap-1.5 py-3 rounded-xl bg-cyan-500/10 text-cyan-300 hover:bg-cyan-500/20 active:scale-95 transition-all disabled:opacity-40"
+              >
+                <PauseCircle size={18} />
+                <span className="text-[11px] font-medium">Pause it</span>
               </button>
               <button
                 onClick={() => act('snoozed', 'up')}

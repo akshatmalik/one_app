@@ -293,7 +293,7 @@ export function TimelineView({ games, gamesWithMetrics, updateGame, onLogTime, o
         const totalH = getTotalHours(event.game);
         return `Completed — ${totalH}h total`;
       }
-      case 'abandon': return 'Abandoned';
+      case 'abandon': return 'DNF';
       case 'milestone': return event.milestoneDescription || '';
     }
   };

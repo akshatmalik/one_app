@@ -14,7 +14,7 @@ export function QuarterInNumbersScreen({ data }: Props) {
     { label: 'Days Active', value: `${data.daysActive}`, icon: <Zap size={24} />, color: 'text-yellow-400', bg: 'from-yellow-500/25 to-yellow-600/10', delay: 0.4 },
     { label: 'Total Spent', value: `$${data.totalSpent.toFixed(0)}`, icon: <DollarSign size={24} />, color: 'text-emerald-400', bg: 'from-emerald-500/25 to-emerald-600/10', delay: 0.5 },
     { label: 'Completed', value: `${data.completedGames.length}`, icon: <Trophy size={24} />, color: 'text-orange-400', bg: 'from-orange-500/25 to-orange-600/10', delay: 0.6 },
-    { label: 'Abandoned', value: `${data.abandonedGames.length}`, icon: <XCircle size={24} />, color: 'text-red-400', bg: 'from-red-500/25 to-red-600/10', delay: 0.7 },
+    { label: 'DNF', value: `${data.abandonedGames.length}`, icon: <XCircle size={24} />, color: 'text-red-400', bg: 'from-red-500/25 to-red-600/10', delay: 0.7 },
     { label: 'Avg Session', value: `${data.avgSessionLength.toFixed(1)}h`, icon: <Star size={24} />, color: 'text-pink-400', bg: 'from-pink-500/25 to-pink-600/10', delay: 0.8 },
   ];
 

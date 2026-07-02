@@ -16,7 +16,13 @@ export interface ImportParseResult {
   format: 'csv' | 'json';
 }
 
-const VALID_STATUSES: GameStatus[] = ['Not Started', 'In Progress', 'Completed', 'Wishlist', 'Abandoned'];
+const VALID_STATUSES: GameStatus[] = ['Not Started', 'In Progress', 'Completed', 'Wishlist', 'Abandoned', 'Pick Up Later'];
+// Lenient aliases for values that mean an existing GameStatus but are spelled differently
+// (e.g. "DNF" is just the display name for the 'Abandoned' status, not a separate value).
+const STATUS_ALIASES: Record<string, GameStatus> = {
+  dnf: 'Abandoned', 'did not finish': 'Abandoned', dropped: 'Abandoned',
+  'pick up later': 'Pick Up Later', paused: 'Pick Up Later', 'on hold': 'Pick Up Later',
+};
 const VALID_SOURCES: PurchaseSource[] = ['Steam', 'PlayStation', 'Xbox', 'Nintendo', 'Epic', 'GOG', 'Physical', 'Other'];
 const VALID_SUBSCRIPTIONS: SubscriptionSource[] = ['PS Plus', 'Game Pass', 'Epic Free', 'Prime Gaming', 'Humble Choice', 'Other'];
 
@@ -45,9 +51,9 @@ function normalizeHeader(h: string): string {
 
 function normalizeStatus(value: string | undefined): GameStatus {
   if (!value) return 'Not Started';
-  const trimmed = value.trim();
-  const match = VALID_STATUSES.find(s => s.toLowerCase() === trimmed.toLowerCase());
-  return match ?? 'Not Started';
+  const trimmed = value.trim().toLowerCase();
+  const match = VALID_STATUSES.find(s => s.toLowerCase() === trimmed);
+  return match ?? STATUS_ALIASES[trimmed] ?? 'Not Started';
 }
 
 function normalizeSource(value: string | undefined): PurchaseSource | undefined {

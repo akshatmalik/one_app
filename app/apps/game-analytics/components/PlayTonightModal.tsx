@@ -76,6 +76,8 @@ function scoreGame(
 
   // In-progress bonus
   if (game.status === 'In Progress') score += 14;
+  // Pick Up Later bonus — you already decided you want to come back to this one
+  if (game.status === 'Pick Up Later') score += 18;
 
   // Recency shaping
   if (logs.length > 0) {
@@ -106,6 +108,8 @@ function scoreGame(
     } else {
       reason = 'In progress — good time to continue';
     }
+  } else if (game.status === 'Pick Up Later') {
+    reason = 'You paused this one on purpose — tonight could be the night';
   } else if (chemistry.topFactor === 'freshness') {
     reason = 'Untouched — full new-game energy';
   } else if (chemistry.topFactor === 'craving') {
@@ -387,6 +391,14 @@ function StatusBadge({ status }: { status: string }) {
       <span className="flex items-center gap-1 text-[10px] font-medium text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-full">
         <Star size={9} />
         Fresh Start
+      </span>
+    );
+  }
+  if (status === 'Pick Up Later') {
+    return (
+      <span className="flex items-center gap-1 text-[10px] font-medium text-cyan-400 bg-cyan-500/10 px-2 py-0.5 rounded-full">
+        <Zap size={9} />
+        Resume It
       </span>
     );
   }

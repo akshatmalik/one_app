@@ -28,6 +28,7 @@ const STATUS_COLORS: Record<GameStatus, string> = {
   'Not Started': '#6b7280',
   'Wishlist': '#a855f7',
   'Abandoned': '#ef4444',
+  'Pick Up Later': '#22d3ee',
 };
 
 const CHART_COLORS = ['#8b5cf6', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#ec4899'];

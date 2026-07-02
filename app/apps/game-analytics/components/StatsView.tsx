@@ -92,6 +92,7 @@ const STATUS_COLORS: Record<GameStatus, string> = {
   'Not Started': '#6b7280',
   'Wishlist': '#a855f7',
   'Abandoned': '#ef4444',
+  'Pick Up Later': '#22d3ee',
 };
 
 const CHART_COLORS = ['#8b5cf6', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#3b82f6', '#84cc16'];
@@ -796,8 +797,9 @@ export function StatsView({ games, summary, budgets = [], onSetBudget, trophies,
                           'bg-blue-500/20 text-blue-400': game.status === 'In Progress',
                           'bg-white/10 text-white/50': game.status === 'Not Started',
                           'bg-red-500/20 text-red-400': game.status === 'Abandoned',
+                          'bg-cyan-500/20 text-cyan-400': game.status === 'Pick Up Later',
                         })}>
-                          {game.status}
+                          {game.status === 'Abandoned' ? 'DNF' : game.status}
                         </span>
                       </div>
                       {game.playLogs && game.playLogs.length > 0 && (
