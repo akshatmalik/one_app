@@ -253,8 +253,8 @@ export function QueueGameCard({
     );
   }
 
-  // ===== STANDARD CARD (Completed, Not Started, Wishlist, Abandoned) =====
-  const canStart = game.status === 'Not Started' || game.status === 'Wishlist';
+  // ===== STANDARD CARD (Completed, Not Started, Wishlist, Abandoned, Pick Up Later) =====
+  const canStart = game.status !== 'In Progress';
 
   return (
     <div

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, CalendarClock, CalendarPlus, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical, Download, Upload, Gift, ShoppingCart, Search, X, Moon, CreditCard, Swords, Inbox, History, RefreshCw, Crown, Users, Users2, PiggyBank, Radar, Home } from 'lucide-react';
+import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, CalendarClock, CalendarPlus, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical, Download, Upload, Gift, ShoppingCart, Search, X, Moon, CreditCard, Swords, Inbox, History, RefreshCw, Crown, Users, Users2, PiggyBank, Radar, Home, Play } from 'lucide-react';
 import { useGames } from './hooks/useGames';
 import { useAnalytics, GameWithMetrics } from './hooks/useAnalytics';
 import { useBudget } from './hooks/useBudget';
@@ -1608,6 +1608,14 @@ export default function GameAnalyticsPage() {
                     }
                   }}
                   onDelete={(game) => handleDelete(game.id, game.name)}
+                  onStartGame={async (game) => {
+                    const today = new Date().toISOString().split('T')[0];
+                    await updateGame(game.id, { status: 'In Progress', startDate: game.startDate || today });
+                    showUndo({
+                      message: `"${game.name}" set to In Progress`,
+                      onUndo: async () => { await updateGame(game.id, { status: game.status }); },
+                    });
+                  }}
                   isInQueue={isInQueue}
                   sortBy={sortBy}
                   gameColors={gameColors}
@@ -2323,6 +2331,7 @@ interface GameCardListProps {
   onToggleQueue: (game: GameWithMetrics) => void;
   onToggleSpecial: (game: GameWithMetrics) => void;
   onDelete: (game: GameWithMetrics) => void;
+  onStartGame: (game: GameWithMetrics) => void;
   isInQueue: (id: string) => boolean;
   sortBy?: string;
   gameColors: Map<string, string>;
@@ -2343,6 +2352,7 @@ function GameCardList({
   onToggleQueue,
   onToggleSpecial,
   onDelete,
+  onStartGame,
   isInQueue,
   sortBy = 'hours',
   gameColors,
@@ -2401,13 +2411,13 @@ function GameCardList({
     if (cardViewMode === 'poster') {
       return (
         <div key={game.id} className={animClass}>
-          <PosterCard game={game} allGames={allGames} idx={idx} onClick={() => onCardClick(game)} onQuickLog={(h, d) => onQuickLog(game, h, d)} isInQueue={isInQueue(game.id)} sortBy={sortBy} tintColor={gameColors.get(game.id)} aiQuip={gameQuips[game.id]?.quip} eloRanking={eloRanking} gameTier={gameTier} eloTierRank={eloTierRank} />
+          <PosterCard game={game} allGames={allGames} idx={idx} onClick={() => onCardClick(game)} onQuickLog={(h, d) => onQuickLog(game, h, d)} onStartGame={() => onStartGame(game)} isInQueue={isInQueue(game.id)} sortBy={sortBy} tintColor={gameColors.get(game.id)} aiQuip={gameQuips[game.id]?.quip} eloRanking={eloRanking} gameTier={gameTier} eloTierRank={eloTierRank} />
         </div>
       );
     }
     return (
       <div key={game.id} className={animClass}>
-        <CompactCard game={game} allGames={allGames} idx={idx} onClick={() => onCardClick(game)} onLogTime={(d) => onLogTime(game, d)} onToggleQueue={() => onToggleQueue(game)} onDelete={() => onDelete(game)} isInQueue={isInQueue(game.id)} sortBy={sortBy} tintColor={gameColors.get(game.id)} aiQuip={gameQuips[game.id]?.quip} eloRanking={eloRanking} gameTier={gameTier} eloTierRank={eloTierRank} />
+        <CompactCard game={game} allGames={allGames} idx={idx} onClick={() => onCardClick(game)} onLogTime={(d) => onLogTime(game, d)} onToggleQueue={() => onToggleQueue(game)} onDelete={() => onDelete(game)} onStartGame={() => onStartGame(game)} isInQueue={isInQueue(game.id)} sortBy={sortBy} tintColor={gameColors.get(game.id)} aiQuip={gameQuips[game.id]?.quip} eloRanking={eloRanking} gameTier={gameTier} eloTierRank={eloTierRank} />
       </div>
     );
   };
@@ -2817,12 +2827,13 @@ function NowPlayingCard({ game, allGames, onClick, onQuickLog, sortBy = 'hours',
 
 // --- Poster Card ---
 
-function PosterCard({ game, allGames, idx, onClick, onQuickLog, isInQueue, sortBy = 'hours', tintColor, aiQuip, eloRanking, gameTier, eloTierRank }: {
+function PosterCard({ game, allGames, idx, onClick, onQuickLog, onStartGame, isInQueue, sortBy = 'hours', tintColor, aiQuip, eloRanking, gameTier, eloTierRank }: {
   game: GameWithMetrics;
   allGames: Game[];
   idx: number;
   onClick: () => void;
   onQuickLog: (hours: number, date?: string) => void;
+  onStartGame: () => void;
   isInQueue: boolean;
   sortBy?: string;
   tintColor?: string;
@@ -3019,6 +3030,15 @@ function PosterCard({ game, allGames, idx, onClick, onQuickLog, isInQueue, sortB
               </span>
             )}
             <div className="flex-1" />
+            {game.status !== 'In Progress' && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onStartGame(); }}
+                title="Start playing"
+                className="flex items-center gap-1 px-1.5 h-6 rounded-lg text-[10px] font-medium text-white/30 active:text-emerald-400 active:bg-emerald-500/10 transition-all"
+              >
+                <Play size={11} /> Start
+              </button>
+            )}
             <CheckInDateNav size="xs" date={checkInDate} onChange={setCheckInDate} />
             <button
               onClick={(e) => {
@@ -3202,7 +3222,7 @@ function PosterCardBack({ game, allGames, onFlip, rarity, freshness, relationshi
 
 // --- Compact Card (original layout, fixed) ---
 
-function CompactCard({ game, allGames, idx, onClick, onLogTime, onToggleQueue, onDelete, isInQueue, sortBy = 'hours', tintColor, aiQuip, eloRanking, gameTier, eloTierRank }: {
+function CompactCard({ game, allGames, idx, onClick, onLogTime, onToggleQueue, onDelete, onStartGame, isInQueue, sortBy = 'hours', tintColor, aiQuip, eloRanking, gameTier, eloTierRank }: {
   game: GameWithMetrics;
   allGames: Game[];
   idx: number;
@@ -3210,6 +3230,7 @@ function CompactCard({ game, allGames, idx, onClick, onLogTime, onToggleQueue, o
   onLogTime: (date?: string) => void;
   onToggleQueue: () => void;
   onDelete: () => void;
+  onStartGame: () => void;
   isInQueue: boolean;
   sortBy?: string;
   tintColor?: string;
@@ -3474,6 +3495,14 @@ function CompactCard({ game, allGames, idx, onClick, onLogTime, onToggleQueue, o
               {isInQueue ? <Check size={12} /> : <ListPlus size={12} />}
               {isInQueue ? 'Queued' : 'Queue'}
             </button>
+            {game.status !== 'In Progress' && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onStartGame(); }}
+                className="flex items-center gap-1 px-2.5 py-1.5 text-white/30 active:text-emerald-400 active:bg-emerald-500/10 rounded-lg transition-all text-xs"
+              >
+                <Play size={12} /> Start
+              </button>
+            )}
             <CheckInDateNav size="xs" date={checkInDate} onChange={setCheckInDate} />
             <div className="flex-1" />
             {/* Flip button */}

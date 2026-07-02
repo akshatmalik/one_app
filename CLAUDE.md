@@ -790,9 +790,9 @@ const avgRating = totalRating / games.length;
 Before committing:
 - [ ] Run `npm run build` - Ensure no TypeScript errors
 - [ ] Run `npm run lint` - Ensure no linting errors
-- [ ] Test in browser - Verify functionality works
-- [ ] Check responsive design - Test mobile/tablet views
 - [ ] Review changes - Ensure no unintended modifications
+
+**Do not launch the dev server / drive the app in a browser (Playwright, etc.) unless the user explicitly asks for it.** `npm run build` + `npm run lint` passing is sufficient verification by default. Only do manual/browser testing when the user says to test, verify, or check something in the running app.
 
 ### Code Quality
 
@@ -845,7 +845,7 @@ Test these scenarios:
 
 3. **Type safety first**: Define types before implementing features.
 
-4. **Test locally**: Changes should work with `npm run build` and `npm run dev`.
+4. **Verify with build/lint, not the browser**: Changes should pass `npm run build` and `npm run lint`. Do not start `npm run dev` or drive the app with a browser/Playwright to "verify" a change unless the user explicitly asks for that — a clean build + lint is the default bar for calling work done.
 
 ### Common Pitfalls to Avoid
 
