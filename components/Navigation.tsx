@@ -10,7 +10,7 @@ export function Navigation() {
   const pathname = usePathname();
 
   // Hide navigation for full-immersion apps
-  if (pathname.startsWith('/apps/todo-app') || pathname === '/apps/survivor-deckbuilder') {
+  if (pathname.startsWith('/apps/todo-app') || pathname === '/apps/survivor-deckbuilder' || pathname === '/apps/story-generator') {
     return null;
   }
 

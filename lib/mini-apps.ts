@@ -52,6 +52,16 @@ export const MINI_APPS: MiniApp[] = [
     isNew: true,
   },
   {
+    id: 'story-generator',
+    name: '36 Hours',
+    description: 'AI-driven zombie survival story — a chat adventure that reacts to what you type',
+    icon: '🧟',
+    path: '/apps/story-generator',
+    color: '#EF4444',
+    tags: ['game', 'ai', 'story'],
+    isNew: true,
+  },
+  {
     id: 'game-interest-tracker',
     name: 'Game Interest Tracker',
     description: 'Track composite buzz scores for upcoming releases — trailer views, Trends, subreddit growth',
