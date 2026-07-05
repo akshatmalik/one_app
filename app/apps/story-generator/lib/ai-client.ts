@@ -15,7 +15,7 @@ const firebaseConfig = {
   appId: "1:1052736128978:web:9d42b47c6a343eac35aa0b",
 };
 
-export const STORY_AI_MODEL = 'gemini-2.5-pro';
+export const STORY_AI_MODEL = 'gemini-3.5-flash';
 
 type ModelOptions = Parameters<typeof getGenerativeModel>[1];
 
