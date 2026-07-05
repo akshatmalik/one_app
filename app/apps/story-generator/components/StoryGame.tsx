@@ -1,12 +1,13 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
   ArrowLeft,
   BookOpen,
   Clock,
   Dices,
+  FolderOpen,
   Heart,
   Loader2,
   Lock,
@@ -23,7 +24,8 @@ import {
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useStoryGame } from '../hooks/useStoryGame';
-import { ArchivedStory, FateRoll, StorySave, TranscriptEntry } from '../lib/types';
+import { parseNarration, narrationLength, NarrationParagraph } from '../lib/narration';
+import { ArchivedStory, FateRoll, StorySave, TranscriptEntry, TurnEffect } from '../lib/types';
 import { ZOMBIE_ARC } from '../lib/arc-zombie';
 
 // ── Small helpers ────────────────────────────────────────────────────
@@ -68,9 +70,45 @@ const SKY_GRADIENTS: Record<SkyPhase, string> = {
   dawn: 'radial-gradient(ellipse 120% 70% at 50% -10%, rgba(245,158,11,0.22), transparent 60%)',
 };
 
-// ── Typewriter ───────────────────────────────────────────────────────
+// ── Narration rendering ──────────────────────────────────────────────
+// Narration is markdown-lite (short paragraphs, **bold**, *italics*,
+// quoted dialogue). We pre-parse into segments and reveal by character
+// budget so the typewriter never shows a half-open `**` marker.
 
-function TypewriterText({
+function NarrationBody({ paragraphs, budget, showCaret }: { paragraphs: NarrationParagraph[]; budget: number; showCaret: boolean }) {
+  let remaining = budget;
+  const out: ReactNode[] = [];
+  for (let pi = 0; pi < paragraphs.length && remaining > 0; pi++) {
+    const p = paragraphs[pi];
+    const nodes: ReactNode[] = [];
+    for (let si = 0; si < p.segments.length && remaining > 0; si++) {
+      const seg = p.segments[si];
+      const take = seg.text.slice(0, remaining);
+      remaining -= take.length;
+      if (!take) continue;
+      if (seg.bold) nodes.push(<strong key={si} className="font-semibold text-white">{take}</strong>);
+      else if (seg.italic) nodes.push(<em key={si} className="italic text-amber-100/85">{take}</em>);
+      else nodes.push(<span key={si}>{take}</span>);
+    }
+    const isLastRendered = remaining <= 0 || pi === paragraphs.length - 1;
+    out.push(
+      <p
+        key={pi}
+        className={clsx(
+          'mb-2.5 last:mb-0',
+          p.isDialogue && 'border-l-2 border-red-500/40 pl-3 text-red-100/90',
+        )}
+      >
+        {nodes}
+        {showCaret && isLastRendered && <span className="story-caret text-red-400">▌</span>}
+      </p>,
+    );
+    if (remaining <= 0) break;
+  }
+  return <>{out}</>;
+}
+
+function TypewriterNarration({
   text,
   animate,
   onProgress,
@@ -81,42 +119,61 @@ function TypewriterText({
   onProgress: () => void;
   onDone: () => void;
 }) {
-  const [count, setCount] = useState(animate ? 0 : text.length);
+  const paragraphs = parseNarration(text);
+  const total = narrationLength(paragraphs);
+  const [count, setCount] = useState(animate ? 0 : total);
   const doneRef = useRef(!animate);
 
   useEffect(() => {
     if (!animate) {
-      setCount(text.length);
+      setCount(total);
       return;
     }
     doneRef.current = false;
     setCount(0);
     const iv = setInterval(() => {
       setCount(c => {
-        const next = Math.min(text.length, c + 4);
-        if (next >= text.length) clearInterval(iv);
+        const next = Math.min(total, c + 5);
+        if (next >= total) clearInterval(iv);
         return next;
       });
     }, 24);
     return () => clearInterval(iv);
-  }, [text, animate]);
+  }, [text, animate, total]);
 
   useEffect(() => {
     if (!animate) return;
     onProgress();
-    if (count >= text.length && !doneRef.current) {
+    if (count >= total && !doneRef.current) {
       doneRef.current = true;
       onDone();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [count]);
 
-  const typing = animate && count < text.length;
+  const typing = animate && count < total;
   return (
-    <span onClick={() => typing && setCount(text.length)} className={typing ? 'cursor-pointer' : undefined}>
-      {text.slice(0, count)}
-      {typing && <span className="story-caret text-red-400">▌</span>}
-    </span>
+    <div onClick={() => typing && setCount(total)} className={typing ? 'cursor-pointer' : undefined}>
+      <NarrationBody paragraphs={paragraphs} budget={count} showCaret={typing} />
+    </div>
+  );
+}
+
+const EFFECT_TONE: Record<TurnEffect['tone'], string> = {
+  good: 'text-emerald-300 border-emerald-500/25 bg-emerald-500/10',
+  bad: 'text-red-300 border-red-500/25 bg-red-500/10',
+  neutral: 'text-white/50 border-white/10 bg-white/5',
+};
+
+function EffectChips({ effects }: { effects: TurnEffect[] }) {
+  return (
+    <div className="flex flex-wrap gap-1.5 mt-1.5 story-fade-up">
+      {effects.map((fx, i) => (
+        <span key={i} className={clsx('text-[10px] px-2 py-0.5 rounded-full border font-medium', EFFECT_TONE[fx.tone])}>
+          {fx.text}
+        </span>
+      ))}
+    </div>
   );
 }
 
@@ -220,6 +277,52 @@ function Journal({ save, onClose }: { save: StorySave; onClose: () => void }) {
               ))}
             </div>
           </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Load menu (in-game) ──────────────────────────────────────────────
+
+function LoadMenu({
+  library,
+  onResume,
+  onDelete,
+  onClose,
+}: {
+  library: ArchivedStory[];
+  onResume: (id: string) => void;
+  onDelete: (id: string) => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center" onClick={onClose}>
+      <div
+        className="w-full max-w-md max-h-[80dvh] overflow-y-auto bg-[#0d0d0f] border border-white/10 rounded-t-2xl sm:rounded-2xl p-5 story-fade-up"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-1">
+          <h2 className="text-white font-semibold flex items-center gap-2"><FolderOpen size={16} className="text-red-400" /> Load a story</h2>
+          <button onClick={onClose} className="p-1.5 text-white/40 hover:text-white/80 rounded-lg hover:bg-white/5" aria-label="Close load menu">
+            <X size={16} />
+          </button>
+        </div>
+        <p className="text-white/35 text-xs mb-4">Loading shelves your current run into the library first — nothing is lost.</p>
+        {library.length === 0 ? (
+          <p className="text-white/40 text-sm py-6 text-center">No saved stories yet. Use the save button to shelve this run.</p>
+        ) : (
+          <div className="space-y-2">
+            {library.map(a => (
+              <LibraryCard
+                key={a.id}
+                story={a}
+                disabled={false}
+                onResume={() => onResume(a.id)}
+                onDelete={() => onDelete(a.id)}
+              />
+            ))}
+          </div>
         )}
       </div>
     </div>
@@ -415,6 +518,7 @@ export function StoryGame() {
 
   const [input, setInput] = useState('');
   const [journalOpen, setJournalOpen] = useState(false);
+  const [loadOpen, setLoadOpen] = useState(false);
   const [animatingId, setAnimatingId] = useState<string | null>(null);
   const [titleCard, setTitleCard] = useState<{ act: number; actTitle: string; beatTitle: string; key: string } | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
@@ -431,6 +535,9 @@ export function StoryGame() {
     const prev = prevLenRef.current;
     prevLenRef.current = len;
     if (prev === null || len <= prev) return;
+    // A normal turn appends 1-3 entries; a bigger jump means a whole run was
+    // loaded/resumed — restore it silently, no typewriter, no title card.
+    if (len - prev > 4) return;
     const fresh = save.transcript.slice(prev);
     const last = fresh[fresh.length - 1];
     if (last.role === 'narrator') setAnimatingId(last.id);
@@ -516,6 +623,14 @@ export function StoryGame() {
 
       {titleCard && <TitleCard act={titleCard.act} actTitle={titleCard.actTitle} beatTitle={titleCard.beatTitle} />}
       {journalOpen && <Journal save={save} onClose={() => setJournalOpen(false)} />}
+      {loadOpen && (
+        <LoadMenu
+          library={library}
+          onResume={id => { setLoadOpen(false); resumeStory(id); }}
+          onDelete={id => { if (confirm('Delete this saved story forever?')) deleteStory(id); }}
+          onClose={() => setLoadOpen(false)}
+        />
+      )}
 
       {/* Header + HUD */}
       <div className="relative z-10 border-b border-white/10 bg-gradient-to-r from-red-950/40 to-transparent">
@@ -540,6 +655,14 @@ export function StoryGame() {
               <BookOpen size={17} />
             </button>
             <button
+              onClick={() => setLoadOpen(true)}
+              disabled={loading}
+              className="p-2 rounded-lg text-white/40 hover:text-white/80 hover:bg-white/5 transition-colors disabled:opacity-40"
+              aria-label="Load a story"
+            >
+              <FolderOpen size={17} />
+            </button>
+            <button
               onClick={() => { if (confirm('Save this story to your library and return to the title screen? You can resume it any time.')) saveAndRestart(); }}
               className="p-2 rounded-lg text-white/40 hover:text-white/80 hover:bg-white/5 transition-colors"
               aria-label="Save and restart"
@@ -547,6 +670,18 @@ export function StoryGame() {
               <Save size={17} />
             </button>
           </div>
+        </div>
+        {/* Scene progress — one segment per beat */}
+        <div className="px-4 pb-2 flex items-center gap-1" aria-label={`Scene ${save.beatIndex + 1} of ${arc.beats.length}`}>
+          {arc.beats.map((b, i) => (
+            <div
+              key={b.id}
+              className={clsx(
+                'h-[3px] flex-1 rounded-full transition-colors duration-500',
+                i < save.beatIndex ? 'bg-red-500/70' : i === save.beatIndex ? 'bg-red-400 story-vignette-pulse' : 'bg-white/10',
+              )}
+            />
+          ))}
         </div>
         <div className="px-4 pb-3 flex items-center gap-4 text-xs">
           <div className="flex items-center gap-1.5 flex-1 min-w-0 max-w-[160px]">
@@ -619,15 +754,16 @@ export function StoryGame() {
             );
           }
           return (
-            <div key={e.id} className="flex justify-start">
-              <div className="max-w-[92%] rounded-2xl rounded-bl-sm px-4 py-3 bg-white/[0.06] border border-white/5 text-white/90 text-sm leading-relaxed whitespace-pre-wrap">
-                <TypewriterText
+            <div key={e.id} className="flex flex-col items-start">
+              <div className="max-w-[92%] rounded-2xl rounded-bl-sm px-4 py-3 bg-white/[0.06] border border-white/5 text-white/90 text-sm leading-relaxed">
+                <TypewriterNarration
                   text={e.text}
                   animate={e.id === animatingId}
                   onProgress={() => scrollToEnd(false)}
                   onDone={() => setAnimatingId(null)}
                 />
               </div>
+              {e.effects && e.effects.length > 0 && e.id !== animatingId && <EffectChips effects={e.effects} />}
             </div>
           );
         })}
@@ -636,7 +772,9 @@ export function StoryGame() {
           <div className="flex justify-start">
             <div className="rounded-2xl px-4 py-3 bg-white/[0.06] border border-white/5 flex items-center gap-2">
               <Loader2 size={14} className="text-red-400 animate-spin" />
-              <span className="text-xs text-white/50">The world responds...</span>
+              <span className="text-xs text-white/50">
+                {['The world responds...', 'The dead listen...', 'Fate settles...', 'The city shifts...'][save.transcript.length % 4]}
+              </span>
             </div>
           </div>
         )}

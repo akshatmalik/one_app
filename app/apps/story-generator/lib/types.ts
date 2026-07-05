@@ -114,6 +114,12 @@ export interface StoryTurnResult {
   suggestedActions: string[];
 }
 
+/** A compact, player-visible consequence of a turn ("-12 health", "+ crowbar"). */
+export interface TurnEffect {
+  text: string;
+  tone: 'good' | 'bad' | 'neutral';
+}
+
 export interface TranscriptEntry {
   id: string;
   role: 'narrator' | 'player' | 'system';
@@ -121,6 +127,8 @@ export interface TranscriptEntry {
   beatId: string;
   /** The fate roll behind a player action (player entries only). */
   fate?: FateRoll;
+  /** What this turn cost/gained (narrator entries only). */
+  effects?: TurnEffect[];
 }
 
 export type GameStatus = 'playing' | 'dead' | 'ended';

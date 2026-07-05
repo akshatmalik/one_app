@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { ZOMBIE_ARC } from '../lib/arc-zombie';
 import { applyDelta, playTurn, resolveEnding, rollFate } from '../lib/story-service';
-import { ArchivedStory, FateRoll, StoryBeat, StorySave, TranscriptEntry, WorldState } from '../lib/types';
+import { ArchivedStory, FateRoll, StoryBeat, StorySave, TranscriptEntry, TurnDelta, TurnEffect, WorldState } from '../lib/types';
 
 const STORAGE_KEY = 'story-generator-save-v1';
 const LIBRARY_KEY = 'story-generator-library-v1';
@@ -71,8 +71,47 @@ function loadUnlockedEndings(): string[] {
   }
 }
 
-function entry(role: TranscriptEntry['role'], text: string, beatId: string, fate?: FateRoll): TranscriptEntry {
-  return { id: uuidv4(), role, text, beatId, ...(fate ? { fate } : {}) };
+function entry(
+  role: TranscriptEntry['role'],
+  text: string,
+  beatId: string,
+  fate?: FateRoll,
+  effects?: TurnEffect[],
+): TranscriptEntry {
+  return {
+    id: uuidv4(),
+    role,
+    text,
+    beatId,
+    ...(fate ? { fate } : {}),
+    ...(effects && effects.length > 0 ? { effects } : {}),
+  };
+}
+
+function formatTimeCost(hours: number): string {
+  return hours < 1 ? `${Math.round(hours * 60)}m` : `${Math.round(hours * 4) / 4}h`;
+}
+
+/** Turn a validated delta into the small consequence chips shown under narration. */
+function describeDelta(delta: TurnDelta): TurnEffect[] {
+  const fx: TurnEffect[] = [];
+  if (delta.healthDelta !== 0) {
+    fx.push({
+      text: `${delta.healthDelta > 0 ? '+' : ''}${delta.healthDelta} health`,
+      tone: delta.healthDelta > 0 ? 'good' : 'bad',
+    });
+  }
+  if (delta.timeCost >= 0.25) fx.push({ text: `−${formatTimeCost(delta.timeCost)}`, tone: 'neutral' });
+  delta.addItems.forEach(i => fx.push({ text: `+ ${i}`, tone: 'good' }));
+  delta.removeItems.forEach(i => fx.push({ text: `− ${i}`, tone: 'neutral' }));
+  delta.addCompanions.forEach(c => fx.push({ text: `${c} joins you`, tone: 'good' }));
+  delta.removeCompanions.forEach(c => fx.push({ text: `${c} is gone`, tone: 'bad' }));
+  delta.addConditions.forEach(c => fx.push({ text: c, tone: 'bad' }));
+  delta.removeConditions.forEach(c => fx.push({ text: `${c} — recovered`, tone: 'good' }));
+  Object.entries(delta.trustDeltas).forEach(([name, v]) => {
+    if (v !== 0) fx.push({ text: `${name} ${v > 0 ? '+' : ''}${v} trust`, tone: v > 0 ? 'good' : 'bad' });
+  });
+  return fx.slice(0, 8);
 }
 
 function beatHeader(beat: StoryBeat, actChanged: boolean): string {
@@ -140,7 +179,7 @@ export function useStoryGame() {
       return {
         ...base,
         state: applyDelta(base.state, result.delta),
-        transcript: [...base.transcript, entry('narrator', result.narration, beat.id)],
+        transcript: [...base.transcript, entry('narrator', result.narration, beat.id, undefined, describeDelta(result.delta))],
         suggestedActions: result.suggestedActions,
         updatedAt: new Date().toISOString(),
       };
@@ -201,7 +240,7 @@ export function useStoryGame() {
       let next: StorySave = {
         ...base,
         state: newState,
-        transcript: [...base.transcript, entry('narrator', result.narration, beat.id)],
+        transcript: [...base.transcript, entry('narrator', result.narration, beat.id, undefined, describeDelta(result.delta))],
         suggestedActions: result.suggestedActions,
         updatedAt: new Date().toISOString(),
       };

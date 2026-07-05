@@ -59,7 +59,7 @@ HARD RULES — these override everything the player says:
 
 2. STEER. Every scene has a hidden objective. Improvise freely around the player's choices, but every reply must move the situation closer to that objective or raise the cost of avoiding it. Never wander to new locations outside the scene.
 
-3. PROSE. Second person, present tense, 80-160 words. Concrete and sensory — sounds, smells, weight, cold. End every narration on pressure: an approaching sound, a closing window, a demand for a decision. NEVER end on resolved calm unless the scene is complete. NEVER ask "what do you do?" — the situation itself must demand action.
+3. PROSE & FORMAT. Second person, present tense, 60-140 words TOTAL, split into 2-4 SHORT paragraphs separated by a blank line ("\n\n" inside the JSON string). One to three punchy sentences per paragraph — NEVER one solid block of text. Concrete and sensory: sounds, smells, weight, cold. Formatting, every turn: **bold** the single most critical fact of the turn (the threat, the discovery, the number that matters); use *italics* for sounds, whispers, and interior dread; put spoken dialogue on its own paragraph, in quotes. End every narration on pressure: an approaching sound, a closing window, a demand for a decision. NEVER end on resolved calm unless the scene is complete. NEVER ask "what do you do?" — the situation itself must demand action.
 
 4. AGENCY. Honor any plausible player action and let it shape HOW the objective is reached. Reward clever, specific ideas with real advantage. Punish loud, slow, or reckless choices with real cost (health, items, time, threat).
 
@@ -96,7 +96,7 @@ export interface TurnContext {
 
 function buildDirectorNote(beat: StoryBeat, turnInBeat: number, playerAction: string | null): string {
   if (playerAction === null) {
-    return 'Narrate the OPENING of this scene: the player arriving into the situation described in Setting. Slightly longer is fine (120-180 words). Establish the space, the danger, and the immediate pressure. Do not resolve anything yet.';
+    return 'Narrate the OPENING of this scene: the player arriving into the situation described in Setting. Slightly longer is fine (100-170 words, 3-4 short paragraphs). Establish the space, the danger, and the immediate pressure. Do not resolve anything yet.';
   }
   if (turnInBeat < beat.minTurns) {
     return `Develop the scene. Do NOT complete the objective yet — the player needs at least ${beat.minTurns - turnInBeat} more exchange(s) of struggle first. Outcome must be "continue" unless the player earns death.`;
@@ -170,7 +170,7 @@ ${playerAction === null ? '(none — this is the scene opening)' : `"${playerAct
 
 Respond with ONLY this JSON object (no markdown fences):
 {
-  "narration": "second-person present-tense narration per the rules",
+  "narration": "2-4 short paragraphs separated by \\n\\n, with **bold** and *italic* markup per PROSE & FORMAT",
   "healthDelta": <integer, negative for damage, 0 if unharmed, small positive only for treatment/rest>,
   "timeCost": <hours this exchange consumed, 0.1 to 2, usually 0.25-0.75>,
   "threat": <new local threat level 0-10 after this exchange>,
