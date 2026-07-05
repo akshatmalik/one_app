@@ -14,6 +14,8 @@ export interface WorldState {
   threat: number;
   inventory: string[];
   companions: string[];
+  /** Per-companion trust, 0-10. New companions start at 5. */
+  trust: Record<string, number>;
   /** Ongoing afflictions, e.g. "sprained ankle", "bitten". */
   conditions: string[];
   /** Arc-logic booleans, e.g. mayaJoined, gotMeds, samBiteKnown. */
@@ -50,6 +52,18 @@ export interface StoryBeat {
   guidance?: string;
 }
 
+/** A named ending, resolved deterministically from the final state. */
+export interface EndingVariant {
+  id: string;
+  title: string;
+  /** One-line inscription shown on the ending screen and in the gallery. */
+  epitaph: string;
+  /** Shown in the gallery while the ending is still locked. */
+  hint: string;
+  /** First matching ending (in arc order) wins. The last ending must always match. */
+  condition: (state: WorldState, deathCount: number) => boolean;
+}
+
 export interface StoryArc {
   id: string;
   title: string;
@@ -58,9 +72,24 @@ export interface StoryArc {
   premise: string;
   openingState: WorldState;
   beats: StoryBeat[];
+  /** Ordered ending variants — first condition match wins. */
+  endings: EndingVariant[];
 }
 
 export type TurnOutcome = 'continue' | 'objective-complete' | 'player-death';
+
+// ── Fate ─────────────────────────────────────────────────────────────
+// The engine rolls a d20 for every player action BEFORE calling the model.
+// The roll tells the narrator how well the attempt goes — tabletop physics
+// the model must honor, so identical actions genuinely play out differently.
+
+export type FateBand = 'disaster' | 'setback' | 'mixed' | 'clean' | 'triumph';
+
+export interface FateRoll {
+  /** 1-20. */
+  roll: number;
+  band: FateBand;
+}
 
 /** Validated, clamped state changes for one turn. */
 export interface TurnDelta {
@@ -74,6 +103,8 @@ export interface TurnDelta {
   addConditions: string[];
   removeConditions: string[];
   setFlags: Record<string, boolean>;
+  /** Companion trust nudges, each clamped to -2..+2. */
+  trustDeltas: Record<string, number>;
 }
 
 export interface StoryTurnResult {
@@ -88,6 +119,8 @@ export interface TranscriptEntry {
   role: 'narrator' | 'player' | 'system';
   text: string;
   beatId: string;
+  /** The fate roll behind a player action (player entries only). */
+  fate?: FateRoll;
 }
 
 export type GameStatus = 'playing' | 'dead' | 'ended';
@@ -113,6 +146,17 @@ export interface StorySave {
   deathCause?: string;
   suggestedActions: string[];
   deathCount: number;
+  /** Optional protagonist name — companions use it. */
+  playerName?: string;
+  /** Which EndingVariant this run earned (set when status becomes 'ended'). */
+  endingId?: string;
   startedAt: string;
   updatedAt: string;
+}
+
+/** A run parked in the browser's story library — resumable any time. */
+export interface ArchivedStory {
+  id: string;
+  archivedAt: string;
+  save: StorySave;
 }

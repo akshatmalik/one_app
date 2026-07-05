@@ -21,6 +21,7 @@ export const ZOMBIE_ARC: StoryArc = {
     threat: 3,
     inventory: ['kitchen knife', 'half bottle of water'],
     companions: [],
+    trust: {},
     conditions: [],
     flags: {},
   },
@@ -318,6 +319,74 @@ export const ZOMBIE_ARC: StoryArc = {
       guidance:
         "Choose the ending the flags and conditions have earned. Examples: clean escape (no bites, companions alive) — quiet, exhausted relief, the city shrinking behind the boat; bittersweet (Sam present) — the screening finds him; the player chooses to plead, smuggle, stay behind with him, or let him go, and the epilogue honors that choice without judging it; the player bitten — refusal at the wire: a last look at the boats, and what they do with their remaining hours; Maya's reunion — small, human, worth the whole trip. Do NOT invent a cure or a miracle. The epilogue is 150-220 words, second person, past-tense final line permitted. It should feel EARNED by this specific playthrough: reference at least two concrete things the player actually did.",
       summary: 'Reached the screening at the barricade gate — the end of the road.',
+    },
+  ],
+
+  // ── Endings — first matching condition wins ─────────────────────
+  // Resolved by the engine from the final state, so every run gets a
+  // named ending it actually earned. The gallery persists across runs.
+  endings: [
+    {
+      id: 'hollow-dawn',
+      title: 'The Hollow Dawn',
+      epitaph: 'You reached the wire. The wire is as far as you go.',
+      hint: 'Carry the one wound the screening cannot forgive.',
+      condition: state => state.conditions.some(c => c.toLowerCase().includes('bit')),
+    },
+    {
+      id: 'no-one-left-behind',
+      title: 'No One Left Behind',
+      epitaph: 'Everyone you chose to carry, you carried all the way.',
+      hint: 'Bring them both to the gate — the paramedic and the boy.',
+      condition: state =>
+        state.companions.some(c => c.toLowerCase().includes('maya')) &&
+        state.companions.some(c => c.toLowerCase().includes('sam')),
+    },
+    {
+      id: 'the-weight',
+      title: 'The Weight of the Wire',
+      epitaph: 'You got out. Part of you stayed in that line.',
+      hint: 'Take the boy under your wing — and lose him before the end.',
+      condition: state =>
+        state.flags.samJoined === true &&
+        !state.companions.some(c => c.toLowerCase().includes('sam')),
+    },
+    {
+      id: 'two-sisters',
+      title: 'Two Sisters',
+      epitaph: 'Some reunions are worth an entire burning city.',
+      hint: 'Earn the paramedic’s trust and walk her home.',
+      condition: state =>
+        state.companions.some(c => c.toLowerCase().includes('maya')),
+    },
+    {
+      id: 'ghost-of-harbor-bridge',
+      title: 'The Ghost of Harbor Bridge',
+      epitaph: 'Thirty-six hours, one set of footprints.',
+      hint: 'Cross the whole city without letting a single soul attach to yours.',
+      condition: state =>
+        state.companions.length === 0 && !state.flags.mayaJoined && !state.flags.samJoined,
+    },
+    {
+      id: 'clean-run',
+      title: 'The Clean Run',
+      epitaph: 'The city took its shot at you. It missed.',
+      hint: 'Arrive strong, early, and barely scratched.',
+      condition: state => state.health >= 75 && state.hoursLeft >= 6,
+    },
+    {
+      id: 'by-a-thread',
+      title: 'By a Thread',
+      epitaph: 'Whatever was left of you is what got on that boat.',
+      hint: 'Make it — but only just.',
+      condition: (state, deathCount) => state.health <= 30 || deathCount >= 3,
+    },
+    {
+      id: 'the-crossing',
+      title: 'The Crossing',
+      epitaph: 'You did what the broadcast asked: you were on it.',
+      hint: 'Reach the far side of thirty-six hours.',
+      condition: () => true,
     },
   ],
 };

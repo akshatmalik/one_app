@@ -1,25 +1,405 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
   ArrowLeft,
+  BookOpen,
   Clock,
+  Dices,
   Heart,
   Loader2,
+  Lock,
   Package,
+  Play,
   RotateCcw,
+  Save,
   Send,
   Skull,
+  Trash2,
+  Trophy,
   Users,
+  X,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useStoryGame } from '../hooks/useStoryGame';
+import { ArchivedStory, FateRoll, StorySave, TranscriptEntry } from '../lib/types';
+import { ZOMBIE_ARC } from '../lib/arc-zombie';
+
+// ── Small helpers ────────────────────────────────────────────────────
+
+/** 34.75 → "34¾" — the clock reads like a watch, not a float. */
+function formatHours(h: number): string {
+  const whole = Math.floor(h);
+  const frac = h - whole;
+  const glyph = frac >= 0.75 ? '¾' : frac >= 0.5 ? '½' : frac >= 0.25 ? '¼' : '';
+  return `${whole}${glyph}`;
+}
+
+const FATE_STYLE: Record<FateRoll['band'], { label: string; cls: string }> = {
+  disaster: { label: 'Disaster', cls: 'text-red-400 border-red-500/40 bg-red-500/10' },
+  setback: { label: 'Setback', cls: 'text-orange-400 border-orange-500/30 bg-orange-500/10' },
+  mixed: { label: 'At a cost', cls: 'text-amber-300 border-amber-500/30 bg-amber-500/10' },
+  clean: { label: 'Clean', cls: 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10' },
+  triumph: { label: 'Triumph', cls: 'text-yellow-300 border-yellow-400/40 bg-yellow-400/10' },
+};
+
+function trustColor(t: number): string {
+  return t <= 3 ? 'text-red-400' : t <= 6 ? 'text-amber-300' : 'text-emerald-400';
+}
+
+// The sky tracks the in-game clock: grey morning → flat day → rust dusk →
+// deep night → the final amber dawn. Pure atmosphere, zero text.
+type SkyPhase = 'morning' | 'day' | 'dusk' | 'night' | 'dawn';
+
+function skyPhase(hoursLeft: number): SkyPhase {
+  if (hoursLeft > 28) return 'morning';
+  if (hoursLeft > 20) return 'day';
+  if (hoursLeft > 14) return 'dusk';
+  if (hoursLeft > 6) return 'night';
+  return 'dawn';
+}
+
+const SKY_GRADIENTS: Record<SkyPhase, string> = {
+  morning: 'radial-gradient(ellipse 120% 70% at 50% -10%, rgba(148,163,184,0.16), transparent 60%)',
+  day: 'radial-gradient(ellipse 120% 70% at 50% -10%, rgba(203,213,225,0.11), transparent 55%)',
+  dusk: 'radial-gradient(ellipse 120% 70% at 50% -10%, rgba(217,119,6,0.18), transparent 62%)',
+  night: 'radial-gradient(ellipse 120% 70% at 50% -10%, rgba(30,58,138,0.26), transparent 65%)',
+  dawn: 'radial-gradient(ellipse 120% 70% at 50% -10%, rgba(245,158,11,0.22), transparent 60%)',
+};
+
+// ── Typewriter ───────────────────────────────────────────────────────
+
+function TypewriterText({
+  text,
+  animate,
+  onProgress,
+  onDone,
+}: {
+  text: string;
+  animate: boolean;
+  onProgress: () => void;
+  onDone: () => void;
+}) {
+  const [count, setCount] = useState(animate ? 0 : text.length);
+  const doneRef = useRef(!animate);
+
+  useEffect(() => {
+    if (!animate) {
+      setCount(text.length);
+      return;
+    }
+    doneRef.current = false;
+    setCount(0);
+    const iv = setInterval(() => {
+      setCount(c => {
+        const next = Math.min(text.length, c + 4);
+        if (next >= text.length) clearInterval(iv);
+        return next;
+      });
+    }, 24);
+    return () => clearInterval(iv);
+  }, [text, animate]);
+
+  useEffect(() => {
+    if (!animate) return;
+    onProgress();
+    if (count >= text.length && !doneRef.current) {
+      doneRef.current = true;
+      onDone();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [count]);
+
+  const typing = animate && count < text.length;
+  return (
+    <span onClick={() => typing && setCount(text.length)} className={typing ? 'cursor-pointer' : undefined}>
+      {text.slice(0, count)}
+      {typing && <span className="story-caret text-red-400">▌</span>}
+    </span>
+  );
+}
+
+// ── Act title card ───────────────────────────────────────────────────
+
+function TitleCard({ act, actTitle, beatTitle }: { act: number; actTitle: string; beatTitle: string }) {
+  return (
+    <div className="story-title-card fixed inset-0 z-[70] bg-black/90 backdrop-blur-sm flex flex-col items-center justify-center pointer-events-none px-6 text-center">
+      <p className="story-title-text text-red-500/90 text-xs font-semibold uppercase tracking-[0.5em] mb-4">Act {act}</p>
+      <h2 className="story-title-text text-3xl sm:text-4xl font-bold text-white uppercase">{actTitle}</h2>
+      <div className="story-title-text h-px w-24 bg-red-500/40 my-5" />
+      <p className="story-title-text text-white/50 text-sm tracking-[0.3em] uppercase">{beatTitle}</p>
+    </div>
+  );
+}
+
+// ── Journal ──────────────────────────────────────────────────────────
+
+function Journal({ save, onClose }: { save: StorySave; onClose: () => void }) {
+  const arc = ZOMBIE_ARC;
+  const beat = arc.beats[save.beatIndex];
+  const elapsed = arc.openingState.hoursLeft - save.state.hoursLeft;
+  return (
+    <div className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm flex justify-end" onClick={onClose}>
+      <div
+        className="w-full max-w-sm h-full bg-[#0d0d0f] border-l border-white/10 overflow-y-auto p-5 story-fade-up"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-5">
+          <h2 className="text-white font-semibold flex items-center gap-2"><BookOpen size={16} className="text-red-400" /> Journal</h2>
+          <button onClick={onClose} className="p-1.5 text-white/40 hover:text-white/80 rounded-lg hover:bg-white/5" aria-label="Close journal">
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="grid grid-cols-3 gap-2 mb-6 text-center">
+          <div className="rounded-xl bg-white/[0.04] border border-white/5 py-2.5">
+            <p className="text-lg font-bold text-white">{formatHours(elapsed)}h</p>
+            <p className="text-[10px] uppercase tracking-wider text-white/35">On the road</p>
+          </div>
+          <div className="rounded-xl bg-white/[0.04] border border-white/5 py-2.5">
+            <p className="text-lg font-bold text-white">{save.state.health}</p>
+            <p className="text-[10px] uppercase tracking-wider text-white/35">Health</p>
+          </div>
+          <div className="rounded-xl bg-white/[0.04] border border-white/5 py-2.5">
+            <p className="text-lg font-bold text-white">{save.deathCount}</p>
+            <p className="text-[10px] uppercase tracking-wider text-white/35">Deaths</p>
+          </div>
+        </div>
+
+        <p className="text-[10px] uppercase tracking-[0.2em] text-red-400/70 font-semibold mb-2">The story so far</p>
+        <ol className="space-y-2.5 mb-6">
+          {save.beatRecaps.map((r, i) => (
+            <li key={i} className="text-sm text-white/60 leading-relaxed flex gap-2.5">
+              <span className="text-red-500/60 font-semibold shrink-0">{i + 1}.</span>
+              {r}
+            </li>
+          ))}
+          <li className="text-sm text-white/85 leading-relaxed flex gap-2.5">
+            <span className="text-red-400 font-semibold shrink-0">▸</span>
+            <span><span className="text-red-300/90">Now:</span> {beat.title} — Act {beat.act}, {beat.actTitle}</span>
+          </li>
+        </ol>
+
+        {save.state.companions.length > 0 && (
+          <>
+            <p className="text-[10px] uppercase tracking-[0.2em] text-blue-400/70 font-semibold mb-2">Companions</p>
+            <div className="space-y-2 mb-6">
+              {save.state.companions.map(c => {
+                const t = save.state.trust[c] ?? 5;
+                return (
+                  <div key={c} className="flex items-center justify-between rounded-xl bg-white/[0.04] border border-white/5 px-3 py-2">
+                    <span className="text-sm text-white/80">{c}</span>
+                    <span className={clsx('flex items-center gap-1 text-xs font-semibold', trustColor(t))}>
+                      <Heart size={12} className="fill-current" /> {t}/10
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
+
+        {save.state.inventory.length > 0 && (
+          <>
+            <p className="text-[10px] uppercase tracking-[0.2em] text-white/40 font-semibold mb-2">Pack</p>
+            <div className="flex flex-wrap gap-1.5 mb-6">
+              {save.state.inventory.map(i => (
+                <span key={i} className="text-xs px-2.5 py-1 rounded-full bg-white/5 text-white/60 border border-white/10">{i}</span>
+              ))}
+            </div>
+          </>
+        )}
+
+        {save.state.conditions.length > 0 && (
+          <>
+            <p className="text-[10px] uppercase tracking-[0.2em] text-red-400/70 font-semibold mb-2">Wounds & afflictions</p>
+            <div className="flex flex-wrap gap-1.5">
+              {save.state.conditions.map(c => (
+                <span key={c} className="text-xs px-2.5 py-1 rounded-full bg-red-500/10 text-red-300 border border-red-500/20">{c}</span>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Start screen ─────────────────────────────────────────────────────
+
+function LibraryCard({
+  story,
+  onResume,
+  onDelete,
+  disabled,
+}: {
+  story: ArchivedStory;
+  onResume: () => void;
+  onDelete: () => void;
+  disabled: boolean;
+}) {
+  const arc = ZOMBIE_ARC;
+  const s = story.save;
+  const beat = arc.beats[s.beatIndex];
+  const endingTitle = s.endingId ? arc.endings.find(e => e.id === s.endingId)?.title : undefined;
+  const statusLine =
+    s.status === 'ended' ? `Finished — ${endingTitle ?? 'The Crossing'}` :
+    s.status === 'dead' ? `Died in Act ${beat?.act ?? '?'} — retry waiting` :
+    `Act ${beat?.act ?? 1} · ${beat?.title ?? ''} · ${formatHours(s.state.hoursLeft)}h left`;
+
+  return (
+    <div className="flex items-center gap-3 rounded-xl bg-white/[0.04] border border-white/10 px-4 py-3 text-left">
+      <div className="min-w-0 flex-1">
+        <p className="text-sm text-white/85 font-medium truncate">
+          {s.playerName ? `${s.playerName}'s run` : 'Unnamed run'}
+          <span className="text-white/30 font-normal"> · {new Date(story.archivedAt).toLocaleDateString()}</span>
+        </p>
+        <p className={clsx('text-xs truncate mt-0.5', s.status === 'ended' ? 'text-amber-300/80' : s.status === 'dead' ? 'text-red-400/80' : 'text-white/45')}>
+          {statusLine}
+        </p>
+      </div>
+      <button
+        onClick={onResume}
+        disabled={disabled}
+        className="p-2 rounded-lg bg-red-500/15 text-red-300 hover:bg-red-500/25 hover:text-white transition-colors disabled:opacity-40"
+        aria-label="Resume story"
+      >
+        <Play size={15} />
+      </button>
+      <button
+        onClick={onDelete}
+        className="p-2 rounded-lg text-white/30 hover:text-red-400 hover:bg-white/5 transition-colors"
+        aria-label="Delete story"
+      >
+        <Trash2 size={15} />
+      </button>
+    </div>
+  );
+}
+
+function StartScreen({
+  loading,
+  error,
+  library,
+  unlockedEndingIds,
+  onStart,
+  onResume,
+  onDelete,
+}: {
+  loading: boolean;
+  error: string | null;
+  library: ArchivedStory[];
+  unlockedEndingIds: string[];
+  onStart: (name: string) => void;
+  onResume: (id: string) => void;
+  onDelete: (id: string) => void;
+}) {
+  const arc = ZOMBIE_ARC;
+  const [name, setName] = useState('');
+  const [showEndings, setShowEndings] = useState(false);
+
+  return (
+    <div className="min-h-dvh bg-[#0a0a0a] flex flex-col">
+      <div className="px-4 py-3">
+        <Link href="/" className="inline-flex items-center gap-2 text-white/40 hover:text-white/70 text-sm transition-colors">
+          <ArrowLeft size={16} /> Hub
+        </Link>
+      </div>
+      <div className="flex-1 flex flex-col items-center px-6 pb-12 text-center">
+        <div className="p-4 rounded-2xl bg-gradient-to-br from-red-900/40 to-amber-900/20 border border-red-500/20 mb-6 mt-4">
+          <Skull size={40} className="text-red-400" />
+        </div>
+        <h1 className="text-4xl font-bold text-white tracking-tight mb-2">{arc.title}</h1>
+        <p className="text-red-400/90 font-medium mb-6">{arc.tagline}</p>
+        <p className="text-white/60 text-sm leading-relaxed max-w-md mb-8">{arc.premise}</p>
+
+        <input
+          type="text"
+          value={name}
+          onChange={e => setName(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') onStart(name); }}
+          placeholder="Your name (optional — companions will use it)"
+          maxLength={24}
+          className="w-full max-w-xs px-4 py-3 mb-4 bg-white/5 border border-white/10 rounded-xl text-white text-sm text-center placeholder-white/25 focus:outline-none focus:border-red-500/50 transition-colors"
+        />
+        <button
+          onClick={() => onStart(name)}
+          disabled={loading}
+          className="px-8 py-4 bg-gradient-to-r from-red-700 to-red-600 hover:from-red-600 hover:to-red-500 disabled:opacity-50 text-white font-semibold rounded-2xl transition-all shadow-lg shadow-red-900/30 flex items-center gap-2"
+        >
+          {loading ? <Loader2 size={18} className="animate-spin" /> : null}
+          {loading ? 'The city wakes...' : 'Begin'}
+        </button>
+        {error && <p className="text-red-400 text-sm mt-4">{error}</p>}
+        <p className="text-white/25 text-xs mt-6 max-w-sm">
+          Type anything — the story reacts to what you say. Every action rolls fate. Choices cost time, noise draws the dead, and death sends you back to the start of the scene.
+        </p>
+
+        {library.length > 0 && (
+          <div className="w-full max-w-md mt-10 text-left">
+            <p className="text-[10px] uppercase tracking-[0.25em] text-white/40 font-semibold mb-3">Your stories</p>
+            <div className="space-y-2">
+              {library.map(a => (
+                <LibraryCard
+                  key={a.id}
+                  story={a}
+                  disabled={loading}
+                  onResume={() => onResume(a.id)}
+                  onDelete={() => onDelete(a.id)}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="w-full max-w-md mt-10 text-left">
+          <button
+            onClick={() => setShowEndings(v => !v)}
+            className="w-full flex items-center justify-between text-[10px] uppercase tracking-[0.25em] text-white/40 font-semibold mb-3 hover:text-white/70 transition-colors"
+          >
+            <span className="flex items-center gap-2"><Trophy size={13} className="text-amber-400/70" /> Endings discovered — {unlockedEndingIds.length}/{arc.endings.length}</span>
+            <span>{showEndings ? '−' : '+'}</span>
+          </button>
+          {showEndings && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 story-fade-up">
+              {arc.endings.map(e => {
+                const unlocked = unlockedEndingIds.includes(e.id);
+                return (
+                  <div
+                    key={e.id}
+                    className={clsx(
+                      'rounded-xl border px-3.5 py-2.5',
+                      unlocked ? 'bg-amber-500/[0.07] border-amber-500/25' : 'bg-white/[0.03] border-white/5',
+                    )}
+                  >
+                    <p className={clsx('text-xs font-semibold flex items-center gap-1.5', unlocked ? 'text-amber-300' : 'text-white/35')}>
+                      {!unlocked && <Lock size={10} />}
+                      {unlocked ? e.title : '???'}
+                    </p>
+                    <p className="text-[11px] text-white/35 mt-1 leading-snug italic">
+                      {unlocked ? e.epitaph : e.hint}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Main component ───────────────────────────────────────────────────
 
 export function StoryGame() {
   const {
     arc,
     save,
+    library,
+    unlockedEndingIds,
+    ending,
     hydrated,
     loading,
     error,
@@ -28,15 +408,52 @@ export function StoryGame() {
     sendAction,
     retry,
     restartFromCheckpoint,
-    abandonGame,
+    saveAndRestart,
+    resumeStory,
+    deleteStory,
   } = useStoryGame();
 
   const [input, setInput] = useState('');
+  const [journalOpen, setJournalOpen] = useState(false);
+  const [animatingId, setAnimatingId] = useState<string | null>(null);
+  const [titleCard, setTitleCard] = useState<{ act: number; actTitle: string; beatTitle: string; key: string } | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
+  const prevLenRef = useRef<number | null>(null);
+
+  // Watch the transcript: new narrator entries get the typewriter, new
+  // act-headers get the cinematic title card. Restored entries get neither.
+  useEffect(() => {
+    if (!save) {
+      prevLenRef.current = 0;
+      return;
+    }
+    const len = save.transcript.length;
+    const prev = prevLenRef.current;
+    prevLenRef.current = len;
+    if (prev === null || len <= prev) return;
+    const fresh = save.transcript.slice(prev);
+    const last = fresh[fresh.length - 1];
+    if (last.role === 'narrator') setAnimatingId(last.id);
+    const actEntry = fresh.find(e => e.role === 'system' && /^ACT \d+ — /.test(e.text));
+    if (actEntry) {
+      const m = actEntry.text.match(/^ACT (\d+) — (.+) · (.+)$/);
+      if (m) setTitleCard({ act: Number(m[1]), actTitle: m[2], beatTitle: m[3], key: actEntry.id });
+    }
+  }, [save]);
 
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [save?.transcript.length, loading, error]);
+    if (!titleCard) return;
+    const t = setTimeout(() => setTitleCard(null), 3050);
+    return () => clearTimeout(t);
+  }, [titleCard]);
+
+  const scrollToEnd = useCallback((smooth = false) => {
+    endRef.current?.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', block: 'end' });
+  }, []);
+
+  useEffect(() => {
+    scrollToEnd(true);
+  }, [save?.transcript.length, loading, error, scrollToEnd]);
 
   const handleSend = (text?: string) => {
     const action = (text ?? input).trim();
@@ -53,47 +470,55 @@ export function StoryGame() {
     );
   }
 
-  // ── Start screen ─────────────────────────────────────────────────
   if (!save) {
     return (
-      <div className="h-dvh bg-[#0a0a0a] flex flex-col">
-        <div className="px-4 py-3">
-          <Link href="/" className="inline-flex items-center gap-2 text-white/40 hover:text-white/70 text-sm transition-colors">
-            <ArrowLeft size={16} /> Hub
-          </Link>
-        </div>
-        <div className="flex-1 flex flex-col items-center justify-center px-6 text-center">
-          <div className="p-4 rounded-2xl bg-gradient-to-br from-red-900/40 to-amber-900/20 border border-red-500/20 mb-6">
-            <Skull size={40} className="text-red-400" />
-          </div>
-          <h1 className="text-4xl font-bold text-white tracking-tight mb-2">{arc.title}</h1>
-          <p className="text-red-400/90 font-medium mb-6">{arc.tagline}</p>
-          <p className="text-white/60 text-sm leading-relaxed max-w-md mb-10">{arc.premise}</p>
-          <button
-            onClick={startNewGame}
-            disabled={loading}
-            className="px-8 py-4 bg-gradient-to-r from-red-700 to-red-600 hover:from-red-600 hover:to-red-500 disabled:opacity-50 text-white font-semibold rounded-2xl transition-all shadow-lg shadow-red-900/30 flex items-center gap-2"
-          >
-            {loading ? <Loader2 size={18} className="animate-spin" /> : null}
-            {loading ? 'The city wakes...' : 'Begin'}
-          </button>
-          {error && <p className="text-red-400 text-sm mt-4">{error}</p>}
-          <p className="text-white/25 text-xs mt-8 max-w-sm">
-            Type anything — the story reacts to what you say. Choices cost time, noise draws the dead, and death sends you back to the start of the scene.
-          </p>
-        </div>
-      </div>
+      <StartScreen
+        loading={loading}
+        error={error}
+        library={library}
+        unlockedEndingIds={unlockedEndingIds}
+        onStart={name => startNewGame(name)}
+        onResume={resumeStory}
+        onDelete={id => { if (confirm('Delete this saved story forever?')) deleteStory(id); }}
+      />
     );
   }
 
   const { state } = save;
   const healthColor = state.health > 60 ? 'bg-emerald-500' : state.health > 30 ? 'bg-amber-500' : 'bg-red-500';
   const isTerminal = save.status !== 'playing';
+  const phase = skyPhase(state.hoursLeft);
+
+  // Hurt = the screen itself bleeds at the edges. Threat feeds in a little too.
+  const hurtFactor = state.health < 35 ? (35 - state.health) / 35 : 0;
+  const threatFactor = state.threat >= 7 ? 0.35 : 0;
+  const vignette = Math.min(1, Math.max(hurtFactor, threatFactor));
 
   return (
-    <div className="h-dvh bg-[#0a0a0a] flex flex-col">
+    <div className="h-dvh bg-[#0a0a0a] flex flex-col relative overflow-hidden">
+      {/* Living sky — tracks the in-game clock */}
+      {(Object.keys(SKY_GRADIENTS) as SkyPhase[]).map(p => (
+        <div
+          key={p}
+          aria-hidden
+          className={clsx('absolute inset-0 pointer-events-none transition-opacity duration-[3000ms]', p === phase ? 'opacity-100' : 'opacity-0')}
+          style={{ background: SKY_GRADIENTS[p] }}
+        />
+      ))}
+      {/* Blood vignette when hurt or hunted */}
+      {vignette > 0 && (
+        <div
+          aria-hidden
+          className={clsx('absolute inset-0 pointer-events-none z-[45]', state.health < 20 && 'story-vignette-pulse')}
+          style={{ boxShadow: `inset 0 0 120px 30px rgba(185, 28, 28, ${(0.12 + vignette * 0.3).toFixed(2)})` }}
+        />
+      )}
+
+      {titleCard && <TitleCard act={titleCard.act} actTitle={titleCard.actTitle} beatTitle={titleCard.beatTitle} />}
+      {journalOpen && <Journal save={save} onClose={() => setJournalOpen(false)} />}
+
       {/* Header + HUD */}
-      <div className="border-b border-white/10 bg-gradient-to-r from-red-950/40 to-[#0a0a0a]">
+      <div className="relative z-10 border-b border-white/10 bg-gradient-to-r from-red-950/40 to-transparent">
         <div className="px-4 pt-3 pb-2 flex items-center justify-between">
           <div className="flex items-center gap-3 min-w-0">
             <Link href="/" className="p-1.5 -ml-1.5 rounded-lg text-white/40 hover:text-white/80 hover:bg-white/5 transition-colors" aria-label="Back to hub">
@@ -106,12 +531,22 @@ export function StoryGame() {
               <h1 className="text-white font-semibold truncate">{currentBeat?.title}</h1>
             </div>
           </div>
-          <button
-            onClick={() => { if (confirm('Abandon this story and start over?')) abandonGame(); }}
-            className="text-xs text-white/30 hover:text-white/60 transition-colors px-2 py-1"
-          >
-            New story
-          </button>
+          <div className="flex items-center gap-1 shrink-0">
+            <button
+              onClick={() => setJournalOpen(true)}
+              className="p-2 rounded-lg text-white/40 hover:text-white/80 hover:bg-white/5 transition-colors"
+              aria-label="Open journal"
+            >
+              <BookOpen size={17} />
+            </button>
+            <button
+              onClick={() => { if (confirm('Save this story to your library and return to the title screen? You can resume it any time.')) saveAndRestart(); }}
+              className="p-2 rounded-lg text-white/40 hover:text-white/80 hover:bg-white/5 transition-colors"
+              aria-label="Save and restart"
+            >
+              <Save size={17} />
+            </button>
+          </div>
         </div>
         <div className="px-4 pb-3 flex items-center gap-4 text-xs">
           <div className="flex items-center gap-1.5 flex-1 min-w-0 max-w-[160px]">
@@ -122,7 +557,7 @@ export function StoryGame() {
           </div>
           <div className="flex items-center gap-1 text-amber-300/90 font-medium shrink-0">
             <Clock size={13} />
-            {state.hoursLeft}h left
+            {formatHours(state.hoursLeft)}h left
           </div>
           <div className="flex items-center gap-1 shrink-0" title={`Threat ${state.threat}/10`}>
             <Skull size={13} className={state.threat >= 7 ? 'text-red-400' : state.threat >= 4 ? 'text-amber-400' : 'text-white/30'} />
@@ -133,11 +568,16 @@ export function StoryGame() {
         </div>
         {(state.inventory.length > 0 || state.companions.length > 0 || state.conditions.length > 0) && (
           <div className="px-4 pb-2.5 flex flex-wrap gap-1.5">
-            {state.companions.map(c => (
-              <span key={c} className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-300 border border-blue-500/20">
-                <Users size={10} /> {c}
-              </span>
-            ))}
+            {state.companions.map(c => {
+              const t = state.trust[c] ?? 5;
+              return (
+                <span key={c} className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-300 border border-blue-500/20">
+                  <Users size={10} /> {c}
+                  <Heart size={9} className={clsx('fill-current', trustColor(t))} />
+                  <span className={trustColor(t)}>{t}</span>
+                </span>
+              );
+            })}
             {state.conditions.map(c => (
               <span key={c} className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-red-500/15 text-red-300 border border-red-500/20">
                 {c}
@@ -153,8 +593,8 @@ export function StoryGame() {
       </div>
 
       {/* Transcript */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
-        {save.transcript.map(e => {
+      <div className="relative z-10 flex-1 overflow-y-auto px-4 py-4 space-y-4">
+        {save.transcript.map((e: TranscriptEntry) => {
           if (e.role === 'system') {
             return (
               <div key={e.id} className="flex items-center gap-3 py-2">
@@ -166,17 +606,27 @@ export function StoryGame() {
           }
           if (e.role === 'player') {
             return (
-              <div key={e.id} className="flex justify-end">
+              <div key={e.id} className="flex flex-col items-end gap-1">
                 <div className="max-w-[85%] rounded-2xl rounded-br-sm px-4 py-2.5 bg-gradient-to-r from-red-800 to-red-700 text-white text-sm">
                   {e.text}
                 </div>
+                {e.fate && (
+                  <span className={clsx('inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border font-semibold', FATE_STYLE[e.fate.band].cls)}>
+                    <Dices size={10} /> {e.fate.roll} — {FATE_STYLE[e.fate.band].label}
+                  </span>
+                )}
               </div>
             );
           }
           return (
             <div key={e.id} className="flex justify-start">
               <div className="max-w-[92%] rounded-2xl rounded-bl-sm px-4 py-3 bg-white/[0.06] border border-white/5 text-white/90 text-sm leading-relaxed whitespace-pre-wrap">
-                {e.text}
+                <TypewriterText
+                  text={e.text}
+                  animate={e.id === animatingId}
+                  onProgress={() => scrollToEnd(false)}
+                  onDone={() => setAnimatingId(null)}
+                />
               </div>
             </div>
           );
@@ -202,7 +652,7 @@ export function StoryGame() {
 
         {/* Death screen */}
         {save.status === 'dead' && (
-          <div className="rounded-2xl border border-red-500/30 bg-gradient-to-b from-red-950/60 to-[#140505] p-6 text-center">
+          <div className="rounded-2xl border border-red-500/30 bg-gradient-to-b from-red-950/60 to-[#140505] p-6 text-center story-fade-up">
             <Skull size={36} className="text-red-500 mx-auto mb-3" />
             <h2 className="text-2xl font-bold text-red-400 mb-2">You didn&apos;t make it</h2>
             <p className="text-white/60 text-sm mb-6">{save.deathCause}</p>
@@ -215,10 +665,10 @@ export function StoryGame() {
                 <RotateCcw size={16} /> Retry this scene
               </button>
               <button
-                onClick={abandonGame}
+                onClick={saveAndRestart}
                 className="px-6 py-3 bg-white/5 hover:bg-white/10 text-white/70 font-medium rounded-xl transition-colors"
               >
-                Start over
+                Shelve it & start fresh
               </button>
             </div>
             {save.deathCount > 0 && (
@@ -229,16 +679,20 @@ export function StoryGame() {
 
         {/* Ending screen */}
         {save.status === 'ended' && (
-          <div className="rounded-2xl border border-amber-500/30 bg-gradient-to-b from-amber-950/40 to-[#0f0a02] p-6 text-center">
-            <p className="text-[10px] uppercase tracking-[0.25em] text-amber-400/80 font-semibold mb-2">The End</p>
-            <h2 className="text-2xl font-bold text-amber-300 mb-4">{arc.title}</h2>
-            <div className="text-white/50 text-xs space-y-1 mb-6">
-              <p>Survived with {state.health} health · {state.hoursLeft}h to spare</p>
+          <div className="rounded-2xl border border-amber-500/30 bg-gradient-to-b from-amber-950/40 to-[#0f0a02] p-6 text-center story-fade-up">
+            <p className="text-[10px] uppercase tracking-[0.25em] text-amber-400/80 font-semibold mb-2">Ending discovered</p>
+            <h2 className="text-3xl font-bold text-amber-300 mb-2">{ending?.title ?? arc.title}</h2>
+            {ending && <p className="text-white/50 text-sm italic mb-5">&ldquo;{ending.epitaph}&rdquo;</p>}
+            <div className="text-white/50 text-xs space-y-1 mb-5">
+              <p>Survived with {state.health} health · {formatHours(state.hoursLeft)}h to spare</p>
               <p>{state.companions.length > 0 ? `Made it with: ${state.companions.join(', ')}` : 'Made it alone'}</p>
               {save.deathCount > 0 && <p>Deaths along the way: {save.deathCount}</p>}
             </div>
+            <p className="text-amber-400/60 text-xs mb-6 flex items-center justify-center gap-1.5">
+              <Trophy size={12} /> {unlockedEndingIds.length}/{arc.endings.length} endings discovered
+            </p>
             <button
-              onClick={abandonGame}
+              onClick={saveAndRestart}
               className="px-8 py-3 bg-amber-700 hover:bg-amber-600 text-white font-medium rounded-xl transition-colors"
             >
               Play again
@@ -251,9 +705,9 @@ export function StoryGame() {
 
       {/* Suggested actions + input */}
       {!isTerminal && (
-        <div className="border-t border-white/10 bg-[#0a0a0a] px-4 pt-3 pb-5">
-          {save.suggestedActions.length > 0 && !loading && (
-            <div className="flex flex-wrap gap-2 mb-3">
+        <div className="relative z-10 border-t border-white/10 bg-[#0a0a0a]/90 backdrop-blur px-4 pt-3 pb-5">
+          {save.suggestedActions.length > 0 && !loading && animatingId === null && (
+            <div className="flex flex-wrap gap-2 mb-3 story-fade-up">
               {save.suggestedActions.map((a, i) => (
                 <button
                   key={`${a}-${i}`}

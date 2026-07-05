@@ -590,3 +590,53 @@ input[type="range"]::-moz-range-thumb {
     rgba(16, 185, 129, 0.08) 100%
   );
 }
+
+/* ── Story Generator ("36 Hours") ────────────────────────────────── */
+
+@keyframes storyVignettePulse {
+  0%, 100% { opacity: 0.65; }
+  50% { opacity: 1; }
+}
+
+.story-vignette-pulse {
+  animation: storyVignettePulse 1.6s ease-in-out infinite;
+}
+
+@keyframes storyTitleCard {
+  0% { opacity: 0; }
+  10% { opacity: 1; }
+  82% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+.story-title-card {
+  animation: storyTitleCard 3s ease forwards;
+}
+
+@keyframes storyTitleText {
+  0% { opacity: 0; transform: translateY(10px); letter-spacing: 0.4em; }
+  25% { opacity: 1; transform: translateY(0); letter-spacing: 0.2em; }
+  100% { opacity: 1; transform: translateY(0); letter-spacing: 0.2em; }
+}
+
+.story-title-text {
+  animation: storyTitleText 3s ease forwards;
+}
+
+@keyframes storyFadeUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.story-fade-up {
+  animation: storyFadeUp 0.35s ease both;
+}
+
+@keyframes storyCaretBlink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.story-caret {
+  animation: storyCaretBlink 0.8s step-end infinite;
+}

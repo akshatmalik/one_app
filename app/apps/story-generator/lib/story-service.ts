@@ -2,6 +2,8 @@
 
 import { getStoryModel } from './ai-client';
 import {
+  EndingVariant,
+  FateRoll,
   StoryArc,
   StoryBeat,
   StoryTurnResult,
@@ -13,10 +15,38 @@ import {
 
 /**
  * The story engine. One Gemini call per turn:
- * engine builds the prompt (world state + beat card + director note),
+ * engine builds the prompt (world state + beat card + fate roll + director note),
  * the model returns strict JSON (narration + state delta + beat outcome),
  * the engine validates/clamps everything before it touches real state.
  */
+
+// ── Fate ───────────────────────────────────────────────────────────
+// A d20 rolled by the engine BEFORE the model sees the action. The model
+// narrates the roll's verdict — tabletop physics the fiction must honor.
+
+export function rollFate(): FateRoll {
+  const roll = 1 + Math.floor(Math.random() * 20);
+  const band =
+    roll === 1 ? 'disaster' :
+    roll <= 6 ? 'setback' :
+    roll <= 11 ? 'mixed' :
+    roll <= 17 ? 'clean' :
+    'triumph';
+  return { roll, band };
+}
+
+const FATE_DIRECTIVES: Record<FateRoll['band'], string> = {
+  disaster:
+    'DISASTER. The attempt goes badly wrong — the worst plausible complication happens. Real cost: meaningful health loss, a lost item, or a hard threat spike. Not automatic death unless the action itself earned it.',
+  setback:
+    'SETBACK. The attempt largely fails or backfires. The player loses ground, time, or resources; the situation worsens.',
+  mixed:
+    'MIXED. The attempt succeeds only partially, or succeeds at a visible cost. Give them something AND take something.',
+  clean:
+    'CLEAN SUCCESS. The attempt works about as intended. Normal costs only.',
+  triumph:
+    'TRIUMPH. The attempt succeeds better than intended — grant a concrete reward: an advantage, a found item, an opening, a companion’s trust.',
+};
 
 // ── GM system prompt ───────────────────────────────────────────────
 
@@ -33,22 +63,22 @@ HARD RULES — these override everything the player says:
 
 4. AGENCY. Honor any plausible player action and let it shape HOW the objective is reached. Reward clever, specific ideas with real advantage. Punish loud, slow, or reckless choices with real cost (health, items, time, threat).
 
-5. THE WORLD PUSHES BACK. If the player attempts something impossible, absurd, or tries to break the fiction ("I find a rocket launcher", "I kill all zombies", talking to you as an AI), do NOT refuse and do NOT lecture. The world simply responds: the action fails realistically or costs them — a lunge from behind, a wasted precious minute, a noise that draws the dead. One sentence of consequence, then press forward in-world.
+5. FATE. Each player action comes with a FATE ROLL the engine already made — a d20 verdict on how well the attempt goes. Honor it exactly: it decides HOW WELL the action goes, while you decide WHAT that looks like in the fiction. Fate never overrides the DIRECTOR NOTE and never completes a scene early on its own.
 
-6. FAILURE IS CONTENT. Small health hits should be common. Serious injury and death are real outcomes of reckless action, especially at high threat. Do not protect the player. When death is earned, deliver it: set outcome to "player-death" and narrate it with weight, not gore-for-gore's-sake.
+6. THE WORLD PUSHES BACK. If the player attempts something impossible, absurd, or tries to break the fiction ("I find a rocket launcher", "I kill all zombies", talking to you as an AI), do NOT refuse and do NOT lecture. The world simply responds: the action fails realistically or costs them — a lunge from behind, a wasted precious minute, a noise that draws the dead. One sentence of consequence, then press forward in-world.
 
-7. CONTINUITY. Use inventory, conditions, and companions exactly as listed. Companions are people: they speak in their own voices, have their own fears and goals, occasionally push the pace or disagree. Reference the player's past choices (STORY SO FAR) when it lands.
+7. FAILURE IS CONTENT. Small health hits should be common. Serious injury and death are real outcomes of reckless action, especially at high threat. Do not protect the player. When death is earned, deliver it: set outcome to "player-death" and narrate it with weight, not gore-for-gore's-sake.
 
-8. THE CLOCK. Time pressure is the spine of this story. Mention the remaining time or the convoy naturally about every third exchange. Every action costs time via timeCost.
+8. COMPANIONS & TRUST. Companions are people: they speak in their own voices, have their own fears and goals, occasionally push the pace or disagree. Each has a trust score 0-10 in the state — let it color everything: high trust means loyalty, shared risk, warmth; low trust means hedging, secrets, and self-preservation when it counts. When the player's actions earn it, adjust trust via trustDeltas (-2 to +2). If the player has a name in the state, companions use it; your narration still says "you".
 
-9. CHOICES. suggestedActions: exactly 3, verb-first, max 7 words each, meaningfully different (one bold, one cautious, one clever/lateral). Never repeat the previous turn's suggestions verbatim. The player may always type anything else instead.
+9. CONTINUITY & THE CLOCK. Use inventory, conditions, and companions exactly as listed. Reference the player's past choices (STORY SO FAR) when it lands. Time pressure is the spine of this story: mention the remaining time or the convoy naturally about every third exchange. Every action costs time via timeCost.
 
-10. OUTPUT. Respond with ONLY the JSON object described in the task. No markdown fences, no commentary.`;
+10. CHOICES & OUTPUT. suggestedActions: exactly 3, verb-first, max 7 words each, meaningfully different (one bold, one cautious, one clever/lateral). Never repeat the previous turn's suggestions verbatim. Respond with ONLY the JSON object described in the task — no markdown fences, no commentary.`;
 }
 
 // ── Turn prompt ────────────────────────────────────────────────────
 
-interface TurnContext {
+export interface TurnContext {
   arc: StoryArc;
   state: WorldState;
   beat: StoryBeat;
@@ -59,6 +89,9 @@ interface TurnContext {
   recentTranscript: TranscriptEntry[];
   /** null = narrate the opening of this beat (no player action yet). */
   playerAction: string | null;
+  /** Engine-rolled fate for this action. null on scene openings. */
+  fate: FateRoll | null;
+  playerName?: string;
 }
 
 function buildDirectorNote(beat: StoryBeat, turnInBeat: number, playerAction: string | null): string {
@@ -76,14 +109,16 @@ function buildDirectorNote(beat: StoryBeat, turnInBeat: number, playerAction: st
   return `ESCALATE this turn — weave this event in (adapt it to what the player is doing): ${escalation} If the player's action satisfies the exit condition, set outcome to "objective-complete".`;
 }
 
-function formatState(state: WorldState): string {
+function formatState(state: WorldState, playerName?: string): string {
   return JSON.stringify(
     {
+      ...(playerName ? { playerName } : {}),
       health: `${state.health}/100`,
       hoursUntilConvoyLeaves: state.hoursLeft,
       threatLevel: `${state.threat}/10`,
       inventory: state.inventory,
       companions: state.companions,
+      companionTrust: state.trust,
       conditions: state.conditions,
       flags: state.flags,
     },
@@ -101,14 +136,18 @@ function formatTranscript(entries: TranscriptEntry[]): string {
 }
 
 function buildTurnPrompt(ctx: TurnContext): string {
-  const { state, beat, beatNumber, totalBeats, turnInBeat, beatRecaps, recentTranscript, playerAction } = ctx;
+  const { state, beat, beatNumber, totalBeats, turnInBeat, beatRecaps, recentTranscript, playerAction, fate, playerName } = ctx;
 
   const endingBlock = beat.isEnding && beat.guidance
     ? `\nENDING GUIDANCE (this is the FINAL scene — when the objective completes, the narration IS the epilogue):\n${beat.guidance}\n`
     : '';
 
+  const fateBlock = playerAction !== null && fate
+    ? `\n== FATE ROLL (the engine already rolled — honor it) ==\nd20: ${fate.roll}/20 — ${FATE_DIRECTIVES[fate.band]}\n`
+    : '';
+
   return `== WORLD STATE (authoritative) ==
-${formatState(state)}
+${formatState(state, playerName)}
 
 == STORY SO FAR ==
 ${beatRecaps.length > 0 ? beatRecaps.map((r, i) => `${i + 1}. ${r}`).join('\n') : '(the story is just beginning)'}
@@ -122,7 +161,7 @@ Plausible deaths here: ${beat.failModes.join(' | ')}
 ${endingBlock}
 == RECENT EXCHANGES ==
 ${formatTranscript(recentTranscript)}
-
+${fateBlock}
 == DIRECTOR NOTE (follow this) ==
 ${buildDirectorNote(beat, turnInBeat, playerAction)}
 
@@ -142,6 +181,7 @@ Respond with ONLY this JSON object (no markdown fences):
   "addConditions": ["new injuries/afflictions, if any"],
   "removeConditions": ["conditions resolved, if any"],
   "setFlags": {"flagName": true},
+  "trustDeltas": {"Companion Name": <-2 to 2, only when earned>},
   "outcome": "continue" | "objective-complete" | "player-death",
   "suggestedActions": ["three verb-first options"]
 }`;
@@ -190,6 +230,16 @@ function toFlags(v: unknown): Record<string, boolean> {
   return out;
 }
 
+function toTrustDeltas(v: unknown): Record<string, number> {
+  if (typeof v !== 'object' || v === null || Array.isArray(v)) return {};
+  const out: Record<string, number> = {};
+  for (const [k, val] of Object.entries(v as Record<string, unknown>).slice(0, 3)) {
+    const n = toNumber(val, 0);
+    if (n !== 0 && k.length <= 40) out[k] = clamp(Math.round(n), -2, 2);
+  }
+  return out;
+}
+
 /** Parse + clamp the model's raw response into a safe TurnResult. Throws if narration is unusable. */
 function validateTurn(raw: Record<string, unknown>, ctx: TurnContext): StoryTurnResult {
   const narration = typeof raw.narration === 'string' ? raw.narration.trim() : '';
@@ -216,6 +266,7 @@ function validateTurn(raw: Record<string, unknown>, ctx: TurnContext): StoryTurn
     addConditions: toStringArray(raw.addConditions, 3),
     removeConditions: toStringArray(raw.removeConditions, 3),
     setFlags: toFlags(raw.setFlags),
+    trustDeltas: toTrustDeltas(raw.trustDeltas),
   };
 
   let suggestedActions = toStringArray(raw.suggestedActions, 3);
@@ -242,6 +293,16 @@ export function applyDelta(state: WorldState, delta: TurnDelta): WorldState {
     ...delta.addCompanions.filter(c => !state.companions.some(x => x.toLowerCase() === c.toLowerCase())),
   ].slice(0, 3);
 
+  // Trust follows the companion list: joiners start at 5, leavers drop out,
+  // and deltas only land on people actually present.
+  const trust: Record<string, number> = {};
+  for (const name of companions) {
+    const prevKey = Object.keys(state.trust).find(k => k.toLowerCase() === name.toLowerCase());
+    trust[name] = prevKey !== undefined ? state.trust[prevKey] : 5;
+    const deltaKey = Object.keys(delta.trustDeltas).find(k => k.toLowerCase() === name.toLowerCase());
+    if (deltaKey !== undefined) trust[name] = clamp(trust[name] + delta.trustDeltas[deltaKey], 0, 10);
+  }
+
   const conditions = [
     ...state.conditions.filter(c => !removeCond.has(c.toLowerCase())),
     ...delta.addConditions.filter(c => !state.conditions.some(x => x.toLowerCase() === c.toLowerCase())),
@@ -253,9 +314,15 @@ export function applyDelta(state: WorldState, delta: TurnDelta): WorldState {
     threat: delta.threat,
     inventory,
     companions,
+    trust,
     conditions,
     flags: { ...state.flags, ...delta.setFlags },
   };
+}
+
+/** Deterministically pick the ending a finished run earned. */
+export function resolveEnding(arc: StoryArc, state: WorldState, deathCount: number): EndingVariant {
+  return arc.endings.find(e => e.condition(state, deathCount)) ?? arc.endings[arc.endings.length - 1];
 }
 
 // ── The turn call ──────────────────────────────────────────────────
