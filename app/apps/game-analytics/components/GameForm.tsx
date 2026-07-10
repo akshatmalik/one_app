@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { ChevronDown, X, Tag, DollarSign, Calendar, MessageSquare, Sparkles, Loader2, Wallet } from 'lucide-react';
+import { searchRAWGGames, RAWGGameData } from '../lib/rawg-api';
 import { Game, GameStatus, PurchaseSource, SubscriptionSource, BudgetSettings } from '../lib/types';
 import { calculateCostPerHour, getValueRating, formatRating, getTotalHours, getBudgetImpactPreview } from '../lib/calculations';
 import { lookupGameLength } from '../lib/ai-timeline-service';
@@ -129,6 +130,40 @@ export function GameForm({ onSubmit, onClose, initialGame, allGames = [], existi
     playLogs: initialGame?.playLogs || [],
     isSpecial: initialGame?.isSpecial || false,
   });
+
+  // RAWG name autocomplete
+  const [nameResults, setNameResults] = useState<RAWGGameData[]>([]);
+  const [nameSearching, setNameSearching] = useState(false);
+  const [showNameDropdown, setShowNameDropdown] = useState(false);
+  const nameDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const nameJustSelectedRef = useRef(false);
+
+  useEffect(() => {
+    if (nameJustSelectedRef.current) {
+      nameJustSelectedRef.current = false;
+      return;
+    }
+    if (nameDebounceRef.current) clearTimeout(nameDebounceRef.current);
+    const query = formData.name.trim();
+    if (query.length < 2) {
+      setNameResults([]);
+      setShowNameDropdown(false);
+      return;
+    }
+    nameDebounceRef.current = setTimeout(async () => {
+      setNameSearching(true);
+      try {
+        const results = await searchRAWGGames(query, 8);
+        setNameResults(results);
+        setShowNameDropdown(results.length > 0);
+      } catch {
+        setNameResults([]);
+      } finally {
+        setNameSearching(false);
+      }
+    }, 400);
+    return () => { if (nameDebounceRef.current) clearTimeout(nameDebounceRef.current); };
+  }, [formData.name]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Drag-to-dismiss
   const sheetRef = useRef<HTMLDivElement>(null);
@@ -303,14 +338,52 @@ export function GameForm({ onSubmit, onClose, initialGame, allGames = [], existi
             {/* Game Name */}
             <div>
               <label className="block text-xs font-medium text-white/50 mb-1.5">Game Name *</label>
-              <input
-                type="text"
-                required
-                value={formData.name}
-                onChange={e => setFormData({ ...formData, name: e.target.value })}
-                className="w-full px-3 py-3 bg-white/[0.03] border border-white/5 text-white rounded-xl text-sm focus:outline-none focus:bg-white/[0.05] focus:border-white/10 transition-all placeholder:text-white/30"
-                placeholder="Enter game name"
-              />
+              <div className="relative">
+                <input
+                  type="text"
+                  required
+                  value={formData.name}
+                  onChange={e => setFormData({ ...formData, name: e.target.value })}
+                  onBlur={() => setTimeout(() => setShowNameDropdown(false), 150)}
+                  onFocus={() => { if (nameResults.length > 0) setShowNameDropdown(true); }}
+                  className="w-full px-3 py-3 bg-white/[0.03] border border-white/5 text-white rounded-xl text-sm focus:outline-none focus:bg-white/[0.05] focus:border-white/10 transition-all placeholder:text-white/30 pr-8"
+                  placeholder="Enter game name"
+                />
+                {nameSearching && (
+                  <Loader2 size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 animate-spin pointer-events-none" />
+                )}
+                {showNameDropdown && nameResults.length > 0 && (
+                  <div className="absolute left-0 right-0 top-full mt-1 z-50 bg-[#1a1a26] border border-white/10 rounded-xl overflow-hidden shadow-2xl">
+                    {nameResults.map(result => (
+                      <button
+                        key={result.id}
+                        type="button"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          nameJustSelectedRef.current = true;
+                          setFormData(prev => ({ ...prev, name: result.name }));
+                          setShowNameDropdown(false);
+                          setNameResults([]);
+                        }}
+                        className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/[0.06] active:bg-white/[0.09] transition-colors text-left"
+                      >
+                        {result.backgroundImage ? (
+                          <img src={result.backgroundImage} alt="" className="w-9 h-9 rounded-lg object-cover shrink-0" />
+                        ) : (
+                          <div className="w-9 h-9 rounded-lg bg-white/5 flex items-center justify-center shrink-0 text-base">🎮</div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm text-white/90 truncate">{result.name}</div>
+                          <div className="text-[10px] text-white/30">
+                            {result.released ? result.released.slice(0, 4) : ''}
+                            {result.metacritic ? <span className="ml-1.5 text-emerald-400/70">MC {result.metacritic}</span> : null}
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Status Picker — bigger pills with icons */}

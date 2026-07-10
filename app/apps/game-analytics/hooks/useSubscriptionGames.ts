@@ -302,6 +302,17 @@ export function useSubscriptionGames({ userId, games, onAddGame, onAddToQueue, o
     }
   }, [onAddGame, buildFreeGame, updateStatus]);
 
+  const addAsPlaying = useCallback(async (rec: GameRecommendation) => {
+    try {
+      await onAddGame(buildFreeGame(rec, 'In Progress', {
+        startDate: new Date().toISOString().split('T')[0],
+      }));
+      await updateStatus(rec.id, 'interested');
+    } catch (e) {
+      setError(e instanceof Error ? e : new Error(String(e)));
+    }
+  }, [onAddGame, buildFreeGame, updateStatus]);
+
   // Bulk: add every top pick still awaiting a decision to Up Next.
   const addAllTopPicksToUpNext = useCallback(async () => {
     const picks = recs.filter(r => r.status === 'suggested' && r.isTopPick);
@@ -452,9 +463,8 @@ export function useSubscriptionGames({ userId, games, onAddGame, onAddToQueue, o
     dismissNudge,
     markDismissed,
     undoDismiss,
-    saveForLater,
     addToUpNext,
-    addToWishlist,
+    addAsPlaying,
     addAsPlayed,
     addAllTopPicksToUpNext,
     claimAllMonthly,

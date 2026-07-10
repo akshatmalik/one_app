@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import {
-  Gift, Loader2, Sparkles, Flame, Check, Heart, X, ListPlus, Bookmark,
+  Gift, Loader2, Sparkles, Flame, Check, X, Bookmark, Play, ListPlus,
   ExternalLink, ChevronDown, ChevronUp, AlertTriangle, Undo2, PiggyBank,
   Crown, Clock, ShoppingCart, LogOut, RefreshCw, TrendingUp, Search,
 } from 'lucide-react';
@@ -473,7 +473,7 @@ export function SubscriptionDropPanel({ games, userId, onAddGame, onAddToQueue, 
               <span key={rec.id} className="text-[11px] text-white/45 bg-white/[0.04] rounded-lg px-2.5 py-1.5">
                 {rec.gameName}
                 <span className="text-white/20 ml-1">
-                  {rec.status === 'interested' ? '· Up Next' : rec.status === 'wishlisted' ? '· Wishlist' : '· Someday'}
+                  {rec.status === 'played' ? '· Played' : rec.status === 'interested' ? '· Queue' : '· Library'}
                 </span>
               </span>
             ))}
@@ -660,28 +660,23 @@ function SubscriptionGameCard({
           </div>
         ) : (
           <div className="flex items-center gap-1.5">
-            <button onClick={() => sub.addToUpNext(rec)}
-              className="flex-1 flex items-center justify-center gap-1 py-2 rounded-lg bg-indigo-500/10 text-indigo-300/80 text-xs font-medium hover:bg-indigo-500/20 transition-colors"
-              title="Add to library and Up Next queue">
-              <ListPlus size={12} /> Up Next
+            <button onClick={() => sub.addAsPlaying(rec)}
+              className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-blue-500/15 text-blue-300 text-xs font-medium hover:bg-blue-500/25 transition-colors"
+              title="Add to library and start playing now">
+              <Play size={12} /> Playing Now
             </button>
-            <button onClick={() => sub.saveForLater(rec.id)}
-              className="flex items-center justify-center gap-1 py-2 px-2.5 rounded-lg bg-cyan-500/10 text-cyan-300/70 text-xs font-medium hover:bg-cyan-500/20 transition-colors"
-              title="Save for later — keep it here as a maybe, don't add to library">
+            <button onClick={() => sub.addToUpNext(rec)}
+              className="flex items-center justify-center py-2 px-2.5 rounded-lg bg-indigo-500/10 text-indigo-300/80 text-xs hover:bg-indigo-500/20 transition-colors"
+              title="Add to Up Next queue">
               <Bookmark size={12} />
             </button>
-            <button onClick={() => sub.addToWishlist(rec)}
-              className="flex items-center justify-center gap-1 py-2 px-2.5 rounded-lg bg-purple-500/10 text-purple-400/70 text-xs font-medium hover:bg-purple-500/20 transition-colors"
-              title="Add to your library Wishlist">
-              <Heart size={12} />
-            </button>
             <button onClick={() => setShowRating(true)}
-              className="flex items-center justify-center gap-1 py-2 px-2.5 rounded-lg bg-emerald-500/10 text-emerald-400/70 text-xs font-medium hover:bg-emerald-500/20 transition-colors"
+              className="flex items-center justify-center py-2 px-2.5 rounded-lg bg-emerald-500/10 text-emerald-400/70 text-xs hover:bg-emerald-500/20 transition-colors"
               title="Already played — add with a rating">
               <Check size={12} />
             </button>
             <button onClick={() => sub.markDismissed(rec.id)}
-              className="py-2 px-2.5 rounded-lg bg-white/5 text-white/25 text-xs hover:bg-red-500/10 hover:text-red-400/70 transition-colors"
+              className="flex items-center justify-center py-2 px-2.5 rounded-lg bg-white/5 text-white/25 text-xs hover:bg-red-500/10 hover:text-red-400/70 transition-colors"
               title="Not interested">
               <X size={12} />
             </button>
