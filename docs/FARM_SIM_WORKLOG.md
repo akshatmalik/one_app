@@ -149,6 +149,50 @@ Plain mutable `InputState` object. `attachKeyboard()` binds WASD + arrow keys + 
 - `selectedIdx` / `multiSelect` / `BulkActionBar` removed from main page flow — superseded by WASD approach. `TileSheet` still accessible via "Tile Info" button for power users.
 - `FarmGrid` component still present but no longer used by page.tsx (legacy, can delete in R2).
 
+---
+
+### Session 3 — 2026-07-14
+
+**Agent:** Claude Sonnet 4.6
+**Branch:** `claude/farming-sim-plan-p17jtc`
+**Goal:** UI overhaul — canvas fills full screen, HUD floats over it as glassmorphism overlay.
+
+#### Features Built
+
+**F21 — Full-screen canvas** (`page.tsx`)
+Canvas is now `fixed inset-0` — takes the entire screen. All HUD floats above it as positioned overlays. No chrome stealing vertical space; the world is as big as the screen.
+
+**F22 — Consolidated HudBar** (`components/HudBar.tsx`)
+Merged WaterBar, ForecastStrip, ToolBar, and seeds picker all into one component. Renders two overlay regions: top (season pill + weather + gold + AP/water bars) and bottom (seeds strip + tool bar + Market/End Day buttons). All panels use `bg-black/50 backdrop-blur-sm border border-white/10` glassmorphism — readable over any terrain colour.
+
+**F23 — Tool bar redesign**
+Each tool is a rounded pill with active glow (`shadow-[0_0_10px_rgba(250,204,21,0.3)]`). Watering can shows 5 dot charges instead of a text counter. Seeds tool reveals a crop strip above the tool bar.
+
+**F24 — AP + water as thin progress bars**
+Replaced separate WaterBar component with two thin gradient bars just below the top pills. AP goes red when ≤2; water goes red when <30. Clean, unobtrusive.
+
+**F25 — Forecast as icon cluster**
+Weather forecast collapsed into a compact icon group next to today's weather emoji. Each day shows emoji + accuracy% in tiny text. Fits in a single pill.
+
+**F26 — Build panel slide-up**
+Build panel slides up from the bottom as a rounded sheet (`rounded-t-2xl`) above the HUD. Has its own close button.
+
+**F27 — Market full-screen overlay**
+Market opens as a `bg-slate-950/95 backdrop-blur-md` full-screen sheet with a proper header and close button.
+
+**F28 — Stale-save guard** (`lib/storage.ts`, `lib/engine/actions.ts`)
+`load()` now validates tile count matches `GRID_SIZE²` — rejects old 12×12 saves silently. `validActions()` guards against undefined tile index.
+
+**F29 — Removed dead components**
+Deleted `WaterBar.tsx`, `ForecastStrip.tsx`, `ToolBar.tsx`, `TutorialHint.tsx` — all merged into HudBar or dropped.
+
+#### Decisions Made This Session
+
+- HUD is entirely overlaid — canvas gets 100% of screen real estate.
+- Glassmorphism (`backdrop-blur + bg-black/50 + border-white/10`) reads well over grass/soil palette.
+- Seeds strip appears above tool bar only when seeds tool is active — no wasted space otherwise.
+- Tutorial hints removed for now (diegetic signposts planned for R4).
+
 #### Next Up — R2 (Clock, stamina, sleep)
 
 - [ ] `lib/realtime/clock.ts` — in-game 6 AM–10 PM clock, 1 real-second = ~6 game-minutes

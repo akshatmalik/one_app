@@ -233,6 +233,7 @@ export function applyAction(state: GameState, action: PlayerAction): ActionResul
 // Which action TYPES are valid for a given tile — drives the tile sheet.
 export function validActions(state: GameState, idx: number): PlayerAction['type'][] {
   const t = state.tiles[idx];
+  if (!t) return [];
   const out: PlayerAction['type'][] = [];
   switch (t.kind) {
     case 'grass':

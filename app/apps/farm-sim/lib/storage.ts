@@ -4,6 +4,9 @@
 // ============================================================================
 
 import { FarmSaveRepository, GameState, SaveSlotInfo } from './types';
+import { GRID_SIZE } from './balance';
+
+const EXPECTED_TILE_COUNT = GRID_SIZE * GRID_SIZE;
 
 const KEY = (slot: number) => `farm-sim-save-${slot}`;
 const META_KEY = (slot: number) => `farm-sim-meta-${slot}`;
@@ -25,6 +28,8 @@ export class LocalStorageFarmRepository implements FarmSaveRepository {
       if (!raw) return null;
       const state = JSON.parse(raw) as GameState;
       if (state.version !== 1) return null;
+      // Grid was expanded from 12×12 to 20×20 — discard stale saves.
+      if (!Array.isArray(state.tiles) || state.tiles.length !== EXPECTED_TILE_COUNT) return null;
       return state;
     } catch {
       return null;
