@@ -9,6 +9,7 @@ import { ActionResult, CropId, GameState, PlayerAction, Tile } from '../types';
 import {
   AP_COST,
   GOLD_COST,
+  GRID_SIZE,
   MAX_WELLS,
   TILLED_START_MOISTURE,
   MANUAL_WATER_MOISTURE,
@@ -31,8 +32,8 @@ function fail(state: GameState, error: string): ActionResult {
 
 // Manhattan distance of a tile from the starting plot rectangle → expansion ring.
 export function expansionRing(idx: number): 1 | 2 | 3 {
-  const r = Math.floor(idx / 12);
-  const c = idx % 12;
+  const r = Math.floor(idx / GRID_SIZE);
+  const c = idx % GRID_SIZE;
   const dr = Math.max(0, START_PLOT.r0 - r, r - START_PLOT.r1);
   const dc = Math.max(0, START_PLOT.c0 - c, c - START_PLOT.c1);
   const dist = dr + dc;

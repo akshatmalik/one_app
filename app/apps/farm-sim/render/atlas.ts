@@ -3,12 +3,16 @@
 // Parses all SpriteGrids once at boot, packs them into a single offscreen
 // canvas, and exposes drawSprite() for renderers.
 // No game logic here — pure rendering.
+//
+// Sprites are variable size; we pack with a fixed cell large enough for the
+// biggest sprite (farmer 12×18) plus padding.
 // ============================================================================
 
 import { SpriteGrid } from './sprites/spriteUtil';
 import { PAL, PalKey, hexToRgba } from './sprites/palette';
 import { TILE_SPRITES } from './sprites/tiles';
 import { CROP_SPRITES, WITHERED } from './sprites/crops';
+import { FARMER_SPRITES } from './sprites/farmer';
 
 export interface UVRect {
   x: number; // pixel x in atlas
@@ -54,6 +58,11 @@ function collectSprites(): Array<{ name: string; grid: SpriteGrid }> {
   }
   out.push({ name: 'crop_withered', grid: WITHERED });
 
+  // Farmer character sprites
+  for (const [name, grid] of Object.entries(FARMER_SPRITES)) {
+    out.push({ name, grid });
+  }
+
   return out;
 }
 
@@ -73,7 +82,7 @@ function paintSprite(
       if (!hex) continue;
       const rgba = hexToRgba(hex);
       const idx = ((oy + row) * atlasW + (ox + col)) * 4;
-      data[idx] = rgba[0];
+      data[idx]     = rgba[0];
       data[idx + 1] = rgba[1];
       data[idx + 2] = rgba[2];
       data[idx + 3] = rgba[3];
@@ -88,17 +97,19 @@ export function buildAtlas(): Atlas {
   if (_atlas) return _atlas;
 
   const sprites = collectSprites();
-  const SPRITE_W = 16;
-  const SPRITE_H = 16;
-  const PADDING = 1;
-  const COLS = 12;
-  const ROWS = Math.ceil(sprites.length / COLS);
 
-  const atlasW = COLS * (SPRITE_W + PADDING);
-  const atlasH = ROWS * (SPRITE_H + PADDING);
+  // Cell size must fit the largest sprite; farmer is 12×18.
+  const CELL_W  = 20;
+  const CELL_H  = 20;
+  const PADDING = 1;
+  const COLS    = 16;
+  const ROWS    = Math.ceil(sprites.length / COLS);
+
+  const atlasW = COLS * (CELL_W + PADDING);
+  const atlasH = ROWS * (CELL_H + PADDING);
 
   const canvas = document.createElement('canvas');
-  canvas.width = atlasW;
+  canvas.width  = atlasW;
   canvas.height = atlasH;
   const ctx = canvas.getContext('2d')!;
   const imageData = ctx.createImageData(atlasW, atlasH);
@@ -108,10 +119,11 @@ export function buildAtlas(): Atlas {
   sprites.forEach(({ name, grid }, i) => {
     const col = i % COLS;
     const row = Math.floor(i / COLS);
-    const ox = col * (SPRITE_W + PADDING);
-    const oy = row * (SPRITE_H + PADDING);
+    const ox  = col * (CELL_W + PADDING);
+    const oy  = row * (CELL_H + PADDING);
     paintSprite(imageData.data, atlasW, grid, ox, oy);
-    uvs.set(name, { x: ox, y: oy, w: SPRITE_W, h: SPRITE_H });
+    // Store the actual sprite dimensions (not the cell size).
+    uvs.set(name, { x: ox, y: oy, w: grid.w, h: grid.h });
   });
 
   ctx.putImageData(imageData, 0, 0);

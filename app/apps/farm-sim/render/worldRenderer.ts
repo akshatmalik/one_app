@@ -6,12 +6,14 @@
 //   1. Ground layer (terrain tiles) — drawn to offscreen cache, reused
 //   2. Crops (y-sorted so tall back-row crops go behind front-row)
 //   3. Buildings / infrastructure
-//   4. Selection highlight
-//   5. Lighting overlay
+//   4. Player character (y-sorted with objects)
+//   5. Selection highlight (facing tile)
+//   6. Lighting overlay
 // ============================================================================
 
 import { GameState, Tile } from '../lib/types';
 import { GRID_SIZE, RESERVOIR_POS } from '../lib/balance';
+import { PlayerState, facingTileIdx } from '../lib/realtime/player';
 import { Atlas } from './atlas';
 import { Camera, TILE_PX, tileToWorld, worldToScreen } from './camera';
 import { TimeOfDay, applyLighting } from './lighting';
@@ -29,10 +31,7 @@ function tilledSprite(tile: Tile): string {
 
 function channelSprite(tiles: Tile[], idx: number): string {
   // Simple horizontal/vertical pick based on neighbours.
-  // Full bitmask auto-connect is R4; for now use H if any L/R neighbour is channel,
-  // V otherwise.
   const col = idx % GRID_SIZE;
-  const row = Math.floor(idx / GRID_SIZE);
   const left  = col > 0 ? tiles[idx - 1].kind : null;
   const right = col < GRID_SIZE - 1 ? tiles[idx + 1].kind : null;
   if (left === 'channel' || right === 'channel') return 'channel_h';
@@ -48,12 +47,8 @@ function isReservoir(idx: number): boolean {
 function cropSpriteName(tile: Tile): string | null {
   if (!tile.crop) return null;
   const { cropId, growthDays, mature } = tile.crop;
-  // If stress ≥ 2 and not mature: show withered.
   if (tile.crop.stressDays >= 2 && !mature) return 'crop_withered';
-  // Determine stage from growthDays.
-  // growDays from CROPS gives max; stages are 0,1,2,3 (mature).
   if (mature) return `crop_${cropId}_3`;
-  // rough 3-stage split
   const stage = Math.min(2, Math.floor(growthDays * 3 / 7));
   return `crop_${cropId}_${stage}`;
 }
@@ -62,7 +57,6 @@ function cropSpriteName(tile: Tile): string | null {
 
 interface GroundCache {
   canvas: HTMLCanvasElement;
-  /** serialized tile kinds + moisture bins to detect stale cache */
   key: string;
 }
 
@@ -83,7 +77,7 @@ function buildGroundCache(
   worldH: number
 ): GroundCache {
   const canvas = document.createElement('canvas');
-  canvas.width = worldW;
+  canvas.width  = worldW;
   canvas.height = worldH;
   const ctx = canvas.getContext('2d')!;
   ctx.imageSmoothingEnabled = false;
@@ -106,18 +100,16 @@ function buildGroundCache(
         spriteName = channelSprite(tiles, idx);
         break;
       case 'well':
-        // Draw grass underneath, well on top (in objects layer).
         spriteName = grassVariant(idx);
         break;
       case 'reservoir':
-        // Reservoir is a 2×2 building drawn in the objects layer.
         spriteName = 'grass';
         break;
       default:
         spriteName = 'locked';
     }
 
-    atlas.draw(ctx, spriteName, wx, wy, 2); // 16px sprite × 2 = 32px tile
+    atlas.draw(ctx, spriteName, wx, wy, 2);
   });
 
   return { canvas, key: groundCacheKey(tiles) };
@@ -139,6 +131,7 @@ export function invalidateGroundCache() {
 export interface RenderOptions {
   tod?: TimeOfDay;
   selectedIdx?: number | null;
+  player?: PlayerState;
 }
 
 export function renderWorld(
@@ -148,7 +141,7 @@ export function renderWorld(
   cam: Camera,
   opts: RenderOptions = {}
 ) {
-  const { tod = 'day', selectedIdx = null } = opts;
+  const { tod = 'day', selectedIdx = null, player } = opts;
   const { viewW, viewH, worldW, worldH } = cam;
 
   ctx.imageSmoothingEnabled = false;
@@ -158,11 +151,11 @@ export function renderWorld(
   const ground = getGroundCache(state.tiles, atlas, worldW, worldH);
   ctx.drawImage(
     ground.canvas,
-    cam.x, cam.y, viewW, viewH,   // source rect (crop to viewport)
-    0, 0, viewW, viewH             // dest (fill canvas)
+    cam.x, cam.y, viewW, viewH,
+    0, 0, viewW, viewH
   );
 
-  // 2. Objects layer: wells, reservoir, crops — y-sorted by world-y bottom edge
+  // 2. Objects layer: wells, reservoir, crops — y-sorted with player
   type DrawCmd = { wy: number; fn: () => void };
   const cmds: DrawCmd[] = [];
 
@@ -170,7 +163,6 @@ export function renderWorld(
     const [wx, wy] = tileToWorld(idx);
     const [sx, sy] = worldToScreen(cam, wx, wy);
 
-    // Skip tiles fully outside viewport
     if (sx + TILE_PX < 0 || sx > viewW || sy + TILE_PX < 0 || sy > viewH) return;
 
     if (tile.kind === 'well') {
@@ -188,18 +180,32 @@ export function renderWorld(
 
     const cropName = cropSpriteName(tile);
     if (cropName) {
-      // Crops anchor at bottom-centre of tile; draw offset up.
       cmds.push({ wy: wy + TILE_PX, fn: () => atlas.draw(ctx, cropName, sx, sy - 8, 2) });
     }
   });
+
+  // 3. Player character — y-sorted with objects by feet position
+  if (player) {
+    const frameName = player.isMoving
+      ? `farmer_${player.facing}_walk${player.walkFrame}`
+      : `farmer_${player.facing}_idle`;
+    const [sx, sy] = worldToScreen(cam, player.x, player.y);
+    // Player feet world-y = player.y + 36; use that for y-sort
+    const feetWy = player.y + 36;
+    cmds.push({
+      wy: feetWy,
+      fn: () => atlas.draw(ctx, frameName, sx, sy, 2),
+    });
+  }
 
   // Y-sort and draw
   cmds.sort((a, b) => a.wy - b.wy);
   for (const cmd of cmds) cmd.fn();
 
-  // 3. Selection highlight
-  if (selectedIdx !== null && selectedIdx >= 0) {
-    const [wx, wy] = tileToWorld(selectedIdx);
+  // 4. Facing tile highlight (shows which tile the tool will act on)
+  const highlightIdx = player ? facingTileIdx(player, GRID_SIZE) : selectedIdx;
+  if (highlightIdx !== null && highlightIdx !== undefined && highlightIdx >= 0) {
+    const [wx, wy] = tileToWorld(highlightIdx);
     const [sx, sy] = worldToScreen(cam, wx, wy);
     ctx.save();
     ctx.strokeStyle = 'rgba(255, 255, 100, 0.85)';
@@ -210,6 +216,6 @@ export function renderWorld(
     ctx.restore();
   }
 
-  // 4. Lighting overlay
+  // 5. Lighting overlay
   applyLighting(ctx, tod, viewW, viewH);
 }

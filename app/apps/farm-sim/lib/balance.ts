@@ -7,9 +7,9 @@
 import { Season } from './types';
 
 // ── World ──────────────────────────────────────────────
-export const GRID_SIZE = 12; // 12×12 world grid
-export const START_PLOT = { r0: 3, c0: 3, r1: 8, c1: 8 }; // starting 6×6 (inclusive)
-export const RESERVOIR_POS = { r: 3, c: 5 }; // pre-placed inside start plot, north edge
+export const GRID_SIZE = 20; // 20×20 world grid
+export const START_PLOT = { r0: 7, c0: 7, r1: 13, c1: 13 }; // starting 7×7 (inclusive)
+export const RESERVOIR_POS = { r: 7, c: 10 }; // pre-placed inside start plot, north edge centre
 export const SEASON_LENGTH = 28; // days per season
 export const SEASONS: Season[] = ['Spring', 'Summer', 'Fall']; // Winter is M2
 
