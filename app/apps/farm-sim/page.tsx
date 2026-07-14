@@ -7,7 +7,7 @@ import { PlayerAction } from './lib/types';
 import { HudBar } from './components/HudBar';
 import { ForecastStrip } from './components/ForecastStrip';
 import { WaterBar } from './components/WaterBar';
-import { FarmGrid } from './components/FarmGrid';
+import { GameCanvas } from './components/GameCanvas';
 import { TileSheet } from './components/TileSheet';
 import { MarketPanel } from './components/MarketPanel';
 import { BuildPanel, BuildTool } from './components/BuildPanel';
@@ -104,7 +104,7 @@ export default function FarmSimPage() {
           <ForecastStrip state={state} />
           {state.tutorialStep >= 0 && <TutorialHint state={state} />}
 
-          <FarmGrid
+          <GameCanvas
             state={state}
             selectedIdx={multiSelect ? null : selectedIdx}
             selectedSet={multiSelect ? selection : undefined}
