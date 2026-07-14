@@ -327,7 +327,7 @@ export function GameCanvas({
   return (
     <canvas
       ref={canvasRef}
-      className="w-full flex-1 block touch-none"
+      className="absolute inset-0 w-full h-full block touch-none"
       onPointerDown={handlePointerDown}
       style={{ imageRendering: 'pixelated', cursor: 'crosshair' }}
     />

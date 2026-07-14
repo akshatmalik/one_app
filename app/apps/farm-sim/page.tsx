@@ -72,7 +72,7 @@ export default function FarmSimPage() {
   const showMenu = menuOpen || !state;
 
   return (
-    <div className="fixed inset-0 bg-black select-none overflow-hidden">
+    <div className="w-full h-full bg-black select-none overflow-hidden relative">
 
       {/* Canvas is always full-screen, HUD floats above it */}
       {state && (
