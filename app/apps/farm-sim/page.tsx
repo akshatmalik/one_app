@@ -11,6 +11,7 @@ import { FarmGrid } from './components/FarmGrid';
 import { TileSheet } from './components/TileSheet';
 import { MarketPanel } from './components/MarketPanel';
 import { BuildPanel, BuildTool } from './components/BuildPanel';
+import { BulkActionBar } from './components/BulkActionBar';
 import { DayRecap } from './components/DayRecap';
 import { TutorialHint } from './components/TutorialHint';
 import { MenuScreen } from './components/MenuScreen';
@@ -25,6 +26,10 @@ export default function FarmSimPage() {
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
   const [buildTool, setBuildTool] = useState<BuildTool | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [multiSelect, setMultiSelect] = useState(false);
+  const [selection, setSelection] = useState<Set<number>>(new Set());
+
+  const clearMulti = () => setSelection(new Set());
 
   // Advance the tutorial when the player performs the expected action type.
   const dispatch = (action: PlayerAction): boolean => {
@@ -62,7 +67,25 @@ export default function FarmSimPage() {
       dispatch(actionMap[buildTool]);
       return;
     }
+    // Farm multi-select: tapping toggles membership.
+    if (mode === 'farm' && multiSelect) {
+      setSelection((prev) => {
+        const next = new Set(prev);
+        if (next.has(idx)) next.delete(idx);
+        else next.add(idx);
+        return next;
+      });
+      return;
+    }
     setSelectedIdx((cur) => (cur === idx ? null : idx));
+  };
+
+  const switchMode = (m: Mode) => {
+    setMode(m);
+    setSelectedIdx(null);
+    setBuildTool(null);
+    setMultiSelect(false);
+    clearMulti();
   };
 
   // Show the menu automatically when there's no game loaded yet.
@@ -81,12 +104,23 @@ export default function FarmSimPage() {
           <ForecastStrip state={state} />
           {state.tutorialStep >= 0 && <TutorialHint state={state} />}
 
-          <FarmGrid state={state} selectedIdx={selectedIdx} onSelect={handleSelect} />
+          <FarmGrid
+            state={state}
+            selectedIdx={multiSelect ? null : selectedIdx}
+            selectedSet={multiSelect ? selection : undefined}
+            onSelect={handleSelect}
+          />
 
           {/* Error toast */}
           {game.error && (
             <div className="absolute bottom-40 left-1/2 -translate-x-1/2 z-30 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold shadow-lg">
               {game.error}
+            </div>
+          )}
+          {/* Info toast */}
+          {game.info && !game.error && (
+            <div className="absolute bottom-52 left-1/2 -translate-x-1/2 z-30 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold shadow-lg">
+              {game.info}
             </div>
           )}
 
@@ -97,11 +131,7 @@ export default function FarmSimPage() {
             {(['farm', 'build', 'market'] as Mode[]).map((m) => (
               <button
                 key={m}
-                onClick={() => {
-                  setMode(m);
-                  setSelectedIdx(null);
-                  setBuildTool(null);
-                }}
+                onClick={() => switchMode(m)}
                 className={`flex-1 rounded-t-lg py-1.5 text-xs font-semibold capitalize ${
                   mode === m ? 'bg-slate-800 text-white' : 'bg-slate-950 text-slate-400'
                 }`}
@@ -111,10 +141,38 @@ export default function FarmSimPage() {
             ))}
           </div>
 
+          {/* Multi-select toggle (Farm mode only) */}
+          {mode === 'farm' && (
+            <div className="flex justify-end px-3 pt-1 bg-slate-800">
+              <button
+                onClick={() => {
+                  setMultiSelect((v) => !v);
+                  clearMulti();
+                  setSelectedIdx(null);
+                }}
+                className={`text-[11px] rounded px-2 py-1 font-semibold ${
+                  multiSelect ? 'bg-yellow-500 text-yellow-950' : 'bg-slate-700 text-slate-300'
+                }`}
+              >
+                {multiSelect ? '☑︎ Multi-select' : '☐ Multi-select'}
+              </button>
+            </div>
+          )}
+
           {/* Contextual bottom area */}
           <div className="bg-slate-900">
             {mode === 'market' ? (
               <MarketPanel state={state} dispatch={dispatch} />
+            ) : mode === 'farm' && multiSelect ? (
+              <BulkActionBar
+                state={state}
+                selection={Array.from(selection)}
+                dispatchMany={game.dispatchMany}
+                onApplied={(n, label) =>
+                  game.flashInfo(n > 0 ? `${label} ${n} tile${n === 1 ? '' : 's'}` : 'Nothing applicable')
+                }
+                onClear={clearMulti}
+              />
             ) : mode === 'build' && !selectedIdx ? (
               <BuildPanel state={state} tool={buildTool} onPick={setBuildTool} />
             ) : selectedIdx !== null && validActions(state, selectedIdx).length > 0 ? (

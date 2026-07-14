@@ -10,10 +10,13 @@ import { farmRepo, AUTOSAVE_SLOT } from '../lib/storage';
 interface UseFarmGame {
   state: GameState | null;
   error: string | null;
+  info: string | null;
   recap: DayRecap | null;
   hasSave: boolean;
   slots: SaveSlotInfo[];
   dispatch: (action: PlayerAction) => boolean;
+  dispatchMany: (actions: PlayerAction[]) => number;
+  flashInfo: (msg: string) => void;
   endDay: () => void;
   dismissRecap: () => void;
   startNewGame: (seed?: number) => void;
@@ -27,10 +30,12 @@ interface UseFarmGame {
 export function useFarmGame(): UseFarmGame {
   const [state, setState] = useState<GameState | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
   const [recap, setRecap] = useState<DayRecap | null>(null);
   const [slots, setSlots] = useState<SaveSlotInfo[]>([]);
   const [hasSave, setHasSave] = useState(false);
   const errorTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const infoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // On mount, discover existing saves (don't auto-load — show the menu).
   useEffect(() => {
@@ -50,6 +55,12 @@ export function useFarmGame(): UseFarmGame {
     errorTimer.current = setTimeout(() => setError(null), 2600);
   }, []);
 
+  const flashInfo = useCallback((msg: string) => {
+    setInfo(msg);
+    if (infoTimer.current) clearTimeout(infoTimer.current);
+    infoTimer.current = setTimeout(() => setInfo(null), 2200);
+  }, []);
+
   const dispatch = useCallback(
     (action: PlayerAction): boolean => {
       if (!state) return false;
@@ -61,6 +72,34 @@ export function useFarmGame(): UseFarmGame {
       setState(result.state);
       autosave(result.state);
       return true;
+    },
+    [state, autosave, flashError]
+  );
+
+  // Apply a batch of actions, threading state through one render. Returns how
+  // many applied. Used by multi-select bulk actions.
+  const dispatchMany = useCallback(
+    (actions: PlayerAction[]): number => {
+      if (!state) return 0;
+      let cur = state;
+      let applied = 0;
+      let lastError: string | undefined;
+      for (const a of actions) {
+        const res = applyAction(cur, a);
+        if (res.ok) {
+          cur = res.state;
+          applied++;
+        } else {
+          lastError = res.error;
+        }
+      }
+      if (applied > 0) {
+        setState(cur);
+        autosave(cur);
+      } else if (lastError) {
+        flashError(lastError);
+      }
+      return applied;
     },
     [state, autosave, flashError]
   );
@@ -128,10 +167,13 @@ export function useFarmGame(): UseFarmGame {
   return {
     state,
     error,
+    info,
     recap,
     hasSave,
     slots,
     dispatch,
+    dispatchMany,
+    flashInfo,
     endDay,
     dismissRecap,
     startNewGame,

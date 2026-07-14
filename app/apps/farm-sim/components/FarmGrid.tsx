@@ -9,10 +9,11 @@ import { validActions } from '../lib/engine/actions';
 interface Props {
   state: GameState;
   selectedIdx: number | null;
+  selectedSet?: Set<number>;
   onSelect: (idx: number) => void;
 }
 
-export function FarmGrid({ state, selectedIdx, onSelect }: Props) {
+export function FarmGrid({ state, selectedIdx, selectedSet, onSelect }: Props) {
   const [zoomed, setZoomed] = useState(true);
   const size = zoomed ? 30 : 22;
 
@@ -33,7 +34,7 @@ export function FarmGrid({ state, selectedIdx, onSelect }: Props) {
             key={idx}
             tile={tile}
             size={size}
-            selected={selectedIdx === idx}
+            selected={selectedIdx === idx || !!selectedSet?.has(idx)}
             expandable={validActions(state, idx).includes('expand')}
             onTap={() => onSelect(idx)}
           />
