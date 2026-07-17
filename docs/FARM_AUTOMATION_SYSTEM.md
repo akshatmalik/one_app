@@ -50,6 +50,17 @@ Acceptance rules:
 - Weather and RNG are independent of action order; the same seed plus action log reproduces the result.
 - A player can complete the first harvest without automation, but cannot comfortably scale the field manually.
 
+## Mobile Interaction Contract
+
+The farm view is mobile-first and uses the same interaction model on phones and desktop browsers:
+
+- Tapping the world selects a tile and computes a deterministic four-way route around structures and terrain.
+- The farmer walks to the destination automatically; dragging the world temporarily pans the following camera.
+- The first tap never performs a destructive action. A contextual bottom sheet exposes only actions valid for the selected tile.
+- Distant tiles remain inspectable while the farmer approaches, but actions unlock only within one tile of the target.
+- The compact command dock contains tools, farm operations, construction mode, and sleep. Detailed crop, soil, water, storage, and production information appears only in contextual sheets.
+- The same fixed-step movement fallback runs in background browser playtests so click paths and action logs remain replayable.
+
 ## Irrigation
 
 Use the existing connected-channel/flood-fill model as the foundation. Add automation in this order:

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState } from 'react';
 import { Download, Play, Plus, Save, Sprout, Trash2 } from 'lucide-react';
 import { SaveSlotInfo } from '../lib/types';
 import { MANUAL_SLOTS } from '../lib/storage';
@@ -37,13 +37,6 @@ export function MenuScreen({
   const [showSeed, setShowSeed] = useState(false);
   const [seedText, setSeedText] = useState('');
   const slotMap = new Map(slots.map((s) => [s.slot, s]));
-  // Block all clicks for 200ms after mount so the triggering click can't fall through.
-  const readyRef = useRef(false);
-  useEffect(() => {
-    const t = setTimeout(() => { readyRef.current = true; }, 200);
-    return () => clearTimeout(t);
-  }, []);
-
   const start = () => {
     const trimmed = seedText.trim();
     const seed = trimmed ? Math.abs(hashText(trimmed)) : undefined;
@@ -54,7 +47,7 @@ export function MenuScreen({
     <div
       className="fixed inset-0 z-40 flex flex-col items-center justify-center gap-5 overflow-y-auto bg-[#102019] p-6 text-white"
       onPointerDown={(e) => e.stopPropagation()}
-      onClickCapture={(e) => { if (!readyRef.current) e.stopPropagation(); }}
+      onClick={(e) => e.stopPropagation()}
     >
       <div className="text-center">
         <Sprout size={38} strokeWidth={1.5} className="mx-auto text-[#d9b95f]" />

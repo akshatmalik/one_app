@@ -17,7 +17,7 @@ import { PlayerState, facingTileIdx } from '../lib/realtime/player';
 import { Atlas } from './atlas';
 import { Camera, TILE_PX, tileToWorld, worldToScreen } from './camera';
 import { TimeOfDay, applyLighting } from './lighting';
-import { lockedScenery } from '../lib/worldScenery';
+import { groundDetails, GroundDetail, lockedScenery } from '../lib/worldScenery';
 
 const IMG_CACHE: Record<string, HTMLImageElement> = {};
 function drawExternalImg(ctx: CanvasRenderingContext2D, src: string, sx: number, sy: number, w: number, h: number) {
@@ -84,6 +84,34 @@ function cropSpriteName(tile: Tile): string | null {
   return `crop_${cropId}_${stage}`;
 }
 
+function drawGroundDetail(ctx: CanvasRenderingContext2D, detail: GroundDetail, wx: number, wy: number) {
+  const x = wx + detail.x;
+  const y = wy + detail.y;
+  if (detail.kind === 'flower') {
+    ctx.fillStyle = detail.variant === 0 ? '#e8c96d' : detail.variant === 1 ? '#e58a6d' : '#d9b7e8';
+    ctx.fillRect(x, y, 2, 2);
+    ctx.fillStyle = '#4f7c43';
+    ctx.fillRect(x + 1, y + 2, 1, 3);
+    return;
+  }
+  if (detail.kind === 'tuft') {
+    ctx.fillStyle = detail.variant === 0 ? '#3f713e' : '#588442';
+    ctx.fillRect(x + 1, y + 2, 2, 5);
+    ctx.fillRect(x, y + 3, 1, 3);
+    ctx.fillRect(x + 3, y + 1, 1, 5);
+    return;
+  }
+  if (detail.kind === 'pebble') {
+    ctx.fillStyle = detail.variant === 0 ? '#8b8b72' : detail.variant === 1 ? '#9b8069' : '#6e786b';
+    ctx.fillRect(x, y + 2, 3, 2);
+    ctx.fillRect(x + 1, y + 1, 2, 1);
+    return;
+  }
+  ctx.fillStyle = 'rgba(93, 70, 48, 0.22)';
+  ctx.fillRect(x, y + 2, 7 + detail.variant * 2, 2);
+  ctx.fillRect(x + 3, y, 4, 2);
+}
+
 // ── Ground layer cache ────────────────────────────────────────────────────────
 // Uses object-reference equality: since tiles array is replaced on every state
 // mutation (immutable update pattern), a new reference means a rebuild is needed.
@@ -91,6 +119,7 @@ function cropSpriteName(tile: Tile): string | null {
 interface GroundCache {
   canvas: HTMLCanvasElement;
   tilesRef: Tile[];
+  seed: number;
 }
 
 let _groundCache: GroundCache | null = null;
@@ -98,6 +127,7 @@ let _groundCache: GroundCache | null = null;
 function buildGroundCache(
   tiles: Tile[],
   atlas: Atlas,
+  seed: number,
   worldW: number,
   worldH: number
 ): GroundCache {
@@ -157,14 +187,17 @@ function buildGroundCache(
     } else {
       atlas.draw(ctx, spriteName, wx, wy, 2);
     }
+
+    const terrain = tile.kind === 'locked' ? 'locked' : tile.kind === 'path' ? 'path' : tile.kind === 'tilled' ? 'tilled' : 'grass';
+    for (const detail of groundDetails(seed, idx, terrain)) drawGroundDetail(ctx, detail, wx, wy);
   });
 
-  return { canvas, tilesRef: tiles };
+  return { canvas, tilesRef: tiles, seed };
 }
 
-function getGroundCache(tiles: Tile[], atlas: Atlas, worldW: number, worldH: number): GroundCache {
-  if (_groundCache && _groundCache.tilesRef === tiles) return _groundCache;
-  _groundCache = buildGroundCache(tiles, atlas, worldW, worldH);
+function getGroundCache(tiles: Tile[], atlas: Atlas, seed: number, worldW: number, worldH: number): GroundCache {
+  if (_groundCache && _groundCache.tilesRef === tiles && _groundCache.seed === seed) return _groundCache;
+  _groundCache = buildGroundCache(tiles, atlas, seed, worldW, worldH);
   return _groundCache;
 }
 
@@ -178,6 +211,7 @@ export interface RenderOptions {
   tod?: TimeOfDay;
   selectedIdx?: number | null;
   player?: PlayerState;
+  navigationPath?: Array<{ row: number; col: number }>;
   waterEffects?: Array<{ idx: number; progress: number }>;
   showIrrigation?: boolean;
   buildTool?: string | null;
@@ -190,7 +224,7 @@ export function renderWorld(
   cam: Camera,
   opts: RenderOptions = {}
 ) {
-  const { tod = 'day', selectedIdx = null, player, waterEffects = [], showIrrigation = false, buildTool = null } = opts;
+  const { tod = 'day', selectedIdx = null, player, navigationPath = [], waterEffects = [], showIrrigation = false, buildTool = null } = opts;
   const { viewW, viewH, worldW, worldH } = cam;
 
   ctx.imageSmoothingEnabled = false;
@@ -198,8 +232,31 @@ export function renderWorld(
   ctx.fillRect(0, 0, viewW, viewH);
 
   // 1. Ground layer (cached offscreen canvas)
-  const ground = getGroundCache(state.tiles, atlas, worldW, worldH);
+  const ground = getGroundCache(state.tiles, atlas, state.seed, worldW, worldH);
   ctx.drawImage(ground.canvas, Math.round(-cam.x), Math.round(-cam.y));
+
+  if (player && navigationPath.length > 0) {
+    const [playerX, playerY] = worldToScreen(cam, player.x + 12, player.y + 28);
+    ctx.save();
+    ctx.lineCap = 'square';
+    ctx.lineJoin = 'miter';
+    ctx.setLineDash([3, 3]);
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(241, 210, 122, 0.78)';
+    ctx.beginPath();
+    ctx.moveTo(Math.round(playerX), Math.round(playerY));
+    for (const point of navigationPath) {
+      const [x, y] = worldToScreen(cam, point.col * TILE_PX + TILE_PX / 2, point.row * TILE_PX + TILE_PX / 2);
+      ctx.lineTo(Math.round(x), Math.round(y));
+    }
+    ctx.stroke();
+    const destination = navigationPath[navigationPath.length - 1];
+    const [endX, endY] = worldToScreen(cam, destination.col * TILE_PX + TILE_PX / 2, destination.row * TILE_PX + TILE_PX / 2);
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#f1d27a';
+    ctx.fillRect(Math.round(endX) - 3, Math.round(endY) - 3, 6, 6);
+    ctx.restore();
+  }
 
   // Hauling routes are world infrastructure: visible even when no transfer is active.
   const millIdx = state.tiles.findIndex((tile) => tile.kind === 'mill');
@@ -252,10 +309,10 @@ export function renderWorld(
     if (sx + TILE_PX < 0 || sx > viewW || sy + TILE_PX < 0 || sy > viewH) return;
 
     if (tile.kind === 'well') {
-      cmds.push({ wy: wy + TILE_PX, fn: () => drawGenerated(ctx, 'well', sx - 16, sy - 32, 64, 64) });
+      cmds.push({ wy: wy + TILE_PX, fn: () => drawGenerated(ctx, 'well', sx - 8, sy - 24, 48, 48) });
     }
 
-    if (tile.kind === 'shed') cmds.push({ wy: wy + TILE_PX, fn: () => drawGenerated(ctx, 'farmhouse', sx - 32, sy - 64, 96, 96) });
+    if (tile.kind === 'shed') cmds.push({ wy: wy + TILE_PX, fn: () => drawGenerated(ctx, 'farmhouse', sx - 24, sy - 52, 80, 80) });
     if (tile.kind === 'mill') {
       const millSprite = !state.mill.commissioned
         ? 'mill-foundation'
@@ -265,21 +322,21 @@ export function renderWorld(
             ? 'mill-2'
             : 'mill-1';
       const millSize = !state.mill.commissioned
-        ? { w: 96, h: 80 }
+        ? { w: 80, h: 68 }
         : state.mill.level >= 3
-          ? { w: 144, h: 104 }
+          ? { w: 112, h: 84 }
           : state.mill.level === 2
-            ? { w: 112, h: 96 }
-            : { w: 96, h: 96 };
+            ? { w: 96, h: 80 }
+            : { w: 80, h: 80 };
       cmds.push({
         wy: wy + TILE_PX,
         fn: () => drawGenerated(ctx, millSprite, sx + TILE_PX / 2 - millSize.w / 2, sy + TILE_PX - millSize.h, millSize.w, millSize.h),
       });
     }
-    if (tile.kind === 'depot') cmds.push({ wy: wy + TILE_PX, fn: () => drawGenerated(ctx, 'depot', sx - 24, sy - 48, 80, 80) });
+    if (tile.kind === 'depot') cmds.push({ wy: wy + TILE_PX, fn: () => drawGenerated(ctx, 'depot', sx - 16, sy - 40, 64, 64) });
     if (tile.kind === 'crate') cmds.push({ wy: wy + TILE_PX, fn: () => {
       const crate = state.fieldCrates.find((candidate) => candidate.idx === idx);
-      drawGenerated(ctx, crate && crate.wheat > 0 ? 'crate-full' : 'crate-empty', sx - 8, sy - 16, 48, 48);
+      drawGenerated(ctx, crate && crate.wheat > 0 ? 'crate-full' : 'crate-empty', sx, sy - 8, 32, 32);
       if (crate) {
         ctx.fillStyle = 'rgba(18, 16, 12, 0.82)';
         ctx.fillRect(sx + 4, sy + 26, 24, 4);
@@ -289,38 +346,38 @@ export function renderWorld(
     } });
     if (tile.kind === 'brush' || tile.kind === 'rock') cmds.push({
       wy: wy + TILE_PX,
-      fn: () => drawGenerated(ctx, tile.kind, sx - 8, sy - 16, 48, 48),
+      fn: () => drawGenerated(ctx, tile.kind, sx, sy - 8, 32, 32),
     });
     if (tile.kind === 'marsh') cmds.push({
       wy: wy + TILE_PX,
-      fn: () => drawGenerated(ctx, 'marsh', sx - 16, sy - 16, 64, 48),
+      fn: () => drawGenerated(ctx, 'marsh', sx - 4, sy - 8, 40, 30),
     });
     if (tile.kind === 'locked') {
       const scenery = lockedScenery(state.seed, idx);
       if (scenery === 'brush' || scenery === 'rock') cmds.push({
         wy: wy + TILE_PX,
-        fn: () => drawGenerated(ctx, scenery, sx - 8, sy - 16, 48, 48),
+        fn: () => drawGenerated(ctx, scenery, sx, sy - 8, 32, 32),
       });
       if (scenery === 'marsh') cmds.push({
         wy: wy + TILE_PX,
-        fn: () => drawGenerated(ctx, scenery, sx - 16, sy - 16, 64, 48),
+        fn: () => drawGenerated(ctx, scenery, sx - 4, sy - 8, 40, 30),
       });
     }
     if (tile.kind === 'sprinkler') cmds.push({
       wy: wy + TILE_PX,
-      fn: () => drawGenerated(ctx, tile.irrigated ? 'sprinkler-on' : 'sprinkler-off', sx - 8, sy - 16, 48, 48),
+      fn: () => drawGenerated(ctx, tile.irrigated ? 'sprinkler-on' : 'sprinkler-off', sx, sy - 8, 32, 32),
     });
 
     if (tile.kind === 'barn') {
-      cmds.push({ wy: wy + TILE_PX, fn: () => drawExternalImg(ctx, '/farm-barn.png', sx - 16, sy - 32, 64, 64) });
+      cmds.push({ wy: wy + TILE_PX, fn: () => drawExternalImg(ctx, '/farm-barn.png', sx - 8, sy - 24, 48, 48) });
     }
 
     if (tile.kind === 'coop') {
-      cmds.push({ wy: wy + TILE_PX, fn: () => drawExternalImg(ctx, '/farm-coop.png', sx - 16, sy - 32, 64, 64) });
+      cmds.push({ wy: wy + TILE_PX, fn: () => drawExternalImg(ctx, '/farm-coop.png', sx - 8, sy - 24, 48, 48) });
     }
 
     if (isReservoir(idx)) {
-      cmds.push({ wy: wy + TILE_PX, fn: () => drawGenerated(ctx, 'reservoir', sx - 16, sy - 32, 64, 64) });
+      cmds.push({ wy: wy + TILE_PX, fn: () => drawGenerated(ctx, 'reservoir', sx - 8, sy - 24, 48, 48) });
     }
 
     if (tile.kind === 'channel') {
@@ -331,9 +388,13 @@ export function renderWorld(
     if (cropName) {
       if (cropName.startsWith('crop_wheat_')) {
         const stage = cropName.at(-1);
-        cmds.push({ wy: wy + TILE_PX, fn: () => drawGenerated(ctx, `wheat-${stage}`, sx - 4, sy - 8, 40, 40) });
+        const size = [18, 23, 28, 32][Number(stage)] ?? 24;
+        cmds.push({
+          wy: wy + TILE_PX,
+          fn: () => drawGenerated(ctx, `wheat-${stage}`, sx + (TILE_PX - size) / 2, sy + TILE_PX - size, size, size),
+        });
       } else {
-        cmds.push({ wy: wy + TILE_PX, fn: () => atlas.draw(ctx, cropName, sx, sy - 8, 2) });
+        cmds.push({ wy: wy + TILE_PX, fn: () => atlas.draw(ctx, cropName, sx + 4, sy + 8, 1.5) });
       }
     }
   });
@@ -402,15 +463,18 @@ export function renderWorld(
   }
 
   // 4. Facing tile highlight
-  const highlightIdx = player ? facingTileIdx(player, GRID_SIZE) : selectedIdx;
+  const highlightIdx = selectedIdx ?? (player ? facingTileIdx(player, GRID_SIZE) : null);
   if (highlightIdx !== null && highlightIdx !== undefined && highlightIdx >= 0) {
     const [wx, wy] = tileToWorld(highlightIdx);
     const [sx, sy] = worldToScreen(cam, wx, wy);
     ctx.save();
-    ctx.strokeStyle = player?.tool === 'can' ? '#7dd3fc' : player?.tool === 'hand' ? '#f2c14e' : '#f5f2e8';
+    const isSelected = selectedIdx === highlightIdx;
+    const pulse = isSelected ? 0.55 + Math.sin(performance.now() / 180) * 0.18 : 1;
+    ctx.globalAlpha = pulse;
+    ctx.strokeStyle = isSelected ? '#f1d27a' : player?.tool === 'can' ? '#7dd3fc' : player?.tool === 'hand' ? '#f2c14e' : '#f5f2e8';
     ctx.lineWidth = 2;
     ctx.strokeRect(sx + 1, sy + 1, TILE_PX - 2, TILE_PX - 2);
-    ctx.fillStyle = player?.tool === 'can' ? 'rgba(125, 211, 252, 0.16)' : 'rgba(245, 242, 232, 0.1)';
+    ctx.fillStyle = isSelected ? 'rgba(241, 210, 122, 0.14)' : player?.tool === 'can' ? 'rgba(125, 211, 252, 0.16)' : 'rgba(245, 242, 232, 0.1)';
     ctx.fillRect(sx + 1, sy + 1, TILE_PX - 2, TILE_PX - 2);
 
     const tile = state.tiles[highlightIdx];
