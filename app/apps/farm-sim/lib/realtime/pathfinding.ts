@@ -1,5 +1,5 @@
-import type { GameState, TileKind } from '../types';
-import { lockedScenery } from '../worldScenery';
+import type { GameState } from '../types';
+import { isTileBlocked } from './collision';
 
 export interface TilePosition {
   row: number;
@@ -53,10 +53,9 @@ export function findTilePath(
   if (!inBounds(start.row, start.col, size) || !inBounds(target.row, target.col, size)) return [];
 
   const startIdx = indexOf(start, size);
-  if (isBlocked(state, startIdx)) return [];
 
-  const destination = isBlocked(state, indexOf(target, size))
-    ? adjacentTargets(target, size).filter((position) => !isBlocked(state, indexOf(position, size)))
+  const destination = isTileBlocked(state, indexOf(target, size))
+    ? adjacentTargets(target, size).filter((position) => !isTileBlocked(state, indexOf(position, size)))
     : [target];
   if (destination.length === 0) return [];
 
@@ -84,7 +83,7 @@ export function findTilePath(
     const col = current % size;
     for (const neighbor of neighbors(row, col, size)) {
       const next = indexOf(neighbor, size);
-      if (visited[next] || isBlocked(state, next)) continue;
+      if (visited[next] || isTileBlocked(state, next)) continue;
       visited[next] = 1;
       previous[next] = current;
       queue[tail++] = next;
@@ -102,24 +101,6 @@ export function findTilePath(
 }
 
 export const findPath = findTilePath;
-
-const BLOCKED_KINDS: ReadonlySet<TileKind> = new Set([
-  'reservoir',
-  'shed',
-  'mill',
-  'depot',
-  'crate',
-  'brush',
-  'rock',
-  'marsh',
-  'extractor',
-]);
-
-function isBlocked(state: Pick<GameState, 'tiles' | 'seed'>, idx: number): boolean {
-  const tile = state.tiles[idx];
-  if (!tile || BLOCKED_KINDS.has(tile.kind)) return true;
-  return tile.kind === 'locked' && lockedScenery(state.seed, idx) !== null;
-}
 
 function adjacentTargets(target: TilePosition, gridSize: number): TilePosition[] {
   // Orthogonal positions come first, matching movement; diagonals allow the

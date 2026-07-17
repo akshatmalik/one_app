@@ -105,6 +105,7 @@ export function MarketPanel({ state, dispatch }: Props) {
             <div className="space-y-2">
               {state.fieldCrates.map((crate, index) => {
                 const route = state.haulRoutes.find((candidate) => candidate.crateId === crate.id);
+                const routeStatus = production.crateStatuses.find((candidate) => candidate.crateId === crate.id);
                 const freeMill = state.mill.inputCapacity - state.mill.input;
                 const loadQty = Math.min(crate.wheat, freeMill);
                 const nextRouteLevel = route && route.level < 3 ? (route.level + 1 as 2 | 3) : null;
@@ -113,7 +114,7 @@ export function MarketPanel({ state, dispatch }: Props) {
                   <div key={crate.id} className="border border-white/10 bg-[#0c130f] p-3">
                     <div className="mb-2 flex items-center justify-between"><span className="text-xs font-bold">{fieldLocation(crate.idx)} field · Crate {index + 1}</span><span className="text-xs tabular-nums text-[#f1d27a]">{crate.wheat}/{crate.capacity}</span></div>
                     <Progress value={crate.wheat} max={crate.capacity} tone={crate.wheat >= crate.capacity ? 'bg-[#ef8f78]' : 'bg-[#e0bd5d]'} />
-                    <div className="mb-2 mt-1 text-[9px] text-white/40">{route ? `Automated route · ${route.ratePerDay} wheat/day` : 'Manual hauling'}</div>
+                    <div className={`mb-2 mt-1 text-[9px] ${routeStatus?.state === 'active' ? 'text-[#8fd6a1]' : routeStatus?.state === 'blocked' ? 'text-[#efa08c]' : 'text-white/45'}`}>{routeStatus?.label ?? (route ? `Automated route · ${route.ratePerDay} wheat/day` : 'Manual hauling only')}</div>
                     <div className="flex flex-wrap gap-1.5">
                       <SmallButton onClick={() => dispatch({ type: 'loadMillFromCrate', crateId: crate.id, qty: loadQty })} disabled={loadQty < 1}>Haul {loadQty} now</SmallButton>
                       <SmallButton onClick={() => dispatch({ type: 'upgradeFieldCrate', crateId: crate.id })} disabled={state.gold < GOLD_COST.wheatStorage}>+12 capacity · {GOLD_COST.wheatStorage}g</SmallButton>
@@ -182,7 +183,7 @@ export function MarketPanel({ state, dispatch }: Props) {
         </div>
       )}
 
-      {tab === 'seeds' && <div className="grid grid-cols-2 gap-2">{CROP_IDS.map((crop) => <div key={crop} className="flex items-center gap-2 border border-white/[0.08] bg-black/[0.15] p-2"><Sprout size={15} className="shrink-0 text-emerald-300" /><div className="min-w-0 flex-1"><div className="truncate text-xs font-semibold">{CROPS[crop].name}</div><div className="text-[10px] text-white/40">{CROPS[crop].seedCost}g · {state.seeds[crop]} seeds</div><div className="truncate text-[9px] text-white/30">{CROPS[crop].waterNeed} water · {CROPS[crop].preferredSoils.join('/')}</div></div><SmallButton onClick={() => dispatch({ type: 'buySeeds', crop, qty: 1 })} disabled={state.gold < CROPS[crop].seedCost}>+1</SmallButton></div>)}</div>}
+      {tab === 'seeds' && <div className="grid grid-cols-2 gap-2">{CROP_IDS.map((crop) => <div key={crop} className="flex items-center gap-2 border border-white/[0.08] bg-black/[0.15] p-2"><Sprout size={15} className="shrink-0 text-emerald-300" /><div className="min-w-0 flex-1"><div className="truncate text-xs font-semibold">{CROPS[crop].name}</div><div className="text-[10px] text-white/40">{CROPS[crop].seedCost}g · {state.seeds[crop]} seeds</div><div className="truncate text-[9px] text-white/30">{CROPS[crop].growDays} days · {CROPS[crop].yieldUnits} yield · {CROPS[crop].preferredSoils.join('/')}</div></div><SmallButton ariaLabel={`Buy one ${CROPS[crop].name} seed`} onClick={() => dispatch({ type: 'buySeeds', crop, qty: 1 })} disabled={state.gold < CROPS[crop].seedCost}>+1</SmallButton></div>)}</div>}
 
       {tab === 'equipment' && <div className="space-y-2">{(Object.keys(UPGRADES) as UpgradeId[]).map((id) => { const upgrade = UPGRADES[id]; const owned = state.upgrades.includes(id); return <div key={id} className="flex items-center gap-2 border-b border-white/[0.08] py-3"><div className="min-w-0 flex-1"><div className="text-xs font-semibold">{upgrade.name}</div><div className="text-[10px] text-white/40">{upgrade.effect}</div></div><SmallButton onClick={() => dispatch({ type: 'buyUpgrade', upgrade: id })} disabled={owned || state.gold < upgrade.cost}>{owned ? 'Owned' : `${upgrade.cost}g`}</SmallButton></div>; })}</div>}
     </div>
@@ -210,6 +211,6 @@ function Command({ children, onClick, disabled }: { children: React.ReactNode; o
   return <button onClick={onClick} disabled={disabled} className="rounded-md bg-[#d9b95f] px-3 py-2 text-xs font-bold text-[#17201d] disabled:opacity-35">{children}</button>;
 }
 
-function SmallButton({ children, onClick, disabled }: { children: React.ReactNode; onClick: () => void; disabled?: boolean }) {
-  return <button onClick={onClick} disabled={disabled} className="rounded-md border border-white/[0.15] px-2 py-1 text-[10px] font-semibold hover:bg-white/[0.08] disabled:opacity-30">{children}</button>;
+function SmallButton({ children, onClick, disabled, ariaLabel }: { children: React.ReactNode; onClick: () => void; disabled?: boolean; ariaLabel?: string }) {
+  return <button onClick={onClick} disabled={disabled} aria-label={ariaLabel} className="min-h-9 rounded-md border border-white/[0.15] px-2 py-1 text-[10px] font-semibold hover:bg-white/[0.08] disabled:opacity-30">{children}</button>;
 }

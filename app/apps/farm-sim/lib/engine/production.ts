@@ -13,6 +13,7 @@ export function syncProductionMilestones(state: GameState): void {
 export function millStatus(state: GameState): string {
   if (!state.mill.commissioned) return 'Foundation awaiting restoration';
   if (state.mill.output >= state.mill.outputCapacity) return 'Output full - export flour';
+  if (state.mill.output > 0 && state.mill.input === 0) return `${state.mill.output} flour ready - export or load more wheat`;
   if (state.mill.input === 0) return 'Idle - load stored wheat';
   return `Working at dawn: up to ${state.mill.ratePerDay} flour`;
 }

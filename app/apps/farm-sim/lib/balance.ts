@@ -21,7 +21,7 @@ export const SEASONS: Season[] = ['Spring', 'Summer', 'Fall']; // Winter is M2
 
 // ── Player ─────────────────────────────────────────────
 export const START_GOLD = 120; // 🔧
-export const START_SEEDS = { wheat: 6, beans: 3, carrot: 3 } as const; // enough to discover rotation and soil affinity
+export const START_SEEDS = { wheat: 6, beans: 3, carrot: 3, rice: 3 } as const; // enough to discover rotation, soil affinity, and rice
 // ── Gold costs ─────────────────────────────────────────
 export const GOLD_COST = {
   channel: 15, // 🔧
@@ -45,7 +45,7 @@ export const MILL_OUTPUT_CAPACITY = 9;
 export const MILL_RATE_PER_DAY = 3;
 export const FLOUR_EXPORT_PRICE = 22;
 export const CRATE_CATCHMENT = 4;
-export const FIELD_CRATE_CAPACITY = 12;
+export const FIELD_CRATE_CAPACITY = 24;
 export const FIELD_CRATE_UPGRADE = 12;
 export const HAUL_ROUTE_LEVELS = {
   1: { rate: 3, cost: 90 },

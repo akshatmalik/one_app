@@ -31,6 +31,14 @@ export function productionProjection(state: GameState) {
   const averageHarvest = recent.length ? recent.reduce((sum, value) => sum + value, 0) / recent.length : 0;
   const routeRate = state.haulRoutes.reduce((sum, route) => sum + route.ratePerDay, 0);
   const effectiveFeed = routeRate > 0 ? Math.min(routeRate, state.mill.ratePerDay) : 0;
+  const crateStatuses = state.fieldCrates.map((crate) => {
+    const route = state.haulRoutes.find((candidate) => candidate.crateId === crate.id);
+    if (!route) return { crateId: crate.id, state: 'manual' as const, label: 'Manual hauling only' };
+    if (!state.mill.commissioned) return { crateId: crate.id, state: 'blocked' as const, label: 'Route waiting: restore the mill' };
+    if (crate.wheat < 1) return { crateId: crate.id, state: 'waiting' as const, label: `Route ready · ${route.ratePerDay}/day · crate empty` };
+    if (state.mill.input >= state.mill.inputCapacity) return { crateId: crate.id, state: 'blocked' as const, label: 'Route waiting: mill input is full' };
+    return { crateId: crate.id, state: 'active' as const, label: `Route active · up to ${route.ratePerDay} wheat/day` };
+  });
   return {
     crateWheat,
     looseWheat: state.inventory.wheat,
@@ -42,6 +50,7 @@ export function productionProjection(state: GameState) {
     routeRate,
     millRate: state.mill.ratePerDay,
     effectiveFeed,
+    crateStatuses,
     queuedWheat: crateWheat + state.mill.input,
     daysToClear: state.mill.commissioned && state.mill.ratePerDay > 0
       ? (crateWheat + state.mill.input) / Math.min(state.mill.ratePerDay, routeRate || state.mill.ratePerDay)

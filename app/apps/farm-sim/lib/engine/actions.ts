@@ -68,7 +68,7 @@ function tileDistance(a: number, b: number): number {
   return Math.abs(Math.floor(a / GRID_SIZE) - Math.floor(b / GRID_SIZE)) + Math.abs(a % GRID_SIZE - b % GRID_SIZE);
 }
 
-function nearestCrate(state: GameState, tileIdx: number, units = 0): FieldCrate | undefined {
+export function nearestCrateForHarvest(state: GameState, tileIdx: number, units = 0): FieldCrate | undefined {
   return state.fieldCrates
     .filter((crate) => tileDistance(crate.idx, tileIdx) <= CRATE_CATCHMENT && crate.wheat + units <= crate.capacity)
     .sort((a, b) => tileDistance(a.idx, tileIdx) - tileDistance(b.idx, tileIdx) || a.idx - b.idx)[0];
@@ -141,7 +141,7 @@ export function applyAction(state: GameState, action: PlayerAction): ActionResul
       const def = CROPS[t.crop.cropId];
       const units = harvestYield(t);
       if (t.crop.cropId === 'wheat') {
-        const destination = nearestCrate(state, action.idx, units);
+        const destination = nearestCrateForHarvest(state, action.idx, units);
         if (!destination) return fail(state, `No field crate within ${CRATE_CATCHMENT} tiles has room for this harvest.`);
         s.fieldCrates.find((crate) => crate.id === destination.id)!.wheat += units;
         s.production.harvestedWheat += units;

@@ -11,15 +11,15 @@ import {
   START_SEEDS,
   RESERVOIR_START,
   START_NITROGEN,
-  WHEAT_STORAGE_START,
   MILL_INPUT_CAPACITY,
   MILL_OUTPUT_CAPACITY,
   MILL_RATE_PER_DAY,
   FIELD_CRATE_CAPACITY,
+  HAUL_ROUTE_LEVELS,
   FARM_LANDMARKS,
 } from '../balance';
 import { CROP_IDS } from '../../data/crops';
-import { idxOf } from './water';
+import { computeIrrigation, connectedChannels, idxOf, orthoNeighbors } from './water';
 import { initMarket } from './market';
 import { rollSeasonWeather, buildForecast } from './weather';
 import { createContractOffers } from './contracts';
@@ -36,6 +36,17 @@ function soilAt(seed: number, r: number, c: number): SoilType {
   if (r >= 25 || hash < 22) return 'clay';
   if (c >= 26 || hash > 78) return 'sandy';
   return 'loam';
+}
+
+function starterCrop(cropId: CropId, growthDays: number, soil: SoilType): Tile {
+  return {
+    kind: 'tilled',
+    moisture: 70,
+    nitrogen: START_NITROGEN,
+    crop: { cropId, growthDays, mature: cropId === 'wheat', stressDays: 0 },
+    irrigated: false,
+    soil,
+  };
 }
 
 function buildTiles(seed: number): Tile[] {
@@ -70,7 +81,31 @@ function buildTiles(seed: number): Tile[] {
   for (const idx of yardPaths) {
     if (tiles[idx].kind === 'grass') tiles[idx] = { ...tiles[idx], kind: 'path' };
   }
-  return tiles;
+
+  // The opening farm is useful on day one while keeping the player spawn clear.
+  tiles[idxOf(17, 21)] = { kind: 'well', moisture: 0, nitrogen: 0, crop: null, irrigated: false, soil: 'clay' };
+  for (const [r, c] of [[17, 19], [18, 19], [19, 19], [20, 19]] as const) {
+    tiles[idxOf(r, c)] = { kind: 'channel', moisture: 0, nitrogen: 0, crop: null, irrigated: false, soil: 'clay' };
+  }
+  tiles[idxOf(20, 18)] = { kind: 'sprinkler', moisture: 0, nitrogen: 0, crop: null, irrigated: false, soil: 'loam' };
+
+  const wheat = [[16, 14], [16, 15], [17, 14], [17, 15], [17, 16], [18, 15]] as const;
+  const carrots = [[21, 14], [21, 15], [21, 16], [21, 17], [21, 18], [21, 19]] as const;
+  const beans = [[23, 18], [23, 19], [23, 20], [23, 21], [23, 22], [23, 23]] as const;
+  for (const [r, c] of wheat) tiles[idxOf(r, c)] = starterCrop('wheat', 4, 'loam');
+  for (const [r, c] of carrots) tiles[idxOf(r, c)] = starterCrop('carrot', 2, 'sandy');
+  for (const [r, c] of beans) tiles[idxOf(r, c)] = starterCrop('beans', 2, 'loam');
+
+  const supplied = connectedChannels(tiles);
+  const irrigated = computeIrrigation(tiles);
+  return tiles.map((tile, idx) => ({
+    ...tile,
+    irrigated: tile.kind === 'channel'
+      ? supplied.has(idx)
+      : tile.kind === 'sprinkler'
+        ? orthoNeighbors(idx).some((neighbor) => supplied.has(neighbor))
+        : irrigated[idx],
+  }));
 }
 
 export function newGame(seed: number): GameState {
@@ -91,7 +126,7 @@ export function newGame(seed: number): GameState {
     gold: START_GOLD,
     tiles: buildTiles(seed),
     reservoir: RESERVOIR_START,
-    wells: 0,
+    wells: 1,
     inventory: emptyCounts(),
     seeds,
     items: Object.fromEntries((['fertilizer', 'flour', 'bread', 'milk', 'egg', 'fuel', 'riceBag', 'cornmeal', 'vegetableCrate', 'tomatoSauce', 'bricks', 'ironBars', 'machineParts'] as ItemId[]).map((id) => [id, 0])) as Record<ItemId, number>,
@@ -99,19 +134,19 @@ export function newGame(seed: number): GameState {
     facilities: { kiln: { level: 0, usedToday: 0 }, kitchen: { level: 0, usedToday: 0 }, workshop: { level: 0, usedToday: 0 } },
     extractors: [],
     mill: {
-      commissioned: false,
-      level: 0,
-      input: 0,
-      output: 0,
+      commissioned: true,
+      level: 1,
+      input: 3,
+      output: 2,
       inputCapacity: MILL_INPUT_CAPACITY,
       outputCapacity: MILL_OUTPUT_CAPACITY,
       ratePerDay: MILL_RATE_PER_DAY,
     },
     fieldCrates: [{ id: 'crate-start', idx: idxOf(FARM_LANDMARKS.crate.r, FARM_LANDMARKS.crate.c), wheat: 0, capacity: FIELD_CRATE_CAPACITY }],
-    haulRoutes: [],
+    haulRoutes: [{ id: 'route-crate-start', crateId: 'crate-start', level: 1, ratePerDay: HAUL_ROUTE_LEVELS[1].rate }],
     parcels: initialParcels(false),
     production: {
-      wheatStorageCapacity: WHEAT_STORAGE_START,
+      wheatStorageCapacity: FIELD_CRATE_CAPACITY,
       harvestedWheat: 0,
       rawWheatExported: 0,
       wheatMilled: 0,
