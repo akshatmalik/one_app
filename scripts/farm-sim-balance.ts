@@ -56,16 +56,16 @@ function playDay(state: GameState, bot: Bot): GameState {
 
   for (const idx of PLOT_TILES) {
     const t = s.tiles[idx];
-    if (t.kind === 'grass' && s.ap > 0) {
+    if (t.kind === 'grass') {
       const r = applyAction(s, { type: 'till', idx });
       if (r.ok) s = r.state;
     }
     const tile = s.tiles[idx];
-    if (tile.kind === 'tilled' && tile.crop?.mature && s.ap > 0) {
+    if (tile.kind === 'tilled' && tile.crop?.mature) {
       const r = applyAction(s, { type: 'harvest', idx });
       if (r.ok) s = r.state;
     }
-    if (tile.kind === 'tilled' && !s.tiles[idx].crop && s.ap > 0) {
+    if (tile.kind === 'tilled' && !s.tiles[idx].crop) {
       const crop = bot === 'naive' ? 'wheat' : bestLegalCrop(s);
       if (crop && CROPS[crop].seasons.includes(season)) {
         // cautious: only plant if 3-day forecast has no frost
@@ -82,7 +82,7 @@ function playDay(state: GameState, bot: Bot): GameState {
     }
     // water anything tilled that will stress
     const t3 = s.tiles[idx];
-    if (t3.kind === 'tilled' && s.ap > 0 && s.reservoir >= 10) {
+    if (t3.kind === 'tilled' && s.reservoir >= 10) {
       const need = t3.crop ? CROPS[t3.crop.cropId].waterNeed : 10;
       if (t3.moisture < need) {
         const rw = applyAction(s, { type: 'water', idx });
