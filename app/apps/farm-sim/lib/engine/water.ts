@@ -29,6 +29,22 @@ export function orthoNeighbors(idx: number): number[] {
   return out;
 }
 
+export function allNeighbors(idx: number): number[] {
+  const r = rowOf(idx);
+  const c = colOf(idx);
+  const out: number[] = [];
+  for (let dr = -1; dr <= 1; dr++) {
+    for (let dc = -1; dc <= 1; dc++) {
+      if (dr === 0 && dc === 0) continue;
+      const nr = r + dr, nc = c + dc;
+      if (nr >= 0 && nr < GRID_SIZE && nc >= 0 && nc < GRID_SIZE) {
+        out.push(idxOf(nr, nc));
+      }
+    }
+  }
+  return out;
+}
+
 // Flood-fill from the reservoir through channel tiles. Returns the set of
 // channel indices that are connected to the reservoir (i.e. actually carry water).
 export function connectedChannels(tiles: Tile[]): Set<number> {

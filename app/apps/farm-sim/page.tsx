@@ -1,206 +1,172 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
+import { ClipboardList, Hammer, X } from 'lucide-react';
 import { useFarmGame } from './hooks/useFarmGame';
-import { PlayerAction } from './lib/types';
+import { PlayerAction, CropId } from './lib/types';
 import { HudBar } from './components/HudBar';
-import { ForecastStrip } from './components/ForecastStrip';
-import { WaterBar } from './components/WaterBar';
-import { FarmGrid } from './components/FarmGrid';
-import { TileSheet } from './components/TileSheet';
+import { GameCanvas } from './components/GameCanvas';
 import { MarketPanel } from './components/MarketPanel';
 import { BuildPanel, BuildTool } from './components/BuildPanel';
-import { BulkActionBar } from './components/BulkActionBar';
 import { DayRecap } from './components/DayRecap';
-import { TutorialHint } from './components/TutorialHint';
 import { MenuScreen } from './components/MenuScreen';
-import { validActions } from './lib/engine/actions';
-
-type Mode = 'farm' | 'build' | 'market';
+import { DevOverlay } from './components/DevOverlay';
+import { PlayerState, facingTileIdx, CAN_MAX_CHARGES } from './lib/realtime/player';
+import type { ToolId } from './lib/realtime/player';
+import { GRID_SIZE } from './lib/balance';
 
 export default function FarmSimPage() {
   const game = useFarmGame();
-  const { state } = game;
-  const [mode, setMode] = useState<Mode>('farm');
-  const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
-  const [buildTool, setBuildTool] = useState<BuildTool | null>(null);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [multiSelect, setMultiSelect] = useState(false);
-  const [selection, setSelection] = useState<Set<number>>(new Set());
+  const { state, advanceTime, recap } = game;
 
-  const clearMulti = () => setSelection(new Set());
+  const [menuOpen, setMenuOpen]       = useState(false);
+  const [showMarket, setShowMarket]   = useState(false);
+  const [showBuild, setShowBuild]     = useState(false);
+  const [buildTool, setBuildTool]     = useState<BuildTool | null>(null);
 
-  // Advance the tutorial when the player performs the expected action type.
-  const dispatch = (action: PlayerAction): boolean => {
+  const [currentTool, setCurrentTool]   = useState<ToolId>('hoe');
+  const [selectedCrop, setSelectedCrop] = useState<CropId | null>(null);
+  const [waterCharges, setWaterCharges] = useState(CAN_MAX_CHARGES);
+  const [playerState, setPlayerState]   = useState<PlayerState | null>(null);
+  const [fps, setFps]                   = useState(60);
+
+  useEffect(() => { if (!state) setMenuOpen(true); }, [state]);
+
+  const dispatch = useCallback((action: PlayerAction): boolean => {
     const ok = game.dispatch(action);
     if (ok && state) {
       const expected: Record<number, PlayerAction['type']> = {
-        0: 'till',
-        1: 'plant',
-        2: 'water',
-        4: 'sell',
+        0: 'till', 1: 'plant', 2: 'water', 4: 'sell',
       };
-      if (expected[state.tutorialStep] === action.type) {
+      if (expected[state.tutorialStep] === action.type)
         game.advanceTutorial(state.tutorialStep);
-      }
     }
     return ok;
-  };
+  }, [game, state]);
 
-  const handleEndDay = () => {
-    setSelectedIdx(null);
-    if (state && state.tutorialStep === 3) game.advanceTutorial(3);
+  const handleEndDay = useCallback(() => {
+    if (state?.tutorialStep === 3) game.advanceTutorial(3);
     game.endDay();
-  };
+  }, [game, state]);
 
-  const handleSelect = (idx: number) => {
-    if (!state) return;
-    // In build mode with a tool active, tapping a tile builds directly.
-    if (mode === 'build' && buildTool) {
-      const actionMap: Record<BuildTool, PlayerAction> = {
-        channel: { type: 'buildChannel', idx },
-        well: { type: 'digWell', idx },
-        expand: { type: 'expand', idx },
-        demolish: { type: 'demolish', idx },
-      };
-      dispatch(actionMap[buildTool]);
-      return;
+  const handleToolChange = useCallback((tool: ToolId) => {
+    setCurrentTool(tool);
+    if (tool === 'builder') setShowBuild(true);
+    else {
+      setShowBuild(false);
+      setBuildTool(null);
     }
-    // Farm multi-select: tapping toggles membership.
-    if (mode === 'farm' && multiSelect) {
-      setSelection((prev) => {
-        const next = new Set(prev);
-        if (next.has(idx)) next.delete(idx);
-        else next.add(idx);
-        return next;
-      });
-      return;
+  }, []);
+
+  const handleAction = useCallback((action: PlayerAction): boolean => {
+    if (action.type === 'water') {
+      const ok = dispatch(action);
+      if (ok) setWaterCharges((c) => Math.max(0, c - 1));
+      return ok;
     }
-    setSelectedIdx((cur) => (cur === idx ? null : idx));
-  };
+    return dispatch(action);
+  }, [dispatch]);
 
-  const switchMode = (m: Mode) => {
-    setMode(m);
-    setSelectedIdx(null);
-    setBuildTool(null);
-    setMultiSelect(false);
-    clearMulti();
-  };
+  const handlePlayerMove = useCallback((player: PlayerState) => {
+    setPlayerState({ ...player }); // shallow clone so DevOverlay sees fresh object
+    setWaterCharges(player.waterCharges);
+    // Pull FPS from the console API if available
+    if (typeof window !== 'undefined' && (window as any).__farm) {
+      setFps((window as any).__farm.getFps());
+    }
+  }, []);
 
-  // Show the menu automatically when there's no game loaded yet.
-  useEffect(() => {
-    if (!state) setMenuOpen(true);
-  }, [state]);
-
+  const facingIdx = playerState ? facingTileIdx(playerState, GRID_SIZE) : null;
   const showMenu = menuOpen || !state;
 
+  useEffect(() => {
+    const paused = showMenu || showMarket || showBuild || !!recap || !state;
+    if (paused) return;
+
+    let lastTick = performance.now();
+    const timer = window.setInterval(() => {
+      const now = performance.now();
+      advanceTime(now - lastTick);
+      lastTick = now;
+    }, 250);
+    return () => window.clearInterval(timer);
+  }, [showMenu, showMarket, showBuild, recap, advanceTime, state]);
+
   return (
-    <div className="fixed inset-0 flex flex-col bg-slate-900 text-white select-none">
-      {/* Top bar: back link */}
+    <div className="w-full h-full bg-black select-none overflow-hidden relative">
+
+      {/* Canvas is always full-screen, HUD floats above it */}
       {state && (
-        <>
-          <HudBar state={state} onMenu={() => setMenuOpen(true)} />
-          <ForecastStrip state={state} />
-          {state.tutorialStep >= 0 && <TutorialHint state={state} />}
+        <GameCanvas
+          state={state}
+          selectedCrop={selectedCrop}
+          activeTool={currentTool}
+          buildTool={buildTool}
+          onAction={handleAction}
+          onToolChange={handleToolChange}
+          onPlayerMove={handlePlayerMove}
+        />
+      )}
 
-          <FarmGrid
-            state={state}
-            selectedIdx={multiSelect ? null : selectedIdx}
-            selectedSet={multiSelect ? selection : undefined}
-            onSelect={handleSelect}
-          />
+      {/* HUD overlay — floats over canvas */}
+      {state && (
+        <HudBar
+          state={state}
+          tool={currentTool}
+          waterCharges={waterCharges}
+          selectedCrop={selectedCrop}
+          onMenu={() => setMenuOpen(true)}
+          onToolPick={handleToolChange}
+          onCropPick={setSelectedCrop}
+          onMarket={() => { setShowMarket(true); setShowBuild(false); setBuildTool(null); }}
+          onEndDay={handleEndDay}
+          facingIdx={facingIdx}
+        />
+      )}
 
-          {/* Error toast */}
-          {game.error && (
-            <div className="absolute bottom-40 left-1/2 -translate-x-1/2 z-30 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold shadow-lg">
-              {game.error}
-            </div>
-          )}
-          {/* Info toast */}
-          {game.info && !game.error && (
-            <div className="absolute bottom-52 left-1/2 -translate-x-1/2 z-30 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold shadow-lg">
-              {game.info}
-            </div>
-          )}
+      {/* Toasts */}
+      {state && game.error && (
+        <div className="absolute bottom-20 left-1/2 z-30 -translate-x-1/2 rounded-md
+                        bg-red-600/90 backdrop-blur-sm px-4 py-2 text-sm font-bold
+                        shadow-xl border border-red-400/30 pointer-events-none">
+          {game.error}
+        </div>
+      )}
+      {state && game.info && !game.error && (
+        <div className="absolute bottom-20 left-1/2 z-30 -translate-x-1/2 rounded-md
+                        bg-emerald-600/90 backdrop-blur-sm px-4 py-2 text-sm font-bold
+                        shadow-xl border border-emerald-400/30 pointer-events-none">
+          {game.info}
+        </div>
+      )}
 
-          <WaterBar state={state} />
-
-          {/* Mode tabs */}
-          <div className="flex gap-1 px-3 pt-2 bg-slate-900">
-            {(['farm', 'build', 'market'] as Mode[]).map((m) => (
-              <button
-                key={m}
-                onClick={() => switchMode(m)}
-                className={`flex-1 rounded-t-lg py-1.5 text-xs font-semibold capitalize ${
-                  mode === m ? 'bg-slate-800 text-white' : 'bg-slate-950 text-slate-400'
-                }`}
-              >
-                {m}
-              </button>
-            ))}
+      {/* Build panel — slides up from bottom, above HUD */}
+      {state && showBuild && (
+        <div className="absolute bottom-16 left-2 right-2 z-20 border border-white/10 bg-[#111a15]/97 shadow-2xl backdrop-blur-md md:bottom-20 md:left-4 md:right-auto md:w-[380px]">
+          <div className="flex h-12 items-center justify-between border-b border-white/10 px-3">
+            <span className="flex items-center gap-2 text-sm font-bold text-white"><Hammer size={16} className="text-[#d9b95f]" /> Build</span>
+            <button type="button" aria-label="Close build panel" onClick={() => { setShowBuild(false); setBuildTool(null); setCurrentTool('hoe'); }}
+              className="grid h-8 w-8 place-items-center rounded-md text-white/50 hover:bg-white/10 hover:text-white"><X size={16} /></button>
           </div>
+          <BuildPanel state={state} tool={buildTool} onPick={setBuildTool} />
+        </div>
+      )}
 
-          {/* Multi-select toggle (Farm mode only) */}
-          {mode === 'farm' && (
-            <div className="flex justify-end px-3 pt-1 bg-slate-800">
-              <button
-                onClick={() => {
-                  setMultiSelect((v) => !v);
-                  clearMulti();
-                  setSelectedIdx(null);
-                }}
-                className={`text-[11px] rounded px-2 py-1 font-semibold ${
-                  multiSelect ? 'bg-yellow-500 text-yellow-950' : 'bg-slate-700 text-slate-300'
-                }`}
-              >
-                {multiSelect ? '☑︎ Multi-select' : '☐ Multi-select'}
-              </button>
-            </div>
-          )}
-
-          {/* Contextual bottom area */}
-          <div className="bg-slate-900">
-            {mode === 'market' ? (
-              <MarketPanel state={state} dispatch={dispatch} />
-            ) : mode === 'farm' && multiSelect ? (
-              <BulkActionBar
-                state={state}
-                selection={Array.from(selection)}
-                dispatchMany={game.dispatchMany}
-                onApplied={(n, label) =>
-                  game.flashInfo(n > 0 ? `${label} ${n} tile${n === 1 ? '' : 's'}` : 'Nothing applicable')
-                }
-                onClear={clearMulti}
-              />
-            ) : mode === 'build' && !selectedIdx ? (
-              <BuildPanel state={state} tool={buildTool} onPick={setBuildTool} />
-            ) : selectedIdx !== null && validActions(state, selectedIdx).length > 0 ? (
-              <TileSheet
-                state={state}
-                idx={selectedIdx}
-                dispatch={dispatch}
-                onClose={() => setSelectedIdx(null)}
-              />
-            ) : (
-              <div className="p-4 text-center text-xs text-slate-500 bg-slate-800 rounded-t-xl">
-                {mode === 'build'
-                  ? 'Pick a build tool below or tap a tile.'
-                  : 'Tap a tile to act on it.'}
-              </div>
-            )}
-
-            {/* End Day — always visible */}
-            <div className="p-3 bg-slate-900">
-              <button
-                onClick={handleEndDay}
-                className="w-full rounded-lg bg-indigo-600 py-3 font-bold text-white active:bg-indigo-700"
-              >
-                🌙 END DAY ▸
-              </button>
-            </div>
+      {/* Farm operations — bottom sheet on mobile, side panel on desktop */}
+      {state && showMarket && (
+        <div className="absolute inset-x-0 bottom-0 top-16 z-30 flex flex-col border-t border-white/10 bg-[#111a15]/97 shadow-2xl backdrop-blur-md md:inset-y-0 md:left-auto md:right-0 md:top-0 md:w-[440px] md:border-l md:border-t-0">
+          <div className="flex h-14 shrink-0 items-center justify-between border-b border-white/10 px-4">
+            <span className="flex items-center gap-2 text-sm font-bold text-white"><ClipboardList size={18} className="text-[#d9b95f]" /> Farm operations</span>
+            <button type="button" onClick={() => setShowMarket(false)} aria-label="Close farm operations"
+              className="grid h-9 w-9 place-items-center rounded-md text-white/50 hover:bg-white/10 hover:text-white">
+              <X size={18} />
+            </button>
           </div>
-        </>
+          <div className="min-h-0 flex-1 overflow-auto">
+            <MarketPanel state={state} dispatch={dispatch} />
+          </div>
+        </div>
       )}
 
       {/* Menu overlay */}
@@ -209,35 +175,21 @@ export default function FarmSimPage() {
           hasSave={game.hasSave}
           slots={game.slots}
           inGame={!!state}
-          onNewGame={(seed) => {
-            game.startNewGame(seed);
-            setMenuOpen(false);
-            setMode('farm');
-            setSelectedIdx(null);
-          }}
-          onContinue={() => {
-            game.continueGame();
-            setMenuOpen(false);
-          }}
-          onLoadSlot={(slot) => {
-            game.loadSlot(slot);
-            setMenuOpen(false);
-            setMode('farm');
-            setSelectedIdx(null);
-          }}
+          onNewGame={(seed) => { game.startNewGame(seed); setMenuOpen(false); }}
+          onContinue={() => { game.continueGame(); setMenuOpen(false); }}
+          onLoadSlot={(slot) => { game.loadSlot(slot); setMenuOpen(false); }}
           onSaveSlot={game.saveToSlot}
           onDeleteSlot={game.deleteSlot}
           onClose={() => setMenuOpen(false)}
         />
       )}
 
-      {/* Day recap */}
+      {/* Dev overlay — toggle with backtick ` */}
+      {state && <DevOverlay state={state} player={playerState} fps={fps} />}
+
       {game.recap && <DayRecap recap={game.recap} onClose={game.dismissRecap} />}
 
-      {/* Hidden back-to-hub link for navigation */}
-      <Link href="/" className="sr-only">
-        Back to hub
-      </Link>
+      <Link href="/" className="sr-only">Back to hub</Link>
     </div>
   );
 }

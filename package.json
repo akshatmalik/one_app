@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "farm:playtest": "tsx scripts/farm-sim-harness.mts"
   },
   "dependencies": {
     "@chatscope/chat-ui-kit-react": "^2.1.1",
@@ -42,6 +43,7 @@
     "eslint": "^8.57.0",
     "eslint-config-next": "^14.0.4",
     "postcss": "^8.4.38",
-    "tailwindcss": "^3.4.3"
+    "tailwindcss": "^3.4.3",
+    "tsx": "^4.23.1"
   }
 }

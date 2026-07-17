@@ -8,15 +8,22 @@ import {
   START_PLOT,
   RESERVOIR_POS,
   START_GOLD,
-  BASE_AP,
   START_SEEDS,
   RESERVOIR_START,
   START_NITROGEN,
+  WHEAT_STORAGE_START,
+  MILL_INPUT_CAPACITY,
+  MILL_OUTPUT_CAPACITY,
+  MILL_RATE_PER_DAY,
+  FIELD_CRATE_CAPACITY,
+  FARM_LANDMARKS,
 } from '../balance';
 import { CROP_IDS } from '../../data/crops';
 import { idxOf } from './water';
 import { initMarket } from './market';
 import { rollSeasonWeather, buildForecast } from './weather';
+import { createContractOffers } from './contracts';
+import { initialParcels } from './parcels';
 
 function emptyCounts(): Record<CropId, number> {
   const out = {} as Record<CropId, number>;
@@ -28,10 +35,9 @@ function buildTiles(): Tile[] {
   const tiles: Tile[] = [];
   for (let r = 0; r < GRID_SIZE; r++) {
     for (let c = 0; c < GRID_SIZE; c++) {
-      const inStartPlot =
-        r >= START_PLOT.r0 && r <= START_PLOT.r1 && c >= START_PLOT.c0 && c <= START_PLOT.c1;
+      const inStarterParcel = r >= START_PLOT.r0 && r <= START_PLOT.r1 && c >= START_PLOT.c0 && c <= START_PLOT.c1;
       tiles.push({
-        kind: inStartPlot ? 'grass' : 'locked',
+        kind: inStarterParcel ? 'grass' : 'locked',
         moisture: 0,
         nitrogen: START_NITROGEN,
         crop: null,
@@ -39,14 +45,29 @@ function buildTiles(): Tile[] {
       });
     }
   }
-  // Place the reservoir inside the start plot.
+  // Place the reservoir at the start of the farm zone.
   const rIdx = idxOf(RESERVOIR_POS.r, RESERVOIR_POS.c);
   tiles[rIdx] = { kind: 'reservoir', moisture: 0, nitrogen: 0, crop: null, irrigated: false };
+  // A compact authored operations yard frames the starting field.
+  tiles[idxOf(FARM_LANDMARKS.shed.r, FARM_LANDMARKS.shed.c)] = { kind: 'shed', moisture: 0, nitrogen: 0, crop: null, irrigated: false };
+  tiles[idxOf(FARM_LANDMARKS.mill.r, FARM_LANDMARKS.mill.c)] = { kind: 'mill', moisture: 0, nitrogen: 0, crop: null, irrigated: false };
+  tiles[idxOf(FARM_LANDMARKS.depot.r, FARM_LANDMARKS.depot.c)] = { kind: 'depot', moisture: 0, nitrogen: 0, crop: null, irrigated: false };
+  tiles[idxOf(FARM_LANDMARKS.crate.r, FARM_LANDMARKS.crate.c)] = { kind: 'crate', moisture: 0, nitrogen: 0, crop: null, irrigated: false };
+  const yardPaths = new Set<number>();
+  for (let c = FARM_LANDMARKS.shed.c; c <= FARM_LANDMARKS.depot.c; c++) yardPaths.add(idxOf(19, c));
+  for (let r = 17; r <= 19; r++) yardPaths.add(idxOf(r, FARM_LANDMARKS.shed.c + 1));
+  for (let r = 18; r <= 19; r++) yardPaths.add(idxOf(r, RESERVOIR_POS.c));
+  for (let r = 17; r <= 19; r++) yardPaths.add(idxOf(r, FARM_LANDMARKS.mill.c - 1));
+  for (let r = 19; r <= FARM_LANDMARKS.depot.r; r++) yardPaths.add(idxOf(r, FARM_LANDMARKS.depot.c));
+  for (const idx of yardPaths) {
+    if (tiles[idx].kind === 'grass') tiles[idx] = { ...tiles[idx], kind: 'path' };
+  }
   return tiles;
 }
 
 export function newGame(seed: number): GameState {
   const day = 1;
+  const reputation = 0;
   const weatherTruth = rollSeasonWeather(seed, day);
   const seeds = emptyCounts();
   for (const [k, v] of Object.entries(START_SEEDS)) {
@@ -57,14 +78,43 @@ export function newGame(seed: number): GameState {
     version: 1,
     seed,
     day,
+    time: 360, // 6:00 AM
+    lastTickMs: Date.now(),
     gold: START_GOLD,
-    ap: BASE_AP,
-    apMax: BASE_AP,
     tiles: buildTiles(),
     reservoir: RESERVOIR_START,
     wells: 0,
     inventory: emptyCounts(),
     seeds,
+    items: { fertilizer: 0, flour: 0, bread: 0, milk: 0, egg: 0, fuel: 0 },
+    mill: {
+      commissioned: false,
+      level: 0,
+      input: 0,
+      output: 0,
+      inputCapacity: MILL_INPUT_CAPACITY,
+      outputCapacity: MILL_OUTPUT_CAPACITY,
+      ratePerDay: MILL_RATE_PER_DAY,
+    },
+    fieldCrates: [{ id: 'crate-start', idx: idxOf(FARM_LANDMARKS.crate.r, FARM_LANDMARKS.crate.c), wheat: 0, capacity: FIELD_CRATE_CAPACITY }],
+    haulRoutes: [],
+    parcels: initialParcels(false),
+    production: {
+      wheatStorageCapacity: WHEAT_STORAGE_START,
+      harvestedWheat: 0,
+      rawWheatExported: 0,
+      wheatMilled: 0,
+      flourExported: 0,
+      automatedWaterings: 0,
+      harvestedToday: 0,
+      recentHarvests: [],
+      milestones: [],
+    },
+    machines: [],
+    animals: [],
+    contracts: createContractOffers(seed, day, reputation, 3),
+    reputation,
+    unlocks: ['irrigation'],
     market: initMarket(),
     weatherTruth,
     forecast: [],

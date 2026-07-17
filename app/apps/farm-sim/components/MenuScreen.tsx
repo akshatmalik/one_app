@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { Download, Play, Plus, Save, Sprout, Trash2 } from 'lucide-react';
 import { SaveSlotInfo } from '../lib/types';
-import { AUTOSAVE_SLOT, MANUAL_SLOTS } from '../lib/storage';
+import { MANUAL_SLOTS } from '../lib/storage';
 import { seasonForDay, dayOfSeason } from '../lib/engine/weather';
 
 interface Props {
@@ -36,6 +37,12 @@ export function MenuScreen({
   const [showSeed, setShowSeed] = useState(false);
   const [seedText, setSeedText] = useState('');
   const slotMap = new Map(slots.map((s) => [s.slot, s]));
+  // Block all clicks for 200ms after mount so the triggering click can't fall through.
+  const readyRef = useRef(false);
+  useEffect(() => {
+    const t = setTimeout(() => { readyRef.current = true; }, 200);
+    return () => clearTimeout(t);
+  }, []);
 
   const start = () => {
     const trimmed = seedText.trim();
@@ -44,43 +51,47 @@ export function MenuScreen({
   };
 
   return (
-    <div className="fixed inset-0 z-40 bg-emerald-950 text-white flex flex-col items-center justify-center p-6 gap-4 overflow-y-auto">
+    <div
+      className="fixed inset-0 z-40 flex flex-col items-center justify-center gap-5 overflow-y-auto bg-[#102019] p-6 text-white"
+      onPointerDown={(e) => e.stopPropagation()}
+      onClickCapture={(e) => { if (!readyRef.current) e.stopPropagation(); }}
+    >
       <div className="text-center">
-        <div className="text-5xl">🌾</div>
-        <h1 className="text-2xl font-bold mt-2">Farm Sim</h1>
-        <p className="text-emerald-300/70 text-sm">A turn-based farming optimization puzzle</p>
+        <Sprout size={38} strokeWidth={1.5} className="mx-auto text-[#d9b95f]" />
+        <h1 className="mt-2 text-3xl font-bold">Farm Sim</h1>
+        <p className="mt-1 text-sm text-[#86c98a]">Grow. Connect. Automate.</p>
       </div>
 
       <div className="w-full max-w-xs space-y-2">
         {inGame && (
           <button
             onClick={onClose}
-            className="w-full rounded-lg bg-emerald-600 py-3 font-bold"
+            className="flex w-full items-center justify-center gap-2 rounded-md bg-[#d9b95f] py-3 font-bold text-[#17201d] hover:bg-[#efd47c]"
           >
-            ▸ Resume
+            <Play size={16} fill="currentColor" /> Resume
           </button>
         )}
         {!inGame && hasSave && (
           <button
             onClick={onContinue}
-            className="w-full rounded-lg bg-emerald-600 py-3 font-bold"
+            className="flex w-full items-center justify-center gap-2 rounded-md bg-[#d9b95f] py-3 font-bold text-[#17201d] hover:bg-[#efd47c]"
           >
-            ▸ Continue
+            <Play size={16} fill="currentColor" /> Continue
           </button>
         )}
 
         {!showSeed ? (
           <button
             onClick={() => onNewGame(undefined)}
-            className="w-full rounded-lg bg-emerald-800 py-3 font-semibold"
+            className="flex w-full items-center justify-center gap-2 rounded-md border border-white/10 bg-white/5 py-3 font-semibold hover:bg-white/10"
           >
-            + New Game
+            <Plus size={16} /> New farm
           </button>
         ) : null}
 
         <button
           onClick={() => setShowSeed((s) => !s)}
-          className="w-full rounded-lg bg-slate-700 py-2 text-xs"
+          className="w-full rounded-md py-2 text-xs text-white/50 hover:bg-white/5 hover:text-white"
         >
           {showSeed ? 'Cancel custom seed' : 'New game with custom seed…'}
         </button>
@@ -91,9 +102,9 @@ export function MenuScreen({
               value={seedText}
               onChange={(e) => setSeedText(e.target.value)}
               placeholder="any word or number"
-              className="flex-1 rounded-lg bg-slate-800 px-3 py-2 text-sm"
+              className="min-w-0 flex-1 rounded-md border border-white/10 bg-black/20 px-3 py-2 text-sm outline-none focus:border-[#d9b95f]"
             />
-            <button onClick={start} className="rounded-lg bg-emerald-600 px-4 font-bold">
+            <button onClick={start} className="rounded-md bg-[#d9b95f] px-4 font-bold text-[#17201d]">
               Go
             </button>
           </div>
@@ -102,36 +113,42 @@ export function MenuScreen({
 
       {/* Save slots */}
       <div className="w-full max-w-xs space-y-2 mt-2">
-        <div className="text-xs text-emerald-300/60">Save slots</div>
+        <div className="text-[10px] font-semibold uppercase text-[#86c98a]">Save slots</div>
         {MANUAL_SLOTS.map((slot) => {
           const info = slotMap.get(slot);
           return (
-            <div key={slot} className="flex items-center gap-2 rounded-lg bg-slate-800 p-2">
+            <div key={slot} className="flex items-center gap-2 rounded-md border border-white/10 bg-black/20 p-2">
               <div className="flex-1 min-w-0">
                 <div className="text-xs font-semibold">Slot {slot}</div>
-                <div className="text-[10px] text-slate-400 truncate">{slotLabel(info)}</div>
+                <div className="truncate text-[10px] text-white/40">{slotLabel(info)}</div>
               </div>
               {inGame && (
                 <button
                   onClick={() => onSaveSlot(slot)}
-                  className="rounded bg-emerald-700 px-2 py-1 text-[10px] font-bold"
+                  title="Save"
+                  aria-label={`Save to slot ${slot}`}
+                  className="grid h-8 w-8 place-items-center rounded-md text-[#86c98a] hover:bg-white/10"
                 >
-                  Save
+                  <Save size={14} />
                 </button>
               )}
               {info && (
                 <>
                   <button
                     onClick={() => onLoadSlot(slot)}
-                    className="rounded bg-sky-700 px-2 py-1 text-[10px] font-bold"
+                    title="Load"
+                    aria-label={`Load slot ${slot}`}
+                    className="grid h-8 w-8 place-items-center rounded-md text-[#75bde7] hover:bg-white/10"
                   >
-                    Load
+                    <Download size={14} />
                   </button>
                   <button
                     onClick={() => onDeleteSlot(slot)}
-                    className="rounded bg-red-800 px-2 py-1 text-[10px] font-bold"
+                    title="Delete"
+                    aria-label={`Delete slot ${slot}`}
+                    className="grid h-8 w-8 place-items-center rounded-md text-[#e88979] hover:bg-white/10"
                   >
-                    ✕
+                    <Trash2 size={14} />
                   </button>
                 </>
               )}

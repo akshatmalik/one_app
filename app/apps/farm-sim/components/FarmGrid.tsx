@@ -35,7 +35,7 @@ export function FarmGrid({ state, selectedIdx, selectedSet, onSelect }: Props) {
             tile={tile}
             size={size}
             selected={selectedIdx === idx || !!selectedSet?.has(idx)}
-            expandable={validActions(state, idx).includes('expand')}
+            expandable={false}
             onTap={() => onSelect(idx)}
           />
         ))}

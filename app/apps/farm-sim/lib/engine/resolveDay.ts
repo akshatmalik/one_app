@@ -18,8 +18,10 @@ import {
   EVAPORATION,
   FALLOW_N_REGEN,
   GRASS_N_REGEN,
-  STORM_DESTROY_CHANCE,
   PRICE_MOVE_RECAP_THRESHOLD,
+  STORM_DESTROY_CHANCE,
+  SPRINKLER_WATER_DRAW,
+  SPRINKLER_MOISTURE,
 } from '../balance';
 import { CROPS } from '../../data/crops';
 import { streamRng } from './rng';
@@ -28,20 +30,28 @@ import {
   dayOfSeason,
   seasonNumber,
   rollSeasonWeather,
+  normalizeSeasonWeather,
   buildForecast,
 } from './weather';
-import { computeIrrigation } from './water';
+import { computeIrrigation, allNeighbors, connectedChannels, orthoNeighbors } from './water';
 import { resolveCropNight, applyBeanNeighborBonus } from './crops';
 import { getPrice, stepMarket } from './market';
 import { clamp, cloneState } from './util';
 import * as recap from '../recap-text';
+import { refreshContracts } from './contracts';
+import { syncProductionMilestones } from './production';
+import { WAKE_MINUTES } from '../realtime/clock';
 
 export function endDay(state: GameState): { state: GameState; recap: DayRecap } {
   const s = cloneState(state);
+  s.weatherTruth = normalizeSeasonWeather(s.seed, s.day, s.weatherTruth);
   const weather: Weather = s.weatherTruth[dayOfSeason(s.day)];
   const events: RecapEvent[] = [];
   const goldBefore = s.gold;
   let waterDrawn = 0;
+  const expiredContracts = s.contracts.filter(
+    (contract) => contract.status === 'available' && contract.expiresDay === state.day
+  ).length;
 
   // Snapshot prices before market step, to detect big moves.
   const priceBefore: Record<string, number> = {};
@@ -115,6 +125,35 @@ export function endDay(state: GameState): { state: GameState; recap: DayRecap } 
       }
     }
   });
+
+  // ── 5.5 SPRINKLERS ────────────────────────────────────
+  const suppliedChannels = connectedChannels(s.tiles);
+  suppliedChannels.forEach((idx) => { s.tiles[idx].irrigated = true; });
+  s.tiles.forEach((tile, idx) => {
+    if (tile.kind === 'channel' && !suppliedChannels.has(idx)) tile.irrigated = false;
+  });
+  s.tiles.forEach((t, idx) => {
+    if (t.kind === 'sprinkler') {
+      const supplied = orthoNeighbors(idx).some((neighbor) => suppliedChannels.has(neighbor));
+      t.irrigated = supplied;
+      if (!supplied) return;
+      if (s.reservoir >= SPRINKLER_WATER_DRAW) {
+        s.reservoir -= SPRINKLER_WATER_DRAW;
+        waterDrawn += SPRINKLER_WATER_DRAW;
+        const neighbors = allNeighbors(idx);
+        for (const n of neighbors) {
+          const nt = s.tiles[n];
+          if (nt.kind === 'tilled') {
+            nt.moisture = clamp(nt.moisture + SPRINKLER_MOISTURE, 0, 100);
+            s.production.automatedWaterings += 1;
+          }
+        }
+      } else {
+        shorted++; // Count as a reservoir short
+      }
+    }
+  });
+
   if (shorted > 0) events.push(recap.reservoirShort(shorted));
 
   // ── 6. CROPS ──────────────────────────────────────────
@@ -151,9 +190,48 @@ export function endDay(state: GameState): { state: GameState; recap: DayRecap } 
   const marketRng = streamRng(s.seed, s.day, 'market');
   s.market = stepMarket(s.market, s, marketRng);
 
+  // ── 9.5 MACHINES ──────────────────────────────────────
+  if (s.mill.commissioned) {
+    for (const route of s.haulRoutes) {
+      const crate = s.fieldCrates.find((candidate) => candidate.id === route.crateId);
+      if (!crate || crate.wheat <= 0 || s.mill.input >= s.mill.inputCapacity) continue;
+      const moved = Math.min(route.ratePerDay, crate.wheat, s.mill.inputCapacity - s.mill.input);
+      crate.wheat -= moved;
+      s.mill.input += moved;
+    }
+  }
+  if (s.mill.commissioned && s.mill.input > 0 && s.mill.output < s.mill.outputCapacity) {
+    const processed = Math.min(s.mill.ratePerDay, s.mill.input, s.mill.outputCapacity - s.mill.output);
+    s.mill.input -= processed;
+    s.mill.output += processed;
+    s.production.wheatMilled += processed;
+    events.push({
+      kind: 'harvestReady',
+      text: `The mill finished ${processed} flour. ${s.mill.output}/${s.mill.outputCapacity} is ready at the depot.`,
+      severity: 'good',
+    });
+  }
+  s.production.recentHarvests = [...s.production.recentHarvests, s.production.harvestedToday].slice(-7);
+  s.production.harvestedToday = 0;
+  syncProductionMilestones(s);
+  // ── Machines
+  for (const m of s.machines) {
+    // Tractor/Seeder don't process items overnight
+  }
+
+  // ── Animals
+  for (const a of s.animals) {
+    if (a.fedToday) {
+      if (a.produceDays > 0) a.produceDays -= 1;
+    }
+    a.fedToday = false;
+  }
+
   // ── 10. ADVANCE DAY ───────────────────────────────────
   const prevSeasonNum = seasonNumber(s.day);
   s.day += 1;
+  s.time = WAKE_MINUTES;
+  s.lastTickMs = Date.now();
   const newSeasonNum = seasonNumber(s.day);
   if (newSeasonNum !== prevSeasonNum) {
     // New season: re-roll truth, clear dead/out-of-season berries.
@@ -166,7 +244,7 @@ export function endDay(state: GameState): { state: GameState; recap: DayRecap } 
     events.push(recap.seasonChange(seasonForDay(s.day)));
   }
   s.forecast = buildForecast(s.seed, s.day, s.weatherTruth);
-  s.ap = s.apMax;
+  s.contracts = refreshContracts(s);
   s.marketVisitedToday = false;
 
   // ── 11. RECAP (worst-first ordering) ──────────────────
@@ -180,6 +258,13 @@ export function endDay(state: GameState): { state: GameState; recap: DayRecap } 
         events.push(recap.priceMove(CROPS[id as keyof typeof CROPS].name, pct));
       }
     }
+  }
+  if (expiredContracts > 0) {
+    events.push({
+      kind: 'contractExpired',
+      text: `${expiredContracts} local order${expiredContracts === 1 ? '' : 's'} expired. New work is posted.`,
+      severity: 'info',
+    });
   }
   // Weather flavor last.
   events.push(recap.weatherFlavor(weather));

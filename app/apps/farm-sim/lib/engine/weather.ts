@@ -26,6 +26,10 @@ export function seasonNumber(day: number): number {
   return Math.floor((day - 1) / SEASON_LENGTH);
 }
 
+export function isWeatherAllowed(day: number, weather: Weather): boolean {
+  return (WEATHER_WEIGHTS[seasonForDay(day)][weather] ?? 0) > 0;
+}
+
 // Pre-roll all SEASON_LENGTH days of the season that `day` falls in.
 // Uses the season number so re-entering a season reproduces the same weather.
 export function rollSeasonWeather(seed: number, day: number): Weather[] {
@@ -39,6 +43,12 @@ export function rollSeasonWeather(seed: number, day: number): Weather[] {
     out.push(weightedPick(weights, rng()));
   }
   return out;
+}
+
+export function normalizeSeasonWeather(seed: number, day: number, weather: Weather[]): Weather[] {
+  const rolled = rollSeasonWeather(seed, day);
+  if (weather.length !== SEASON_LENGTH) return rolled;
+  return weather.map((value, index) => isWeatherAllowed(day + index - dayOfSeason(day), value) ? value : rolled[index]);
 }
 
 // Generate the forecast the player is SHOWN for a specific global day, given the

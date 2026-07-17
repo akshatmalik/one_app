@@ -1,6 +1,6 @@
 'use client';
 
-import { Tile } from '../lib/types';
+import { CropId, Tile, TileKind } from '../lib/types';
 import { CROPS } from '../data/crops';
 
 interface Props {
@@ -23,13 +23,24 @@ function stageOf(tile: Tile): number {
   return 0;
 }
 
-const KIND_BG: Record<Tile['kind'], string> = {
-  locked: 'bg-slate-800/60',
-  grass: 'bg-green-700',
-  tilled: 'bg-amber-900',
-  channel: 'bg-sky-600',
-  reservoir: 'bg-blue-500',
-  well: 'bg-slate-500',
+const KIND_BG: Record<TileKind, string> = {
+  grass: 'bg-emerald-500',
+  tilled: 'bg-[#8B5A2B]',
+  channel: 'bg-blue-400',
+  reservoir: 'bg-blue-600',
+  well: 'bg-blue-300',
+  sprinkler: 'bg-gray-400',
+  barn: 'bg-red-800',
+  coop: 'bg-yellow-700',
+  shed: 'bg-amber-800',
+  mill: 'bg-stone-500',
+  depot: 'bg-stone-600',
+  crate: 'bg-amber-700',
+  path: 'bg-amber-200',
+  brush: 'bg-green-800',
+  rock: 'bg-stone-500',
+  marsh: 'bg-cyan-900',
+  locked: 'bg-gray-800',
 };
 
 export function TileCell({ tile, size, selected, expandable, onTap }: Props) {
@@ -86,10 +97,6 @@ export function TileCell({ tile, size, selected, expandable, onTap }: Props) {
       {/* stressed badge */}
       {dry && <span className="absolute bottom-0 left-0 text-[9px] leading-none">🥀</span>}
 
-      {/* expandable lock + price */}
-      {tile.kind === 'locked' && expandable && (
-        <span className="absolute inset-0 grid place-items-center text-[8px] text-white/70">➕</span>
-      )}
     </button>
   );
 }
