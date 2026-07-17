@@ -71,6 +71,16 @@ export const MINI_APPS: MiniApp[] = [
     tags: ['gaming', 'analytics'],
     isNew: true,
   },
+  {
+    id: 'farm-sim',
+    name: 'Farm Sim',
+    description: 'A turn-based farming optimization puzzle — crops, weather, water, and a living market',
+    icon: '🌾',
+    path: '/apps/farm-sim',
+    color: '#65A30D',
+    tags: ['game', 'strategy', 'simulation'],
+    isNew: true,
+  },
 ];
 
 export function getMiniAppById(id: string): MiniApp | undefined {
