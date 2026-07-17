@@ -6,6 +6,8 @@ import { applyAction } from '../lib/engine/actions';
 import { endDay as endDayEngine } from '../lib/engine/resolveDay';
 import { newGame as newGameEngine, randomSeed } from '../lib/engine/newGame';
 import { farmRepo, AUTOSAVE_SLOT } from '../lib/storage';
+import { advanceClock, FORCED_SLEEP_MINUTES } from '../lib/realtime/clock';
+import { buildForecast, normalizeSeasonWeather } from '../lib/engine/weather';
 
 interface UseFarmGame {
   state: GameState | null;
@@ -18,6 +20,7 @@ interface UseFarmGame {
   dispatchMany: (actions: PlayerAction[]) => number;
   flashInfo: (msg: string) => void;
   endDay: () => void;
+  advanceTime: (realElapsedMs: number) => void;
   dismissRecap: () => void;
   startNewGame: (seed?: number) => void;
   continueGame: () => void;
@@ -42,6 +45,15 @@ export function useFarmGame(): UseFarmGame {
     setSlots(farmRepo.listSlots());
     setHasSave(farmRepo.load(AUTOSAVE_SLOT) !== null);
   }, []);
+
+  useEffect(() => {
+    if (!state) return;
+    const weatherTruth = normalizeSeasonWeather(state.seed, state.day, state.weatherTruth);
+    if (!weatherTruth.some((weather, index) => weather !== state.weatherTruth[index])) return;
+    const repaired = { ...state, weatherTruth, forecast: buildForecast(state.seed, state.day, weatherTruth) };
+    setState(repaired);
+    farmRepo.save(AUTOSAVE_SLOT, repaired);
+  }, [state]);
 
   const autosave = useCallback((s: GameState) => {
     farmRepo.save(AUTOSAVE_SLOT, s);
@@ -112,6 +124,22 @@ export function useFarmGame(): UseFarmGame {
     autosave(next);
   }, [state, autosave]);
 
+  const advanceTime = useCallback((realElapsedMs: number) => {
+    if (!state) return;
+    const nextTime = advanceClock(state.time, realElapsedMs);
+    if (nextTime >= FORCED_SLEEP_MINUTES) {
+      const { state: next, recap: dayRecap } = endDayEngine(state);
+      setState(next);
+      setRecap(dayRecap);
+      autosave(next);
+      return;
+    }
+
+    const next = { ...state, time: nextTime, lastTickMs: Date.now() };
+    setState(next);
+    if (Math.floor(state.time / 60) !== Math.floor(nextTime / 60)) autosave(next);
+  }, [state, autosave]);
+
   const dismissRecap = useCallback(() => setRecap(null), []);
 
   const startNewGame = useCallback(
@@ -175,6 +203,7 @@ export function useFarmGame(): UseFarmGame {
     dispatchMany,
     flashInfo,
     endDay,
+    advanceTime,
     dismissRecap,
     startNewGame,
     continueGame,

@@ -1,73 +1,40 @@
-// ============================================================================
-// Farm Sim — Shared 32-colour palette.
-// ONE palette for all sprites. This is what makes everything read as a cohesive
-// world instead of clip-art. Edit here; all sprites pick up the change.
-// ============================================================================
-
+// Shared natural palette for the 16x16 farm sprites.
 export const PAL = {
-  // ── Transparent ────────────────────────────────────────────────────────────
-  '.': null,        // transparent
+  '.': null,
 
-  // ── Soil ramp (6) ──────────────────────────────────────────────────────────
-  //   dry light → dry dark → wet light → wet dark → tilled dry → tilled wet
-  'A': '#c8a87a',   // soil highlight dry
-  'B': '#a8845a',   // soil mid dry
-  'C': '#7a5c38',   // soil shadow dry
-  'D': '#7a6448',   // soil highlight wet
-  'E': '#5a4830',   // soil mid wet
-  'F': '#3c3020',   // soil shadow wet
+  // Soil: dry and wet ramps remain deliberately far apart.
+  A: '#c3a36f', B: '#99764b', C: '#63472d',
+  D: '#756451', E: '#514636', F: '#302b25',
 
-  // ── Grass / foliage ramp (6) ───────────────────────────────────────────────
-  'G': '#a8d870',   // grass highlight
-  'H': '#78b840',   // grass mid
-  'I': '#4a8820',   // grass shadow / dark
-  'J': '#386018',   // dark foliage
-  'K': '#c8e890',   // pale grass / dry patch
-  'L': '#e8f8b0',   // sun glint on grass
+  // Grass and hedge: olive greens keep the field calm and readable.
+  G: '#a5b86a', H: '#71894b', I: '#4b6538', J: '#293b2d',
+  K: '#c4c98a', L: '#d9d5a0',
 
-  // ── Water / sky ramp (5) ───────────────────────────────────────────────────
-  'M': '#b0d8f8',   // sky / water highlight
-  'N': '#70a8e0',   // water mid
-  'O': '#3878c0',   // water deep
-  'P': '#2050a0',   // water shadow
-  'Q': '#e8f4ff',   // water shimmer / foam
+  // Water.
+  M: '#a9c4bd', N: '#6f9e9a', O: '#3f706f', P: '#2a4d52', Q: '#d5e1cc',
 
-  // ── Stone / structure (4) ──────────────────────────────────────────────────
-  'R': '#d0c8b8',   // stone light
-  'S': '#a09888',   // stone mid
-  'T': '#706858',   // stone dark
-  'U': '#504840',   // stone shadow
+  // Stone.
+  R: '#c7c0aa', S: '#938d7a', T: '#625f55', U: '#3e3d38',
 
-  // ── Wood / warm structure (4) ──────────────────────────────────────────────
-  'V': '#d89858',   // wood light
-  'W': '#a86830',   // wood mid
-  'X': '#784020',   // wood dark
-  'Y': '#501800',   // wood shadow
+  // Wood.
+  V: '#c59a63', W: '#8c6742', X: '#5f432f', Y: '#35271f',
 
-  // ── Crop / produce tints (4) ───────────────────────────────────────────────
-  'a': '#f8e040',   // warm yellow (wheat)
-  'b': '#e86020',   // tomato red
-  'c': '#5888d8',   // berry blue-purple
-  'd': '#f87808',   // pumpkin orange
+  // Produce.
+  a: '#d6bd59', b: '#b95e4c', c: '#667e9d', d: '#c9834f',
 
-  // ── Neutral / outline (3) ──────────────────────────────────────────────────
-  '0': '#181008',   // near-black outline
-  '1': '#f8f0e0',   // near-white highlight
-  '2': '#888070',   // mid grey
+  // Outline and neutral highlight.
+  0: '#20221f', 1: '#f0e7c9', 2: '#888678',
 } as const;
 
 export type PalKey = keyof typeof PAL;
-export type RGBA = [number, number, number, number]; // 0-255 each
+export type RGBA = [number, number, number, number];
 
-/** Parse a hex colour string to RGBA. Returns null for transparent. */
 export function hexToRgba(hex: string): RGBA {
   const v = parseInt(hex.slice(1), 16);
   return [(v >> 16) & 0xff, (v >> 8) & 0xff, v & 0xff, 255];
 }
 
-/** Resolve a palette key to RGBA (null = transparent). */
 export function palToRgba(key: PalKey): RGBA | null {
   const hex = PAL[key];
-  if (hex === null) return null;
-  return hexToRgba(hex);
+  return hex === null ? null : hexToRgba(hex);
 }

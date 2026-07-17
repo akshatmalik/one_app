@@ -65,6 +65,8 @@ export function seasonChange(season: string): RecapEvent {
   };
 }
 
+
+
 export function weatherFlavor(weather: Weather): RecapEvent {
   const lines: Record<Weather, string> = {
     sunny: 'A clear, dry day on the farm.',

@@ -4,7 +4,7 @@
 // ============================================================================
 
 export type FacingDir = 'up' | 'down' | 'left' | 'right';
-export type ToolId = 'hand' | 'hoe' | 'can' | 'seeds' | 'builder';
+export type ToolId = 'hand' | 'hoe' | 'can' | 'seeds' | 'builder' | 'tractor' | 'seeder';
 
 export interface PlayerState {
   /** World pixel position (top-left of sprite bounding box, 24×36 at 2× scale) */
@@ -33,9 +33,9 @@ const SPRITE_H = 36;
  * Returns null if the facing tile is outside the grid.
  */
 export function facingTileIdx(player: PlayerState, gridSize: number): number | null {
-  // Feet position: bottom-centre of sprite
-  const feetX = player.x + SPRITE_W / 2;
-  const feetY = player.y + SPRITE_H;
+  // Center of collision box
+  const feetX = player.x + 12;
+  const feetY = player.y + 24;
 
   let targetRow = Math.floor(feetY / TILE_PX);
   let targetCol = Math.floor(feetX / TILE_PX);
@@ -57,8 +57,8 @@ export function facingTileIdx(player: PlayerState, gridSize: number): number | n
  * Return the tile index the player's feet are standing on.
  */
 export function standingTileIdx(player: PlayerState, gridSize: number): number {
-  const feetX = player.x + SPRITE_W / 2;
-  const feetY = player.y + SPRITE_H;
+  const feetX = player.x + 12;
+  const feetY = player.y + 24;
   const col = Math.min(gridSize - 1, Math.max(0, Math.floor(feetX / TILE_PX)));
   const row = Math.min(gridSize - 1, Math.max(0, Math.floor(feetY / TILE_PX)));
   return row * gridSize + col;

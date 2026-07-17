@@ -12,8 +12,9 @@ export function toolToAction(
   player: PlayerState,
   state: GameState,
   selectedCrop: CropId | null,
+  targetIdx?: number
 ): PlayerAction | null {
-  const idx = facingTileIdx(player, GRID_SIZE);
+  const idx = targetIdx !== undefined ? targetIdx : facingTileIdx(player, GRID_SIZE);
   if (idx === null) return null;
 
   const tile = state.tiles[idx];
@@ -21,26 +22,34 @@ export function toolToAction(
 
   switch (player.tool as ToolId) {
     case 'hoe':
-      if (tile.kind === 'grass') return { type: 'till', idx };
-      break;
+      return { type: 'till', idx };
 
     case 'can':
-      if (tile.kind === 'tilled' && player.waterCharges > 0)
-        return { type: 'water', idx };
-      break;
+      if (player.waterCharges > 0) return { type: 'water', idx };
+      return null;
 
     case 'seeds':
-      if (tile.kind === 'tilled' && tile.crop === null && selectedCrop !== null)
-        return { type: 'plant', idx, crop: selectedCrop };
-      break;
+      if (selectedCrop !== null) return { type: 'plant', idx, crop: selectedCrop };
+      return null;
 
     case 'hand':
-      if (tile.crop?.mature) return { type: 'harvest', idx };
-      break;
+      return { type: 'harvest', idx };
 
     case 'builder':
       // Builder actions are handled separately through the BuildPanel overlay.
       return null;
+
+    case 'tractor':
+      if (state.upgrades.includes('tractor') && (state.items['fuel'] ?? 0) > 0) {
+        return { type: 'tillArea', idx };
+      }
+      break;
+
+    case 'seeder':
+      if (state.upgrades.includes('seeder') && (state.items['fuel'] ?? 0) > 0 && selectedCrop !== null) {
+        return { type: 'plantArea', idx, crop: selectedCrop };
+      }
+      break;
   }
 
   return null;

@@ -4,40 +4,69 @@
 // See docs/FARM_SIM_PLAN.md §1.
 // ============================================================================
 
-import { Season } from './types';
+import { ParcelId, Season, UpgradeId } from './types';
 
 // ── World ──────────────────────────────────────────────
-export const GRID_SIZE = 20; // 20×20 world grid
-export const START_PLOT = { r0: 7, c0: 7, r1: 13, c1: 13 }; // starting 7×7 (inclusive)
-export const RESERVOIR_POS = { r: 7, c: 10 }; // pre-placed inside start plot, north edge centre
+export const GRID_SIZE = 40; // 40×40 world grid
+export const START_PLOT = { r0: 15, c0: 14, r1: 24, c1: 25 }; // compact starter farm inside the wider landscape
+export const RESERVOIR_POS = { r: 17, c: 20 };
+export const FARM_LANDMARKS = {
+  shed: { r: 16, c: 16 },
+  mill: { r: 16, c: 24 },
+  depot: { r: 21, c: 25 },
+  crate: { r: 18, c: 16 },
+} as const;
 export const SEASON_LENGTH = 28; // days per season
 export const SEASONS: Season[] = ['Spring', 'Summer', 'Fall']; // Winter is M2
 
 // ── Player ─────────────────────────────────────────────
 export const START_GOLD = 120; // 🔧
-export const BASE_AP = 12; // 🔧 the central difficulty knob
 export const START_SEEDS = { wheat: 3 } as const; // onboarding gift
-
-// ── Action costs (AP) ──────────────────────────────────
-export const AP_COST = {
-  till: 1,
-  plant: 1,
-  water: 1,
-  harvest: 1,
-  buildChannel: 2,
-  demolish: 1,
-  digWell: 3,
-  marketTrip: 1, // first sell of the day only; later sells same day are free
-} as const;
-
 // ── Gold costs ─────────────────────────────────────────
 export const GOLD_COST = {
   channel: 15, // 🔧
   well: 100,
+  sprinkler: 55,
+  mill: 90,
+  wheatStorage: 70,
+  fieldCrate: 50,
+  haulRoute: 90,
+  clearBrush: 8,
+  clearRock: 18,
+  drainMarsh: 28,
   expandRing1: 40, // tiles orthogonally adjacent to start plot
   expandRing2: 80,
   expandRing3: 150, // corners / outermost
 } as const;
+export const WHEAT_STORAGE_START = 12;
+export const WHEAT_STORAGE_UPGRADE = 12;
+export const MILL_INPUT_CAPACITY = 9;
+export const MILL_OUTPUT_CAPACITY = 9;
+export const MILL_RATE_PER_DAY = 3;
+export const FLOUR_EXPORT_PRICE = 22;
+export const CRATE_CATCHMENT = 4;
+export const FIELD_CRATE_CAPACITY = 12;
+export const FIELD_CRATE_UPGRADE = 12;
+export const HAUL_ROUTE_LEVELS = {
+  1: { rate: 3, cost: 90 },
+  2: { rate: 6, cost: 180 },
+  3: { rate: 12, cost: 360 },
+} as const;
+export const MILL_LEVELS = {
+  1: { rate: 3, input: 9, output: 9, cost: 90, name: 'Stone Mill' },
+  2: { rate: 6, input: 18, output: 18, cost: 280, name: 'Twin Stones' },
+  3: { rate: 12, input: 36, output: 36, cost: 650, name: 'Roller Mill' },
+} as const;
+export const PARCEL_COST: Record<ParcelId, number> = {
+  north: 160,
+  south: 180,
+  west: 200,
+  east: 220,
+  northwest: 360,
+  northeast: 400,
+  southwest: 420,
+  southeast: 460,
+};
 export const MAX_WELLS = 3;
 
 // ── Water ──────────────────────────────────────────────
@@ -46,11 +75,22 @@ export const RESERVOIR_START = 120;
 export const RAIN_RESERVOIR_GAIN = 100;
 export const WELL_DAILY_YIELD = 30;
 export const MANUAL_WATER_MOISTURE = 40; // moisture added per water action
-export const MANUAL_WATER_MOISTURE_BIGCAN = 60; // with Big Can upgrade
-export const MANUAL_WATER_DRAW = 10; // reservoir cost per water action
+export const MANUAL_WATER_MOISTURE_BIGCAN = 60;
+export const MANUAL_WATER_DRAW = 20;
+
+export const SPRINKLER_MOISTURE = 30;
+export const SPRINKLER_WATER_DRAW = 10; // reservoir cost per water action
 export const IRRIGATION_TARGET = 70; // channel-adjacent tiles topped to this at dawn
 export const TILLED_START_MOISTURE = 40;
 export const RAIN_TILE_GAIN = 50; // rain: moisture = min(100, m + 50)
+export const ITEM_SELL_PRICE: Record<string, number> = {
+  fertilizer: 15,
+  flour: 20,
+  bread: 35,
+  milk: 45,
+  egg: 15,
+  fuel: 5,
+};
 export const EVAPORATION: Record<string, number> = {
   sunny: 10,
   cloudy: 5,
@@ -72,7 +112,7 @@ export const BEAN_SELF_N = 4; // beans add to own tile per day
 export const BEAN_NEIGHBOR_N = 2; // beans add to orthogonal neighbors per day
 
 // ── Weather ────────────────────────────────────────────
-export const FORECAST_ACCURACY = [0.9, 0.7, 0.55]; // day+1, +2, +3
+export const FORECAST_ACCURACY = [1, 1, 1]; // the simple forecast is always accurate
 export const STORM_DESTROY_CHANCE = 0.15; // per MATURE crop, per storm
 
 // ── Market ─────────────────────────────────────────────
@@ -85,12 +125,12 @@ export const NOISE_MAX = 1.4;
 export const PRICE_MOVE_RECAP_THRESHOLD = 0.15; // report price moves ≥ 15%
 
 // ── Upgrades (one-time, bought at market) ──────────────
-export const UPGRADES = {
+export const UPGRADES: Record<UpgradeId, { cost: number; name: string; effect: string }> = {
   bigCan: { cost: 80, name: 'Big Watering Can', effect: 'Watering gives +60 moisture instead of +40' },
-  cart: { cost: 60, name: 'Market Cart', effect: 'Market trips cost 0 AP' },
-  coffee: { cost: 120, name: 'Endless Coffee', effect: 'Permanent +2 AP per day' },
-} as const;
-export const COFFEE_AP_BONUS = 2;
+  tractor: { cost: 500, name: 'Tractor', effect: 'Plows multiple tiles' },
+  seeder: { cost: 500, name: 'Seeder', effect: 'Plants seeds in multiple tiles' },
+  truck: { cost: 1000, name: 'Truck', effect: 'Allows quick selling' },
+};
 
 // ── Death & stress ─────────────────────────────────────
 export const STRESS_DAYS_TO_DIE = 2; // consecutive dry days kills a crop

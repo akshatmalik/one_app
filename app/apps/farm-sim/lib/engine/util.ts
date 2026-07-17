@@ -15,11 +15,21 @@ export function cloneState(state: GameState): GameState {
     tiles: state.tiles.map((t) => ({ ...t, crop: t.crop ? { ...t.crop } : null })),
     inventory: { ...state.inventory },
     seeds: { ...state.seeds },
+    items: { ...state.items },
+    mill: { ...state.mill },
+    fieldCrates: state.fieldCrates.map((crate) => ({ ...crate })),
+    haulRoutes: state.haulRoutes.map((route) => ({ ...route })),
+    parcels: { ...state.parcels },
+    production: { ...state.production, milestones: [...state.production.milestones], recentHarvests: [...state.production.recentHarvests] },
+    machines: state.machines.map((machine) => ({ ...machine })),
+    animals: state.animals.map((animal) => ({ ...animal })),
+    contracts: state.contracts.map((contract) => ({ ...contract })),
     market: Object.fromEntries(
       Object.entries(state.market).map(([k, v]) => [k, { ...v, history: [...v.history] }])
     ) as GameState['market'],
     weatherTruth: [...state.weatherTruth],
     forecast: [...state.forecast],
     upgrades: [...state.upgrades],
+    unlocks: [...state.unlocks],
   };
 }

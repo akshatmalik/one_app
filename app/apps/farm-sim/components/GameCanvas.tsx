@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useCallback } from 'react';
 import { GameState, PlayerAction, CropId } from '../lib/types';
+import { BuildTool } from './BuildPanel';
 import { GRID_SIZE } from '../lib/balance';
 import { buildAtlas, resetAtlas } from '../render/atlas';
 import { makeCamera, clampCamera, Camera } from '../render/camera';
@@ -13,6 +14,7 @@ import {
   WALK_SPEED,
   RUN_SPEED,
   facingTileIdx,
+  CAN_MAX_CHARGES,
 } from '../lib/realtime/player';
 import {
   InputState,
@@ -21,6 +23,9 @@ import {
 } from '../lib/realtime/input';
 import { toolToAction } from '../lib/realtime/interact';
 import type { ToolId } from '../lib/realtime/player';
+import { clockToTimeOfDay } from '../render/lighting';
+import { lockedScenery } from '../lib/worldScenery';
+import { TouchControls } from './TouchControls';
 
 // Sprite footprint at 2× scale: source is 12×18 → 24×36 screen px
 const SPRITE_W = 24;
@@ -33,10 +38,13 @@ const HIT_Y1 = 36;
 
 /** Fixed-timestep simulation rate. */
 const SIM_DT = 1 / 60;
+const WATER_EFFECT_MS = 900;
 
 interface Props {
   state: GameState;
   selectedCrop: CropId | null;
+  activeTool: ToolId;           // controlled from parent — synced into playerRef each frame
+  buildTool: BuildTool | null;
   onAction: (action: PlayerAction) => boolean;
   onToolChange: (tool: ToolId) => void;
   onPlayerMove?: (player: PlayerState) => void;
@@ -48,6 +56,7 @@ function collidesWithTiles(
   px: number,
   py: number,
   tiles: GameState['tiles'],
+  seed: number,
 ): boolean {
   const x0 = px + HIT_X0;
   const x1 = px + HIT_X1;
@@ -67,7 +76,8 @@ function collidesWithTiles(
     for (const c of cols) {
       if (r < 0 || r >= GRID_SIZE || c < 0 || c >= GRID_SIZE) return true;
       const t = tiles[r * GRID_SIZE + c];
-      if (t.kind === 'locked' || t.kind === 'reservoir') return true;
+      if (t.kind === 'reservoir' || t.kind === 'shed' || t.kind === 'mill' || t.kind === 'depot' || t.kind === 'crate' || t.kind === 'brush' || t.kind === 'rock' || t.kind === 'marsh') return true;
+      if (t.kind === 'locked' && lockedScenery(seed, r * GRID_SIZE + c)) return true;
     }
   }
   return false;
@@ -79,6 +89,7 @@ function updatePlayer(
   player: PlayerState,
   input: InputState,
   tiles: GameState['tiles'],
+  seed: number,
   dt: number,
 ): void {
   const speed = (input.run ? RUN_SPEED : WALK_SPEED) * TILE_PX * dt;
@@ -97,10 +108,10 @@ function updatePlayer(
 
   if (player.isMoving) {
     const nx = player.x + dx * speed;
-    if (!collidesWithTiles(nx, player.y, tiles)) player.x = nx;
+    if (!collidesWithTiles(nx, player.y, tiles, seed)) player.x = nx;
 
     const ny = player.y + dy * speed;
-    if (!collidesWithTiles(player.x, ny, tiles)) player.y = ny;
+    if (!collidesWithTiles(player.x, ny, tiles, seed)) player.y = ny;
 
     // Walk animation: toggle frame every 8 ticks
     player.walkTick++;
@@ -132,6 +143,8 @@ function followPlayer(cam: Camera, player: PlayerState): Camera {
 export function GameCanvas({
   state,
   selectedCrop,
+  activeTool,
+  buildTool,
   onAction,
   onToolChange,
   onPlayerMove,
@@ -145,20 +158,32 @@ export function GameCanvas({
   const rafRef       = useRef<number>(0);
   const accumRef     = useRef<number>(0);
   const lastTimeRef  = useRef<number>(0);
-  const actionCooldownRef = useRef<number>(0); // frames until next auto-repeat action
+  const actionCooldownRef = useRef<number>(0);
+  const fpsRef       = useRef<number>(60);
+  const fpsCountRef  = useRef<number>(0);
+  const fpsTimeRef   = useRef<number>(0);
+  const waterEffectsRef = useRef<Array<{ idx: number; startedAt: number }>>([]);
 
   // Mirror latest React state into refs so the rAF closure always reads fresh.
-  const stateRef      = useRef(state);
+  const stateRef        = useRef(state);
   const selectedCropRef = useRef(selectedCrop);
-  const onActionRef   = useRef(onAction);
+  const activeToolRef   = useRef(activeTool);
+  const buildToolRef    = useRef(buildTool);
+  const onActionRef     = useRef(onAction);
   const onToolChangeRef = useRef(onToolChange);
   const onPlayerMoveRef = useRef(onPlayerMove);
 
-  stateRef.current      = state;
+  stateRef.current        = state;
   selectedCropRef.current = selectedCrop;
-  onActionRef.current   = onAction;
+  activeToolRef.current   = activeTool;
+  buildToolRef.current    = buildTool;
+  onActionRef.current     = onAction;
   onToolChangeRef.current = onToolChange;
   onPlayerMoveRef.current = onPlayerMove;
+
+  // Keep playerRef.tool in sync with the HUD's authoritative tool selection.
+  // This prevents the rAF onPlayerMove callback from reverting tool picks.
+  playerRef.current.tool = activeTool;
 
   // ── Boot ────────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -171,13 +196,24 @@ export function GameCanvas({
     const atlas = buildAtlas();
 
     const resize = () => {
-      canvas.width  = canvas.offsetWidth;
-      canvas.height = canvas.offsetHeight;
+      const worldW = GRID_SIZE * TILE_PX;
+      const worldH = GRID_SIZE * TILE_PX;
+      const renderScale = Math.max(
+        1,
+        canvas.offsetWidth / worldW,
+        canvas.offsetHeight / worldH
+      );
+      const nextWidth = Math.ceil(canvas.offsetWidth / renderScale);
+      const nextHeight = Math.ceil(canvas.offsetHeight / renderScale);
+      if (canvas.width !== nextWidth) canvas.width = nextWidth;
+      if (canvas.height !== nextHeight) canvas.height = nextHeight;
       if (!camRef.current) {
-        const worldW = GRID_SIZE * TILE_PX;
-        const worldH = GRID_SIZE * TILE_PX;
+        const player = playerRef.current;
+        // Center camera on player at boot.
+        const initX = player.x + 12 - canvas.width / 2;
+        const initY = player.y + 18 - canvas.height / 2;
         camRef.current = clampCamera({
-          x: 0, y: 0,
+          x: initX, y: initY,
           viewW: canvas.width,
           viewH: canvas.height,
           worldW,
@@ -200,9 +236,13 @@ export function GameCanvas({
     const detachKeys = attachKeyboard(inputRef.current);
 
     // Q/E tool cycling
-    const TOOLS: ToolId[] = ['hand', 'hoe', 'can', 'seeds', 'builder'];
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.repeat) return;
+      const gs = stateRef.current;
+      const TOOLS: ToolId[] = ['hand', 'hoe', 'can', 'seeds', 'builder'];
+      if (gs.upgrades.includes('tractor')) TOOLS.push('tractor');
+      if (gs.upgrades.includes('seeder')) TOOLS.push('seeder');
+
       if (e.key === 'q' || e.key === 'Q') {
         const cur = playerRef.current.tool;
         const idx = TOOLS.indexOf(cur);
@@ -233,15 +273,33 @@ export function GameCanvas({
       // Fixed-step simulation
       while (accumRef.current >= SIM_DT) {
         accumRef.current -= SIM_DT;
-        updatePlayer(player, input, gs.tiles, SIM_DT);
+        updatePlayer(player, input, gs.tiles, gs.seed, SIM_DT);
+
+        const wantsAction = input.action || input.actionQueued;
+
+        // Refill watering can: action while can is equipped + facing reservoir/channel/well
+        if (wantsAction && player.tool === 'can' && actionCooldownRef.current <= 0) {
+          const facingIdx = facingTileIdx(player, GRID_SIZE);
+          if (facingIdx !== null) {
+            const ft = gs.tiles[facingIdx];
+            if (ft && (ft.kind === 'reservoir' || ft.kind === 'channel' || ft.kind === 'well')) {
+              player.waterCharges = CAN_MAX_CHARGES;
+              actionCooldownRef.current = 30;
+            }
+          }
+        }
 
         // Action button: fire tool on facing tile, with cooldown for hold-to-repeat
-        if (input.action) {
+        if (wantsAction) {
           if (actionCooldownRef.current <= 0) {
             const act = toolToAction(player, gs, selectedCropRef.current);
             if (act) {
               const ok = onActionRef.current(act);
               if (ok) {
+                if (act.type === 'water') {
+                  waterEffectsRef.current.push({ idx: act.idx, startedAt: now });
+                  player.waterCharges = Math.max(0, player.waterCharges - 1);
+                }
                 // First press: 30-frame delay before repeat; then 12-frame repeat
                 actionCooldownRef.current = actionCooldownRef.current === 0 ? 30 : 12;
               }
@@ -252,11 +310,27 @@ export function GameCanvas({
         } else {
           actionCooldownRef.current = 0;
         }
+        input.actionQueued = false;
       }
 
       // Camera follow
       if (camRef.current) {
+        if (camRef.current.viewW !== canvas.width || camRef.current.viewH !== canvas.height) {
+          camRef.current = clampCamera({
+            ...camRef.current,
+            viewW: canvas.width,
+            viewH: canvas.height,
+          });
+        }
         camRef.current = followPlayer(camRef.current, player);
+      }
+
+      // FPS counter (updates once per second)
+      fpsCountRef.current++;
+      if (now - fpsTimeRef.current >= 1000) {
+        fpsRef.current = fpsCountRef.current;
+        fpsCountRef.current = 0;
+        fpsTimeRef.current = now;
       }
 
       // Notify page of player position (for HUD facing tile)
@@ -265,9 +339,18 @@ export function GameCanvas({
       // Render
       const cam = camRef.current;
       if (cam && ctx) {
+        waterEffectsRef.current = waterEffectsRef.current.filter(
+          (effect) => now - effect.startedAt < WATER_EFFECT_MS
+        );
         renderWorld(ctx, gs, atlas, cam, {
-          tod: 'day',
+          tod: clockToTimeOfDay(gs.time),
           player,
+          waterEffects: waterEffectsRef.current.map((effect) => ({
+            idx: effect.idx,
+            progress: (now - effect.startedAt) / WATER_EFFECT_MS,
+          })),
+          showIrrigation: activeToolRef.current === 'builder',
+          buildTool: buildToolRef.current,
         });
       }
 
@@ -276,12 +359,63 @@ export function GameCanvas({
 
     rafRef.current = requestAnimationFrame(loop);
 
+    // ── window.__farm console API ──────────────────────────────────────────
+    if (typeof window !== 'undefined') {
+      (window as any).__farm = {
+        getState: () => stateRef.current,
+        getPlayer: () => playerRef.current,
+        getFps: () => fpsRef.current,
+        dispatch: (action: PlayerAction) => onActionRef.current(action),
+        tp: (row: number, col: number) => {
+          playerRef.current.x = col * TILE_PX + 4;
+          playerRef.current.y = row * TILE_PX;
+          console.log(`[farm] teleported to tile (${row}, ${col})`);
+        },
+        addGold: (n: number) => onActionRef.current({ type: 'sell', crop: 'wheat', qty: 0 } as any) || console.log('[farm] use dispatch directly: __farm.dispatch({type:"sell",...})'),
+        tillAll: () => {
+          const gs = stateRef.current;
+          let count = 0;
+          gs.tiles.forEach((t, idx) => {
+            if (t.kind === 'grass') {
+              onActionRef.current({ type: 'till', idx });
+              count++;
+            }
+          });
+          console.log(`[farm] tilled ${count} tiles`);
+        },
+        waterAll: () => {
+          const gs = stateRef.current;
+          let count = 0;
+          gs.tiles.forEach((t, idx) => {
+            if (t.kind === 'tilled') {
+              onActionRef.current({ type: 'water', idx });
+              count++;
+            }
+          });
+          console.log(`[farm] watered ${count} tiles`);
+        },
+        help: () => console.log(
+          '[farm API]\n' +
+          '  __farm.getState()       — full GameState\n' +
+          '  __farm.getPlayer()      — player position/tool/charges\n' +
+          '  __farm.getFps()         — current FPS\n' +
+          '  __farm.tp(row, col)     — teleport player to tile\n' +
+          '  __farm.dispatch(action) — fire any PlayerAction\n' +
+          '  __farm.tillAll()        — till every grass tile\n' +
+          '  __farm.waterAll()       — water every tilled tile\n' +
+          '  Press ` (backtick) in-game to toggle dev overlay'
+        ),
+      };
+      console.log('[farm] dev API ready — type __farm.help() for commands');
+    }
+
     return () => {
       cancelAnimationFrame(rafRef.current);
       ro.disconnect();
       detachKeys();
       window.removeEventListener('keydown', onKeyDown);
       resetAtlas();
+      if (typeof window !== 'undefined') delete (window as any).__farm;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -291,8 +425,8 @@ export function GameCanvas({
     const cam = camRef.current;
     if (!cam) return;
     const rect = canvasRef.current!.getBoundingClientRect();
-    const screenX = e.clientX - rect.left;
-    const screenY = e.clientY - rect.top;
+    const screenX = (e.clientX - rect.left) * (canvasRef.current!.width / rect.width);
+    const screenY = (e.clientY - rect.top) * (canvasRef.current!.height / rect.height);
     const worldX  = screenX + cam.x;
     const worldY  = screenY + cam.y;
 
@@ -315,21 +449,49 @@ export function GameCanvas({
       player.facing = centerY > py ? 'down' : 'up';
     }
 
-    // Try to use tool on the tapped tile directly if it's adjacent
-    const facingIdx = facingTileIdx(player, GRID_SIZE);
-    const tappedIdx = row * GRID_SIZE + col;
-    if (facingIdx === tappedIdx) {
-      const act = toolToAction(player, stateRef.current, selectedCropRef.current);
-      if (act) onActionRef.current(act);
+    // Try to use tool on the tapped tile if it's adjacent to where the player is standing
+    const standingRow = Math.floor((player.y + 24) / TILE_PX);
+    const standingCol = Math.floor((player.x + 12) / TILE_PX);
+
+    // We allow interaction if the tapped tile is adjacent (including diagonals)
+    if (Math.abs(row - standingRow) <= 1 && Math.abs(col - standingCol) <= 1) {
+      const tappedIdx = row * GRID_SIZE + col;
+
+      let act: PlayerAction | null = null;
+      const currentBuildTool = buildToolRef.current;
+      if (currentBuildTool) {
+        if (currentBuildTool === 'channel') act = { type: 'buildChannel', idx: tappedIdx };
+        else if (currentBuildTool === 'well') act = { type: 'digWell', idx: tappedIdx };
+        else if (currentBuildTool === 'sprinkler') act = { type: 'buildSprinkler', idx: tappedIdx };
+        else if (currentBuildTool === 'crate') act = { type: 'buildFieldCrate', idx: tappedIdx };
+        else if (currentBuildTool === 'clear') act = { type: 'clearLand', idx: tappedIdx };
+        else if (currentBuildTool === 'demolish') act = { type: 'demolish', idx: tappedIdx };
+      } else {
+        act = toolToAction(player, stateRef.current, selectedCropRef.current, tappedIdx);
+      }
+
+      if (act) {
+        const ok = onActionRef.current(act);
+        if (ok && act.type === 'water') {
+          waterEffectsRef.current.push({ idx: act.idx, startedAt: performance.now() });
+          playerRef.current.waterCharges = Math.max(0, playerRef.current.waterCharges - 1);
+        }
+      }
     }
   }, []);
 
   return (
-    <canvas
-      ref={canvasRef}
-      className="absolute inset-0 w-full h-full block touch-none"
-      onPointerDown={handlePointerDown}
-      style={{ imageRendering: 'pixelated', cursor: 'crosshair' }}
-    />
+    <>
+      <canvas
+        ref={canvasRef}
+        className="absolute inset-0 block h-full w-full touch-none"
+        onPointerDown={handlePointerDown}
+        style={{ imageRendering: 'pixelated', cursor: 'crosshair' }}
+      />
+      <TouchControls
+        inputRef={inputRef}
+        onAction={() => { inputRef.current.actionQueued = true; }}
+      />
+    </>
   );
 }

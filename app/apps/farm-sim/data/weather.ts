@@ -5,10 +5,10 @@
 
 import { Season, Weather } from '../lib/types';
 
-export const WEATHER_WEIGHTS: Record<Season, Record<Weather, number>> = {
-  Spring: { sunny: 35, cloudy: 10, rain: 30, storm: 10, heatwave: 5, frost: 10 },
-  Summer: { sunny: 40, cloudy: 10, rain: 15, storm: 10, heatwave: 25, frost: 0 },
-  Fall: { sunny: 35, cloudy: 10, rain: 25, storm: 10, heatwave: 5, frost: 15 },
+export const WEATHER_WEIGHTS: Record<Season, Partial<Record<Weather, number>>> = {
+  Spring: { sunny: 45, cloudy: 20, rain: 35 },
+  Summer: { sunny: 65, cloudy: 20, rain: 15 },
+  Fall: { sunny: 40, cloudy: 30, rain: 30 },
 };
 
 export const WEATHER_META: Record<Weather, { emoji: string; label: string }> = {

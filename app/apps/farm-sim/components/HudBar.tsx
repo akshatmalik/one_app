@@ -1,28 +1,24 @@
 'use client';
 
-import { GameState } from '../lib/types';
-import { seasonForDay, dayOfSeason } from '../lib/engine/weather';
-import { SEASON_LENGTH, RESERVOIR_CAP } from '../lib/balance';
-import { WEATHER_META } from '../data/weather';
-import { FORECAST_ACCURACY } from '../lib/balance';
-import type { ToolId } from '../lib/realtime/player';
-import { CAN_MAX_CHARGES } from '../lib/realtime/player';
-import { CropId } from '../lib/types';
+import { Boxes, Clock3, Coins, Droplets, Factory, Hand, Hammer, Menu, Moon, Pickaxe, Sprout, Tractor, Wheat } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
+import { CropId, GameState } from '../lib/types';
 import { CROPS } from '../data/crops';
+import { WEATHER_META } from '../data/weather';
+import { RESERVOIR_CAP, SEASON_LENGTH } from '../lib/balance';
+import { millStatus } from '../lib/engine/production';
+import { productionProjection, waterProjection } from '../lib/engine/engineering';
+import { dayOfSeason, seasonForDay } from '../lib/engine/weather';
+import { CAN_MAX_CHARGES, ToolId } from '../lib/realtime/player';
+import { formatClock } from '../lib/realtime/clock';
 
-const TOOLS: { id: ToolId; icon: string; label: string }[] = [
-  { id: 'hand',    icon: '🤲', label: 'Harvest' },
-  { id: 'hoe',     icon: '⛏',  label: 'Hoe' },
-  { id: 'can',     icon: '🚿', label: 'Water' },
-  { id: 'seeds',   icon: '🌱', label: 'Plant' },
-  { id: 'builder', icon: '🔨', label: 'Build' },
+const BASE_TOOLS: { id: ToolId; Icon: LucideIcon; label: string; key: string }[] = [
+  { id: 'hand', Icon: Hand, label: 'Harvest', key: '1' },
+  { id: 'hoe', Icon: Pickaxe, label: 'Till', key: '2' },
+  { id: 'can', Icon: Droplets, label: 'Water', key: '3' },
+  { id: 'seeds', Icon: Sprout, label: 'Plant', key: '4' },
+  { id: 'builder', Icon: Hammer, label: 'Build', key: '5' },
 ];
-
-const SEASON_COLORS: Record<string, string> = {
-  Spring: 'text-emerald-300',
-  Summer: 'text-yellow-300',
-  Fall:   'text-orange-300',
-};
 
 interface Props {
   state: GameState;
@@ -30,10 +26,43 @@ interface Props {
   waterCharges: number;
   selectedCrop: CropId | null;
   onMenu: () => void;
-  onToolPick: (t: ToolId) => void;
-  onCropPick: (c: CropId) => void;
+  onToolPick: (tool: ToolId) => void;
+  onCropPick: (crop: CropId) => void;
   onMarket: () => void;
   onEndDay: () => void;
+  facingIdx: number | null;
+}
+
+function targetReadout(state: GameState, idx: number | null): { title: string; detail: string; tone: string } | null {
+  if (idx === null || !state.tiles[idx]) return null;
+  const tile = state.tiles[idx];
+  if (tile.crop) {
+    const crop = CROPS[tile.crop.cropId];
+    return {
+      title: crop.name,
+      detail: tile.crop.mature ? 'Ready to harvest' : `Growth ${tile.crop.growthDays}/${crop.growDays} · Moisture ${Math.round(tile.moisture)}%`,
+      tone: tile.crop.mature ? 'text-[#f2c14e]' : tile.moisture < crop.waterNeed ? 'text-[#ef8f78]' : 'text-[#8fd6a1]',
+    };
+  }
+  const labels: Partial<Record<typeof tile.kind, [string, string]>> = {
+    grass: ['Meadow', 'Unworked ground'],
+    tilled: ['Tilled soil', `Moisture ${Math.round(tile.moisture)}% · Nitrogen ${Math.round(tile.nitrogen)}%`],
+    locked: ['Unowned land', 'Purchase the surrounding parcel'],
+    brush: ['Dense brush', 'Clearing cost applies'],
+    rock: ['Boulder', 'Clearing cost applies'],
+    marsh: ['Wet ground', 'Drainage cost applies'],
+    reservoir: ['Reservoir', `${Math.round(state.reservoir)} water stored`],
+    channel: ['Irrigation channel', tile.irrigated ? 'Connected to water' : 'Disconnected'],
+    sprinkler: ['Sprinkler', tile.irrigated ? 'Supplied' : 'No water connection'],
+    well: ['Well', 'Adds 30 water each dawn'],
+    crate: ['Field crate', state.fieldCrates.find((crate) => crate.idx === idx) ? `${state.fieldCrates.find((crate) => crate.idx === idx)!.wheat}/${state.fieldCrates.find((crate) => crate.idx === idx)!.capacity} wheat` : 'Local harvest storage'],
+    mill: ['Flour mill', millStatus(state)],
+    depot: ['Shipping depot', 'Exports flour and crops'],
+    shed: ['Farmhouse', 'Farm operations base'],
+    path: ['Farm road', 'Logistics access'],
+  };
+  const label = labels[tile.kind];
+  return label ? { title: label[0], detail: label[1], tone: 'text-white' } : null;
 }
 
 export function HudBar({
@@ -46,177 +75,154 @@ export function HudBar({
   onCropPick,
   onMarket,
   onEndDay,
+  facingIdx,
 }: Props) {
-  const season      = seasonForDay(state.day);
+  const season = seasonForDay(state.day);
   const dayInSeason = dayOfSeason(state.day) + 1;
-  const today       = state.weatherTruth[dayOfSeason(state.day)];
-  const todayMeta   = WEATHER_META[today];
-  const waterPct    = Math.max(0, Math.min(100, (state.reservoir / RESERVOIR_CAP) * 100));
-  const waterLow    = state.reservoir < 30;
-  const apPct       = (state.ap / state.apMax) * 100;
-  const apLow       = state.ap <= 2;
+  const weather = state.weatherTruth[dayOfSeason(state.day)];
+  const waterPct = Math.min(100, (state.reservoir / RESERVOIR_CAP) * 100);
+  const production = productionProjection(state);
+  const water = waterProjection(state);
+  const tools = [...BASE_TOOLS];
+  if (state.upgrades.includes('tractor')) tools.push({ id: 'tractor', Icon: Tractor, label: 'Tractor', key: '6' });
+  if (state.upgrades.includes('seeder')) tools.push({ id: 'seeder', Icon: Wheat, label: 'Seeder', key: '7' });
+  const target = targetReadout(state, facingIdx);
 
   return (
     <>
-      {/* ── TOP BAR — season, gold, AP, weather ─────────────────────────── */}
-      <div className="absolute top-0 left-0 right-0 z-10 pointer-events-none">
-        <div className="flex items-center gap-2 px-3 pt-3 pb-2">
-
-          {/* Season / day pill */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 p-2">
+        <div className="mx-auto flex min-h-12 max-w-6xl items-center gap-1.5 border border-white/10 bg-[#111713]/95 px-2 py-1.5 text-white shadow-xl backdrop-blur-md md:gap-3">
           <button
+            type="button"
             onClick={onMenu}
-            className="pointer-events-auto flex items-center gap-1.5 rounded-xl px-3 py-1.5
-                       bg-black/60 backdrop-blur-sm border border-white/10 shadow-lg"
+            aria-label="Open menu"
+            title="Menu"
+            className="pointer-events-auto grid h-9 w-9 shrink-0 place-items-center rounded-md text-white/70 hover:bg-white/10 hover:text-white"
           >
-            <span className={`text-xs font-bold ${SEASON_COLORS[season] ?? 'text-white'}`}>
-              {season}
-            </span>
-            <span className="text-white/50 text-xs">·</span>
-            <span className="text-white text-xs font-semibold">
-              Day {dayInSeason}
-              <span className="text-white/30">/{SEASON_LENGTH}</span>
-            </span>
-            <span className="text-white/30 text-xs ml-0.5">≡</span>
+            <Menu size={18} />
           </button>
 
-          <div className="flex-1" />
+          <div className="shrink-0 border-l border-white/10 pl-2 leading-tight">
+            <div className="text-[10px] font-semibold uppercase text-[#86c98a]">{season}</div>
+            <div className="text-xs font-bold">Day {dayInSeason}<span className="text-white/35">/{SEASON_LENGTH}</span></div>
+          </div>
 
-          {/* Weather */}
-          <div className="pointer-events-auto flex items-center gap-1 rounded-xl px-2 py-1.5
-                          bg-black/60 backdrop-blur-sm border border-white/10 shadow-lg">
-            <span className="text-base leading-none">{todayMeta.emoji}</span>
-            <div className="flex gap-0.5 items-center">
-              {state.forecast.map((w, i) => {
-                const acc = Math.round((FORECAST_ACCURACY[i] ?? 0.5) * 100);
-                return (
-                  <span key={i} className="flex flex-col items-center">
-                    <span className="text-[11px] leading-none">{w ? WEATHER_META[w].emoji : '❔'}</span>
-                    <span className="text-[8px] text-white/30">{acc}%</span>
-                  </span>
-                );
-              })}
+          <div className="flex shrink-0 items-center gap-1.5 border-l border-white/10 pl-2 font-semibold tabular-nums text-[#f1d27a]" title="Farm time">
+            <Clock3 size={14} />
+            <span className="text-xs">{formatClock(state.time)}</span>
+          </div>
+
+          <div className="flex shrink-0 items-center gap-1.5 border-l border-white/10 pl-2">
+            <span className="text-lg" aria-hidden="true">{WEATHER_META[weather].emoji}</span>
+            <div className="leading-tight">
+              <div className="hidden text-[9px] uppercase text-white/35 sm:block">Today</div>
+              <div className="text-[10px] font-semibold text-white/75 sm:text-xs">{WEATHER_META[weather].label}</div>
             </div>
           </div>
 
-          {/* Gold */}
-          <div className="pointer-events-auto flex items-center gap-1 rounded-xl px-3 py-1.5
-                          bg-black/60 backdrop-blur-sm border border-white/10 shadow-lg">
-            <span className="text-sm">💰</span>
-            <span className="text-yellow-300 font-bold text-sm tabular-nums">{Math.round(state.gold)}</span>
+          <div className="hidden min-w-0 items-center gap-2 border-l border-white/10 pl-2 lg:flex">
+            <span className="text-[9px] uppercase text-white/35">Next</span>
+            {state.forecast.map((item, index) => (
+              <span key={index} className="flex items-center gap-1 text-[10px] text-white/65">
+                <span aria-hidden="true">{item ? WEATHER_META[item].emoji : '?'}</span>
+                {item ? WEATHER_META[item].label : 'Unknown'}
+              </span>
+            ))}
           </div>
-        </div>
 
-        {/* AP + Water bars — thin strips right under the top pills */}
-        <div className="flex gap-2 px-3 pb-1">
-          {/* AP bar */}
-          <div className="flex items-center gap-1.5 flex-1">
-            <span className="text-[10px] text-white/50">⚡</span>
-            <div className="flex-1 h-1.5 rounded-full bg-black/40 overflow-hidden">
-              <div
-                className={`h-full rounded-full transition-all ${apLow ? 'bg-red-400' : 'bg-yellow-400'}`}
-                style={{ width: `${apPct}%` }}
-              />
-            </div>
-            <span className={`text-[10px] tabular-nums font-bold ${apLow ? 'text-red-300' : 'text-white/60'}`}>
-              {state.ap}/{state.apMax}
+          <button type="button" onClick={onMarket} className="pointer-events-auto hidden min-w-0 flex-1 items-center gap-2 border-l border-white/10 pl-3 text-left hover:text-[#f1d27a] md:flex">
+            <Factory size={16} className="shrink-0 text-[#f1d27a]" />
+            <span className="truncate text-xs">{millStatus(state)}</span>
+          </button>
+
+          <div className="ml-auto flex shrink-0 items-center gap-2 text-xs font-semibold tabular-nums">
+            <span className="hidden items-center gap-1 text-[#d9b95f] sm:flex" title="Stored wheat">
+              <Boxes size={14} /> {production.crateWheat}/{production.capacity}
             </span>
-          </div>
-          {/* Water bar */}
-          <div className="flex items-center gap-1.5 flex-1">
-            <span className="text-[10px] text-white/50">💧</span>
-            <div className="flex-1 h-1.5 rounded-full bg-black/40 overflow-hidden">
-              <div
-                className={`h-full rounded-full transition-all ${waterLow ? 'bg-red-400' : 'bg-sky-400'}`}
-                style={{ width: `${waterPct}%` }}
-              />
-            </div>
-            <span className={`text-[10px] tabular-nums font-bold ${waterLow ? 'text-red-300' : 'text-white/60'}`}>
-              {Math.round(state.reservoir)}/{RESERVOIR_CAP}
+            <span className="hidden items-center gap-1 text-[#75bde7] sm:flex" title={`Dawn demand ${water.demand}, well supply ${water.supply}`}>
+              <Droplets size={14} /> {Math.round(waterPct)}% · {water.demand}/{water.supply}
+            </span>
+            <span className="flex items-center gap-1 text-[#f1d27a]">
+              <Coins size={14} /> {Math.round(state.gold)}
             </span>
           </div>
         </div>
       </div>
 
-      {/* ── BOTTOM HUD — tools + actions ─────────────────────────────────── */}
-      <div className="absolute bottom-0 left-0 right-0 z-10 pointer-events-none">
-
-        {/* Seeds strip (above tools, only when seeds tool active) */}
-        {tool === 'seeds' && (
-          <div className="pointer-events-auto flex gap-1.5 px-3 pb-1">
-            {(Object.keys(CROPS) as CropId[]).map((cropId) => {
-              const def = CROPS[cropId];
-              const qty = state.seeds[cropId] ?? 0;
-              const active = selectedCrop === cropId;
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 p-2">
+        {tool === 'seeds' ? (
+          <div className="pointer-events-auto mx-auto mb-1 flex w-fit max-w-full gap-1 overflow-x-auto border border-white/10 bg-[#111713]/95 p-1 shadow-xl backdrop-blur-md">
+            {(Object.keys(CROPS) as CropId[]).map((crop) => {
+              const active = selectedCrop === crop;
+              const quantity = state.seeds[crop] ?? 0;
               return (
                 <button
-                  key={cropId}
-                  disabled={qty === 0}
-                  onClick={() => onCropPick(cropId)}
-                  className={`flex-1 flex flex-col items-center py-1.5 rounded-xl border transition-all
-                    ${active
-                      ? 'bg-green-500/40 border-green-400 shadow-[0_0_8px_rgba(74,222,128,0.4)]'
-                      : qty === 0
-                        ? 'bg-black/30 border-white/5 opacity-40'
-                        : 'bg-black/50 border-white/10 active:bg-white/10'
-                    }`}
+                  type="button"
+                  key={crop}
+                  disabled={quantity === 0}
+                  onClick={() => onCropPick(crop)}
+                  aria-label={`${CROPS[crop].name}, ${quantity} seeds`}
+                  className={`h-12 w-12 shrink-0 rounded-md border text-center disabled:opacity-30 ${active ? 'border-[#f1d27a] bg-[#f1d27a]/15' : 'border-transparent hover:bg-white/10'}`}
                 >
-                  <span className="text-base leading-none">{def.emoji}</span>
-                  <span className="text-[9px] text-white/60 font-medium">{qty > 0 ? `×${qty}` : '0'}</span>
+                  <span className="block text-lg leading-5">{CROPS[crop].emoji}</span>
+                  <span className="block text-[9px] text-white/60">{quantity}</span>
                 </button>
               );
             })}
           </div>
-        )}
+        ) : null}
 
-        {/* Tool bar */}
-        <div className="pointer-events-auto flex gap-1.5 px-3 pb-1">
-          {TOOLS.map((t) => {
-            const active = tool === t.id;
+        {target ? (
+          <div className="mx-auto mb-1 flex w-fit max-w-[calc(100vw-1rem)] items-center gap-2 border border-white/10 bg-[#101914]/95 px-3 py-1.5 shadow-lg backdrop-blur-md">
+            <span className={`text-xs font-bold ${target.tone}`}>{target.title}</span>
+            <span className="h-3 w-px bg-white/15" />
+            <span className="truncate text-[10px] text-white/55">{target.detail}</span>
+          </div>
+        ) : null}
+
+        <div className="pointer-events-auto mx-auto flex w-fit max-w-full items-center gap-1 overflow-x-auto border border-white/10 bg-[#111713]/95 p-1 shadow-2xl backdrop-blur-md">
+          <button
+            type="button"
+            onClick={onMarket}
+            aria-label="Open farm operations"
+            title="Farm operations"
+            className="grid h-12 w-12 shrink-0 place-items-center rounded-md text-[#f1d27a] hover:bg-white/10"
+          >
+            <Factory size={21} />
+          </button>
+          <div className="mx-0.5 h-8 w-px shrink-0 bg-white/10" />
+          {tools.map((item) => {
+            const active = tool === item.id;
             return (
               <button
-                key={t.id}
-                onClick={() => onToolPick(t.id)}
-                className={`flex-1 flex flex-col items-center py-2 rounded-xl border transition-all text-lg
-                  ${active
-                    ? 'bg-yellow-400/20 border-yellow-400/60 shadow-[0_0_10px_rgba(250,204,21,0.3)]'
-                    : 'bg-black/50 border-white/10 active:bg-white/10'
-                  }`}
+                type="button"
+                key={item.id}
+                onClick={() => onToolPick(item.id)}
+                aria-label={item.label}
+                title={`${item.label} (${item.key})`}
+                className={`relative h-12 w-12 shrink-0 rounded-md border text-center ${active ? 'border-[#f1d27a] bg-[#f1d27a]/15' : 'border-transparent hover:bg-white/10'}`}
               >
-                <span className="leading-none">{t.icon}</span>
-                <span className="text-[9px] text-white/60 font-medium mt-0.5">{t.label}</span>
-                {t.id === 'can' && (
-                  <div className="flex gap-0.5 mt-0.5">
-                    {Array.from({ length: CAN_MAX_CHARGES }).map((_, i) => (
-                      <span
-                        key={i}
-                        className={`w-1 h-1 rounded-full ${i < waterCharges ? 'bg-sky-400' : 'bg-white/15'}`}
-                      />
+                <item.Icon size={19} strokeWidth={1.8} className="mx-auto mb-0.5" />
+                <span className="block text-[9px] text-white/55">{item.label}</span>
+                {item.id === 'can' ? (
+                  <span className="absolute inset-x-1 bottom-0.5 flex gap-px">
+                    {Array.from({ length: CAN_MAX_CHARGES }, (_, index) => (
+                      <span key={index} className={`h-0.5 flex-1 ${index < waterCharges ? 'bg-[#75bde7]' : 'bg-white/10'}`} />
                     ))}
-                  </div>
-                )}
+                  </span>
+                ) : null}
               </button>
             );
           })}
-        </div>
-
-        {/* Action bar */}
-        <div className="pointer-events-auto flex gap-2 px-3 pb-4">
+          <div className="mx-0.5 h-8 w-px shrink-0 bg-white/10" />
           <button
-            onClick={onMarket}
-            className="flex-1 rounded-xl py-2.5 text-sm font-bold
-                       bg-amber-600/80 border border-amber-500/50 backdrop-blur-sm
-                       shadow-lg active:bg-amber-700 transition-colors"
-          >
-            🛒 Market
-          </button>
-          <button
+            type="button"
             onClick={onEndDay}
-            className="flex-1 rounded-xl py-2.5 text-sm font-bold
-                       bg-indigo-600/80 border border-indigo-500/50 backdrop-blur-sm
-                       shadow-lg active:bg-indigo-700 transition-colors
-                       shadow-[0_0_16px_rgba(99,102,241,0.4)]"
+            aria-label="End day"
+            title="Sleep until 06:00"
+            className="grid h-12 w-12 shrink-0 place-items-center rounded-md text-[#aeb8e8] hover:bg-white/10"
           >
-            🌙 End Day
+            <Moon size={21} />
           </button>
         </div>
       </div>

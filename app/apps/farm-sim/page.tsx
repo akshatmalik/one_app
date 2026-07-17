@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
+import { ClipboardList, Hammer, X } from 'lucide-react';
 import { useFarmGame } from './hooks/useFarmGame';
 import { PlayerAction, CropId } from './lib/types';
 import { HudBar } from './components/HudBar';
@@ -10,13 +11,14 @@ import { MarketPanel } from './components/MarketPanel';
 import { BuildPanel, BuildTool } from './components/BuildPanel';
 import { DayRecap } from './components/DayRecap';
 import { MenuScreen } from './components/MenuScreen';
+import { DevOverlay } from './components/DevOverlay';
 import { PlayerState, facingTileIdx, CAN_MAX_CHARGES } from './lib/realtime/player';
 import type { ToolId } from './lib/realtime/player';
 import { GRID_SIZE } from './lib/balance';
 
 export default function FarmSimPage() {
   const game = useFarmGame();
-  const { state } = game;
+  const { state, advanceTime, recap } = game;
 
   const [menuOpen, setMenuOpen]       = useState(false);
   const [showMarket, setShowMarket]   = useState(false);
@@ -27,6 +29,7 @@ export default function FarmSimPage() {
   const [selectedCrop, setSelectedCrop] = useState<CropId | null>(null);
   const [waterCharges, setWaterCharges] = useState(CAN_MAX_CHARGES);
   const [playerState, setPlayerState]   = useState<PlayerState | null>(null);
+  const [fps, setFps]                   = useState(60);
 
   useEffect(() => { if (!state) setMenuOpen(true); }, [state]);
 
@@ -50,7 +53,10 @@ export default function FarmSimPage() {
   const handleToolChange = useCallback((tool: ToolId) => {
     setCurrentTool(tool);
     if (tool === 'builder') setShowBuild(true);
-    else setShowBuild(false);
+    else {
+      setShowBuild(false);
+      setBuildTool(null);
+    }
   }, []);
 
   const handleAction = useCallback((action: PlayerAction): boolean => {
@@ -63,13 +69,29 @@ export default function FarmSimPage() {
   }, [dispatch]);
 
   const handlePlayerMove = useCallback((player: PlayerState) => {
-    setPlayerState(player);
-    setCurrentTool(player.tool);
+    setPlayerState({ ...player }); // shallow clone so DevOverlay sees fresh object
     setWaterCharges(player.waterCharges);
+    // Pull FPS from the console API if available
+    if (typeof window !== 'undefined' && (window as any).__farm) {
+      setFps((window as any).__farm.getFps());
+    }
   }, []);
 
   const facingIdx = playerState ? facingTileIdx(playerState, GRID_SIZE) : null;
   const showMenu = menuOpen || !state;
+
+  useEffect(() => {
+    const paused = showMenu || showMarket || showBuild || !!recap || !state;
+    if (paused) return;
+
+    let lastTick = performance.now();
+    const timer = window.setInterval(() => {
+      const now = performance.now();
+      advanceTime(now - lastTick);
+      lastTick = now;
+    }, 250);
+    return () => window.clearInterval(timer);
+  }, [showMenu, showMarket, showBuild, recap, advanceTime, state]);
 
   return (
     <div className="w-full h-full bg-black select-none overflow-hidden relative">
@@ -79,6 +101,8 @@ export default function FarmSimPage() {
         <GameCanvas
           state={state}
           selectedCrop={selectedCrop}
+          activeTool={currentTool}
+          buildTool={buildTool}
           onAction={handleAction}
           onToolChange={handleToolChange}
           onPlayerMove={handlePlayerMove}
@@ -95,21 +119,22 @@ export default function FarmSimPage() {
           onMenu={() => setMenuOpen(true)}
           onToolPick={handleToolChange}
           onCropPick={setSelectedCrop}
-          onMarket={() => { setShowMarket(true); setShowBuild(false); }}
+          onMarket={() => { setShowMarket(true); setShowBuild(false); setBuildTool(null); }}
           onEndDay={handleEndDay}
+          facingIdx={facingIdx}
         />
       )}
 
       {/* Toasts */}
       {state && game.error && (
-        <div className="absolute bottom-36 left-1/2 -translate-x-1/2 z-30 rounded-xl
+        <div className="absolute bottom-20 left-1/2 z-30 -translate-x-1/2 rounded-md
                         bg-red-600/90 backdrop-blur-sm px-4 py-2 text-sm font-bold
                         shadow-xl border border-red-400/30 pointer-events-none">
           {game.error}
         </div>
       )}
       {state && game.info && !game.error && (
-        <div className="absolute bottom-36 left-1/2 -translate-x-1/2 z-30 rounded-xl
+        <div className="absolute bottom-20 left-1/2 z-30 -translate-x-1/2 rounded-md
                         bg-emerald-600/90 backdrop-blur-sm px-4 py-2 text-sm font-bold
                         shadow-xl border border-emerald-400/30 pointer-events-none">
           {game.info}
@@ -118,29 +143,27 @@ export default function FarmSimPage() {
 
       {/* Build panel — slides up from bottom, above HUD */}
       {state && showBuild && (
-        <div className="absolute bottom-36 left-0 right-0 z-20
-                        bg-slate-900/95 backdrop-blur-md border-t border-slate-700 rounded-t-2xl shadow-2xl">
-          <div className="flex items-center justify-between px-4 pt-3 pb-1">
-            <span className="text-sm font-bold text-white">🔨 Build Mode</span>
-            <button onClick={() => { setShowBuild(false); setCurrentTool('hoe'); }}
-              className="text-slate-400 text-lg px-2">✕</button>
+        <div className="absolute bottom-16 left-2 right-2 z-20 border border-white/10 bg-[#111a15]/97 shadow-2xl backdrop-blur-md md:bottom-20 md:left-4 md:right-auto md:w-[380px]">
+          <div className="flex h-12 items-center justify-between border-b border-white/10 px-3">
+            <span className="flex items-center gap-2 text-sm font-bold text-white"><Hammer size={16} className="text-[#d9b95f]" /> Build</span>
+            <button type="button" aria-label="Close build panel" onClick={() => { setShowBuild(false); setBuildTool(null); setCurrentTool('hoe'); }}
+              className="grid h-8 w-8 place-items-center rounded-md text-white/50 hover:bg-white/10 hover:text-white"><X size={16} /></button>
           </div>
           <BuildPanel state={state} tool={buildTool} onPick={setBuildTool} />
         </div>
       )}
 
-      {/* Market — full-screen overlay */}
+      {/* Farm operations — bottom sheet on mobile, side panel on desktop */}
       {state && showMarket && (
-        <div className="absolute inset-0 z-30 bg-slate-950/95 backdrop-blur-md flex flex-col">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800">
-            <span className="text-base font-bold text-white">🛒 Market</span>
-            <button onClick={() => setShowMarket(false)}
-              className="w-8 h-8 flex items-center justify-center rounded-full
-                         bg-slate-800 text-slate-400 hover:text-white transition-colors">
-              ✕
+        <div className="absolute inset-x-0 bottom-0 top-16 z-30 flex flex-col border-t border-white/10 bg-[#111a15]/97 shadow-2xl backdrop-blur-md md:inset-y-0 md:left-auto md:right-0 md:top-0 md:w-[440px] md:border-l md:border-t-0">
+          <div className="flex h-14 shrink-0 items-center justify-between border-b border-white/10 px-4">
+            <span className="flex items-center gap-2 text-sm font-bold text-white"><ClipboardList size={18} className="text-[#d9b95f]" /> Farm operations</span>
+            <button type="button" onClick={() => setShowMarket(false)} aria-label="Close farm operations"
+              className="grid h-9 w-9 place-items-center rounded-md text-white/50 hover:bg-white/10 hover:text-white">
+              <X size={18} />
             </button>
           </div>
-          <div className="flex-1 overflow-auto">
+          <div className="min-h-0 flex-1 overflow-auto">
             <MarketPanel state={state} dispatch={dispatch} />
           </div>
         </div>
@@ -160,6 +183,9 @@ export default function FarmSimPage() {
           onClose={() => setMenuOpen(false)}
         />
       )}
+
+      {/* Dev overlay — toggle with backtick ` */}
+      {state && <DevOverlay state={state} player={playerState} fps={fps} />}
 
       {game.recap && <DayRecap recap={game.recap} onClose={game.dismissRecap} />}
 

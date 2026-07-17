@@ -5,13 +5,14 @@
 // can NEVER shift randomness, and (seed, day, system) reproduces exactly.
 // ============================================================================
 
-export type SystemId = 'weather' | 'forecast' | 'storm' | 'market';
+export type SystemId = 'weather' | 'forecast' | 'storm' | 'market' | 'contracts';
 
 const SYSTEM_SALT: Record<SystemId, number> = {
   weather: 0x9e3779b1,
   forecast: 0x85ebca77,
   storm: 0xc2b2ae3d,
   market: 0x27d4eb2f,
+  contracts: 0x165667b1,
 };
 
 // mulberry32 — small, fast, good enough for a game.
@@ -43,11 +44,12 @@ export function streamRng(seed: number, day: number, system: SystemId): () => nu
 
 // Weighted pick from { key: weight } using a [0,1) roll.
 export function weightedPick<T extends string>(
-  weights: Record<T, number>,
+  weights: Partial<Record<T, number>>,
   roll: number
 ): T {
-  const entries = Object.entries(weights) as [T, number][];
+  const entries = (Object.entries(weights) as [T, number][]).filter(([, weight]) => weight > 0);
   const total = entries.reduce((s, [, w]) => s + w, 0);
+  if (entries.length === 0 || total <= 0) throw new Error('weightedPick requires a positive weight.');
   let target = roll * total;
   for (const [key, w] of entries) {
     target -= w;

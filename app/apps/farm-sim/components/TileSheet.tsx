@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { CropId, GameState, PlayerAction } from '../lib/types';
 import { CROPS } from '../data/crops';
-import { validActions, plantableCrops, expansionCost } from '../lib/engine/actions';
+import { validActions, plantableCrops } from '../lib/engine/actions';
 import { harvestYield } from '../lib/engine/crops';
 import { connectedChannels } from '../lib/engine/water';
 import { getPrice } from '../lib/engine/market';
@@ -181,18 +181,27 @@ export function TileSheet({ state, idx, dispatch, onClose }: Props) {
             Well <span className="opacity-70">3⚡ {GOLD_COST.well}g</span>
           </button>
         )}
+        {actions.includes('buildStructure') && (
+          <>
+            <button
+              onClick={() => dispatch({ type: 'buildStructure', idx, kind: 'barn' })}
+              disabled={state.gold < 500}
+              className={`${btn} bg-red-900`}
+            >
+              Barn <span className="opacity-70">5⚡ 500g</span>
+            </button>
+            <button
+              onClick={() => dispatch({ type: 'buildStructure', idx, kind: 'coop' })}
+              disabled={state.gold < 300}
+              className={`${btn} bg-orange-900`}
+            >
+              Coop <span className="opacity-70">5⚡ 300g</span>
+            </button>
+          </>
+        )}
         {actions.includes('demolish') && (
           <button onClick={() => dispatch({ type: 'demolish', idx })} className={`${btn} bg-red-800`}>
             Demolish <span className="opacity-70">1⚡</span>
-          </button>
-        )}
-        {actions.includes('expand') && (
-          <button
-            onClick={() => dispatch({ type: 'expand', idx })}
-            disabled={state.gold < expansionCost(idx)}
-            className={`${btn} bg-purple-700`}
-          >
-            Buy land <span className="opacity-70">{expansionCost(idx)}g</span>
           </button>
         )}
       </div>

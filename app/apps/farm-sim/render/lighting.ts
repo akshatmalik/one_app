@@ -16,10 +16,10 @@ interface LightGrade {
 }
 
 export const LIGHT_GRADES: Record<TimeOfDay, LightGrade> = {
-  dawn:  { overlay: 'rgba(255, 180, 80, 1)',  alpha: 0.18, brightness: 0.8 },
-  day:   { overlay: 'rgba(255, 255, 220, 1)', alpha: 0.06, brightness: 1.0 },
-  dusk:  { overlay: 'rgba(220, 100, 60, 1)',  alpha: 0.22, brightness: 0.75 },
-  night: { overlay: 'rgba(20, 30, 80, 1)',    alpha: 0.55, brightness: 0.3 },
+  dawn:  { overlay: 'rgba(255, 185, 110, 1)', alpha: 0.08, brightness: 0.9 },
+  day:   { overlay: 'rgba(255, 255, 255, 1)', alpha: 0, brightness: 1.0 },
+  dusk:  { overlay: 'rgba(205, 105, 75, 1)',  alpha: 0.12, brightness: 0.82 },
+  night: { overlay: 'rgba(20, 30, 70, 1)',    alpha: 0.42, brightness: 0.42 },
 };
 
 /** Apply the colour-grade overlay to a canvas context. Call after all world draws. */
@@ -39,11 +39,10 @@ export function applyLighting(
   ctx.restore();
 }
 
-/** R2+: convert game clock minutes (0–1200) to TimeOfDay bucket. */
+/** Convert absolute clock minutes (06:00 through next-day 02:00) to a light bucket. */
 export function clockToTimeOfDay(gameMinute: number): TimeOfDay {
-  // 06:00 = 0, 22:00 = 960, 02:00 = 1200
-  if (gameMinute < 60)  return 'dawn';   // 06:00–07:00
-  if (gameMinute < 840) return 'day';    // 07:00–20:00
-  if (gameMinute < 960) return 'dusk';   // 20:00–22:00
-  return 'night';                         // 22:00–02:00
+  if (gameMinute < 7 * 60) return 'dawn';
+  if (gameMinute < 20 * 60) return 'day';
+  if (gameMinute < 22 * 60) return 'dusk';
+  return 'night';
 }

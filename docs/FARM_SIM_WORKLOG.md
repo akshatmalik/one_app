@@ -23,7 +23,7 @@
 - Rendering moves from DOM grid → HTML5 `<canvas>` with pixel-art sprite atlas.
 - Still mobile-portrait-first; lives in the One App hub at `/apps/farm-sim`.
 
-**Build phases (R0→R5):**
+**Build phases — original R0→R5 (rendering + real-time layer):**
 | Phase | What | Status |
 |-------|------|--------|
 | R0 | Palette + sprite atlas + canvas world render + camera + day-tint | ✅ Done |
@@ -32,6 +32,193 @@
 | R3 | Live weather + lighting | ⏳ Pending |
 | R4 | Realism pass — poses, sway, FX, shadows | ⏳ Pending |
 | R5 | Balance retune + fun test | ⏳ Pending |
+
+**Content expansion phases — approved 2026-07-14 (see §CONTENT PLAN below):**
+| Phase | What | Status |
+|-------|------|--------|
+| C1 | Larger world (32×32), biome zones, fencing, farmhouse, barn | ⏳ Pending |
+| C2 | Animals — chickens, cows, sheep (pasture, feed, produce) | ⏳ Pending |
+| C3 | More crops + Winter season (4th season, greenhouse mechanic) | ⏳ Pending |
+| C4 | Weather depth — wind, fog, drought, blizzard | ⏳ Pending |
+| C5 | Economy — NPC traders, contracts, shipping crate, reputation | ⏳ Pending |
+| C6 | Progression — skill tree, farm level, unlockable land | ⏳ Pending |
+
+---
+
+## CONTENT PLAN — Full Farm Vision (approved 2026-07-14)
+
+### What we're building toward
+
+A proper farming sim closer to Stardew Valley in scope — not a puzzle, a *world*. You live on the farm. Days pass. Seasons change. Animals need care. Crops rot if ignored. The market fluctuates. You build up slowly.
+
+---
+
+### C1 — Larger World + Structure
+
+**Grid: 32×32** (1024 tiles, 1024×1024 world-px at 32px/tile)
+- Starting plot stays 7×7 in the centre-south — feels like you start small in a big world
+- Surrounding locked land expands in rings, each ring more expensive
+- **Biome zones** (cosmetic variation in grass sprites, affects crop yield mods):
+  - `fertile` (centre) — normal yield, dark soil
+  - `dry` (east/west edges) — −15% yield, needs more water
+  - `rocky` (north) — only toughs like potato/pumpkin thrive; stone resource
+  - `riverside` (south edge) — +10% yield, moisture evaporates slower
+
+**New structures (tile kinds):**
+- `farmhouse` — 2×3 footprint, sleep point, interior overlay on enter
+- `barn` — 3×3 footprint, required for animals, upgradeable to hold more
+- `fence` / `gate` — contain animals to a pasture zone, block player
+- `scarecrow` — 1×1, prevents bird damage to 5×5 radius crops (R4)
+- `shipping_crate` — sell crops without AP market trip cost (replaces cart upgrade)
+- `greenhouse` — 2×3, enables growing summer crops in Winter
+
+**Migration:** grid expansion requires a save migrator. v2 saves get a `gridSize` field; on load, if `gridSize !== GRID_SIZE`, show "World expanded — your farm has moved!" and place old tiles centred in the new grid.
+
+---
+
+### C2 — Animals
+
+**Species (in order of unlock):**
+| Animal | Produces | Feed | Housing | Unlock cost |
+|--------|----------|------|---------|-------------|
+| Chicken | Eggs (daily if fed) | Grain (wheat) | Barn slot ×1 | 200g |
+| Cow | Milk (daily if fed + watered) | Hay (grass tiles) | Barn slot ×2 | 800g |
+| Sheep | Wool (every 3 days if fed) | Hay | Barn slot ×2 | 600g |
+| Pig | Truffle (random, rooting in pasture) | Slop (any crop scraps) | Barn slot ×2 | 1000g |
+
+**Animal state per animal:**
+```typescript
+interface Animal {
+  id: string;
+  species: AnimalSpecies;
+  name: string;          // player-named
+  hunger: number;        // 0–100, drops 20/day, produces only if ≥50
+  happiness: number;     // 0–100, petting +10, outdoor time +5/day
+  daysOwned: number;
+  readyToProduce: boolean;
+  outdoor: boolean;      // in pasture or barn
+}
+```
+
+**Mechanics:**
+- Animals in the barn need player to feed them (Z on feed bin)
+- Animals in pasture eat grass tiles (consumed slowly — grass regrows)
+- Happy animals produce higher quality produce (×1.5 market price)
+- Neglected 3+ days → sick → vet fee 100g to cure
+- Player pets animal by facing it + Z with hand tool
+
+**Produce as new items:** eggs, milk, wool, truffle — all sellable at market, some usable in crafting (butter, cheese, yarn — C5)
+
+---
+
+### C3 — More Crops + Winter
+
+**New crops:**
+| Crop | Season | Grow days | Special |
+|------|--------|-----------|---------|
+| Corn | Summer | 9 | High yield (8 units), needs nitrogen |
+| Sunflower | Summer | 6 | Produces seeds (re-plantable), attracts bees (+5% yield to neighbors) |
+| Carrot | Spring/Fall | 4 | Underground, frost-hardy, bolt to seed if left unharvested |
+| Onion | Spring/Fall | 5 | Stores 14 days after harvest before value drops |
+| Grapes | Summer (vine) | 12 | Perennial — plant once, harvest 3 seasons, makes wine (C5) |
+| Lavender | Spring/Summer | 7 | Sells well, attracts bees, dries for Winter sale bonus |
+| Turnip | Fall/Winter | 5 | Only crop that grows in Winter outside greenhouse |
+
+**Winter (4th season, 28 days):**
+- No new planting outdoors (except Turnip)
+- Existing crops die at season change (except greenhouse)
+- Snow overlay replaces rain/frost sprites — world looks different
+- Animals can't go outside — barn feeding mandatory
+- Market prices spike for stored produce (onion, dried lavender, preserved jam C5)
+- Snow can be shovelled off tilled tiles (shovel tool) to expose them
+- Ice forms on reservoir — no irrigation, wells still work (underground)
+- Sleep is longer (natural dark at 18:00 instead of 22:00)
+- **Greenhouse:** plant summer crops, pay 10 water/day heating cost
+
+---
+
+### C4 — Weather Depth
+
+**New weather types:**
+| Weather | Season | Effect |
+|---------|--------|--------|
+| `windy` | Spring/Fall | Seeds blow off mature crops if not harvested (10% loss/day) |
+| `fog` | Fall/Winter | Forecast accuracy drops to 50%/30%/20% for 2 days |
+| `drought` | Summer | Evaporation ×3, reservoir −20/day extra, no rain for 7+ days |
+| `blizzard` | Winter | Movement speed halved, can't work outdoor tiles, animals must be inside |
+| `thunderstorm` | Summer | Like storm but also destroys fences, scatters animals |
+| `perfect` | Spring | +20% yield on crops harvested this day, bees active |
+
+**Visual changes per weather (R3 wires these):**
+- Windy: grass sways faster, leaves particle
+- Fog: grey alpha overlay over canvas, visibility reduced
+- Blizzard: heavy white particle, player slows to 40%
+- Perfect: golden lighting, bee sprites in field
+
+---
+
+### C5 — Economy + NPCs
+
+**NPC traders (show up at market 1–2 days/week, visible on map):**
+| NPC | Specialty | Special offer |
+|-----|-----------|---------------|
+| Merchant Elena | Rare seeds | Sells grapes, lavender, sunflower seeds |
+| Vet Marcus | Animal care | Sells medicine, vet service, breed upgrades |
+| Builder Tomas | Structures | Sells greenhouse kit, barn upgrade, scarecrow |
+| Trader Yuki | Contracts | Offers 3-day "deliver 20 wheat for 150g" contracts |
+
+**Contracts system:**
+- 1–3 active contracts at a time (random from pool)
+- Time-limited (3–7 days)
+- Reward: gold + reputation points
+- Reputation unlocks new NPC stock tiers
+
+**Shipping crate:**
+- Place on farm, fill with produce during the day
+- Automatically sells at end-of-day for standard price (no AP cost, no market trip)
+- Upgrade to "refrigerated crate" — produce doesn't decay
+
+**Crafting (simple):**
+- Butter churn: milk → butter (×2 price)
+- Cheese press: 3× milk → cheese (×4 price, 2 days)
+- Loom: 2× wool → yarn (×2.5 price)
+- Jam maker: 3× berries/grapes → jam (×3 price, stores all winter)
+
+---
+
+### C6 — Progression
+
+**Farm level (1–20):**
+- Earned via: crops harvested, animals produced, contracts completed, days survived
+- Each level unlocks: new land ring, new structure, new NPC, new crop
+
+**Skill tree (3 trees, 5 nodes each):**
+- 🌾 **Farming**: faster till/harvest, higher yield, unlock multi-row planting
+- 💧 **Irrigation**: channel range +1, reservoir cap +50, rain harvesting roof
+- 🐄 **Husbandry**: animals need feeding less often, produce quality +, unlock pig
+
+**Seasons as a meta-cycle:**
+- Spring: plant heavy, repair from Winter
+- Summer: peak production, drought risk, market peak
+- Fall: harvest everything, prepare for Winter, preserve foods
+- Winter: survive, upgrade, plan next year
+
+---
+
+### Implementation order across sessions
+
+| Priority | Phase | Start after |
+|----------|-------|------------|
+| **Now** | R2 (clock + stamina + sleep) | This session |
+| **Now** | R3 (weather + lighting) | After R2 |
+| **Next** | C1 (32×32 world + structures + biomes) | After R3 |
+| **Next** | C2 (animals) | After C1 |
+| **Then** | C3 (new crops + Winter) | After C2 |
+| **Then** | R4 (realism pass) | After C1 |
+| **Then** | C4 (weather depth) | After C3 |
+| **Then** | C5 (economy + NPCs) | After C4 |
+| **Then** | C6 (progression) | After C5 |
+| **Last** | R5 (balance retune) | After all content |
 
 ---
 
@@ -202,4 +389,63 @@ Deleted `WaterBar.tsx`, `ForecastStrip.tsx`, `ToolBar.tsx`, `TutorialHint.tsx` �
 - [ ] `components/Joystick.tsx` — virtual left-thumb joystick for mobile (touch events)
 - [ ] `components/ActionButton.tsx` — large A button bottom-right, fires tool on facing tile
 - [ ] Run button (B) for mobile
+
+---
+
+### Session 3 — 2026-07-14
+
+**Agent:** Claude Sonnet 4.6
+**Branch:** `claude/farming-sim-plan-p17jtc`
+**Goal:** Expand to endless/open world — 64×64, no locked tiles, player can roam and farm anywhere.
+
+#### Features Built
+
+**F30 — 64×64 open world** (`lib/balance.ts`)
+- `GRID_SIZE` 20 → 64 (4096 tiles, 2048×2048 world pixels at 32px/tile)
+- `START_PLOT` moved to {28,28}→{36,36} (center of the world)
+- `RESERVOIR_POS` moved to {28,32} (north edge of start plot)
+- Removed `expandRing1/2/3` costs from `GOLD_COST` — no more tile purchasing
+
+**F31 — Remove locked tiles entirely** (`lib/types.ts`, `lib/engine/actions.ts`, multiple files)
+- `TileKind` no longer includes `'locked'`
+- `PlayerAction` no longer includes `'expand'` type
+- All tiles start as `grass` — player can till/build anywhere from turn 1
+- `newGame()` now creates a 64×64 all-grass world with a reservoir at the center start area
+- Removed `expansionRing()`, `expansionCost()`, and the `'expand'` case from `actions.ts`
+- `validActions()` no longer handles `'locked'` case
+- `BuildPanel.tsx` — removed "Buy land" tool option
+
+**F32 — Reference-based ground cache** (`render/worldRenderer.ts`)
+- Replaced O(N) string-key comparison (`tiles.map().join()` — 28k chars at 64×64) with O(1) object-reference check
+- Since `cloneState()` always returns a new tiles array, reference change = tile change. Zero false cache hits.
+
+**F33 — Camera boots centered on player** (`components/GameCanvas.tsx`)
+- On first resize, camera initializes centered on `playerRef.current.x/y` instead of world origin (0,0)
+- Player no longer has to watch the camera slide 1024px to catch up at boot
+
+**F34 — Grass scatter hash** (`render/worldRenderer.ts`)
+- `grassVariant()` now uses `col * 7 + row * 13 + col ^ row` % 3 for a visually scattered pattern instead of `idx % 3` (which produced diagonal stripes)
+- Collision updated: only `reservoir` blocks player — `locked` case removed from `collidesWithTiles()`
+
+**F35 — Save format guard updated** (`lib/storage.ts`)
+- Comment updated to reflect 64×64; stale 20×20 saves (400 tiles) are auto-discarded
+
+#### Decisions Made
+
+- No tile purchasing / expansion system. World is fully open from game start.
+- Player can farm anywhere — walk to a spot, till, plant. Natural emergent expansion.
+- START_PLOT is just the initial area with grass pre-tilled; not enforced by the engine — it's just where the reservoir and tutorial flow begin.
+- `locked` tile kind removed from the type system completely (not just logically disabled).
+- Ground cache on 64×64 is a 2048×2048 px offscreen canvas (~16MB). Built once at game start, rebuilt only when tile state changes. Acceptable for desktop; monitor on mobile.
+
+#### Next Up
+
+- [ ] R2: `lib/realtime/clock.ts` — in-game time accumulator (6:00–24:00)
+- [ ] R2: `lib/realtime/stamina.ts` — stamina pool with per-action costs
+- [ ] R2: Farmhouse tile + sleep mechanic (walk to bed → `endDay()`)
+- [ ] R2: Watering-can refill when standing on reservoir
+- [ ] Touch controls: virtual joystick + action button
+- [ ] C2: Animals (chickens/cows/sheep) with pasture and barn
+- [ ] World: terrain biomes (riverside, rocky zone, meadow) using procedural noise on tile variants
+- [ ] Minimap (small 64×64 overview in corner)
 - [ ] v1-save migrator: detect old 12×12 save, reset grid to 20×20 newGame

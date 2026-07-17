@@ -5,8 +5,81 @@
 export type Season = 'Spring' | 'Summer' | 'Fall';
 export type Weather = 'sunny' | 'cloudy' | 'rain' | 'storm' | 'heatwave' | 'frost';
 export type CropId = 'wheat' | 'potato' | 'beans' | 'tomato' | 'berries' | 'pumpkin';
-export type TileKind = 'locked' | 'grass' | 'tilled' | 'channel' | 'reservoir' | 'well';
-export type UpgradeId = 'bigCan' | 'cart' | 'coffee';
+export type TileKind = 'grass' | 'tilled' | 'channel' | 'reservoir' | 'well' | 'sprinkler' | 'barn' | 'coop' | 'shed' | 'mill' | 'depot' | 'crate' | 'path' | 'brush' | 'rock' | 'marsh' | 'locked';
+export type UpgradeId = 'bigCan' | 'tractor' | 'seeder' | 'truck';
+export type UnlockId = 'irrigation' | 'mechanization' | 'precisionPlanting' | 'logistics';
+export type ItemId = 'fertilizer' | 'flour' | 'bread' | 'milk' | 'egg' | 'fuel';
+export type MachineType = 'tractor' | 'seeder';
+export type AnimalType = 'cow' | 'chicken';
+export type ParcelId = 'north' | 'south' | 'west' | 'east' | 'northwest' | 'northeast' | 'southwest' | 'southeast';
+
+export interface Animal {
+  id: string;
+  type: AnimalType;
+  fedToday: boolean;
+  produceDays: number;
+}
+
+export interface Machine {
+  id: string;
+  type: MachineType;
+  fuel: number;
+  loadedCrop: CropId | null; // e.g. for seeder
+}
+
+export interface FarmContract {
+  id: string;
+  crop: CropId;
+  quantity: number;
+  rewardGold: number;
+  rewardReputation: number;
+  offeredDay: number;
+  expiresDay: number;
+  status: 'available' | 'completed';
+}
+
+export type ProductionMilestoneId =
+  | 'firstHarvest'
+  | 'reliableWater'
+  | 'bufferStock'
+  | 'firstFlour'
+  | 'exportOperation';
+
+export interface MillState {
+  commissioned: boolean;
+  level: number;
+  input: number;
+  output: number;
+  inputCapacity: number;
+  outputCapacity: number;
+  ratePerDay: number;
+}
+
+export interface FieldCrate {
+  id: string;
+  idx: number;
+  wheat: number;
+  capacity: number;
+}
+
+export interface HaulRoute {
+  id: string;
+  crateId: string;
+  level: number;
+  ratePerDay: number;
+}
+
+export interface ProductionState {
+  wheatStorageCapacity: number;
+  harvestedWheat: number;
+  rawWheatExported: number;
+  wheatMilled: number;
+  flourExported: number;
+  automatedWaterings: number;
+  harvestedToday: number;
+  recentHarvests: number[];
+  milestones: ProductionMilestoneId[];
+}
 
 export interface CropDef {
   id: CropId;
@@ -56,6 +129,7 @@ export type RecapKind =
   | 'reservoirShort'
   | 'priceMove'
   | 'seasonChange'
+  | 'contractExpired'
   | 'harvestReady';
 
 export interface RecapEvent {
@@ -80,18 +154,29 @@ export interface GameState {
   version: 1;
   seed: number; // master seed; per-system streams derived from it
   day: number; // 1-based, global (day 29 = Summer 1)
+  time: number; // In-game time of day in minutes (0 to 1440)
+  lastTickMs: number; // The real-world timestamp when the game was last updated (for advancing time)
   gold: number;
-  ap: number; // remaining today
-  apMax: number; // BASE_AP + upgrades
   tiles: Tile[]; // GRID_SIZE² row-major
   reservoir: number;
   wells: number;
   inventory: Record<CropId, number>; // harvested units held
   seeds: Record<CropId, number>;
+  items: Record<ItemId, number>;
+  mill: MillState;
+  fieldCrates: FieldCrate[];
+  haulRoutes: HaulRoute[];
+  parcels: Record<ParcelId, boolean>;
+  production: ProductionState;
+  machines: Machine[];
+  animals: Animal[];
+  contracts: FarmContract[];
+  reputation: number;
+  unlocks: UnlockId[];
   market: Record<CropId, MarketRow>;
   weatherTruth: Weather[]; // pre-rolled for current season (28 entries)
   forecast: (Weather | null)[]; // what the player was SHOWN for day+1..+3 (fixed once shown)
-  marketVisitedToday: boolean; // first sell of the day costs 1 AP
+  marketVisitedToday: boolean;
   upgrades: UpgradeId[];
   lastRecap: DayRecap | null;
   tutorialStep: number; // onboarding progress, -1 when done
@@ -103,17 +188,48 @@ export type PlayerAction =
   | { type: 'water'; idx: number }
   | { type: 'harvest'; idx: number }
   | { type: 'buildChannel'; idx: number }
-  | { type: 'demolish'; idx: number } // channel/well → grass, no refund
+  | { type: 'buildSprinkler'; idx: number }
+  | { type: 'clearLand'; idx: number }
+  | { type: 'purchaseParcel'; parcel: ParcelId }
+  | { type: 'buildFieldCrate'; idx: number }
+  | { type: 'upgradeFieldCrate'; crateId: string }
+  | { type: 'buildHaulRoute'; crateId: string }
+  | { type: 'upgradeHaulRoute'; routeId: string }
+  | { type: 'demolish'; idx: number } // channel/well/sprinkler → grass, no refund
   | { type: 'digWell'; idx: number }
-  | { type: 'expand'; idx: number }
   | { type: 'buySeeds'; crop: CropId; qty: number }
+  | { type: 'buyItem'; item: ItemId; qty: number }
   | { type: 'sell'; crop: CropId; qty: number }
-  | { type: 'buyUpgrade'; upgrade: UpgradeId };
+  | { type: 'deliverContract'; contractId: string }
+  | { type: 'sellItem'; item: ItemId; qty: number }
+  | { type: 'commissionMill' }
+  | { type: 'upgradeMill' }
+  | { type: 'loadMill'; qty: number }
+  | { type: 'loadMillFromCrate'; crateId: string; qty: number }
+  | { type: 'exportWheatFromCrate'; crateId: string; qty: number }
+  | { type: 'exportFlour'; qty: number }
+  | { type: 'expandWheatStorage' }
+  | { type: 'expand'; idx: number }
+  | { type: 'plantArea'; idx: number; crop: CropId }
+  | { type: 'buyAnimal'; animal: AnimalType }
+  | { type: 'buildBarn'; idx: number }
+  | { type: 'buildCoop'; idx: number }
+  | { type: 'fertilize'; idx: number }
+  | { type: 'buyUpgrade'; upgrade: UpgradeId }
+  | { type: 'buyMachine'; machineType: MachineType }
+  | { type: 'loadMachine'; machineId: string }
+  | { type: 'collectMachine'; machineId: string }
+  | { type: 'eat'; item: string }
+  | { type: 'buyWater' }
+  | { type: 'buildStructure'; idx: number; kind: 'barn' | 'coop' }
+  | { type: 'feedAnimal'; animalId: string }
+  | { type: 'collectAnimal'; animalId: string }
+  | { type: 'tillArea'; idx: number };
 
 export interface ActionResult {
   ok: boolean;
   state: GameState; // unchanged when !ok
-  error?: string; // 'Not enough AP', 'Tomatoes can't be planted in Fall', …
+  error?: string;
 }
 
 export interface SaveSlotInfo {

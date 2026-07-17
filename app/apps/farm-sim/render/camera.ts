@@ -31,8 +31,14 @@ export function makeCamera(viewW: number, viewH: number): Camera {
 
 /** Clamp camera so it never shows outside the world. */
 export function clampCamera(cam: Camera): Camera {
-  const x = Math.max(0, Math.min(cam.x, cam.worldW - cam.viewW));
-  const y = Math.max(0, Math.min(cam.y, cam.worldH - cam.viewH));
+  // Allow a small overflow so the player can walk near edges without hard-stopping.
+  const margin = TILE_PX * 2;
+  const x = cam.viewW >= cam.worldW
+    ? (cam.worldW - cam.viewW) / 2
+    : Math.max(-margin, Math.min(cam.x, cam.worldW - cam.viewW + margin));
+  const y = cam.viewH >= cam.worldH
+    ? (cam.worldH - cam.viewH) / 2
+    : Math.max(-margin, Math.min(cam.y, cam.worldH - cam.viewH + margin));
   return { ...cam, x, y };
 }
 

@@ -9,11 +9,12 @@ export interface InputState {
   left: boolean;
   right: boolean;
   action: boolean; // Z key or Enter — use tool on facing tile
+  actionQueued: boolean; // preserves quick taps until the next simulation step
   run: boolean;    // Shift — move faster
 }
 
 export function makeInputState(): InputState {
-  return { up: false, down: false, left: false, right: false, action: false, run: false };
+  return { up: false, down: false, left: false, right: false, action: false, actionQueued: false, run: false };
 }
 
 /**
@@ -28,8 +29,12 @@ export function attachKeyboard(state: InputState): () => void {
       case 'ArrowDown':  case 's': case 'S': state.down  = true; break;
       case 'ArrowLeft':  case 'a': case 'A': state.left  = true; break;
       case 'ArrowRight': case 'd': case 'D': state.right = true; break;
-      case 'z': case 'Z': case 'Enter':      state.action = true; break;
-      case 'Shift':                           state.run   = true; break;
+      case 'z': case 'Z': case 'Enter': case ' ':
+        state.action = true;
+        state.actionQueued = true;
+        e.preventDefault();
+        break;
+      case 'Shift':                              state.run   = true; break;
     }
   };
 
@@ -39,8 +44,8 @@ export function attachKeyboard(state: InputState): () => void {
       case 'ArrowDown':  case 's': case 'S': state.down  = false; break;
       case 'ArrowLeft':  case 'a': case 'A': state.left  = false; break;
       case 'ArrowRight': case 'd': case 'D': state.right = false; break;
-      case 'z': case 'Z': case 'Enter':      state.action = false; break;
-      case 'Shift':                           state.run   = false; break;
+      case 'z': case 'Z': case 'Enter': case ' ': state.action = false; break;
+      case 'Shift':                              state.run   = false; break;
     }
   };
 

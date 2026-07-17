@@ -13,6 +13,8 @@ import { PAL, PalKey, hexToRgba } from './sprites/palette';
 import { TILE_SPRITES } from './sprites/tiles';
 import { CROP_SPRITES, WITHERED } from './sprites/crops';
 import { FARMER_SPRITES } from './sprites/farmer';
+import { STRUCTURE_SPRITES } from './sprites/structures';
+import { EXPANSION_SPRITES } from './sprites/expansion';
 
 export interface UVRect {
   x: number; // pixel x in atlas
@@ -49,6 +51,9 @@ function collectSprites(): Array<{ name: string; grid: SpriteGrid }> {
   out.push({ name: 'channel_h', grid: TILE_SPRITES.channelH });
   out.push({ name: 'channel_v', grid: TILE_SPRITES.channelV });
   out.push({ name: 'well', grid: TILE_SPRITES.well });
+  out.push({ name: 'path', grid: TILE_SPRITES.path });
+  for (const [name, grid] of Object.entries(STRUCTURE_SPRITES)) out.push({ name, grid });
+  for (const [name, grid] of Object.entries(EXPANSION_SPRITES)) out.push({ name, grid });
 
   // Crops
   for (const [cropId, stages] of Object.entries(CROP_SPRITES)) {
