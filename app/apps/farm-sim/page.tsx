@@ -125,13 +125,14 @@ export default function FarmSimPage() {
       )}
 
       {/* HUD overlay — floats over canvas */}
-      {state && (
+      {state && !showMenu && !recap && (
         <HudBar
           state={state}
           tool={currentTool}
           waterCharges={waterCharges}
           selectedCrop={selectedCrop}
           paused={isPaused}
+          hideDock={showMarket}
           endDayDisabled={simulationPaused}
           timeScale={timeScale}
           onTogglePause={() => setIsPaused((value) => !value)}
@@ -144,7 +145,7 @@ export default function FarmSimPage() {
         />
       )}
 
-      {state && selectedIdx !== null ? (
+      {state && selectedIdx !== null && !showMenu && !showMarket && !recap ? (
         <TileSheet
           state={state}
           idx={selectedIdx}
@@ -196,9 +197,20 @@ export default function FarmSimPage() {
           hasSave={game.hasSave}
           slots={game.slots}
           inGame={!!state}
+          error={game.error}
           onNewGame={(seed) => { game.startNewGame(seed); setIsPaused(false); setMenuOpen(false); }}
-          onContinue={() => { game.continueGame(); setIsPaused(false); setMenuOpen(false); }}
-          onLoadSlot={(slot) => { game.loadSlot(slot); setIsPaused(false); setMenuOpen(false); }}
+          onContinue={() => {
+            if (game.continueGame()) {
+              setIsPaused(false);
+              setMenuOpen(false);
+            }
+          }}
+          onLoadSlot={(slot) => {
+            if (game.loadSlot(slot)) {
+              setIsPaused(false);
+              setMenuOpen(false);
+            }
+          }}
           onSaveSlot={game.saveToSlot}
           onDeleteSlot={game.deleteSlot}
           onClose={() => setMenuOpen(false)}

@@ -8,6 +8,7 @@ import {
   START_PLOT,
   RESERVOIR_POS,
   START_GOLD,
+  START_FUEL,
   START_SEEDS,
   RESERVOIR_START,
   START_NITROGEN,
@@ -90,11 +91,11 @@ function buildTiles(seed: number): Tile[] {
   tiles[idxOf(20, 18)] = { kind: 'sprinkler', moisture: 0, nitrogen: 0, crop: null, irrigated: false, soil: 'loam' };
 
   const wheat = [[16, 14], [16, 15], [17, 14], [17, 15], [17, 16], [18, 15]] as const;
-  const carrots = [[21, 14], [21, 15], [21, 16], [21, 17], [21, 18], [21, 19]] as const;
-  const beans = [[23, 18], [23, 19], [23, 20], [23, 21], [23, 22], [23, 23]] as const;
+  const carrots = [[21, 17], [21, 18], [21, 19]] as const;
+  const beans = [[23, 18], [23, 20], [23, 22]] as const;
   for (const [r, c] of wheat) tiles[idxOf(r, c)] = starterCrop('wheat', 4, 'loam');
   for (const [r, c] of carrots) tiles[idxOf(r, c)] = starterCrop('carrot', 2, 'sandy');
-  for (const [r, c] of beans) tiles[idxOf(r, c)] = starterCrop('beans', 2, 'loam');
+  for (const [r, c] of beans) tiles[idxOf(r, c)] = { ...starterCrop('beans', 2, 'loam'), moisture: 90 };
 
   const supplied = connectedChannels(tiles);
   const irrigated = computeIrrigation(tiles);
@@ -129,7 +130,7 @@ export function newGame(seed: number): GameState {
     wells: 1,
     inventory: emptyCounts(),
     seeds,
-    items: Object.fromEntries((['fertilizer', 'flour', 'bread', 'milk', 'egg', 'fuel', 'riceBag', 'cornmeal', 'vegetableCrate', 'tomatoSauce', 'bricks', 'ironBars', 'machineParts'] as ItemId[]).map((id) => [id, 0])) as Record<ItemId, number>,
+    items: Object.fromEntries((['fertilizer', 'flour', 'bread', 'milk', 'egg', 'fuel', 'riceBag', 'cornmeal', 'vegetableCrate', 'tomatoSauce', 'bricks', 'ironBars', 'machineParts'] as ItemId[]).map((id) => [id, id === 'fuel' ? START_FUEL : 0])) as Record<ItemId, number>,
     resources: Object.fromEntries((['wood', 'stone', 'clay', 'coal', 'ironOre'] as ResourceId[]).map((id) => [id, 0])) as Record<ResourceId, number>,
     facilities: { kiln: { level: 0, usedToday: 0 }, kitchen: { level: 0, usedToday: 0 }, workshop: { level: 0, usedToday: 0 } },
     extractors: [],
@@ -137,7 +138,7 @@ export function newGame(seed: number): GameState {
       commissioned: true,
       level: 1,
       input: 3,
-      output: 2,
+      output: 0,
       inputCapacity: MILL_INPUT_CAPACITY,
       outputCapacity: MILL_OUTPUT_CAPACITY,
       ratePerDay: MILL_RATE_PER_DAY,

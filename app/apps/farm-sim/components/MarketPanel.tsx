@@ -5,7 +5,7 @@ import { ArrowRight, Boxes, Factory, Hammer, LandPlot, PackageOpen, Pickaxe, Rou
 import { FacilityId, GameState, ItemId, ParcelId, PlayerAction, ResourceId, UpgradeId } from '../lib/types';
 import { CROPS, CROP_IDS } from '../data/crops';
 import { getPrice } from '../lib/engine/market';
-import { FLOUR_EXPORT_PRICE, GOLD_COST, GRID_SIZE, HAUL_ROUTE_LEVELS, MILL_LEVELS, PARCEL_COST, UPGRADES } from '../lib/balance';
+import { FLOUR_EXPORT_PRICE, GOLD_COST, GRID_SIZE, HAUL_ROUTE_LEVELS, MACHINE_COST, MILL_LEVELS, PARCEL_COST, UPGRADES } from '../lib/balance';
 import { millStatus } from '../lib/engine/production';
 import { productionProjection, waterProjection } from '../lib/engine/engineering';
 import { PARCELS, parcelIndices } from '../lib/engine/parcels';
@@ -183,9 +183,14 @@ export function MarketPanel({ state, dispatch }: Props) {
         </div>
       )}
 
-      {tab === 'seeds' && <div className="grid grid-cols-2 gap-2">{CROP_IDS.map((crop) => <div key={crop} className="flex items-center gap-2 border border-white/[0.08] bg-black/[0.15] p-2"><Sprout size={15} className="shrink-0 text-emerald-300" /><div className="min-w-0 flex-1"><div className="truncate text-xs font-semibold">{CROPS[crop].name}</div><div className="text-[10px] text-white/40">{CROPS[crop].seedCost}g · {state.seeds[crop]} seeds</div><div className="truncate text-[9px] text-white/30">{CROPS[crop].growDays} days · {CROPS[crop].yieldUnits} yield · {CROPS[crop].preferredSoils.join('/')}</div></div><SmallButton ariaLabel={`Buy one ${CROPS[crop].name} seed`} onClick={() => dispatch({ type: 'buySeeds', crop, qty: 1 })} disabled={state.gold < CROPS[crop].seedCost}>+1</SmallButton></div>)}</div>}
+      {tab === 'seeds' && <div className="grid grid-cols-1 gap-2 min-[380px]:grid-cols-2">{CROP_IDS.map((crop) => <div key={crop} className="flex items-center gap-2 border border-white/[0.08] bg-black/[0.15] p-2"><Sprout size={15} className="shrink-0 text-emerald-300" /><div className="min-w-0 flex-1"><div className="truncate text-xs font-semibold">{CROPS[crop].name}</div><div className="text-[10px] text-white/40">{CROPS[crop].seedCost}g · {state.seeds[crop]} seeds</div><div className="truncate text-[9px] text-white/30">{CROPS[crop].growDays} days · {CROPS[crop].yieldUnits} yield · {CROPS[crop].preferredSoils.join('/')}</div></div><div className="flex shrink-0 flex-col gap-1"><SmallButton ariaLabel={`Buy one ${CROPS[crop].name} seed`} onClick={() => dispatch({ type: 'buySeeds', crop, qty: 1 })} disabled={state.gold < CROPS[crop].seedCost}>+1</SmallButton><SmallButton ariaLabel={`Buy five ${CROPS[crop].name} seeds`} onClick={() => dispatch({ type: 'buySeeds', crop, qty: 5 })} disabled={state.gold < CROPS[crop].seedCost * 5}>+5</SmallButton></div></div>)}</div>}
 
-      {tab === 'equipment' && <div className="space-y-2">{(Object.keys(UPGRADES) as UpgradeId[]).map((id) => { const upgrade = UPGRADES[id]; const owned = state.upgrades.includes(id); return <div key={id} className="flex items-center gap-2 border-b border-white/[0.08] py-3"><div className="min-w-0 flex-1"><div className="text-xs font-semibold">{upgrade.name}</div><div className="text-[10px] text-white/40">{upgrade.effect}</div></div><SmallButton onClick={() => dispatch({ type: 'buyUpgrade', upgrade: id })} disabled={owned || state.gold < upgrade.cost}>{owned ? 'Owned' : `${upgrade.cost}g`}</SmallButton></div>; })}</div>}
+      {tab === 'equipment' && <div className="space-y-3">
+        <section className="border-y border-white/[0.08] py-3">
+          <div className="flex items-center gap-2"><div className="min-w-0 flex-1"><div className="text-xs font-semibold">Fuel reserve</div><div className="text-[10px] text-white/40">Current reserve: {state.items.fuel ?? 0} · 10g each</div></div><div className="flex shrink-0 gap-1"><SmallButton ariaLabel="Buy one fuel" onClick={() => dispatch({ type: 'buyItem', item: 'fuel', qty: 1 })} disabled={state.gold < 10}>Buy 1</SmallButton><SmallButton ariaLabel="Buy five fuel" onClick={() => dispatch({ type: 'buyItem', item: 'fuel', qty: 5 })} disabled={state.gold < 50}>Buy 5</SmallButton></div></div>
+        </section>
+        {(Object.keys(UPGRADES) as UpgradeId[]).filter((id) => id !== 'truck').map((id) => { const upgrade = UPGRADES[id]; const owned = state.upgrades.includes(id); const parts = id === 'tractor' ? MACHINE_COST.tractor.machineParts : id === 'seeder' ? MACHINE_COST.seeder.machineParts : 0; return <div key={id} className="flex items-center gap-2 border-b border-white/[0.08] py-3"><div className="min-w-0 flex-1"><div className="text-xs font-semibold">{upgrade.name}</div><div className="text-[10px] text-white/40">{upgrade.effect}</div>{parts > 0 ? <div className="text-[10px] text-white/35">Requires {parts} machine parts · current {state.items.machineParts}</div> : null}</div><SmallButton onClick={() => dispatch({ type: 'buyUpgrade', upgrade: id })} disabled={owned || state.gold < upgrade.cost || state.items.machineParts < parts}>{owned ? 'Owned' : `${upgrade.cost}g`}</SmallButton></div>; })}
+      </div>}
     </div>
   );
 }

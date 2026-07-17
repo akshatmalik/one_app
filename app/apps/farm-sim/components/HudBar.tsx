@@ -14,7 +14,6 @@ import {
   Play,
   Sprout,
   Tractor,
-  Wrench,
   Wheat,
   X,
 } from 'lucide-react';
@@ -43,6 +42,7 @@ interface Props {
   paused: boolean;
   endDayDisabled: boolean;
   timeScale: 1 | 2 | 4;
+  hideDock?: boolean;
   onTogglePause: () => void;
   onCycleSpeed: () => void;
   onMenu: () => void;
@@ -60,6 +60,7 @@ export function HudBar({
   paused,
   endDayDisabled,
   timeScale,
+  hideDock = false,
   onTogglePause,
   onCycleSpeed,
   onMenu,
@@ -68,7 +69,7 @@ export function HudBar({
   onMarket,
   onEndDay,
 }: Props) {
-  const [panel, setPanel] = useState<'tools' | 'seeds' | null>(null);
+  const [panel, setPanel] = useState<'tools' | 'seeds' | 'forecast' | null>(null);
   const season = seasonForDay(state.day);
   const day = dayOfSeason(state.day) + 1;
   const weather = state.weatherTruth[dayOfSeason(state.day)];
@@ -97,15 +98,21 @@ export function HudBar({
           <button type="button" onClick={onMenu} aria-label="Open menu" className="grid size-10 shrink-0 place-items-center rounded-md text-white/65 hover:bg-white/10 hover:text-white">
             <Menu size={18} />
           </button>
-          <div className="min-w-0 border-l border-white/10 px-2 leading-none">
-            <p className="truncate text-[8px] font-bold uppercase text-[#91ca8d]">{season} {day}</p>
+          <div className="w-12 shrink-0 border-l border-white/10 px-1.5 leading-none min-[390px]:w-14 min-[390px]:px-2">
+            <p className="truncate text-[8px] font-bold uppercase text-[#91ca8d]"><span className="min-[390px]:hidden">{season.slice(0, 3)} {day}</span><span className="hidden min-[390px]:inline">{season} {day}</span></p>
             <p className="mt-1 text-xs font-bold tabular-nums">{formatClock(state.time)}</p>
           </div>
-          <div className="flex min-w-0 items-center gap-1 border-l border-white/10 px-1.5" role="status" aria-live="off">
+          <button
+            type="button"
+            onClick={() => setPanel((value) => value === 'forecast' ? null : 'forecast')}
+            aria-expanded={panel === 'forecast'}
+            aria-label="Show three-day weather forecast"
+            className="flex min-w-0 items-center gap-1 rounded-md border-l border-white/10 px-1.5 hover:bg-white/10"
+          >
             <span className="sr-only">Weather: {WEATHER_META[weather].label}</span>
             <span className="text-base" aria-hidden="true">{WEATHER_META[weather].emoji}</span>
             <span className="hidden truncate text-[9px] font-semibold text-white/55 min-[430px]:block" aria-hidden="true">{WEATHER_META[weather].label}</span>
-          </div>
+          </button>
           <div className="ml-auto flex items-center gap-1 text-xs font-semibold tabular-nums">
             <span
               className={`flex items-center gap-1 px-1 ${water.sustainable ? 'text-[#71bddd]' : 'text-[#efa08c]'}`}
@@ -133,11 +140,11 @@ export function HudBar({
         </div>
       </header>
 
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-40 px-2 pb-[max(0.375rem,env(safe-area-inset-bottom))] md:bottom-4 md:left-4 md:right-auto md:p-0">
+      {!hideDock && <div className="pointer-events-none absolute inset-x-0 bottom-0 z-40 px-2 pb-[max(0.375rem,env(safe-area-inset-bottom))] md:bottom-4 md:left-4 md:right-auto md:p-0">
         {panel ? (
           <div className="pointer-events-auto mx-auto mb-1.5 max-w-sm rounded-md border border-white/10 bg-[#0d1511]/95 p-2 text-white shadow-2xl backdrop-blur-xl md:mx-0 md:w-[360px]">
             <div className="mb-1 flex h-8 items-center justify-between px-1">
-              <span className="text-[10px] font-bold uppercase text-white/45">{panel === 'tools' ? 'Choose tool' : 'Seeds on hand'}</span>
+              <span className="text-[10px] font-bold uppercase text-white/45">{panel === 'tools' ? 'Choose tool' : panel === 'seeds' ? 'Seeds on hand' : 'Weather forecast'}</span>
               <button type="button" onClick={() => setPanel(null)} aria-label="Close picker" className="grid size-8 place-items-center rounded-md text-white/55 hover:bg-white/10"><X size={15} /></button>
             </div>
             {panel === 'tools' ? (
@@ -156,7 +163,7 @@ export function HudBar({
                   </button>
                 ))}
               </div>
-            ) : (
+            ) : panel === 'seeds' ? (
               <div className="flex gap-1 overflow-x-auto pb-1" role="group" aria-label="Seed inventory">
                 {(Object.keys(CROPS) as CropId[]).map((crop) => {
                   const count = state.seeds[crop] ?? 0;
@@ -176,11 +183,21 @@ export function HudBar({
                   );
                 })}
               </div>
+            ) : (
+              <div className="grid grid-cols-3 gap-1" role="list" aria-label="Three-day weather forecast">
+                {state.forecast.map((nextWeather, index) => (
+                  <div key={`${index}-${nextWeather ?? 'unknown'}`} className="rounded-md border border-white/10 bg-black/20 px-1 py-2 text-center" role="listitem">
+                    <span className="block text-[9px] font-semibold uppercase text-white/45">{index === 0 ? 'Tomorrow' : `Day +${index + 1}`}</span>
+                    <span className="mt-1 block text-lg leading-5" aria-hidden="true">{nextWeather ? WEATHER_META[nextWeather].emoji : '—'}</span>
+                    <span className="mt-1 block truncate text-[9px] font-semibold text-white/70">{nextWeather ? WEATHER_META[nextWeather].label : 'Unknown'}</span>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
         ) : null}
 
-        <nav aria-label="Farm controls" className="pointer-events-auto mx-auto grid h-12 max-w-sm grid-cols-5 rounded-md border border-white/10 bg-[#0d1511]/94 p-0.5 text-white shadow-2xl backdrop-blur-xl md:mx-0 md:w-[360px]">
+        <nav aria-label="Farm controls" className="pointer-events-auto mx-auto grid h-12 max-w-sm grid-cols-4 rounded-md border border-white/10 bg-[#0d1511]/94 p-0.5 text-white shadow-2xl backdrop-blur-xl md:mx-0 md:w-[360px]">
           <button type="button" onClick={() => setPanel((value) => value === 'tools' ? null : 'tools')} aria-expanded={panel === 'tools'} className="flex min-w-0 flex-col items-center justify-center rounded-md text-[8px] font-semibold text-white/70 hover:bg-white/[0.07]">
             <active.Icon size={17} className="text-[#efd275]" /><span className="max-w-full truncate px-1">{active.label}</span>
           </button>
@@ -189,11 +206,10 @@ export function HudBar({
             <span className="max-w-full truncate px-1 tabular-nums">{CROPS[visibleCrop].name} ×{state.seeds[visibleCrop] ?? 0}</span>
           </button>
           <button type="button" onClick={() => { setPanel(null); onMarket(); }} className="grid place-items-center rounded-md text-white/65 hover:bg-white/[0.07]" aria-label="Farm operations"><Factory size={18} /></button>
-          <button type="button" onClick={() => pickTool('builder')} className="grid place-items-center rounded-md text-white/65 hover:bg-white/[0.07]" aria-label="Build"><Wrench size={18} /></button>
           <button type="button" onClick={onEndDay} disabled={endDayDisabled} className="grid place-items-center rounded-md text-[#b7bde6] hover:bg-white/[0.07] disabled:opacity-35" aria-label="Sleep and end day"><Moon size={18} /></button>
         </nav>
         <span className="sr-only" aria-live="polite">{CROPS[visibleCrop].name}: {state.seeds[visibleCrop] ?? 0} seeds remaining</span>
-      </div>
+      </div>}
     </>
   );
 }

@@ -268,7 +268,7 @@ export function sessionStatus(session: PlaytestSession, includeState = false) {
 }
 
 export const actionCatalog = {
-  tile: ['till', 'plant', 'water', 'harvest', 'buildChannel', 'buildSprinkler', 'demolish', 'digWell', 'clearLand', 'mine', 'buildExtractor', 'upgradeExtractor', 'amendSoil', 'fertilize', 'buildFieldCrate', 'tillArea', 'plantArea'],
+  tile: ['till', 'plant', 'water', 'harvest', 'harvestArea', 'buildChannel', 'buildSprinkler', 'demolish', 'digWell', 'clearLand', 'mine', 'buildExtractor', 'upgradeExtractor', 'amendSoil', 'fertilize', 'buildFieldCrate', 'tillArea', 'plantArea'],
   land: ['purchaseParcel'],
   production: ['commissionMill', 'upgradeMill', 'loadMill', 'loadMillFromCrate', 'exportFlour', 'exportWheatFromCrate', 'upgradeFieldCrate', 'buildHaulRoute', 'upgradeHaulRoute'],
   economy: ['buySeeds', 'sell', 'sellItem', 'sellResource', 'buyUpgrade'],

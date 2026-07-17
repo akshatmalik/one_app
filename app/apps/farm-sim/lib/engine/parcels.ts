@@ -13,7 +13,7 @@ export interface ParcelDef {
 export const PARCELS: Record<ParcelId, ParcelDef> = {
   north: { id: 'north', name: 'North Meadow', rows: [0, 14], cols: [14, 25], requires: [], terrain: 'brush' },
   south: { id: 'south', name: 'South Flats', rows: [25, 39], cols: [14, 25], requires: [], terrain: 'marsh' },
-  west: { id: 'west', name: 'West Ridge', rows: [15, 24], cols: [0, 13], requires: [], terrain: 'rock' },
+  west: { id: 'west', name: 'West Works', rows: [15, 24], cols: [0, 13], requires: [], terrain: 'mixed' },
   east: { id: 'east', name: 'East Field', rows: [15, 24], cols: [26, 39], requires: [], terrain: 'mixed' },
   northwest: { id: 'northwest', name: 'Northwest Copse', rows: [0, 14], cols: [0, 13], requires: ['north', 'west'], terrain: 'brush' },
   northeast: { id: 'northeast', name: 'Northeast Shelf', rows: [0, 14], cols: [26, 39], requires: ['north', 'east'], terrain: 'rock' },
@@ -47,6 +47,21 @@ export function depositFor(idx: number, seed: number, terrain: TileKind): Resour
   const resource = roll < 48 ? 'stone' : roll < 68 ? 'coal' : roll < 88 ? 'ironOre' : 'clay';
   const max = 5 + (Math.floor(hash / 100) % 10);
   return { resource, remaining: max, max };
+}
+
+export function guaranteedParcelTerrain(parcel: ParcelDef, idx: number): { kind: TileKind; deposit?: ResourceDeposit } | undefined {
+  if (parcel.id !== 'west') return undefined;
+  const row = Math.floor(idx / GRID_SIZE);
+  const col = idx % GRID_SIZE;
+  const anchors: Array<[number, number, TileKind, ResourceDeposit?]> = [
+    [parcel.rows[0] + 2, parcel.cols[0] + 4, 'brush'],
+    [parcel.rows[0] + 2, parcel.cols[0] + 6, 'rock', { resource: 'stone', remaining: 12, max: 12 }],
+    [parcel.rows[0] + 3, parcel.cols[0] + 5, 'marsh', { resource: 'clay', remaining: 12, max: 12 }],
+    [parcel.rows[0] + 3, parcel.cols[0] + 7, 'rock', { resource: 'coal', remaining: 10, max: 10 }],
+    [parcel.rows[0] + 4, parcel.cols[0] + 6, 'rock', { resource: 'ironOre', remaining: 14, max: 14 }],
+  ];
+  const match = anchors.find(([anchorRow, anchorCol]) => row === anchorRow && col === anchorCol);
+  return match ? { kind: match[2], deposit: match[3] } : undefined;
 }
 
 export function initialParcels(owned = false): Record<ParcelId, boolean> {

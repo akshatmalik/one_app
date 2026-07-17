@@ -23,8 +23,8 @@ interface UseFarmGame {
   advanceTime: (realElapsedMs: number) => void;
   dismissRecap: () => void;
   startNewGame: (seed?: number) => void;
-  continueGame: () => void;
-  loadSlot: (slot: number) => void;
+  continueGame: () => boolean;
+  loadSlot: (slot: number) => boolean;
   saveToSlot: (slot: number) => void;
   deleteSlot: (slot: number) => void;
   advanceTutorial: (step: number) => void;
@@ -152,18 +152,36 @@ export function useFarmGame(): UseFarmGame {
     [autosave]
   );
 
-  const continueGame = useCallback(() => {
-    const s = farmRepo.load(AUTOSAVE_SLOT);
-    if (s) setState(s);
-  }, []);
+  const continueGame = useCallback((): boolean => {
+    try {
+      const s = farmRepo.load(AUTOSAVE_SLOT);
+      if (!s) {
+        flashError('Unable to continue: save is missing or incompatible.');
+        return false;
+      }
+      setState(s);
+      return true;
+    } catch {
+      flashError('Unable to continue: save is missing or incompatible.');
+      return false;
+    }
+  }, [flashError]);
 
-  const loadSlot = useCallback((slot: number) => {
-    const s = farmRepo.load(slot);
-    if (s) {
+  const loadSlot = useCallback((slot: number): boolean => {
+    try {
+      const s = farmRepo.load(slot);
+      if (!s) {
+        flashError(`Unable to load slot ${slot}: save is missing or incompatible.`);
+        return false;
+      }
       setState(s);
       setRecap(null);
+      return true;
+    } catch {
+      flashError(`Unable to load slot ${slot}: save is missing or incompatible.`);
+      return false;
     }
-  }, []);
+  }, [flashError]);
 
   const saveToSlot = useCallback((slot: number) => {
     setState((cur) => {

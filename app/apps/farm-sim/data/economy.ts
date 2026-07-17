@@ -51,7 +51,7 @@ export const RECIPES: Record<RecipeId, RecipeDef> = {
   packVegetables: { id: 'packVegetables', name: 'Vegetable crate', facility: 'kitchen', level: 1, inputs: [{ kind: 'crop', id: 'potato', qty: 1 }, { kind: 'crop', id: 'beans', qty: 1 }, { kind: 'crop', id: 'carrot', qty: 1 }], output: { kind: 'item', id: 'vegetableCrate', qty: 1 }, description: 'Crop diversity earns a strong margin.' },
   cookSauce: { id: 'cookSauce', name: 'Tomato sauce', facility: 'kitchen', level: 2, inputs: [{ kind: 'crop', id: 'tomato', qty: 3 }], output: { kind: 'item', id: 'tomatoSauce', qty: 2 }, description: 'Preserves a valuable summer harvest.' },
   makeFuel: { id: 'makeFuel', name: 'Biofuel', facility: 'workshop', level: 1, inputs: [{ kind: 'item', id: 'cornmeal', qty: 1 }, { kind: 'resource', id: 'wood', qty: 1 }], output: { kind: 'item', id: 'fuel', qty: 2 }, description: 'Keeps field machines and extractors moving.' },
-  machineParts: { id: 'machineParts', name: 'Machine parts', facility: 'workshop', level: 2, inputs: [{ kind: 'item', id: 'ironBars', qty: 2 }, { kind: 'resource', id: 'wood', qty: 2 }], output: { kind: 'item', id: 'machineParts', qty: 1 }, description: 'Required for automation and high-tier upgrades.' },
+  machineParts: { id: 'machineParts', name: 'Field parts', facility: 'workshop', level: 1, inputs: [{ kind: 'resource', id: 'ironOre', qty: 2 }, { kind: 'resource', id: 'wood', qty: 2 }], output: { kind: 'item', id: 'machineParts', qty: 1 }, description: 'Rugged parts for tractors, seeders, and early automation.' },
 };
 
 export const ITEM_SELL_VALUES: Record<ItemId, number> = {

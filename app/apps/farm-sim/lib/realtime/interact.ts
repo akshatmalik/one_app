@@ -41,7 +41,7 @@ export function toolToAction(
 
     case 'tractor':
       if (state.upgrades.includes('tractor') && (state.items['fuel'] ?? 0) > 0) {
-        return { type: 'tillArea', idx };
+        return tile.crop?.mature ? { type: 'harvestArea', idx } : { type: 'tillArea', idx };
       }
       break;
 
