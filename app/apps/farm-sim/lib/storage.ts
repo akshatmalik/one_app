@@ -3,12 +3,15 @@
 // Slot 0 is the autosave; slots 1–3 are manual saves.
 // ============================================================================
 
-import { FarmContract, FarmSaveRepository, GameState, SaveSlotInfo, TileKind } from './types';
+import { CropId, FarmContract, FarmSaveRepository, GameState, SaveSlotInfo, TileKind } from './types';
 import { FARM_LANDMARKS, FIELD_CRATE_CAPACITY, GRID_SIZE, MILL_INPUT_CAPACITY, MILL_OUTPUT_CAPACITY, MILL_RATE_PER_DAY, WHEAT_STORAGE_START } from './balance';
 import { createContractOffers, unlocksForReputation } from './engine/contracts';
 import { initialParcels } from './engine/parcels';
 import { FORCED_SLEEP_MINUTES, WAKE_MINUTES } from './realtime/clock';
 import { buildForecast, normalizeSeasonWeather } from './engine/weather';
+import { CROP_IDS } from '../data/crops';
+import { initMarket } from './engine/market';
+import { depositFor } from './engine/parcels';
 
 const EXPECTED_TILE_COUNT = GRID_SIZE * GRID_SIZE;
 const EMPTY_ITEMS: GameState['items'] = {
@@ -18,7 +21,15 @@ const EMPTY_ITEMS: GameState['items'] = {
   milk: 0,
   egg: 0,
   fuel: 0,
+  riceBag: 0,
+  cornmeal: 0,
+  vegetableCrate: 0,
+  tomatoSauce: 0,
+  bricks: 0,
+  ironBars: 0,
+  machineParts: 0,
 };
+const EMPTY_RESOURCES: GameState['resources'] = { wood: 0, stone: 0, clay: 0, coal: 0, ironOre: 0 };
 
 function ensureLandmark(state: GameState, kind: Extract<TileKind, 'shed' | 'mill' | 'depot' | 'crate'>, preferred: number): void {
   if (state.tiles.some((tile) => tile.kind === kind)) return;
@@ -34,7 +45,7 @@ function validContracts(value: unknown): value is FarmContract[] {
     return (
       typeof item.id === 'string' &&
       typeof item.crop === 'string' &&
-      item.crop in { wheat: 1, potato: 1, beans: 1, tomato: 1, berries: 1, pumpkin: 1 } &&
+      CROP_IDS.includes(item.crop as CropId) &&
       Number.isInteger(item.quantity) &&
       (item.quantity ?? 0) > 0 &&
       typeof item.rewardGold === 'number' &&
@@ -65,11 +76,23 @@ export class LocalStorageFarmRepository implements FarmSaveRepository {
       if (!raw) return null;
       const parsed = JSON.parse(raw) as Partial<GameState>;
       const reputation = parsed.reputation ?? 0;
+      const emptyCrops = Object.fromEntries(CROP_IDS.map((id) => [id, 0])) as Record<CropId, number>;
+      const baseMarket = initMarket();
       const state = {
         ...parsed,
         time: Math.min(FORCED_SLEEP_MINUTES, Math.max(WAKE_MINUTES, parsed.time ?? WAKE_MINUTES)),
         lastTickMs: parsed.lastTickMs ?? Date.now(),
         items: { ...EMPTY_ITEMS, ...(parsed.items ?? {}) },
+        inventory: { ...emptyCrops, ...(parsed.inventory ?? {}) },
+        seeds: { ...emptyCrops, ...(parsed.seeds ?? {}) },
+        resources: { ...EMPTY_RESOURCES, ...(parsed.resources ?? {}) },
+        facilities: {
+          kiln: { level: 0, usedToday: 0, ...(parsed.facilities?.kiln ?? {}) },
+          kitchen: { level: 0, usedToday: 0, ...(parsed.facilities?.kitchen ?? {}) },
+          workshop: { level: 0, usedToday: 0, ...(parsed.facilities?.workshop ?? {}) },
+        },
+        extractors: parsed.extractors ?? [],
+        market: Object.fromEntries(CROP_IDS.map((id) => [id, { ...baseMarket[id], ...(parsed.market?.[id] ?? {}) }])) as GameState['market'],
         mill: {
           commissioned: false,
           level: parsed.mill?.commissioned ? 1 : 0,
@@ -107,7 +130,12 @@ export class LocalStorageFarmRepository implements FarmSaveRepository {
       if (state.version !== 1) return null;
       // Grid expansions invalidate positional saves from earlier world layouts.
       if (!Array.isArray(state.tiles) || state.tiles.length !== EXPECTED_TILE_COUNT) return null;
-      state.tiles = state.tiles.map((tile) => ({ ...tile, crop: tile.crop ? { ...tile.crop } : null }));
+      state.tiles = state.tiles.map((tile, idx) => ({
+        ...tile,
+        crop: tile.crop ? { ...tile.crop } : null,
+        soil: tile.soil ?? 'loam',
+        deposit: tile.deposit ? { ...tile.deposit } : depositFor(idx, state.seed, tile.kind),
+      }));
       const normalizedWeather = normalizeSeasonWeather(state.seed, state.day, state.weatherTruth ?? []);
       if (normalizedWeather.some((weather, index) => weather !== state.weatherTruth?.[index])) {
         state.weatherTruth = normalizedWeather;

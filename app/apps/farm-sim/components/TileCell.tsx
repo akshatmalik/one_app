@@ -40,6 +40,7 @@ const KIND_BG: Record<TileKind, string> = {
   brush: 'bg-green-800',
   rock: 'bg-stone-500',
   marsh: 'bg-cyan-900',
+  extractor: 'bg-stone-700',
   locked: 'bg-gray-800',
 };
 

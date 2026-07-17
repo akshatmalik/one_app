@@ -21,7 +21,7 @@ export const SEASONS: Season[] = ['Spring', 'Summer', 'Fall']; // Winter is M2
 
 // ── Player ─────────────────────────────────────────────
 export const START_GOLD = 120; // 🔧
-export const START_SEEDS = { wheat: 3 } as const; // onboarding gift
+export const START_SEEDS = { wheat: 6, beans: 3, carrot: 3 } as const; // enough to discover rotation and soil affinity
 // ── Gold costs ─────────────────────────────────────────
 export const GOLD_COST = {
   channel: 15, // 🔧
@@ -58,16 +58,22 @@ export const MILL_LEVELS = {
   3: { rate: 12, input: 36, output: 36, cost: 650, name: 'Roller Mill' },
 } as const;
 export const PARCEL_COST: Record<ParcelId, number> = {
-  north: 160,
-  south: 180,
-  west: 200,
-  east: 220,
-  northwest: 360,
-  northeast: 400,
-  southwest: 420,
-  southeast: 460,
+  north: 130,
+  south: 150,
+  west: 140,
+  east: 180,
+  northwest: 300,
+  northeast: 330,
+  southwest: 350,
+  southeast: 380,
 };
 export const MAX_WELLS = 3;
+export const EXTRACTOR_BUILD_COST = { gold: 80, bricks: 4, machineParts: 1 } as const;
+export const EXTRACTOR_UPGRADE_COST = { gold: 150, bricks: 6, machineParts: 2 } as const;
+export const MACHINE_COST = {
+  tractor: { gold: 450, machineParts: 3 },
+  seeder: { gold: 320, machineParts: 2 },
+} as const;
 
 // ── Water ──────────────────────────────────────────────
 export const RESERVOIR_CAP = 200; // 🔧

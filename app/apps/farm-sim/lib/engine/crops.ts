@@ -102,6 +102,7 @@ export function harvestYield(tile: Tile): number {
   const crop = tile.crop!;
   const def = CROPS[crop.cropId];
   let units = def.yieldUnits;
+  if (!def.preferredSoils.includes(tile.soil)) units *= def.soilPenalty;
   if (tile.nitrogen < CRITICAL_N_THRESHOLD) units *= CRITICAL_N_YIELD_MULT;
   else if (tile.nitrogen < LOW_N_THRESHOLD) units *= LOW_N_YIELD_MULT;
   return Math.max(1, Math.floor(units));

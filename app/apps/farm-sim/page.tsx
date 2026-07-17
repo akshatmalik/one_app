@@ -140,6 +140,7 @@ export default function FarmSimPage() {
           inRange={selectionInRange}
           isWalking={!!playerState?.isMoving && !selectionInRange}
           waterCharges={waterCharges}
+          selectedCrop={selectedCrop}
           dispatch={handleAction}
           onClose={() => setSelectedIdx(null)}
         />

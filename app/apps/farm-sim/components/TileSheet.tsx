@@ -13,12 +13,12 @@ import {
   Wheat,
   X,
 } from 'lucide-react';
-import { CropId, GameState, PlayerAction } from '../lib/types';
+import { CropId, GameState, PlayerAction, SoilType } from '../lib/types';
 import { CROPS } from '../data/crops';
 import { validActions, plantableCrops } from '../lib/engine/actions';
 import { harvestYield } from '../lib/engine/crops';
 import { connectedChannels } from '../lib/engine/water';
-import { MANUAL_WATER_DRAW, GOLD_COST, MAX_WELLS } from '../lib/balance';
+import { MANUAL_WATER_DRAW, GOLD_COST, MAX_WELLS, EXTRACTOR_BUILD_COST, EXTRACTOR_UPGRADE_COST } from '../lib/balance';
 
 interface Props {
   state: GameState;
@@ -26,6 +26,7 @@ interface Props {
   inRange: boolean;
   isWalking: boolean;
   waterCharges: number;
+  selectedCrop: CropId | null;
   dispatch: (action: PlayerAction) => boolean;
   onClose: () => void;
 }
@@ -51,11 +52,12 @@ function tileTitle(state: GameState, idx: number) {
     reservoir: 'Reservoir', well: 'Farm well', sprinkler: 'Sprinkler', shed: 'Farmhouse',
     mill: 'Flour mill', depot: 'Shipping depot', crate: 'Field crate', path: 'Farm road',
     brush: 'Dense brush', rock: 'Boulder', marsh: 'Wet ground', locked: 'Unowned land',
+    extractor: 'Automated extractor',
   };
   return labels[tile.kind] ?? tile.kind;
 }
 
-export function TileSheet({ state, idx, inRange, isWalking, waterCharges, dispatch, onClose }: Props) {
+export function TileSheet({ state, idx, inRange, isWalking, waterCharges, selectedCrop, dispatch, onClose }: Props) {
   const [showSeeds, setShowSeeds] = useState(false);
   const tile = state.tiles[idx];
   const actions = validActions(state, idx);
@@ -67,6 +69,7 @@ export function TileSheet({ state, idx, inRange, isWalking, waterCharges, dispat
     if (dispatch(action)) navigator.vibrate?.(12);
   };
   const actionClass = 'flex min-h-12 items-center justify-center gap-2 rounded-md border border-white/10 bg-white/[0.06] px-3 text-xs font-semibold text-white transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-35';
+  const soilNames: Record<SoilType, string> = { loam: 'Loam', clay: 'Clay', sandy: 'Sandy' };
 
   return (
     <section
@@ -97,6 +100,9 @@ export function TileSheet({ state, idx, inRange, isWalking, waterCharges, dispat
             </div>
             <Meter label="Moisture" value={tile.moisture} tone="bg-[#69bde2]" />
             <Meter label="Soil nitrogen" value={tile.nitrogen} tone="bg-[#80b96c]" />
+            <p className={`text-[11px] font-medium ${CROPS[tile.crop.cropId].preferredSoils.includes(tile.soil) ? 'text-[#8fd6a1]' : 'text-[#f1d27a]'}`}>
+              {soilNames[tile.soil]} soil · {CROPS[tile.crop.cropId].preferredSoils.includes(tile.soil) ? 'ideal crop match' : `${Math.round(CROPS[tile.crop.cropId].soilPenalty * 100)}% base yield`}
+            </p>
             {!tile.crop.mature && tile.moisture < CROPS[tile.crop.cropId].waterNeed ? (
               <p className="text-[11px] font-medium text-[#efa08c]">Needs water before the next dawn.</p>
             ) : null}
@@ -108,9 +114,11 @@ export function TileSheet({ state, idx, inRange, isWalking, waterCharges, dispat
           </div>
         ) : null}
 
-        {tile.kind === 'grass' ? <p className="text-xs text-white/50">Healthy open soil with {Math.round(tile.nitrogen)}% nitrogen.</p> : null}
+        {tile.kind === 'grass' ? <p className="text-xs text-white/50">{soilNames[tile.soil]} ground with {Math.round(tile.nitrogen)}% nitrogen.</p> : null}
         {tile.kind === 'locked' ? <p className="text-xs text-white/50">Purchase this parcel from Farm operations before working here.</p> : null}
-        {['brush', 'rock', 'marsh'].includes(tile.kind) ? <p className="text-xs text-white/50">Clear this terrain to extend the usable farm.</p> : null}
+        {tile.kind === 'brush' ? <p className="text-xs text-white/50">Clear brush for 4 wood and usable land.</p> : null}
+        {(tile.kind === 'rock' || tile.kind === 'marsh') && tile.deposit ? <p className="text-xs text-white/50">{tile.deposit.resource} deposit · {tile.deposit.remaining}/{tile.deposit.max} remaining. Mine manually or automate it later.</p> : null}
+        {tile.kind === 'extractor' && tile.deposit ? <p className="text-xs text-[#8fd6a1]">Extracting {tile.deposit.resource} each dawn · {tile.deposit.remaining} remaining.</p> : null}
         {tile.kind === 'channel' ? <p className={`text-xs ${connectedChannels(state.tiles).has(idx) ? 'text-[#8fd6a1]' : 'text-[#efa08c]'}`}>{connectedChannels(state.tiles).has(idx) ? 'Connected and carrying water' : 'Disconnected from the reservoir'}</p> : null}
 
         {showSeeds && actions.includes('plant') ? (
@@ -128,7 +136,8 @@ export function TileSheet({ state, idx, inRange, isWalking, waterCharges, dispat
                 >
                   <span className="block text-xl">{def.emoji}</span>
                   <span className="block truncate text-[10px] font-semibold">{def.name}</span>
-                  <span className="block text-[9px] text-white/40">{inSeason ? `${owned} seeds` : 'Out of season'}</span>
+                  <span className="block text-[9px] text-white/40">{inSeason ? `${owned} · ${def.waterNeed} water` : 'Out of season'}</span>
+                  <span className={`block truncate text-[8px] ${def.preferredSoils.includes(tile.soil) ? 'text-emerald-300/70' : 'text-amber-200/55'}`}>{def.preferredSoils.join('/')} soil</span>
                 </button>
               );
             })}
@@ -143,10 +152,16 @@ export function TileSheet({ state, idx, inRange, isWalking, waterCharges, dispat
         ) : (
           <div className="grid grid-cols-2 gap-2">
             {actions.includes('till') ? <button className={actionClass} onClick={() => run({ type: 'till', idx })}><Pickaxe size={17} /> Till soil</button> : null}
+            {actions.includes('tillArea') ? <button className={actionClass} disabled={state.items.fuel < 1} onClick={() => run({ type: 'tillArea', idx })}><Pickaxe size={17} /> Tractor 3×3 · {state.items.fuel} fuel</button> : null}
             {actions.includes('plant') ? <button className={actionClass} onClick={() => setShowSeeds((value) => !value)}><Sprout size={17} /> {showSeeds ? 'Hide seeds' : 'Plant crop'}</button> : null}
+            {actions.includes('plantArea') && selectedCrop ? <button className={actionClass} disabled={state.items.fuel < 1 || state.seeds[selectedCrop] < 1} onClick={() => run({ type: 'plantArea', idx, crop: selectedCrop })}><Sprout size={17} /> Seed 3×3 · {CROPS[selectedCrop].name}</button> : null}
             {actions.includes('water') ? <button className={actionClass} disabled={state.reservoir < MANUAL_WATER_DRAW || waterCharges < 1} onClick={() => run({ type: 'water', idx })}><Droplets size={17} /> Water · {waterCharges}</button> : null}
             {actions.includes('harvest') ? <button className={actionClass} onClick={() => run({ type: 'harvest', idx })}><Wheat size={17} /> Harvest</button> : null}
             {actions.includes('clearLand') ? <button className={actionClass} onClick={() => run({ type: 'clearLand', idx })}><Shovel size={17} /> Clear land</button> : null}
+            {actions.includes('mine') ? <button className={actionClass} onClick={() => run({ type: 'mine', idx })}><Pickaxe size={17} /> Mine {tile.deposit?.resource ?? 'deposit'}</button> : null}
+            {actions.includes('buildExtractor') ? <button className={actionClass} disabled={state.facilities.workshop.level < 2 || state.gold < EXTRACTOR_BUILD_COST.gold || state.items.bricks < EXTRACTOR_BUILD_COST.bricks || state.items.machineParts < EXTRACTOR_BUILD_COST.machineParts} onClick={() => run({ type: 'buildExtractor', idx })}><Hammer size={17} /> Automate · {EXTRACTOR_BUILD_COST.gold}g</button> : null}
+            {actions.includes('upgradeExtractor') ? <button className={actionClass} disabled={state.gold < EXTRACTOR_UPGRADE_COST.gold || state.items.bricks < EXTRACTOR_UPGRADE_COST.bricks || state.items.machineParts < EXTRACTOR_UPGRADE_COST.machineParts} onClick={() => { const extractor = state.extractors.find((candidate) => candidate.idx === idx); if (extractor) run({ type: 'upgradeExtractor', extractorId: extractor.id }); }}><Hammer size={17} /> Upgrade · {EXTRACTOR_UPGRADE_COST.gold}g</button> : null}
+            {actions.includes('fertilize') ? <button className={actionClass} disabled={state.items.fertilizer < 1} onClick={() => run({ type: 'fertilize', idx })}><Sprout size={17} /> Fertilize · {state.items.fertilizer}</button> : null}
             {actions.includes('buildChannel') ? <button className={actionClass} disabled={state.gold < GOLD_COST.channel} onClick={() => run({ type: 'buildChannel', idx })}><Droplets size={17} /> Channel · {GOLD_COST.channel}g</button> : null}
             {actions.includes('buildSprinkler') ? <button className={actionClass} disabled={state.gold < GOLD_COST.sprinkler} onClick={() => run({ type: 'buildSprinkler', idx })}><Sprout size={17} /> Sprinkler · {GOLD_COST.sprinkler}g</button> : null}
             {actions.includes('buildFieldCrate') ? <button className={actionClass} disabled={state.gold < GOLD_COST.fieldCrate} onClick={() => run({ type: 'buildFieldCrate', idx })}><Package size={17} /> Crate · {GOLD_COST.fieldCrate}g</button> : null}
@@ -154,6 +169,14 @@ export function TileSheet({ state, idx, inRange, isWalking, waterCharges, dispat
             {actions.includes('demolish') ? <button className={`${actionClass} text-[#efa08c]`} onClick={() => run({ type: 'demolish', idx })}><Trash2 size={17} /> Remove</button> : null}
           </div>
         )}
+        {inRange && actions.includes('amendSoil') ? (
+          <div>
+            <div className="mb-2 text-[10px] font-semibold uppercase text-white/40">Amend soil</div>
+            <div className="grid grid-cols-3 gap-2">
+              {(['loam', 'clay', 'sandy'] as SoilType[]).map((soil) => <button key={soil} type="button" disabled={tile.soil === soil || (soil === 'loam' ? state.items.fertilizer < 1 : soil === 'clay' ? state.resources.clay < 2 : state.resources.stone < 2)} onClick={() => run({ type: 'amendSoil', idx, soil })} className="min-h-10 rounded-md border border-white/10 bg-black/20 text-[10px] font-semibold disabled:opacity-30">{soilNames[soil]}</button>)}
+            </div>
+          </div>
+        ) : null}
       </div>
     </section>
   );

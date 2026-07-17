@@ -112,6 +112,7 @@ const BLOCKED_KINDS: ReadonlySet<TileKind> = new Set([
   'brush',
   'rock',
   'marsh',
+  'extractor',
 ]);
 
 function isBlocked(state: Pick<GameState, 'tiles' | 'seed'>, idx: number): boolean {

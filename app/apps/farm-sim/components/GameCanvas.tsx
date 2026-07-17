@@ -79,7 +79,7 @@ function collidesWithTiles(
     for (const c of cols) {
       if (r < 0 || r >= GRID_SIZE || c < 0 || c >= GRID_SIZE) return true;
       const t = tiles[r * GRID_SIZE + c];
-      if (t.kind === 'reservoir' || t.kind === 'shed' || t.kind === 'mill' || t.kind === 'depot' || t.kind === 'crate' || t.kind === 'brush' || t.kind === 'rock' || t.kind === 'marsh') return true;
+      if (t.kind === 'reservoir' || t.kind === 'shed' || t.kind === 'mill' || t.kind === 'depot' || t.kind === 'crate' || t.kind === 'brush' || t.kind === 'rock' || t.kind === 'marsh' || t.kind === 'extractor') return true;
       if (t.kind === 'locked' && lockedScenery(seed, r * GRID_SIZE + c)) return true;
     }
   }

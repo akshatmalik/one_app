@@ -188,6 +188,11 @@ function buildGroundCache(
       atlas.draw(ctx, spriteName, wx, wy, 2);
     }
 
+    if (tile.kind === 'grass' || tile.kind === 'tilled') {
+      ctx.fillStyle = tile.soil === 'clay' ? 'rgba(139, 84, 60, 0.12)' : tile.soil === 'sandy' ? 'rgba(224, 197, 123, 0.11)' : 'rgba(64, 118, 66, 0.04)';
+      ctx.fillRect(wx, wy, TILE_PX, TILE_PX);
+    }
+
     const terrain = tile.kind === 'locked' ? 'locked' : tile.kind === 'path' ? 'path' : tile.kind === 'tilled' ? 'tilled' : 'grass';
     for (const detail of groundDetails(seed, idx, terrain)) drawGroundDetail(ctx, detail, wx, wy);
   });
@@ -351,6 +356,10 @@ export function renderWorld(
     if (tile.kind === 'marsh') cmds.push({
       wy: wy + TILE_PX,
       fn: () => drawGenerated(ctx, 'marsh', sx - 4, sy - 8, 40, 30),
+    });
+    if (tile.kind === 'extractor') cmds.push({
+      wy: wy + TILE_PX,
+      fn: () => atlas.draw(ctx, 'extractor', sx, sy - 8, 2),
     });
     if (tile.kind === 'locked') {
       const scenery = lockedScenery(state.seed, idx);

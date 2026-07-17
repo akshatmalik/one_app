@@ -12,10 +12,13 @@ export function clamp(v: number, lo: number, hi: number): number {
 export function cloneState(state: GameState): GameState {
   return {
     ...state,
-    tiles: state.tiles.map((t) => ({ ...t, crop: t.crop ? { ...t.crop } : null })),
+    tiles: state.tiles.map((t) => ({ ...t, crop: t.crop ? { ...t.crop } : null, deposit: t.deposit ? { ...t.deposit } : undefined })),
     inventory: { ...state.inventory },
     seeds: { ...state.seeds },
     items: { ...state.items },
+    resources: { ...state.resources },
+    facilities: Object.fromEntries(Object.entries(state.facilities).map(([id, facility]) => [id, { ...facility }])) as GameState['facilities'],
+    extractors: state.extractors.map((extractor) => ({ ...extractor })),
     mill: { ...state.mill },
     fieldCrates: state.fieldCrates.map((crate) => ({ ...crate })),
     haulRoutes: state.haulRoutes.map((route) => ({ ...route })),

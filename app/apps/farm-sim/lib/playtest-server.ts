@@ -9,6 +9,7 @@ import { DayRecap, GameState, PlayerAction, TileKind } from './types';
 import { productionProjection, waterProjection } from './engine/engineering';
 import { PARCELS, parcelIndices } from './engine/parcels';
 import { PARCEL_COST } from './balance';
+import { FACILITY_CAPACITY, RECIPES, RECIPE_IDS } from '../data/economy';
 
 export interface PlaytestLogEntry {
   revision: number;
@@ -44,7 +45,7 @@ function safeSessionId(value: string | null): string {
 export function getSession(idValue: string | null, seed = 42): PlaytestSession {
   const id = safeSessionId(idValue);
   let session = sessions.get(id);
-  if (session && (!Array.isArray(session.state.fieldCrates) || !session.state.parcels)) {
+  if (session && (!Array.isArray(session.state.fieldCrates) || !session.state.parcels || !session.state.resources || !session.state.facilities)) {
     sessions.delete(id);
     session = undefined;
   }
@@ -125,6 +126,7 @@ const MAP_CHAR: Record<TileKind, string> = {
   grass: '.', tilled: '=', channel: '~', reservoir: 'R', well: 'W', sprinkler: '*',
   barn: 'B', coop: 'C', shed: 'S', mill: 'M', depot: 'D', crate: 'K', path: ':',
   brush: 'b', rock: 'o', marsh: '%', locked: '#',
+  extractor: 'X',
 };
 
 function worldMap(state: GameState): string[] {
@@ -217,7 +219,7 @@ export function sessionStatus(session: PlaytestSession, includeState = false) {
       weather: state.weatherTruth[dayOfSeason(state.day)],
       forecast: state.forecast,
     },
-    economy: { gold: state.gold },
+    economy: { gold: state.gold, resources: state.resources, items: state.items },
     water: {
       reservoir: state.reservoir,
       capacity: RESERVOIR_CAP,
@@ -243,8 +245,21 @@ export function sessionStatus(session: PlaytestSession, includeState = false) {
     mill: state.mill,
     parcels,
     production: state.production,
+    crafting: {
+      facilities: state.facilities,
+      recipes: RECIPE_IDS.map((id) => ({ ...RECIPES[id], available: state.facilities[RECIPES[id].facility].level >= RECIPES[id].level })),
+      dailyCapacity: Object.fromEntries(Object.entries(state.facilities).map(([id, facility]) => [id, FACILITY_CAPACITY[facility.level] - facility.usedToday])),
+    },
+    mining: {
+      resources: state.resources,
+      extractors: state.extractors,
+      deposits: state.tiles.reduce<Array<{ idx: number; kind: TileKind; resource: string; remaining: number }>>((out, tile, idx) => {
+        if (tile.deposit) out.push({ idx, kind: tile.kind, resource: tile.deposit.resource, remaining: tile.deposit.remaining });
+        return out;
+      }, []),
+    },
     bottlenecks: bottlenecks(state),
-    mapLegend: '. grass, = tilled, w wheat, H harvest-ready, ~ channel, * sprinkler, R reservoir, S shed, M mill, K crate, D depot, : path, b brush, o rock, % marsh, # locked',
+    mapLegend: '. grass, = tilled, w wheat, c other crop, H harvest-ready, ~ channel, * sprinkler, R reservoir, S shed, M mill, K crate, D depot, X extractor, : path, b brush, o rock, % marsh, # locked',
     map: worldMap(state),
     actionableTiles,
     ...(includeState ? { state } : {}),
@@ -252,10 +267,11 @@ export function sessionStatus(session: PlaytestSession, includeState = false) {
 }
 
 export const actionCatalog = {
-  tile: ['till', 'plant', 'water', 'harvest', 'buildChannel', 'buildSprinkler', 'demolish', 'digWell', 'clearLand', 'buildFieldCrate'],
+  tile: ['till', 'plant', 'water', 'harvest', 'buildChannel', 'buildSprinkler', 'demolish', 'digWell', 'clearLand', 'mine', 'buildExtractor', 'upgradeExtractor', 'amendSoil', 'fertilize', 'buildFieldCrate', 'tillArea', 'plantArea'],
   land: ['purchaseParcel'],
   production: ['commissionMill', 'upgradeMill', 'loadMill', 'loadMillFromCrate', 'exportFlour', 'exportWheatFromCrate', 'upgradeFieldCrate', 'buildHaulRoute', 'upgradeHaulRoute'],
-  economy: ['buySeeds', 'sell', 'buyUpgrade'],
+  economy: ['buySeeds', 'sell', 'sellItem', 'sellResource', 'buyUpgrade'],
+  crafting: ['upgradeFacility', 'craft'],
   examples: [
     { type: 'till', idx: 168 },
     { type: 'plant', idx: 168, crop: 'wheat' },

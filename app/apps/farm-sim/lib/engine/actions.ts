@@ -24,8 +24,12 @@ import {
   HAUL_ROUTE_LEVELS,
   MILL_LEVELS,
   PARCEL_COST,
+  EXTRACTOR_BUILD_COST,
+  EXTRACTOR_UPGRADE_COST,
+  MACHINE_COST,
 } from '../balance';
 import { CROPS } from '../../data/crops';
+import { FACILITY_CAPACITY, FACILITY_NAMES, FACILITY_UPGRADES, ITEM_SELL_VALUES, RECIPES, RESOURCE_SELL_VALUES } from '../../data/economy';
 import { connectedChannels, orthoNeighbors } from './water';
 import { seasonForDay } from './weather';
 import { getPrice, previewSupplyAfterSell } from './market';
@@ -33,7 +37,7 @@ import { harvestYield } from './crops';
 import { clamp, cloneState } from './util';
 import { unlocksForReputation } from './contracts';
 import { syncProductionMilestones } from './production';
-import { PARCELS, parcelIndices, revealedTerrain } from './parcels';
+import { PARCELS, depositFor, parcelIndices, revealedTerrain } from './parcels';
 
 function fail(state: GameState, error: string): ActionResult {
   return { ok: false, state, error };
@@ -72,6 +76,19 @@ function nearestCrate(state: GameState, tileIdx: number, units = 0): FieldCrate 
 
 function syncStorageCapacity(state: GameState): void {
   state.production.wheatStorageCapacity = state.fieldCrates.reduce((sum, crate) => sum + crate.capacity, 0);
+}
+
+function ingredientCount(state: GameState, ingredient: (typeof RECIPES)[keyof typeof RECIPES]['inputs'][number]): number {
+  if (ingredient.kind === 'crop') return state.inventory[ingredient.id] ?? 0;
+  if (ingredient.kind === 'resource') return state.resources[ingredient.id] ?? 0;
+  return state.items[ingredient.id] ?? 0;
+}
+
+function consumeIngredient(state: GameState, ingredient: (typeof RECIPES)[keyof typeof RECIPES]['inputs'][number], qty: number): void {
+  const amount = ingredient.qty * qty;
+  if (ingredient.kind === 'crop') state.inventory[ingredient.id] -= amount;
+  else if (ingredient.kind === 'resource') state.resources[ingredient.id] -= amount;
+  else state.items[ingredient.id] -= amount;
 }
 
 export function applyAction(state: GameState, action: PlayerAction): ActionResult {
@@ -171,12 +188,76 @@ export function applyAction(state: GameState, action: PlayerAction): ActionResul
 
     case 'clearLand': {
       const t = state.tiles[action.idx];
-      const cost = t.kind === 'brush' ? GOLD_COST.clearBrush : t.kind === 'rock' ? GOLD_COST.clearRock : t.kind === 'marsh' ? GOLD_COST.drainMarsh : null;
-      if (cost === null) return fail(state, 'This tile does not need clearing.');
-      if (state.gold < cost) return fail(state, `Clearing this ${t.kind} costs ${cost}g.`);
+      if (t.kind !== 'brush') return fail(state, t.kind === 'rock' || t.kind === 'marsh' ? 'Mine this resource deposit before farming here.' : 'This tile does not need clearing.');
       const s = cloneState(state);
-      s.gold -= cost;
+      s.resources.wood += 4;
       s.tiles[action.idx] = { ...t, kind: 'grass', moisture: 0, crop: null };
+      return { ok: true, state: s };
+    }
+
+    case 'mine': {
+      const t = state.tiles[action.idx];
+      if (t.kind !== 'rock' && t.kind !== 'marsh') return fail(state, 'There is no exposed deposit here.');
+      const deposit = t.deposit ?? depositFor(action.idx, state.seed, t.kind);
+      if (!deposit || deposit.remaining < 1) return fail(state, 'This deposit is exhausted.');
+      const mined = Math.min(2, deposit.remaining);
+      const s = cloneState(state);
+      s.resources[deposit.resource] += mined;
+      const remaining = deposit.remaining - mined;
+      s.tiles[action.idx] = remaining > 0
+        ? { ...t, deposit: { ...deposit, remaining } }
+        : { ...t, kind: 'grass', moisture: 0, crop: null, deposit: undefined };
+      return { ok: true, state: s };
+    }
+
+    case 'buildExtractor': {
+      const t = state.tiles[action.idx];
+      if (t.kind !== 'rock' && t.kind !== 'marsh') return fail(state, 'Extractors must sit on a resource deposit.');
+      const deposit = t.deposit ?? depositFor(action.idx, state.seed, t.kind);
+      if (!deposit || deposit.remaining < 1) return fail(state, 'This deposit is exhausted.');
+      if (state.facilities.workshop.level < 2) return fail(state, 'A level 2 workshop is required to assemble extractors.');
+      if (state.gold < EXTRACTOR_BUILD_COST.gold || state.items.bricks < EXTRACTOR_BUILD_COST.bricks || state.items.machineParts < EXTRACTOR_BUILD_COST.machineParts)
+        return fail(state, `Needs ${EXTRACTOR_BUILD_COST.gold}g, ${EXTRACTOR_BUILD_COST.bricks} bricks, and ${EXTRACTOR_BUILD_COST.machineParts} machine part.`);
+      const s = cloneState(state);
+      s.gold -= EXTRACTOR_BUILD_COST.gold;
+      s.items.bricks -= EXTRACTOR_BUILD_COST.bricks;
+      s.items.machineParts -= EXTRACTOR_BUILD_COST.machineParts;
+      s.tiles[action.idx] = { ...t, kind: 'extractor', deposit: { ...deposit } };
+      s.extractors.push({ id: `extractor-${action.idx}`, idx: action.idx, level: 1 });
+      return { ok: true, state: s };
+    }
+
+    case 'upgradeExtractor': {
+      const extractor = state.extractors.find((candidate) => candidate.id === action.extractorId);
+      if (!extractor) return fail(state, 'Extractor not found.');
+      if (extractor.level >= 3) return fail(state, 'This extractor is fully upgraded.');
+      if (state.gold < EXTRACTOR_UPGRADE_COST.gold || state.items.bricks < EXTRACTOR_UPGRADE_COST.bricks || state.items.machineParts < EXTRACTOR_UPGRADE_COST.machineParts)
+        return fail(state, `Needs ${EXTRACTOR_UPGRADE_COST.gold}g, ${EXTRACTOR_UPGRADE_COST.bricks} bricks, and ${EXTRACTOR_UPGRADE_COST.machineParts} machine parts.`);
+      const s = cloneState(state);
+      s.gold -= EXTRACTOR_UPGRADE_COST.gold;
+      s.items.bricks -= EXTRACTOR_UPGRADE_COST.bricks;
+      s.items.machineParts -= EXTRACTOR_UPGRADE_COST.machineParts;
+      s.extractors.find((candidate) => candidate.id === action.extractorId)!.level += 1;
+      return { ok: true, state: s };
+    }
+
+    case 'amendSoil': {
+      const t = state.tiles[action.idx];
+      if (!['loam', 'clay', 'sandy'].includes(action.soil)) return fail(state, 'Choose loam, clay, or sandy soil.');
+      if (t.kind !== 'grass' && (t.kind !== 'tilled' || t.crop)) return fail(state, 'Amend open or empty tilled soil.');
+      if (t.soil === action.soil) return fail(state, `This is already ${action.soil} soil.`);
+      const s = cloneState(state);
+      if (action.soil === 'clay') {
+        if (s.resources.clay < 2) return fail(state, 'You need 2 clay. Mine a wetland or ridge deposit.');
+        s.resources.clay -= 2;
+      } else if (action.soil === 'sandy') {
+        if (s.resources.stone < 2) return fail(state, 'You need 2 crushed stone.');
+        s.resources.stone -= 2;
+      } else {
+        if (s.items.fertilizer < 1) return fail(state, 'You need fertilizer to rebuild loam.');
+        s.items.fertilizer -= 1;
+      }
+      s.tiles[action.idx] = { ...t, soil: action.soil, nitrogen: Math.max(t.nitrogen, action.soil === 'loam' ? 75 : 55) };
       return { ok: true, state: s };
     }
 
@@ -191,7 +272,10 @@ export function applyAction(state: GameState, action: PlayerAction): ActionResul
       s.gold -= cost;
       s.parcels[action.parcel] = true;
       for (const idx of parcelIndices(parcel)) {
-        if (s.tiles[idx].kind === 'locked') s.tiles[idx] = { ...s.tiles[idx], kind: revealedTerrain(parcel, idx, s.seed) };
+        if (s.tiles[idx].kind === 'locked') {
+          const kind = revealedTerrain(parcel, idx, s.seed);
+          s.tiles[idx] = { ...s.tiles[idx], kind, deposit: depositFor(idx, s.seed, kind) };
+        }
       }
       return { ok: true, state: s };
     }
@@ -438,8 +522,11 @@ export function applyAction(state: GameState, action: PlayerAction): ActionResul
       if (state.upgrades.includes(action.upgrade)) return fail(state, 'Already owned.');
       const cost = UPGRADES[action.upgrade].cost;
       if (state.gold < cost) return fail(state, 'Not enough gold.');
+      const parts = action.upgrade === 'tractor' ? 3 : action.upgrade === 'seeder' ? 2 : action.upgrade === 'truck' ? 4 : 0;
+      if (state.items.machineParts < parts) return fail(state, `You need ${parts} machine parts from the workshop.`);
       const s = cloneState(state);
       s.gold -= cost;
+      s.items.machineParts -= parts;
       s.upgrades = [...s.upgrades, action.upgrade];
       return { ok: true, state: s };
     }
@@ -454,6 +541,58 @@ export function applyAction(state: GameState, action: PlayerAction): ActionResul
         return { ok: true, state: s };
       }
       return fail(state, 'Cannot buy this item.');
+    }
+    case 'upgradeFacility': {
+      const facility = state.facilities[action.facility];
+      if (facility.level >= 3) return fail(state, `${FACILITY_NAMES[action.facility]} is fully upgraded.`);
+      const cost = FACILITY_UPGRADES[action.facility][facility.level];
+      if (state.gold < cost.gold) return fail(state, `You need ${cost.gold}g.`);
+      for (const [id, qty] of Object.entries(cost.resources)) {
+        if (state.resources[id as keyof GameState['resources']] < (qty ?? 0)) return fail(state, `You need ${qty} ${id}.`);
+      }
+      for (const [id, qty] of Object.entries(cost.items ?? {})) {
+        if (state.items[id as keyof GameState['items']] < (qty ?? 0)) return fail(state, `You need ${qty} ${id}.`);
+      }
+      const s = cloneState(state);
+      s.gold -= cost.gold;
+      for (const [id, qty] of Object.entries(cost.resources)) s.resources[id as keyof GameState['resources']] -= qty ?? 0;
+      for (const [id, qty] of Object.entries(cost.items ?? {})) s.items[id as keyof GameState['items']] -= qty ?? 0;
+      s.facilities[action.facility].level += 1;
+      return { ok: true, state: s };
+    }
+    case 'craft': {
+      const recipe = RECIPES[action.recipe];
+      if (!recipe || !Number.isInteger(action.qty) || action.qty < 1) return fail(state, 'Choose a valid recipe quantity.');
+      const facility = state.facilities[recipe.facility];
+      if (facility.level < recipe.level) return fail(state, `${FACILITY_NAMES[recipe.facility]} level ${recipe.level} is required.`);
+      const capacity = FACILITY_CAPACITY[facility.level] - facility.usedToday;
+      if (action.qty > capacity) return fail(state, `${FACILITY_NAMES[recipe.facility]} can process ${capacity} more batch${capacity === 1 ? '' : 'es'} today.`);
+      for (const input of recipe.inputs) {
+        const need = input.qty * action.qty;
+        if (ingredientCount(state, input) < need) return fail(state, `You need ${need} ${input.id}.`);
+      }
+      const s = cloneState(state);
+      for (const input of recipe.inputs) consumeIngredient(s, input, action.qty);
+      if (recipe.output.kind === 'item') s.items[recipe.output.id] += recipe.output.qty * action.qty;
+      else s.resources[recipe.output.id] += recipe.output.qty * action.qty;
+      s.facilities[recipe.facility].usedToday += action.qty;
+      return { ok: true, state: s };
+    }
+    case 'sellItem': {
+      if (!Number.isInteger(action.qty) || action.qty < 1) return fail(state, 'Sell at least one.');
+      if ((state.items[action.item] ?? 0) < action.qty) return fail(state, `You only have ${state.items[action.item] ?? 0}.`);
+      const s = cloneState(state);
+      s.items[action.item] -= action.qty;
+      s.gold += ITEM_SELL_VALUES[action.item] * action.qty;
+      return { ok: true, state: s };
+    }
+    case 'sellResource': {
+      if (!Number.isInteger(action.qty) || action.qty < 1) return fail(state, 'Sell at least one.');
+      if ((state.resources[action.resource] ?? 0) < action.qty) return fail(state, `You only have ${state.resources[action.resource] ?? 0}.`);
+      const s = cloneState(state);
+      s.resources[action.resource] -= action.qty;
+      s.gold += RESOURCE_SELL_VALUES[action.resource] * action.qty;
+      return { ok: true, state: s };
     }
     case 'buyAnimal': {
       const animalType = action.animal;
@@ -509,12 +648,52 @@ export function applyAction(state: GameState, action: PlayerAction): ActionResul
       s.tiles[action.idx] = { ...s.tiles[action.idx], kind: action.kind };
       return { ok: true, state: s };
     }
-    case 'buyMachine': {
-      // Cost for tractor: 5000, seeder: 2000
-      const cost = action.machineType === 'tractor' ? 5000 : 2000;
-      if (state.gold < cost) return fail(state, 'Not enough gold.');
+    case 'fertilize': {
+      const t = state.tiles[action.idx];
+      if (t.kind !== 'tilled') return fail(state, 'Fertilizer is applied to tilled soil.');
+      if (state.items.fertilizer < 1) return fail(state, 'You have no fertilizer.');
       const s = cloneState(state);
-      s.gold -= cost;
+      s.items.fertilizer -= 1;
+      s.tiles[action.idx] = { ...t, nitrogen: clamp(t.nitrogen + 35, 0, 100) };
+      return { ok: true, state: s };
+    }
+    case 'tillArea': {
+      if (!state.upgrades.includes('tractor')) return fail(state, 'Buy the tractor first.');
+      if (state.items.fuel < 1) return fail(state, 'The tractor needs one fuel.');
+      const centerRow = Math.floor(action.idx / GRID_SIZE), centerCol = action.idx % GRID_SIZE;
+      const targets = state.tiles.map((tile, idx) => ({ tile, idx, row: Math.floor(idx / GRID_SIZE), col: idx % GRID_SIZE }))
+        .filter(({ tile, row, col }) => tile.kind === 'grass' && Math.abs(row - centerRow) <= 1 && Math.abs(col - centerCol) <= 1)
+        .map(({ idx }) => idx);
+      if (targets.length === 0) return fail(state, 'No open ground in this 3x3 area.');
+      const s = cloneState(state);
+      s.items.fuel -= 1;
+      for (const idx of targets) s.tiles[idx] = { ...s.tiles[idx], kind: 'tilled', moisture: TILLED_START_MOISTURE };
+      return { ok: true, state: s };
+    }
+    case 'plantArea': {
+      if (!state.upgrades.includes('seeder')) return fail(state, 'Buy the precision seeder first.');
+      if (state.items.fuel < 1) return fail(state, 'The seeder needs one fuel.');
+      const def = CROPS[action.crop];
+      if (!def.seasons.includes(season)) return fail(state, `${def.name} cannot be planted in ${season}.`);
+      const centerRow = Math.floor(action.idx / GRID_SIZE), centerCol = action.idx % GRID_SIZE;
+      const targets = state.tiles.map((tile, idx) => ({ tile, idx, row: Math.floor(idx / GRID_SIZE), col: idx % GRID_SIZE }))
+        .filter(({ tile, row, col }) => tile.kind === 'tilled' && !tile.crop && Math.abs(row - centerRow) <= 1 && Math.abs(col - centerCol) <= 1)
+        .slice(0, state.seeds[action.crop] ?? 0)
+        .map(({ idx }) => idx);
+      if (targets.length === 0) return fail(state, `No empty tilled soil or ${def.name} seeds in this 3x3 area.`);
+      const s = cloneState(state);
+      s.items.fuel -= 1;
+      s.seeds[action.crop] -= targets.length;
+      for (const idx of targets) s.tiles[idx] = { ...s.tiles[idx], crop: { cropId: action.crop, growthDays: 0, mature: false, stressDays: 0 } };
+      return { ok: true, state: s };
+    }
+    case 'buyMachine': {
+      const cost = MACHINE_COST[action.machineType];
+      if (state.gold < cost.gold || state.items.machineParts < cost.machineParts)
+        return fail(state, `Needs ${cost.gold}g and ${cost.machineParts} machine parts.`);
+      const s = cloneState(state);
+      s.gold -= cost.gold;
+      s.items.machineParts -= cost.machineParts;
       s.machines.push({
         id: `machine-${s.day}-${s.machines.length}`,
         type: action.machineType,
@@ -551,6 +730,8 @@ export function validActions(state: GameState, idx: number): PlayerAction['type'
   switch (t.kind) {
     case 'grass':
       out.push('till');
+      if (state.upgrades.includes('tractor')) out.push('tillArea');
+      out.push('amendSoil');
       out.push('buildChannel', 'digWell', 'buildSprinkler', 'buildFieldCrate');
       break;
     case 'tilled':
@@ -559,7 +740,10 @@ export function validActions(state: GameState, idx: number): PlayerAction['type'
         out.push('water');
       } else {
         out.push('plant', 'water');
+        if (state.upgrades.includes('seeder')) out.push('plantArea');
       }
+      out.push('fertilize');
+      if (!t.crop) out.push('amendSoil');
       break;
     case 'channel':
     case 'well':
@@ -567,9 +751,14 @@ export function validActions(state: GameState, idx: number): PlayerAction['type'
       out.push('demolish');
       break;
     case 'brush':
+      out.push('clearLand');
+      break;
     case 'rock':
     case 'marsh':
-      out.push('clearLand');
+      out.push('mine', 'buildExtractor');
+      break;
+    case 'extractor':
+      out.push('upgradeExtractor');
       break;
   }
   return out;

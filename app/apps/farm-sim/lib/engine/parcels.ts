@@ -1,5 +1,5 @@
 import { GRID_SIZE } from '../balance';
-import { ParcelId, TileKind } from '../types';
+import { ParcelId, ResourceDeposit, TileKind } from '../types';
 
 export interface ParcelDef {
   id: ParcelId;
@@ -34,6 +34,19 @@ export function revealedTerrain(parcel: ParcelDef, idx: number, seed: number): T
   if (hash >= 34) return 'grass';
   if (parcel.terrain === 'mixed') return hash % 3 === 0 ? 'marsh' : hash % 2 === 0 ? 'rock' : 'brush';
   return parcel.terrain;
+}
+
+export function depositFor(idx: number, seed: number, terrain: TileKind): ResourceDeposit | undefined {
+  if (terrain !== 'rock' && terrain !== 'marsh') return undefined;
+  const hash = Math.abs(((idx + 31) * 1664525 + seed * 1013904223) | 0);
+  if (terrain === 'marsh') {
+    const max = 6 + hash % 7;
+    return { resource: 'clay', remaining: max, max };
+  }
+  const roll = hash % 100;
+  const resource = roll < 48 ? 'stone' : roll < 68 ? 'coal' : roll < 88 ? 'ironOre' : 'clay';
+  const max = 5 + (Math.floor(hash / 100) % 10);
+  return { resource, remaining: max, max };
 }
 
 export function initialParcels(owned = false): Record<ParcelId, boolean> {
