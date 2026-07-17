@@ -1,29 +1,46 @@
 'use client';
 
 import { useState } from 'react';
-import { ArrowRight, Factory, LandPlot, PackageOpen, Route, Sprout, Waves } from 'lucide-react';
-import { CropId, GameState, ParcelId, PlayerAction, UpgradeId } from '../lib/types';
+import { ArrowRight, Boxes, Factory, Hammer, LandPlot, PackageOpen, Pickaxe, Route, Sprout, Waves } from 'lucide-react';
+import { FacilityId, GameState, ItemId, ParcelId, PlayerAction, ResourceId, UpgradeId } from '../lib/types';
 import { CROPS, CROP_IDS } from '../data/crops';
 import { getPrice } from '../lib/engine/market';
 import { FLOUR_EXPORT_PRICE, GOLD_COST, GRID_SIZE, HAUL_ROUTE_LEVELS, MILL_LEVELS, PARCEL_COST, UPGRADES } from '../lib/balance';
 import { millStatus } from '../lib/engine/production';
 import { productionProjection, waterProjection } from '../lib/engine/engineering';
 import { PARCELS, parcelIndices } from '../lib/engine/parcels';
+import { FACILITY_CAPACITY, FACILITY_NAMES, FACILITY_UPGRADES, ITEM_SELL_VALUES, RECIPES, RECIPE_IDS, RESOURCE_SELL_VALUES } from '../data/economy';
 
 interface Props {
   state: GameState;
   dispatch: (action: PlayerAction) => boolean;
 }
 
-type Tab = 'production' | 'land' | 'export' | 'seeds' | 'equipment';
+type Tab = 'production' | 'crafting' | 'stock' | 'land' | 'export' | 'seeds' | 'equipment';
 
 const TABS: Array<{ id: Tab; label: string }> = [
   { id: 'production', label: 'Production' },
+  { id: 'crafting', label: 'Craft' },
+  { id: 'stock', label: 'Stock' },
   { id: 'land', label: 'Land' },
   { id: 'export', label: 'Export' },
   { id: 'seeds', label: 'Seeds' },
   { id: 'equipment', label: 'Tools' },
 ];
+
+const RESOURCE_IDS: ResourceId[] = ['wood', 'stone', 'clay', 'coal', 'ironOre'];
+const ITEM_IDS = Object.keys(ITEM_SELL_VALUES) as ItemId[];
+
+function ingredientHave(state: GameState, input: (typeof RECIPES)[keyof typeof RECIPES]['inputs'][number]): number {
+  if (input.kind === 'crop') return state.inventory[input.id] ?? 0;
+  if (input.kind === 'resource') return state.resources[input.id] ?? 0;
+  return state.items[input.id] ?? 0;
+}
+
+function itemLabel(id: string): string {
+  const words = id.replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
 
 function fieldLocation(idx: number): string {
   const row = Math.floor(idx / GRID_SIZE);
@@ -110,6 +127,36 @@ export function MarketPanel({ state, dispatch }: Props) {
         </div>
       )}
 
+      {tab === 'crafting' && (
+        <div className="space-y-4">
+          <p className="text-xs leading-5 text-white/50">Process harvests and mined resources into higher-value goods. Each facility has a daily batch limit that grows with upgrades.</p>
+          {(['kiln', 'kitchen', 'workshop'] as FacilityId[]).map((facilityId) => {
+            const facility = state.facilities[facilityId];
+            const next = facility.level < 3 ? FACILITY_UPGRADES[facilityId][facility.level] : null;
+            const canUpgrade = !!next && state.gold >= next.gold && Object.entries(next.resources).every(([id, qty]) => state.resources[id as ResourceId] >= (qty ?? 0)) && Object.entries(next.items ?? {}).every(([id, qty]) => state.items[id as ItemId] >= (qty ?? 0));
+            const upgradeInputs = next ? [...Object.entries(next.resources), ...Object.entries(next.items ?? {})].filter(([, qty]) => (qty ?? 0) > 0).map(([id, qty]) => `${qty} ${id}`).join(' · ') : '';
+            const recipes = RECIPE_IDS.map((id) => RECIPES[id]).filter((recipe) => recipe.facility === facilityId);
+            return <section key={facilityId} className="border-y border-white/10 py-3">
+              <div className="mb-3 flex items-start justify-between gap-3"><div><h3 className="text-sm font-bold">{FACILITY_NAMES[facilityId]}</h3><p className="text-[10px] text-white/40">Level {facility.level} · {facility.usedToday}/{FACILITY_CAPACITY[facility.level]} batches used today</p>{next ? <p className="mt-1 text-[9px] text-white/35">Next: {next.gold}g · {upgradeInputs}</p> : null}</div>{next ? <SmallButton onClick={() => dispatch({ type: 'upgradeFacility', facility: facilityId })} disabled={!canUpgrade}>Upgrade</SmallButton> : <span className="text-[10px] text-emerald-300">Max level</span>}</div>
+              {facility.level === 0 ? <p className="text-xs text-[#f1d27a]">Build the first level to unlock this production line.</p> : <div className="space-y-2">{recipes.map((recipe) => {
+                const capacity = FACILITY_CAPACITY[facility.level] - facility.usedToday;
+                const inputMax = Math.min(...recipe.inputs.map((input) => Math.floor(ingredientHave(state, input) / input.qty)));
+                const canCraft = facility.level >= recipe.level && capacity > 0 && inputMax > 0;
+                return <div key={recipe.id} className="bg-black/20 p-2.5"><div className="flex items-center gap-2"><div className="min-w-0 flex-1"><div className="text-xs font-semibold">{recipe.name} <span className="text-white/35">×{recipe.output.qty}</span></div><div className="mt-0.5 text-[9px] text-white/40">{recipe.inputs.map((input) => `${input.qty} ${itemLabel(input.id)}`).join(' + ')} · L{recipe.level}</div></div><SmallButton onClick={() => dispatch({ type: 'craft', recipe: recipe.id, qty: 1 })} disabled={!canCraft}>Make</SmallButton></div><p className="mt-1.5 text-[9px] text-white/35">{recipe.description}</p></div>;
+              })}</div>}
+            </section>;
+          })}
+        </div>
+      )}
+
+      {tab === 'stock' && (
+        <div className="space-y-4">
+          <StockGroup title="Materials" icon={<Pickaxe size={14} />} entries={RESOURCE_IDS.map((id) => ({ id, value: state.resources[id], note: id }))} />
+          <StockGroup title="Processed goods" icon={<Hammer size={14} />} entries={ITEM_IDS.filter((id) => state.items[id] > 0).map((id) => ({ id, value: state.items[id], note: `${itemLabel(id)} · ${ITEM_SELL_VALUES[id]}g` }))} empty="Crafted goods will appear here." />
+          <StockGroup title="Harvest storage" icon={<Boxes size={14} />} entries={CROP_IDS.filter((id) => state.inventory[id] > 0).map((id) => ({ id, value: state.inventory[id], note: CROPS[id].name }))} empty="Non-wheat harvests appear here; wheat is stored in field crates." />
+        </div>
+      )}
+
       {tab === 'land' && (
         <div className="space-y-2">
           <div className="mb-3 flex items-center gap-2 text-xs text-white/50"><LandPlot size={15} /> Buy space when the current layout becomes the constraint.</div>
@@ -128,10 +175,14 @@ export function MarketPanel({ state, dispatch }: Props) {
           <div className="flex items-center justify-between border-b border-[#d9b95f]/30 pb-3"><div><div className="text-sm font-bold">Flour shipment</div><div className="text-xs text-white/45">{FLOUR_EXPORT_PRICE}g each · {state.mill.output} ready</div></div><Command onClick={() => dispatch({ type: 'exportFlour', qty: state.mill.output })} disabled={state.mill.output < 1}>Export flour</Command></div>
           {state.fieldCrates.map((crate, index) => <div key={crate.id} className="flex items-center justify-between border-b border-white/[0.08] py-2"><span className="text-xs">Raw wheat · crate {index + 1}</span><SmallButton onClick={() => dispatch({ type: 'exportWheatFromCrate', crateId: crate.id, qty: crate.wheat })} disabled={crate.wheat < 1}>Sell {crate.wheat}</SmallButton></div>)}
           {CROP_IDS.filter((crop) => crop !== 'wheat').map((crop) => { const have = state.inventory[crop]; return <div key={crop} className="flex items-center gap-2 border-b border-white/[0.08] py-2"><span>{CROPS[crop].emoji}</span><span className="flex-1 text-xs font-semibold">{CROPS[crop].name}</span><span className="text-xs text-white/45">{have} · {getPrice(state, crop).toFixed(1)}g</span><SmallButton onClick={() => dispatch({ type: 'sell', crop, qty: have })} disabled={have < 1}>Sell all</SmallButton></div>; })}
+          <div className="pt-2 text-[10px] font-semibold uppercase text-white/35">Processed goods</div>
+          {ITEM_IDS.filter((item) => item !== 'flour').map((item) => { const have = state.items[item]; return <div key={item} className="flex items-center gap-2 border-b border-white/[0.08] py-2"><span className="min-w-0 flex-1 text-xs font-semibold">{itemLabel(item)}</span><span className="text-xs text-white/45">{have} · {ITEM_SELL_VALUES[item]}g</span><SmallButton onClick={() => dispatch({ type: 'sellItem', item, qty: have })} disabled={have < 1}>Sell all</SmallButton></div>; })}
+          <div className="pt-2 text-[10px] font-semibold uppercase text-white/35">Raw materials</div>
+          {RESOURCE_IDS.map((resource) => { const have = state.resources[resource]; return <div key={resource} className="flex items-center gap-2 border-b border-white/[0.08] py-2"><span className="min-w-0 flex-1 text-xs font-semibold">{resource}</span><span className="text-xs text-white/45">{have} · {RESOURCE_SELL_VALUES[resource]}g</span><SmallButton onClick={() => dispatch({ type: 'sellResource', resource, qty: have })} disabled={have < 1}>Sell all</SmallButton></div>; })}
         </div>
       )}
 
-      {tab === 'seeds' && <div className="grid grid-cols-2 gap-2">{CROP_IDS.map((crop) => <div key={crop} className="flex items-center gap-2 border border-white/[0.08] bg-black/[0.15] p-2"><Sprout size={15} className="text-emerald-300" /><div className="min-w-0 flex-1"><div className="truncate text-xs font-semibold">{CROPS[crop].name}</div><div className="text-[10px] text-white/40">{CROPS[crop].seedCost}g · {state.seeds[crop]}</div></div><SmallButton onClick={() => dispatch({ type: 'buySeeds', crop, qty: 1 })} disabled={state.gold < CROPS[crop].seedCost}>+1</SmallButton></div>)}</div>}
+      {tab === 'seeds' && <div className="grid grid-cols-2 gap-2">{CROP_IDS.map((crop) => <div key={crop} className="flex items-center gap-2 border border-white/[0.08] bg-black/[0.15] p-2"><Sprout size={15} className="shrink-0 text-emerald-300" /><div className="min-w-0 flex-1"><div className="truncate text-xs font-semibold">{CROPS[crop].name}</div><div className="text-[10px] text-white/40">{CROPS[crop].seedCost}g · {state.seeds[crop]} seeds</div><div className="truncate text-[9px] text-white/30">{CROPS[crop].waterNeed} water · {CROPS[crop].preferredSoils.join('/')}</div></div><SmallButton onClick={() => dispatch({ type: 'buySeeds', crop, qty: 1 })} disabled={state.gold < CROPS[crop].seedCost}>+1</SmallButton></div>)}</div>}
 
       {tab === 'equipment' && <div className="space-y-2">{(Object.keys(UPGRADES) as UpgradeId[]).map((id) => { const upgrade = UPGRADES[id]; const owned = state.upgrades.includes(id); return <div key={id} className="flex items-center gap-2 border-b border-white/[0.08] py-3"><div className="min-w-0 flex-1"><div className="text-xs font-semibold">{upgrade.name}</div><div className="text-[10px] text-white/40">{upgrade.effect}</div></div><SmallButton onClick={() => dispatch({ type: 'buyUpgrade', upgrade: id })} disabled={owned || state.gold < upgrade.cost}>{owned ? 'Owned' : `${upgrade.cost}g`}</SmallButton></div>; })}</div>}
     </div>
@@ -149,6 +200,10 @@ function Progress({ value, max, tone }: { value: number; max: number; tone: stri
 
 function Metric({ icon, label, value, sub, warning = false }: { icon: React.ReactNode; label: string; value: string; sub: string; warning?: boolean }) {
   return <div className="bg-[#111a15] p-2.5"><div className="flex items-center gap-1.5 text-[9px] font-semibold uppercase text-white/40">{icon}{label}</div><div className={`mt-1 text-base font-bold tabular-nums ${warning ? 'text-[#ef8f78]' : 'text-white'}`}>{value}</div><div className="text-[9px] text-white/40">{sub}</div></div>;
+}
+
+function StockGroup({ title, icon, entries, empty }: { title: string; icon: React.ReactNode; entries: Array<{ id: string; value: number; note: string }>; empty?: string }) {
+  return <section><div className="mb-2 flex items-center gap-1.5 text-[10px] font-semibold uppercase text-white/40">{icon}{title}</div>{entries.length === 0 ? <p className="border-y border-white/10 py-3 text-xs text-white/35">{empty}</p> : <div className="grid grid-cols-2 gap-px bg-white/10">{entries.map((entry) => <div key={entry.id} className="bg-[#111a15] p-2.5"><div className="truncate text-xs font-semibold">{entry.note}</div><div className="mt-1 text-lg font-bold tabular-nums text-[#f1d27a]">{entry.value}</div></div>)}</div>}</section>;
 }
 
 function Command({ children, onClick, disabled }: { children: React.ReactNode; onClick: () => void; disabled?: boolean }) {

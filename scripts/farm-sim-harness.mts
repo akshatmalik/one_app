@@ -1,14 +1,14 @@
 import { appendFileSync, readFileSync, writeFileSync } from 'node:fs';
 
 import { CROPS } from '../app/apps/farm-sim/data/crops';
-import { START_PLOT, GRID_SIZE, MANUAL_WATER_DRAW, GOLD_COST, CRATE_CATCHMENT } from '../app/apps/farm-sim/lib/balance';
+import { START_PLOT, GRID_SIZE, MANUAL_WATER_DRAW, GOLD_COST, CRATE_CATCHMENT, EXTRACTOR_BUILD_COST, PARCEL_COST } from '../app/apps/farm-sim/lib/balance';
 import { applyAction } from '../app/apps/farm-sim/lib/engine/actions';
 import { endDay } from '../app/apps/farm-sim/lib/engine/resolveDay';
 import { newGame } from '../app/apps/farm-sim/lib/engine/newGame';
 import { seasonForDay } from '../app/apps/farm-sim/lib/engine/weather';
 import type { GameState, PlayerAction, CropId } from '../app/apps/farm-sim/lib/types';
 
-type Strategy = 'naive' | 'planner';
+type Strategy = 'naive' | 'planner' | 'industrial';
 type Line = { kind: 'action'; action: PlayerAction; ok: boolean; error?: string } | { kind: 'endDay'; day: number };
 const MAX_ACTIONS_PER_DAY = 96;
 const FIELD_SIZE = 9;
@@ -20,8 +20,8 @@ function args(): { seed: number; days: number; strategy: Strategy; log?: string;
   const seed = Number(get('--seed') ?? 1);
   const days = Number(get('--days') ?? 28);
   const strategy = (get('--strategy') ?? 'planner') as Strategy;
-  if (!Number.isInteger(seed) || !Number.isInteger(days) || days < 0 || !['naive', 'planner'].includes(strategy))
-    throw new Error('usage: --seed N --days N --strategy naive|planner [--log path] [--replay path]');
+  if (!Number.isInteger(seed) || !Number.isInteger(days) || days < 0 || !['naive', 'planner', 'industrial'].includes(strategy))
+    throw new Error('usage: --seed N --days N --strategy naive|planner|industrial [--log path] [--replay path]');
   return { seed, days, strategy, log: get('--log'), replay: get('--replay') };
 }
 
@@ -108,7 +108,116 @@ function nextPlannerAction(state: GameState): PlayerAction | undefined {
   return undefined;
 }
 
+function bestCropFor(state: GameState, idx: number): CropId {
+  const season = seasonForDay(state.day);
+  const soil = state.tiles[idx].soil;
+  const legal = cropIds.filter((id) => CROPS[id].seasons.includes(season));
+  const ranked = legal.sort((a, b) => {
+    const aFit = CROPS[a].preferredSoils.includes(soil) ? 1 : CROPS[a].soilPenalty;
+    const bFit = CROPS[b].preferredSoils.includes(soil) ? 1 : CROPS[b].soilPenalty;
+    const aValue = CROPS[a].yieldUnits * CROPS[a].basePrice * aFit / CROPS[a].growDays;
+    const bValue = CROPS[b].yieldUnits * CROPS[b].basePrice * bFit / CROPS[b].growDays;
+    return bValue - aValue || a.localeCompare(b);
+  });
+  return ranked[idx % Math.min(3, ranked.length)] ?? 'wheat';
+}
+
+function nextIndustrialAction(state: GameState): PlayerAction | undefined {
+  if (state.mill.output > 0) return { type: 'exportFlour', qty: state.mill.output };
+  const mature = state.tiles.findIndex((tile) => tile.crop?.mature);
+  if (mature >= 0) return { type: 'harvest', idx: mature };
+
+  if (!state.parcels.west && state.gold >= PARCEL_COST.west) return { type: 'purchaseParcel', parcel: 'west' };
+  if (state.parcels.west && !state.parcels.north && state.gold >= PARCEL_COST.north) return { type: 'purchaseParcel', parcel: 'north' };
+  if (state.parcels.north && !state.parcels.south && state.gold >= PARCEL_COST.south) return { type: 'purchaseParcel', parcel: 'south' };
+
+  const brush = state.tiles.findIndex((tile) => tile.kind === 'brush' && state.resources.wood < 60);
+  if (brush >= 0) return { type: 'clearLand', idx: brush };
+  const resourceTarget = { stone: 35, clay: 30, coal: 20, ironOre: 20 } as const;
+  const deposit = state.tiles.findIndex((tile) => (tile.kind === 'rock' || tile.kind === 'marsh') && tile.deposit && tile.deposit.remaining > 0 && state.resources[tile.deposit.resource] < resourceTarget[tile.deposit.resource]);
+  if (deposit >= 0) return { type: 'mine', idx: deposit };
+
+  if (state.parcels.west && !state.parcels.north) {
+    const surplus = ([['stone', 35], ['clay', 24], ['ironOre', 24]] as const).find(([id, reserve]) => state.resources[id] > reserve);
+    if (surplus) return { type: 'sellResource', resource: surplus[0], qty: state.resources[surplus[0]] - surplus[1] };
+  }
+
+  for (const facility of ['kiln', 'kitchen', 'workshop'] as const) {
+    if (state.facilities[facility].level === 0) {
+      const result = applyAction(state, { type: 'upgradeFacility', facility });
+      if (result.ok) return { type: 'upgradeFacility', facility };
+    }
+  }
+  const craftOrder = [
+    ...(state.items.machineParts < 8 ? ['machineParts'] as const : []),
+    ...(state.resources.coal < 8 ? ['charcoal'] as const : []),
+    ...(state.items.ironBars < 14 ? ['smeltIron'] as const : []),
+    ...(state.items.bricks < 24 ? ['fireBricks'] as const : []),
+    'bagRice', 'grindCorn', 'packVegetables', 'cookSauce',
+    ...(state.items.fertilizer < 8 ? ['compost'] as const : []),
+    ...(state.items.fuel < 8 ? ['makeFuel'] as const : []),
+  ] as const;
+  for (const recipe of craftOrder) {
+    const result = applyAction(state, { type: 'craft', recipe, qty: 1 });
+    if (result.ok) return { type: 'craft', recipe, qty: 1 };
+  }
+  for (const facility of ['kiln', 'kitchen', 'workshop'] as const) {
+    if (state.facilities[facility].level > 0 && state.facilities[facility].level < 3) {
+      const result = applyAction(state, { type: 'upgradeFacility', facility });
+      if (result.ok) return { type: 'upgradeFacility', facility };
+    }
+  }
+
+  if (state.facilities.workshop.level >= 2 && state.items.machineParts > 0 && state.items.bricks >= 4 && state.gold >= EXTRACTOR_BUILD_COST.gold) {
+    const target = state.tiles.findIndex((tile) => (tile.kind === 'rock' || tile.kind === 'marsh') && tile.deposit && tile.deposit.remaining >= 4);
+    if (target >= 0) return { type: 'buildExtractor', idx: target };
+  }
+  if (!state.upgrades.includes('tractor') && state.items.machineParts >= 3 && state.gold >= 500) return { type: 'buyUpgrade', upgrade: 'tractor' };
+  if (!state.upgrades.includes('seeder') && state.items.machineParts >= 2 && state.gold >= 500) return { type: 'buyUpgrade', upgrade: 'seeder' };
+
+  const sellableItem = (['riceBag', 'cornmeal', 'vegetableCrate', 'tomatoSauce'] as const).find((id) => state.items[id] > 0);
+  if (sellableItem) return { type: 'sellItem', item: sellableItem, qty: state.items[sellableItem] };
+  if (state.items.fertilizer > 8) return { type: 'sellItem', item: 'fertilizer', qty: state.items.fertilizer - 8 };
+  if (state.items.fuel > 8) return { type: 'sellItem', item: 'fuel', qty: state.items.fuel - 8 };
+  const rawSurplus = ([['stone', 24], ['clay', 18], ['ironOre', 14]] as const).find(([id, reserve]) => state.resources[id] > reserve);
+  if (rawSurplus) return { type: 'sellResource', resource: rawSurplus[0], qty: state.resources[rawSurplus[0]] - rawSurplus[1] };
+  for (const crop of cropIds) {
+    const reserve = state.facilities.kitchen.level > 0 && state.gold >= 20 && crop !== 'wheat' ? 3 : 0;
+    if (state.inventory[crop] > reserve) return { type: 'sell', crop, qty: state.inventory[crop] - reserve };
+  }
+  const wheatCrate = state.fieldCrates.find((crate) => crate.wheat > 0);
+  if (!state.mill.commissioned && wheatCrate && state.gold >= GOLD_COST.mill) return { type: 'commissionMill' };
+  if (state.mill.commissioned && wheatCrate && state.mill.input < state.mill.inputCapacity)
+    return { type: 'loadMillFromCrate', crateId: wheatCrate.id, qty: Math.min(wheatCrate.wheat, state.mill.inputCapacity - state.mill.input) };
+
+  const field = farm(state).filter((idx) => isInCrateRange(state, idx)).slice(0, 18);
+  const areaGrass = field.find((idx) => state.tiles[idx].kind === 'grass');
+  if (areaGrass !== undefined && state.upgrades.includes('tractor') && state.items.fuel > 0) return { type: 'tillArea', idx: areaGrass };
+  for (const idx of field) if (state.tiles[idx].kind === 'grass') return { type: 'till', idx };
+  const areaEmpty = field.find((idx) => state.tiles[idx].kind === 'tilled' && !state.tiles[idx].crop);
+  if (areaEmpty !== undefined && state.upgrades.includes('seeder') && state.items.fuel > 0) {
+    const crop = bestCropFor(state, areaEmpty);
+    if ((state.seeds[crop] ?? 0) > 0) return { type: 'plantArea', idx: areaEmpty, crop };
+  }
+  for (const idx of field) {
+    if (state.tiles[idx].kind !== 'tilled' || state.tiles[idx].crop) continue;
+    const crop = bestCropFor(state, idx);
+    if ((state.seeds[crop] ?? 0) < 1) {
+      if (state.gold >= CROPS[crop].seedCost) return { type: 'buySeeds', crop, qty: 1 };
+      continue;
+    }
+    return { type: 'plant', idx, crop };
+  }
+  for (const idx of field) {
+    const tile = state.tiles[idx];
+    if (tile.crop && tile.moisture < Math.max(45, CROPS[tile.crop.cropId].waterNeed) && state.reservoir >= MANUAL_WATER_DRAW)
+      return { type: 'water', idx };
+  }
+  return undefined;
+}
+
 function nextAction(state: GameState, strategy: Strategy): PlayerAction | undefined {
+  if (strategy === 'industrial') return nextIndustrialAction(state);
   if (strategy === 'planner') return nextPlannerAction(state);
   return plan(state, strategy)[0];
 }
@@ -125,7 +234,8 @@ function metrics(state: GameState, accepted: number, rejected: number, losses: n
     crop: Object.fromEntries(cropIds.map(id => [id, state.tiles.filter(t => t.crop?.cropId === id).length])), inventory: state.inventory,
     accepted, rejected, losses, contractsCompleted,
     production: state.production, mill: state.mill, crates: state.fieldCrates, routes: state.haulRoutes,
-    reputation: state.reputation, unlocks: state.unlocks, maxRejectedPerDay };
+    resources: state.resources, items: state.items, facilities: state.facilities, extractors: state.extractors,
+    reputation: state.reputation, unlocks: state.unlocks, upgrades: state.upgrades, parcels: state.parcels, maxRejectedPerDay };
 }
 
 function runReplay(path: string, seed: number) {

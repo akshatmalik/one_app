@@ -4,12 +4,16 @@
 
 export type Season = 'Spring' | 'Summer' | 'Fall';
 export type Weather = 'sunny' | 'cloudy' | 'rain' | 'storm' | 'heatwave' | 'frost';
-export type CropId = 'wheat' | 'potato' | 'beans' | 'tomato' | 'berries' | 'pumpkin';
-export type TileKind = 'grass' | 'tilled' | 'channel' | 'reservoir' | 'well' | 'sprinkler' | 'barn' | 'coop' | 'shed' | 'mill' | 'depot' | 'crate' | 'path' | 'brush' | 'rock' | 'marsh' | 'locked';
+export type CropId = 'wheat' | 'potato' | 'beans' | 'tomato' | 'berries' | 'pumpkin' | 'rice' | 'corn' | 'carrot';
+export type SoilType = 'loam' | 'clay' | 'sandy';
+export type ResourceId = 'wood' | 'stone' | 'clay' | 'coal' | 'ironOre';
+export type TileKind = 'grass' | 'tilled' | 'channel' | 'reservoir' | 'well' | 'sprinkler' | 'barn' | 'coop' | 'shed' | 'mill' | 'depot' | 'crate' | 'path' | 'brush' | 'rock' | 'marsh' | 'extractor' | 'locked';
 export type UpgradeId = 'bigCan' | 'tractor' | 'seeder' | 'truck';
 export type UnlockId = 'irrigation' | 'mechanization' | 'precisionPlanting' | 'logistics';
-export type ItemId = 'fertilizer' | 'flour' | 'bread' | 'milk' | 'egg' | 'fuel';
+export type ItemId = 'fertilizer' | 'flour' | 'bread' | 'milk' | 'egg' | 'fuel' | 'riceBag' | 'cornmeal' | 'vegetableCrate' | 'tomatoSauce' | 'bricks' | 'ironBars' | 'machineParts';
 export type MachineType = 'tractor' | 'seeder';
+export type FacilityId = 'kiln' | 'kitchen' | 'workshop';
+export type RecipeId = 'compost' | 'charcoal' | 'fireBricks' | 'smeltIron' | 'bagRice' | 'grindCorn' | 'packVegetables' | 'cookSauce' | 'makeFuel' | 'machineParts';
 export type AnimalType = 'cow' | 'chicken';
 export type ParcelId = 'north' | 'south' | 'west' | 'east' | 'northwest' | 'northeast' | 'southwest' | 'southeast';
 
@@ -25,6 +29,23 @@ export interface Machine {
   type: MachineType;
   fuel: number;
   loadedCrop: CropId | null; // e.g. for seeder
+}
+
+export interface ResourceDeposit {
+  resource: Extract<ResourceId, 'stone' | 'clay' | 'coal' | 'ironOre'>;
+  remaining: number;
+  max: number;
+}
+
+export interface FacilityState {
+  level: number;
+  usedToday: number;
+}
+
+export interface ExtractorState {
+  id: string;
+  idx: number;
+  level: number;
 }
 
 export interface FarmContract {
@@ -95,6 +116,8 @@ export interface CropDef {
   frostHardy: boolean;
   regrowDays?: number; // berries: re-mature this many days after harvest
   heatLover?: boolean; // tomato: heatwave + watered = 2 growth days
+  preferredSoils: SoilType[];
+  soilPenalty: number; // yield multiplier outside preferred soil
   seasonMod: Record<Season, number>; // market seasonal price modifier
 }
 
@@ -112,6 +135,8 @@ export interface Tile {
   nitrogen: number; // 0–100
   crop: Crop | null;
   irrigated: boolean; // derived each dawn (connected-channel adjacency), cached for UI
+  soil: SoilType;
+  deposit?: ResourceDeposit;
 }
 
 export interface MarketRow {
@@ -163,6 +188,9 @@ export interface GameState {
   inventory: Record<CropId, number>; // harvested units held
   seeds: Record<CropId, number>;
   items: Record<ItemId, number>;
+  resources: Record<ResourceId, number>;
+  facilities: Record<FacilityId, FacilityState>;
+  extractors: ExtractorState[];
   mill: MillState;
   fieldCrates: FieldCrate[];
   haulRoutes: HaulRoute[];
@@ -190,6 +218,13 @@ export type PlayerAction =
   | { type: 'buildChannel'; idx: number }
   | { type: 'buildSprinkler'; idx: number }
   | { type: 'clearLand'; idx: number }
+  | { type: 'mine'; idx: number }
+  | { type: 'buildExtractor'; idx: number }
+  | { type: 'upgradeExtractor'; extractorId: string }
+  | { type: 'amendSoil'; idx: number; soil: SoilType }
+  | { type: 'craft'; recipe: RecipeId; qty: number }
+  | { type: 'upgradeFacility'; facility: FacilityId }
+  | { type: 'sellResource'; resource: ResourceId; qty: number }
   | { type: 'purchaseParcel'; parcel: ParcelId }
   | { type: 'buildFieldCrate'; idx: number }
   | { type: 'upgradeFieldCrate'; crateId: string }

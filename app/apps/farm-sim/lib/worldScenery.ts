@@ -2,6 +2,15 @@ import { GRID_SIZE, START_PLOT } from './balance';
 
 export type LockedScenery = 'brush' | 'rock' | 'marsh';
 
+export type GroundDetailKind = 'flower' | 'tuft' | 'pebble' | 'worn';
+
+export interface GroundDetail {
+  kind: GroundDetailKind;
+  x: number;
+  y: number;
+  variant: number;
+}
+
 function worldHash(seed: number, idx: number): number {
   let hash = Math.imul((idx + 1) ^ seed, 0x45d9f3b) >>> 0;
   hash ^= hash >>> 16;
@@ -12,6 +21,29 @@ function clusterHash(seed: number, row: number, col: number): number {
   const clusterRow = Math.floor(row / 5);
   const clusterCol = Math.floor(col / 5);
   return worldHash(seed ^ 0x6d2b79f5, clusterRow * 97 + clusterCol * 193);
+}
+
+/** Small, clustered marks that add texture without changing tile occupancy. */
+export function groundDetails(seed: number, idx: number, terrain: 'grass' | 'path' | 'tilled' | 'locked'): GroundDetail[] {
+  if (terrain === 'tilled') return [];
+
+  const row = Math.floor(idx / GRID_SIZE);
+  const col = idx % GRID_SIZE;
+  const local = worldHash(seed ^ 0x2f6e2b1, idx);
+  const formation = clusterHash(seed ^ 0x4a1d7c3, row, col);
+  const inCluster = formation % 100 < 58 && ((local >>> 5) % 5) < 3;
+  const rare = local % 100 < (terrain === 'path' ? 5 : 11);
+  if (!inCluster && !rare) return [];
+
+  const detail: GroundDetailKind = terrain === 'path'
+    ? 'worn'
+    : (['flower', 'tuft', 'pebble'] as const)[local % 3];
+  return [{
+    kind: detail,
+    x: 4 + ((local >>> 8) % 24),
+    y: 5 + ((local >>> 16) % 21),
+    variant: (local >>> 24) % 3,
+  }];
 }
 
 /** Sparse deterministic scenery makes unopened land explorable but not empty. */

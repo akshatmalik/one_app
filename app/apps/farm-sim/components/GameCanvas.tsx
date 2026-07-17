@@ -25,7 +25,7 @@ import { toolToAction } from '../lib/realtime/interact';
 import type { ToolId } from '../lib/realtime/player';
 import { clockToTimeOfDay } from '../render/lighting';
 import { lockedScenery } from '../lib/worldScenery';
-import { TouchControls } from './TouchControls';
+import { findTilePath, TilePosition } from '../lib/realtime/pathfinding';
 
 // Sprite footprint at 2× scale: source is 12×18 → 24×36 screen px
 const SPRITE_W = 24;
@@ -42,11 +42,14 @@ const WATER_EFFECT_MS = 900;
 
 interface Props {
   state: GameState;
+  waterCharges: number;
   selectedCrop: CropId | null;
   activeTool: ToolId;           // controlled from parent — synced into playerRef each frame
   buildTool: BuildTool | null;
+  selectedIdx: number | null;
   onAction: (action: PlayerAction) => boolean;
   onToolChange: (tool: ToolId) => void;
+  onTileSelect: (idx: number | null, player: PlayerState) => void;
   onPlayerMove?: (player: PlayerState) => void;
 }
 
@@ -76,7 +79,7 @@ function collidesWithTiles(
     for (const c of cols) {
       if (r < 0 || r >= GRID_SIZE || c < 0 || c >= GRID_SIZE) return true;
       const t = tiles[r * GRID_SIZE + c];
-      if (t.kind === 'reservoir' || t.kind === 'shed' || t.kind === 'mill' || t.kind === 'depot' || t.kind === 'crate' || t.kind === 'brush' || t.kind === 'rock' || t.kind === 'marsh') return true;
+      if (t.kind === 'reservoir' || t.kind === 'shed' || t.kind === 'mill' || t.kind === 'depot' || t.kind === 'crate' || t.kind === 'brush' || t.kind === 'rock' || t.kind === 'marsh' || t.kind === 'extractor') return true;
       if (t.kind === 'locked' && lockedScenery(seed, r * GRID_SIZE + c)) return true;
     }
   }
@@ -138,15 +141,47 @@ function followPlayer(cam: Camera, player: PlayerState): Camera {
   });
 }
 
+function followPath(player: PlayerState, path: TilePosition[], dt: number): void {
+  const next = path[0];
+  if (!next) return;
+  const targetX = next.col * TILE_PX + 4;
+  const targetY = next.row * TILE_PX;
+  const dx = targetX - player.x;
+  const dy = targetY - player.y;
+  const distance = Math.hypot(dx, dy);
+  if (distance < 0.75) {
+    player.x = targetX;
+    player.y = targetY;
+    path.shift();
+    if (path.length === 0) player.isMoving = false;
+    return;
+  }
+
+  if (Math.abs(dx) >= Math.abs(dy)) player.facing = dx >= 0 ? 'right' : 'left';
+  else player.facing = dy >= 0 ? 'down' : 'up';
+  const step = Math.min(distance, RUN_SPEED * TILE_PX * dt);
+  player.x += dx / distance * step;
+  player.y += dy / distance * step;
+  player.isMoving = true;
+  player.walkTick++;
+  if (player.walkTick >= 8) {
+    player.walkTick = 0;
+    player.walkFrame = player.walkFrame === 0 ? 1 : 0;
+  }
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function GameCanvas({
   state,
+  waterCharges,
   selectedCrop,
   activeTool,
   buildTool,
+  selectedIdx,
   onAction,
   onToolChange,
+  onTileSelect,
   onPlayerMove,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -163,27 +198,36 @@ export function GameCanvas({
   const fpsCountRef  = useRef<number>(0);
   const fpsTimeRef   = useRef<number>(0);
   const waterEffectsRef = useRef<Array<{ idx: number; startedAt: number }>>([]);
+  const pathRef       = useRef<TilePosition[]>([]);
+  const manualCameraUntilRef = useRef(0);
+  const pointerRef = useRef<{ id: number; x: number; y: number; camX: number; camY: number; dragged: boolean } | null>(null);
+  const lastPlayerNotifyRef = useRef(0);
 
   // Mirror latest React state into refs so the rAF closure always reads fresh.
   const stateRef        = useRef(state);
   const selectedCropRef = useRef(selectedCrop);
   const activeToolRef   = useRef(activeTool);
   const buildToolRef    = useRef(buildTool);
+  const selectedIdxRef  = useRef(selectedIdx);
   const onActionRef     = useRef(onAction);
   const onToolChangeRef = useRef(onToolChange);
+  const onTileSelectRef = useRef(onTileSelect);
   const onPlayerMoveRef = useRef(onPlayerMove);
 
   stateRef.current        = state;
   selectedCropRef.current = selectedCrop;
   activeToolRef.current   = activeTool;
   buildToolRef.current    = buildTool;
+  selectedIdxRef.current  = selectedIdx;
   onActionRef.current     = onAction;
   onToolChangeRef.current = onToolChange;
+  onTileSelectRef.current = onTileSelect;
   onPlayerMoveRef.current = onPlayerMove;
 
   // Keep playerRef.tool in sync with the HUD's authoritative tool selection.
   // This prevents the rAF onPlayerMove callback from reverting tool picks.
   playerRef.current.tool = activeTool;
+  playerRef.current.waterCharges = waterCharges;
 
   // ── Boot ────────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -259,8 +303,9 @@ export function GameCanvas({
     };
     window.addEventListener('keydown', onKeyDown);
 
-    // rAF loop with fixed-timestep simulation
-    const loop = (now: number) => {
+    // Fixed-step update. Visible tabs call this from rAF; background playtests
+    // use a low-frequency fallback because browsers suspend animation frames.
+    const tick = (now: number) => {
       if (!lastTimeRef.current) lastTimeRef.current = now;
       const rawDt = Math.min((now - lastTimeRef.current) / 1000, 0.1); // cap at 100ms
       lastTimeRef.current = now;
@@ -273,7 +318,10 @@ export function GameCanvas({
       // Fixed-step simulation
       while (accumRef.current >= SIM_DT) {
         accumRef.current -= SIM_DT;
+        const manualMovement = input.left || input.right || input.up || input.down;
+        if (manualMovement) pathRef.current.length = 0;
         updatePlayer(player, input, gs.tiles, gs.seed, SIM_DT);
+        if (!manualMovement && pathRef.current.length > 0) followPath(player, pathRef.current, SIM_DT);
 
         const wantsAction = input.action || input.actionQueued;
 
@@ -322,7 +370,7 @@ export function GameCanvas({
             viewH: canvas.height,
           });
         }
-        camRef.current = followPlayer(camRef.current, player);
+        if (now >= manualCameraUntilRef.current) camRef.current = followPlayer(camRef.current, player);
       }
 
       // FPS counter (updates once per second)
@@ -334,7 +382,10 @@ export function GameCanvas({
       }
 
       // Notify page of player position (for HUD facing tile)
-      onPlayerMoveRef.current?.(player);
+      if (now - lastPlayerNotifyRef.current >= 100) {
+        lastPlayerNotifyRef.current = now;
+        onPlayerMoveRef.current?.(player);
+      }
 
       // Render
       const cam = camRef.current;
@@ -345,6 +396,8 @@ export function GameCanvas({
         renderWorld(ctx, gs, atlas, cam, {
           tod: clockToTimeOfDay(gs.time),
           player,
+          selectedIdx: selectedIdxRef.current,
+          navigationPath: pathRef.current,
           waterEffects: waterEffectsRef.current.map((effect) => ({
             idx: effect.idx,
             progress: (now - effect.startedAt) / WATER_EFFECT_MS,
@@ -353,17 +406,28 @@ export function GameCanvas({
           buildTool: buildToolRef.current,
         });
       }
-
-      rafRef.current = requestAnimationFrame(loop);
     };
 
+    const loop = (now: number) => {
+      tick(now);
+      rafRef.current = requestAnimationFrame(loop);
+    };
     rafRef.current = requestAnimationFrame(loop);
+    const fallbackTimer = window.setInterval(() => {
+      const now = performance.now();
+      if (now - lastTimeRef.current > 120) tick(now);
+    }, 100);
 
     // ── window.__farm console API ──────────────────────────────────────────
     if (typeof window !== 'undefined') {
       (window as any).__farm = {
         getState: () => stateRef.current,
         getPlayer: () => playerRef.current,
+        getInput: () => inputRef.current,
+        getFrameCount: () => fpsCountRef.current,
+        getCamera: () => camRef.current,
+        getSelection: () => selectedIdxRef.current,
+        getPath: () => [...pathRef.current],
         getFps: () => fpsRef.current,
         dispatch: (action: PlayerAction) => onActionRef.current(action),
         tp: (row: number, col: number) => {
@@ -411,6 +475,7 @@ export function GameCanvas({
 
     return () => {
       cancelAnimationFrame(rafRef.current);
+      window.clearInterval(fallbackTimer);
       ro.disconnect();
       detachKeys();
       window.removeEventListener('keydown', onKeyDown);
@@ -420,65 +485,72 @@ export function GameCanvas({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── Canvas tap → walk to tile (or show tile info) ─────────────────────────
-  const handlePointerDown = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
-    const cam = camRef.current;
-    if (!cam) return;
-    const rect = canvasRef.current!.getBoundingClientRect();
-    const screenX = (e.clientX - rect.left) * (canvasRef.current!.width / rect.width);
-    const screenY = (e.clientY - rect.top) * (canvasRef.current!.height / rect.height);
-    const worldX  = screenX + cam.x;
-    const worldY  = screenY + cam.y;
+  useEffect(() => {
+    if (selectedIdx === null) pathRef.current.length = 0;
+  }, [selectedIdx]);
 
-    // Snap to tile centre and walk player toward it (direct, no pathfinding yet)
+  const selectWorldPoint = useCallback((clientX: number, clientY: number) => {
+    const canvas = canvasRef.current;
+    const cam = camRef.current;
+    if (!canvas || !cam) return;
+    const rect = canvas.getBoundingClientRect();
+    const screenX = (clientX - rect.left) * (canvas.width / rect.width);
+    const screenY = (clientY - rect.top) * (canvas.height / rect.height);
+    const worldX = screenX + cam.x;
+    const worldY = screenY + cam.y;
     const col = Math.floor(worldX / TILE_PX);
     const row = Math.floor(worldY / TILE_PX);
     if (col < 0 || col >= GRID_SIZE || row < 0 || row >= GRID_SIZE) return;
 
-    // Set player facing toward the tapped tile relative to current position
     const player = playerRef.current;
-    const centerX = col * TILE_PX + TILE_PX / 2;
-    const centerY = row * TILE_PX + TILE_PX / 2;
-    const px = player.x + SPRITE_W / 2;
-    const py = player.y + SPRITE_H / 2;
-    const absDx = Math.abs(centerX - px);
-    const absDy = Math.abs(centerY - py);
-    if (absDx >= absDy) {
-      player.facing = centerX > px ? 'right' : 'left';
-    } else {
-      player.facing = centerY > py ? 'down' : 'up';
+    const playerScreenX = player.x - cam.x;
+    const playerScreenY = player.y - cam.y;
+    if (screenX >= playerScreenX - 5 && screenX <= playerScreenX + 37 && screenY >= playerScreenY - 5 && screenY <= playerScreenY + 45) {
+      pathRef.current.length = 0;
+      onTileSelectRef.current(null, { ...player });
+      return;
     }
 
-    // Try to use tool on the tapped tile if it's adjacent to where the player is standing
-    const standingRow = Math.floor((player.y + 24) / TILE_PX);
-    const standingCol = Math.floor((player.x + 12) / TILE_PX);
-
-    // We allow interaction if the tapped tile is adjacent (including diagonals)
-    if (Math.abs(row - standingRow) <= 1 && Math.abs(col - standingCol) <= 1) {
-      const tappedIdx = row * GRID_SIZE + col;
-
-      let act: PlayerAction | null = null;
-      const currentBuildTool = buildToolRef.current;
-      if (currentBuildTool) {
-        if (currentBuildTool === 'channel') act = { type: 'buildChannel', idx: tappedIdx };
-        else if (currentBuildTool === 'well') act = { type: 'digWell', idx: tappedIdx };
-        else if (currentBuildTool === 'sprinkler') act = { type: 'buildSprinkler', idx: tappedIdx };
-        else if (currentBuildTool === 'crate') act = { type: 'buildFieldCrate', idx: tappedIdx };
-        else if (currentBuildTool === 'clear') act = { type: 'clearLand', idx: tappedIdx };
-        else if (currentBuildTool === 'demolish') act = { type: 'demolish', idx: tappedIdx };
-      } else {
-        act = toolToAction(player, stateRef.current, selectedCropRef.current, tappedIdx);
-      }
-
-      if (act) {
-        const ok = onActionRef.current(act);
-        if (ok && act.type === 'water') {
-          waterEffectsRef.current.push({ idx: act.idx, startedAt: performance.now() });
-          playerRef.current.waterCharges = Math.max(0, playerRef.current.waterCharges - 1);
-        }
-      }
-    }
+    const startRow = Math.floor((player.y + 24) / TILE_PX);
+    const startCol = Math.floor((player.x + 12) / TILE_PX);
+    pathRef.current = findTilePath({
+      state: stateRef.current,
+      start: { row: startRow, col: startCol },
+      target: { row, col },
+      gridSize: GRID_SIZE,
+    });
+    onTileSelectRef.current(row * GRID_SIZE + col, { ...player });
   }, []);
+
+  // Tap selects/routes. Drag temporarily pans the camera.
+  const handlePointerDown = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
+    const cam = camRef.current;
+    if (!cam) return;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    pointerRef.current = { id: e.pointerId, x: e.clientX, y: e.clientY, camX: cam.x, camY: cam.y, dragged: false };
+  }, []);
+
+  const handlePointerMove = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
+    const pointer = pointerRef.current;
+    const cam = camRef.current;
+    const canvas = canvasRef.current;
+    if (!pointer || pointer.id !== e.pointerId || !cam || !canvas) return;
+    const scaleX = canvas.width / canvas.offsetWidth;
+    const scaleY = canvas.height / canvas.offsetHeight;
+    const dx = (e.clientX - pointer.x) * scaleX;
+    const dy = (e.clientY - pointer.y) * scaleY;
+    if (Math.hypot(dx, dy) > 5) pointer.dragged = true;
+    if (!pointer.dragged) return;
+    manualCameraUntilRef.current = performance.now() + 1600;
+    camRef.current = clampCamera({ ...cam, x: pointer.camX - dx, y: pointer.camY - dy });
+  }, []);
+
+  const handlePointerUp = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
+    const pointer = pointerRef.current;
+    if (!pointer || pointer.id !== e.pointerId) return;
+    pointerRef.current = null;
+    if (!pointer.dragged) selectWorldPoint(e.clientX, e.clientY);
+  }, [selectWorldPoint]);
 
   return (
     <>
@@ -486,11 +558,10 @@ export function GameCanvas({
         ref={canvasRef}
         className="absolute inset-0 block h-full w-full touch-none"
         onPointerDown={handlePointerDown}
-        style={{ imageRendering: 'pixelated', cursor: 'crosshair' }}
-      />
-      <TouchControls
-        inputRef={inputRef}
-        onAction={() => { inputRef.current.actionQueued = true; }}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={() => { pointerRef.current = null; }}
+        style={{ imageRendering: 'pixelated', cursor: 'pointer' }}
       />
     </>
   );

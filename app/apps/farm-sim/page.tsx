@@ -2,17 +2,17 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
-import { ClipboardList, Hammer, X } from 'lucide-react';
+import { ClipboardList, X } from 'lucide-react';
 import { useFarmGame } from './hooks/useFarmGame';
 import { PlayerAction, CropId } from './lib/types';
 import { HudBar } from './components/HudBar';
 import { GameCanvas } from './components/GameCanvas';
 import { MarketPanel } from './components/MarketPanel';
-import { BuildPanel, BuildTool } from './components/BuildPanel';
 import { DayRecap } from './components/DayRecap';
 import { MenuScreen } from './components/MenuScreen';
 import { DevOverlay } from './components/DevOverlay';
-import { PlayerState, facingTileIdx, CAN_MAX_CHARGES } from './lib/realtime/player';
+import { TileSheet } from './components/TileSheet';
+import { PlayerState, CAN_MAX_CHARGES, standingTileIdx } from './lib/realtime/player';
 import type { ToolId } from './lib/realtime/player';
 import { GRID_SIZE } from './lib/balance';
 
@@ -22,14 +22,13 @@ export default function FarmSimPage() {
 
   const [menuOpen, setMenuOpen]       = useState(false);
   const [showMarket, setShowMarket]   = useState(false);
-  const [showBuild, setShowBuild]     = useState(false);
-  const [buildTool, setBuildTool]     = useState<BuildTool | null>(null);
 
   const [currentTool, setCurrentTool]   = useState<ToolId>('hoe');
   const [selectedCrop, setSelectedCrop] = useState<CropId | null>(null);
   const [waterCharges, setWaterCharges] = useState(CAN_MAX_CHARGES);
   const [playerState, setPlayerState]   = useState<PlayerState | null>(null);
   const [fps, setFps]                   = useState(60);
+  const [selectedIdx, setSelectedIdx]   = useState<number | null>(null);
 
   useEffect(() => { if (!state) setMenuOpen(true); }, [state]);
 
@@ -52,11 +51,6 @@ export default function FarmSimPage() {
 
   const handleToolChange = useCallback((tool: ToolId) => {
     setCurrentTool(tool);
-    if (tool === 'builder') setShowBuild(true);
-    else {
-      setShowBuild(false);
-      setBuildTool(null);
-    }
   }, []);
 
   const handleAction = useCallback((action: PlayerAction): boolean => {
@@ -77,11 +71,22 @@ export default function FarmSimPage() {
     }
   }, []);
 
-  const facingIdx = playerState ? facingTileIdx(playerState, GRID_SIZE) : null;
+  const handleTileSelect = useCallback((idx: number | null, player: PlayerState) => {
+    setPlayerState(player);
+    setSelectedIdx(idx);
+  }, []);
+
   const showMenu = menuOpen || !state;
+  const standingIdx = playerState ? standingTileIdx(playerState, GRID_SIZE) : null;
+  const selectionInRange = selectedIdx !== null && standingIdx !== null
+    ? Math.max(
+        Math.abs(Math.floor(selectedIdx / GRID_SIZE) - Math.floor(standingIdx / GRID_SIZE)),
+        Math.abs(selectedIdx % GRID_SIZE - standingIdx % GRID_SIZE),
+      ) <= 1
+    : false;
 
   useEffect(() => {
-    const paused = showMenu || showMarket || showBuild || !!recap || !state;
+    const paused = showMenu || showMarket || !!recap || !state;
     if (paused) return;
 
     let lastTick = performance.now();
@@ -91,7 +96,7 @@ export default function FarmSimPage() {
       lastTick = now;
     }, 250);
     return () => window.clearInterval(timer);
-  }, [showMenu, showMarket, showBuild, recap, advanceTime, state]);
+  }, [showMenu, showMarket, recap, advanceTime, state]);
 
   return (
     <div className="w-full h-full bg-black select-none overflow-hidden relative">
@@ -100,11 +105,14 @@ export default function FarmSimPage() {
       {state && (
         <GameCanvas
           state={state}
+          waterCharges={waterCharges}
           selectedCrop={selectedCrop}
           activeTool={currentTool}
-          buildTool={buildTool}
+          buildTool={null}
+          selectedIdx={selectedIdx}
           onAction={handleAction}
           onToolChange={handleToolChange}
+          onTileSelect={handleTileSelect}
           onPlayerMove={handlePlayerMove}
         />
       )}
@@ -116,40 +124,41 @@ export default function FarmSimPage() {
           tool={currentTool}
           waterCharges={waterCharges}
           selectedCrop={selectedCrop}
+          hasSelection={selectedIdx !== null}
           onMenu={() => setMenuOpen(true)}
           onToolPick={handleToolChange}
           onCropPick={setSelectedCrop}
-          onMarket={() => { setShowMarket(true); setShowBuild(false); setBuildTool(null); }}
+          onMarket={() => setShowMarket(true)}
           onEndDay={handleEndDay}
-          facingIdx={facingIdx}
         />
       )}
 
+      {state && selectedIdx !== null ? (
+        <TileSheet
+          state={state}
+          idx={selectedIdx}
+          inRange={selectionInRange}
+          isWalking={!!playerState?.isMoving && !selectionInRange}
+          waterCharges={waterCharges}
+          selectedCrop={selectedCrop}
+          dispatch={handleAction}
+          onClose={() => setSelectedIdx(null)}
+        />
+      ) : null}
+
       {/* Toasts */}
       {state && game.error && (
-        <div className="absolute bottom-20 left-1/2 z-30 -translate-x-1/2 rounded-md
+        <div className="absolute top-16 left-1/2 z-40 -translate-x-1/2 rounded-md
                         bg-red-600/90 backdrop-blur-sm px-4 py-2 text-sm font-bold
                         shadow-xl border border-red-400/30 pointer-events-none">
           {game.error}
         </div>
       )}
       {state && game.info && !game.error && (
-        <div className="absolute bottom-20 left-1/2 z-30 -translate-x-1/2 rounded-md
+        <div className="absolute top-16 left-1/2 z-40 -translate-x-1/2 rounded-md
                         bg-emerald-600/90 backdrop-blur-sm px-4 py-2 text-sm font-bold
                         shadow-xl border border-emerald-400/30 pointer-events-none">
           {game.info}
-        </div>
-      )}
-
-      {/* Build panel — slides up from bottom, above HUD */}
-      {state && showBuild && (
-        <div className="absolute bottom-16 left-2 right-2 z-20 border border-white/10 bg-[#111a15]/97 shadow-2xl backdrop-blur-md md:bottom-20 md:left-4 md:right-auto md:w-[380px]">
-          <div className="flex h-12 items-center justify-between border-b border-white/10 px-3">
-            <span className="flex items-center gap-2 text-sm font-bold text-white"><Hammer size={16} className="text-[#d9b95f]" /> Build</span>
-            <button type="button" aria-label="Close build panel" onClick={() => { setShowBuild(false); setBuildTool(null); setCurrentTool('hoe'); }}
-              className="grid h-8 w-8 place-items-center rounded-md text-white/50 hover:bg-white/10 hover:text-white"><X size={16} /></button>
-          </div>
-          <BuildPanel state={state} tool={buildTool} onPick={setBuildTool} />
         </div>
       )}
 

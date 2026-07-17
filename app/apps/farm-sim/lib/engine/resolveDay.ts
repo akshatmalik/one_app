@@ -219,6 +219,24 @@ export function endDay(state: GameState): { state: GameState; recap: DayRecap } 
     // Tractor/Seeder don't process items overnight
   }
 
+  // Automated extractors trade infrastructure for steady material flow.
+  const activeExtractors = [] as GameState['extractors'];
+  for (const extractor of s.extractors) {
+    const tile = s.tiles[extractor.idx];
+    const deposit = tile?.deposit;
+    if (!deposit || deposit.remaining <= 0) {
+      if (tile) s.tiles[extractor.idx] = { ...tile, kind: 'grass', deposit: undefined };
+      continue;
+    }
+    const mined = Math.min(extractor.level, deposit.remaining);
+    s.resources[deposit.resource] += mined;
+    deposit.remaining -= mined;
+    if (deposit.remaining > 0) activeExtractors.push(extractor);
+    else s.tiles[extractor.idx] = { ...tile, kind: 'grass', deposit: undefined };
+  }
+  s.extractors = activeExtractors;
+  for (const facility of Object.values(s.facilities)) facility.usedToday = 0;
+
   // ── Animals
   for (const a of s.animals) {
     if (a.fedToday) {
