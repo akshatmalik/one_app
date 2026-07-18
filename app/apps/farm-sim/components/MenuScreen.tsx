@@ -10,6 +10,7 @@ interface Props {
   hasSave: boolean;
   slots: SaveSlotInfo[];
   inGame: boolean;
+  error?: string | null;
   onNewGame: (seed?: number) => void;
   onContinue: () => void;
   onLoadSlot: (slot: number) => void;
@@ -27,6 +28,7 @@ export function MenuScreen({
   hasSave,
   slots,
   inGame,
+  error,
   onNewGame,
   onContinue,
   onLoadSlot,
@@ -54,6 +56,8 @@ export function MenuScreen({
         <h1 className="mt-2 text-3xl font-bold">Farm Sim</h1>
         <p className="mt-1 text-sm text-[#86c98a]">Grow. Connect. Automate.</p>
       </div>
+
+      {error ? <p className="w-full max-w-xs rounded-md border border-[#e88979]/40 bg-[#7f3028]/35 px-3 py-2 text-center text-xs font-semibold text-[#f5b4a7]" role="alert">{error}</p> : null}
 
       <div className="w-full max-w-xs space-y-2">
         {inGame && (

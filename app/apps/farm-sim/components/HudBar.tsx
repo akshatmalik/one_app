@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import {
-  Clock3,
   Coins,
   Droplets,
   Factory,
@@ -10,10 +9,11 @@ import {
   Hammer,
   Menu,
   Moon,
+  Pause,
   Pickaxe,
+  Play,
   Sprout,
   Tractor,
-  Wrench,
   Wheat,
   X,
 } from 'lucide-react';
@@ -21,10 +21,10 @@ import type { LucideIcon } from 'lucide-react';
 import { CropId, GameState } from '../lib/types';
 import { CROPS } from '../data/crops';
 import { WEATHER_META } from '../data/weather';
-import { RESERVOIR_CAP } from '../lib/balance';
 import { dayOfSeason, seasonForDay } from '../lib/engine/weather';
 import { CAN_MAX_CHARGES, ToolId } from '../lib/realtime/player';
 import { formatClock } from '../lib/realtime/clock';
+import { waterProjection } from '../lib/engine/engineering';
 
 const BASE_TOOLS: { id: ToolId; Icon: LucideIcon; label: string }[] = [
   { id: 'hand', Icon: Hand, label: 'Harvest' },
@@ -39,7 +39,12 @@ interface Props {
   tool: ToolId;
   waterCharges: number;
   selectedCrop: CropId | null;
-  hasSelection: boolean;
+  paused: boolean;
+  endDayDisabled: boolean;
+  timeScale: 1 | 2 | 4;
+  hideDock?: boolean;
+  onTogglePause: () => void;
+  onCycleSpeed: () => void;
   onMenu: () => void;
   onToolPick: (tool: ToolId) => void;
   onCropPick: (crop: CropId) => void;
@@ -52,62 +57,97 @@ export function HudBar({
   tool,
   waterCharges,
   selectedCrop,
-  hasSelection,
+  paused,
+  endDayDisabled,
+  timeScale,
+  hideDock = false,
+  onTogglePause,
+  onCycleSpeed,
   onMenu,
   onToolPick,
   onCropPick,
   onMarket,
   onEndDay,
 }: Props) {
-  const [toolsOpen, setToolsOpen] = useState(false);
+  const [panel, setPanel] = useState<'tools' | 'seeds' | 'forecast' | null>(null);
   const season = seasonForDay(state.day);
   const day = dayOfSeason(state.day) + 1;
   const weather = state.weatherTruth[dayOfSeason(state.day)];
-  const water = Math.min(100, Math.round(state.reservoir / RESERVOIR_CAP * 100));
+  const water = waterProjection(state);
   const tools = [...BASE_TOOLS];
   if (state.upgrades.includes('tractor')) tools.push({ id: 'tractor', Icon: Tractor, label: 'Tractor' });
   if (state.upgrades.includes('seeder')) tools.push({ id: 'seeder', Icon: Wheat, label: 'Seeder' });
   const active = tools.find((item) => item.id === tool) ?? tools[0];
+  const visibleCrop = selectedCrop ?? 'wheat';
 
   const pickTool = (next: ToolId) => {
     onToolPick(next);
-    if (next !== 'seeds') setToolsOpen(false);
+    setPanel(next === 'seeds' ? 'seeds' : null);
   };
-  const openMarket = () => {
-    setToolsOpen(false);
-    onMarket();
+
+  const pickCrop = (crop: CropId) => {
+    onCropPick(crop);
+    onToolPick('seeds');
+    setPanel(null);
   };
 
   return (
     <>
-      <header className="pointer-events-none absolute inset-x-0 top-0 z-20 px-2 pt-[max(0.5rem,env(safe-area-inset-top))] text-white md:px-4 md:pt-4">
-        <div className="pointer-events-auto mx-auto flex h-12 max-w-6xl items-center gap-2 rounded-md border border-white/10 bg-[#101713]/90 px-1.5 shadow-xl backdrop-blur-xl">
-          <button type="button" onClick={onMenu} aria-label="Open menu" className="grid size-9 shrink-0 place-items-center rounded-md text-white/65 hover:bg-white/10 hover:text-white">
+      <header className="pointer-events-none absolute inset-x-0 top-0 z-20 px-2 pt-[max(0.375rem,env(safe-area-inset-top))] text-white md:px-4 md:pt-4">
+        <div className="pointer-events-auto mx-auto flex h-11 max-w-6xl items-center rounded-md border border-white/10 bg-[#0d1511]/92 px-1 shadow-xl backdrop-blur-xl">
+          <button type="button" onClick={onMenu} aria-label="Open menu" className="grid size-10 shrink-0 place-items-center rounded-md text-white/65 hover:bg-white/10 hover:text-white">
             <Menu size={18} />
           </button>
-          <div className="min-w-0 border-l border-white/10 pl-2 leading-tight">
-            <p className="truncate text-[9px] font-semibold uppercase text-[#91ca8d]">{season} · Day {day}</p>
-            <p className="mt-0.5 flex items-center gap-1.5 text-xs font-bold tabular-nums"><Clock3 size={13} className="text-white/45" />{formatClock(state.time)}</p>
+          <div className="w-12 shrink-0 border-l border-white/10 px-1.5 leading-none min-[390px]:w-14 min-[390px]:px-2">
+            <p className="truncate text-[8px] font-bold uppercase text-[#91ca8d]"><span className="min-[390px]:hidden">{season.slice(0, 3)} {day}</span><span className="hidden min-[390px]:inline">{season} {day}</span></p>
+            <p className="mt-1 text-xs font-bold tabular-nums">{formatClock(state.time)}</p>
           </div>
-          <div className="flex min-w-0 items-center gap-1.5 border-l border-white/10 pl-2">
+          <button
+            type="button"
+            onClick={() => setPanel((value) => value === 'forecast' ? null : 'forecast')}
+            aria-expanded={panel === 'forecast'}
+            aria-label="Show three-day weather forecast"
+            className="flex min-w-0 items-center gap-1 rounded-md border-l border-white/10 px-1.5 hover:bg-white/10"
+          >
+            <span className="sr-only">Weather: {WEATHER_META[weather].label}</span>
             <span className="text-base" aria-hidden="true">{WEATHER_META[weather].emoji}</span>
-            <span className="hidden truncate text-[10px] font-semibold text-white/60 min-[360px]:block">{WEATHER_META[weather].label}</span>
-          </div>
-          <div className="ml-auto flex items-center gap-2 pr-1 text-xs font-semibold tabular-nums">
-            <span className="hidden items-center gap-1 text-[#71bddd] min-[410px]:flex"><Droplets size={14} />{water}%</span>
-            <span className="flex items-center gap-1 text-[#efd275]"><Coins size={14} />{Math.round(state.gold)}</span>
+            <span className="hidden truncate text-[9px] font-semibold text-white/55 min-[430px]:block" aria-hidden="true">{WEATHER_META[weather].label}</span>
+          </button>
+          <div className="ml-auto flex items-center gap-1 text-xs font-semibold tabular-nums">
+            <span
+              className={`flex items-center gap-1 px-1 ${water.sustainable ? 'text-[#71bddd]' : 'text-[#efa08c]'}`}
+              role="status"
+              aria-label={`Reservoir ${Math.round(state.reservoir)}. Projected dawn demand ${Math.round(water.demand)}. ${water.sustainable ? 'Water supply is sufficient.' : 'Water shortage projected.'}`}
+              title={`${Math.round(state.reservoir)} water · ${Math.round(water.demand)} projected demand`}
+            ><Droplets size={13} />{Math.round(state.reservoir)}</span>
+            <span className="flex items-center gap-1 px-1 text-[#efd275]"><Coins size={14} />{Math.round(state.gold)}</span>
+            <button
+              type="button"
+              onClick={onCycleSpeed}
+              aria-label={`Game speed ${timeScale} times. Change speed.`}
+              className="grid h-10 min-w-8 place-items-center rounded-md text-[10px] font-bold text-white/70 hover:bg-white/10"
+            >{timeScale}×</button>
+            <button
+              type="button"
+              onClick={onTogglePause}
+              aria-label={paused ? 'Resume game' : 'Pause game'}
+              aria-pressed={paused}
+              className={`grid size-10 place-items-center rounded-md ${paused ? 'bg-[#efd275] text-[#17201d]' : 'text-white hover:bg-white/10'}`}
+            >
+              {paused ? <Play size={18} fill="currentColor" /> : <Pause size={18} fill="currentColor" />}
+            </button>
           </div>
         </div>
       </header>
 
-      {!hasSelection ? (
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] md:bottom-4 md:left-4 md:right-auto md:p-0">
-          {toolsOpen ? (
-            <div className="pointer-events-auto mx-auto mb-2 max-w-sm rounded-md border border-white/10 bg-[#101713]/95 p-2 text-white shadow-2xl backdrop-blur-xl md:mx-0 md:w-[352px]">
-              <div className="mb-2 flex h-8 items-center justify-between px-1">
-                <span className="text-[10px] font-semibold uppercase text-white/45">Tools</span>
-                <button type="button" onClick={() => setToolsOpen(false)} aria-label="Close tools" className="grid size-8 place-items-center rounded-md text-white/50 hover:bg-white/10"><X size={15} /></button>
-              </div>
+      {!hideDock && <div className="pointer-events-none absolute inset-x-0 bottom-0 z-40 px-2 pb-[max(0.375rem,env(safe-area-inset-bottom))] md:bottom-4 md:left-4 md:right-auto md:p-0">
+        {panel ? (
+          <div className="pointer-events-auto mx-auto mb-1.5 max-w-sm rounded-md border border-white/10 bg-[#0d1511]/95 p-2 text-white shadow-2xl backdrop-blur-xl md:mx-0 md:w-[360px]">
+            <div className="mb-1 flex h-8 items-center justify-between px-1">
+              <span className="text-[10px] font-bold uppercase text-white/45">{panel === 'tools' ? 'Choose tool' : panel === 'seeds' ? 'Seeds on hand' : 'Weather forecast'}</span>
+              <button type="button" onClick={() => setPanel(null)} aria-label="Close picker" className="grid size-8 place-items-center rounded-md text-white/55 hover:bg-white/10"><X size={15} /></button>
+            </div>
+            {panel === 'tools' ? (
               <div className="grid grid-cols-5 gap-1">
                 {tools.map((item) => (
                   <button
@@ -115,43 +155,61 @@ export function HudBar({
                     key={item.id}
                     onClick={() => pickTool(item.id)}
                     aria-pressed={tool === item.id}
-                    className={`relative flex h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-md border text-[9px] font-medium ${tool === item.id ? 'border-[#efd275] bg-[#efd275]/12 text-[#efd275]' : 'border-transparent text-white/60 hover:bg-white/[0.07]'}`}
+                    className={`relative flex h-12 min-w-0 flex-col items-center justify-center gap-0.5 rounded-md border text-[9px] font-medium ${tool === item.id ? 'border-[#efd275] bg-[#efd275]/12 text-[#efd275]' : 'border-transparent text-white/65 hover:bg-white/[0.07]'}`}
                   >
-                    <item.Icon size={18} />
+                    <item.Icon size={17} />
                     <span className="max-w-full truncate px-1">{item.label}</span>
-                    {item.id === 'can' ? <span className="absolute inset-x-2 bottom-1 h-0.5 bg-white/10"><span className="block h-full bg-[#71bddd]" style={{ width: `${waterCharges / CAN_MAX_CHARGES * 100}%` }} /></span> : null}
+                    {item.id === 'can' ? <span className="absolute inset-x-2 bottom-0.5 h-0.5 bg-white/10"><span className="block h-full bg-[#71bddd]" style={{ width: `${waterCharges / CAN_MAX_CHARGES * 100}%` }} /></span> : null}
                   </button>
                 ))}
               </div>
-              {tool === 'seeds' ? (
-                <div className="mt-2 flex gap-1 overflow-x-auto border-t border-white/10 pt-2">
-                  {(Object.keys(CROPS) as CropId[]).map((crop) => (
+            ) : panel === 'seeds' ? (
+              <div className="flex gap-1 overflow-x-auto pb-1" role="group" aria-label="Seed inventory">
+                {(Object.keys(CROPS) as CropId[]).map((crop) => {
+                  const count = state.seeds[crop] ?? 0;
+                  return (
                     <button
                       type="button"
                       key={crop}
-                      disabled={(state.seeds[crop] ?? 0) < 1}
-                      onClick={() => { onCropPick(crop); setToolsOpen(false); }}
-                      className={`h-12 w-12 shrink-0 rounded-md border text-center disabled:opacity-30 ${selectedCrop === crop ? 'border-[#efd275] bg-[#efd275]/10' : 'border-white/10 bg-black/20'}`}
+                      onClick={() => pickCrop(crop)}
+                      disabled={count < 1}
+                      aria-label={`${CROPS[crop].name}: ${count} seeds`}
+                      className={`h-14 w-14 shrink-0 rounded-md border text-center disabled:opacity-40 ${selectedCrop === crop ? 'border-[#efd275] bg-[#efd275]/10' : 'border-white/10 bg-black/20'}`}
                     >
                       <span className="block text-lg leading-5">{CROPS[crop].emoji}</span>
-                      <span className="block text-[9px] text-white/45">{state.seeds[crop] ?? 0}</span>
+                      <span className="block truncate px-1 text-[8px] text-white/55">{CROPS[crop].name}</span>
+                      <span className="block text-[10px] font-bold tabular-nums text-white">×{count}</span>
                     </button>
-                  ))}
-                </div>
-              ) : null}
-            </div>
-          ) : null}
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="grid grid-cols-3 gap-1" role="list" aria-label="Three-day weather forecast">
+                {state.forecast.map((nextWeather, index) => (
+                  <div key={`${index}-${nextWeather ?? 'unknown'}`} className="rounded-md border border-white/10 bg-black/20 px-1 py-2 text-center" role="listitem">
+                    <span className="block text-[9px] font-semibold uppercase text-white/45">{index === 0 ? 'Tomorrow' : `Day +${index + 1}`}</span>
+                    <span className="mt-1 block text-lg leading-5" aria-hidden="true">{nextWeather ? WEATHER_META[nextWeather].emoji : '—'}</span>
+                    <span className="mt-1 block truncate text-[9px] font-semibold text-white/70">{nextWeather ? WEATHER_META[nextWeather].label : 'Unknown'}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : null}
 
-          <nav aria-label="Farm controls" className="pointer-events-auto mx-auto grid h-14 max-w-sm grid-cols-4 rounded-md border border-white/10 bg-[#101713]/92 p-1 text-white shadow-2xl backdrop-blur-xl md:mx-0 md:w-[352px]">
-            <button type="button" onClick={() => setToolsOpen((value) => !value)} className="flex min-w-0 items-center justify-center gap-2 rounded-md text-xs font-semibold text-white/70 hover:bg-white/[0.07]">
-              <active.Icon size={18} className="text-[#efd275]" /><span className="truncate">{active.label}</span>
-            </button>
-            <button type="button" onClick={openMarket} className="grid place-items-center rounded-md text-white/60 hover:bg-white/[0.07]" aria-label="Farm operations"><Factory size={19} /></button>
-            <button type="button" onClick={() => pickTool('builder')} className="grid place-items-center rounded-md text-white/60 hover:bg-white/[0.07]" aria-label="Build"><Wrench size={19} /></button>
-            <button type="button" onClick={onEndDay} className="grid place-items-center rounded-md text-[#b7bde6] hover:bg-white/[0.07]" aria-label="End day"><Moon size={19} /></button>
-          </nav>
-        </div>
-      ) : null}
+        <nav aria-label="Farm controls" className="pointer-events-auto mx-auto grid h-12 max-w-sm grid-cols-4 rounded-md border border-white/10 bg-[#0d1511]/94 p-0.5 text-white shadow-2xl backdrop-blur-xl md:mx-0 md:w-[360px]">
+          <button type="button" onClick={() => setPanel((value) => value === 'tools' ? null : 'tools')} aria-expanded={panel === 'tools'} className="flex min-w-0 flex-col items-center justify-center rounded-md text-[8px] font-semibold text-white/70 hover:bg-white/[0.07]">
+            <active.Icon size={17} className="text-[#efd275]" /><span className="max-w-full truncate px-1">{active.label}</span>
+          </button>
+          <button type="button" onClick={() => setPanel((value) => value === 'seeds' ? null : 'seeds')} aria-expanded={panel === 'seeds'} aria-label={`${CROPS[visibleCrop].name}: ${state.seeds[visibleCrop] ?? 0} seeds`} className="flex min-w-0 flex-col items-center justify-center rounded-md text-[8px] font-semibold text-white/70 hover:bg-white/[0.07]">
+            <span className="text-base leading-4" aria-hidden="true">{CROPS[visibleCrop].emoji}</span>
+            <span className="max-w-full truncate px-1 tabular-nums">{CROPS[visibleCrop].name} ×{state.seeds[visibleCrop] ?? 0}</span>
+          </button>
+          <button type="button" onClick={() => { setPanel(null); onMarket(); }} className="grid place-items-center rounded-md text-white/65 hover:bg-white/[0.07]" aria-label="Farm operations"><Factory size={18} /></button>
+          <button type="button" onClick={onEndDay} disabled={endDayDisabled} className="grid place-items-center rounded-md text-[#b7bde6] hover:bg-white/[0.07] disabled:opacity-35" aria-label="Sleep and end day"><Moon size={18} /></button>
+        </nav>
+        <span className="sr-only" aria-live="polite">{CROPS[visibleCrop].name}: {state.seeds[visibleCrop] ?? 0} seeds remaining</span>
+      </div>}
     </>
   );
 }

@@ -22,6 +22,8 @@ export default function FarmSimPage() {
 
   const [menuOpen, setMenuOpen]       = useState(false);
   const [showMarket, setShowMarket]   = useState(false);
+  const [isPaused, setIsPaused]       = useState(false);
+  const [timeScale, setTimeScale]     = useState<1 | 2 | 4>(1);
 
   const [currentTool, setCurrentTool]   = useState<ToolId>('hoe');
   const [selectedCrop, setSelectedCrop] = useState<CropId | null>(null);
@@ -54,13 +56,17 @@ export default function FarmSimPage() {
   }, []);
 
   const handleAction = useCallback((action: PlayerAction): boolean => {
+    if (isPaused) {
+      game.flashInfo('Resume the game to work this tile.');
+      return false;
+    }
     if (action.type === 'water') {
       const ok = dispatch(action);
       if (ok) setWaterCharges((c) => Math.max(0, c - 1));
       return ok;
     }
     return dispatch(action);
-  }, [dispatch]);
+  }, [dispatch, game, isPaused]);
 
   const handlePlayerMove = useCallback((player: PlayerState) => {
     setPlayerState({ ...player }); // shallow clone so DevOverlay sees fresh object
@@ -77,6 +83,7 @@ export default function FarmSimPage() {
   }, []);
 
   const showMenu = menuOpen || !state;
+  const simulationPaused = isPaused || showMenu || showMarket || !!recap;
   const standingIdx = playerState ? standingTileIdx(playerState, GRID_SIZE) : null;
   const selectionInRange = selectedIdx !== null && standingIdx !== null
     ? Math.max(
@@ -86,17 +93,16 @@ export default function FarmSimPage() {
     : false;
 
   useEffect(() => {
-    const paused = showMenu || showMarket || !!recap || !state;
-    if (paused) return;
+    if (simulationPaused || !state) return;
 
     let lastTick = performance.now();
     const timer = window.setInterval(() => {
       const now = performance.now();
-      advanceTime(now - lastTick);
+      advanceTime((now - lastTick) * timeScale);
       lastTick = now;
     }, 250);
     return () => window.clearInterval(timer);
-  }, [showMenu, showMarket, recap, advanceTime, state]);
+  }, [simulationPaused, advanceTime, state, timeScale]);
 
   return (
     <div className="w-full h-full bg-black select-none overflow-hidden relative">
@@ -110,6 +116,7 @@ export default function FarmSimPage() {
           activeTool={currentTool}
           buildTool={null}
           selectedIdx={selectedIdx}
+          paused={simulationPaused}
           onAction={handleAction}
           onToolChange={handleToolChange}
           onTileSelect={handleTileSelect}
@@ -118,13 +125,18 @@ export default function FarmSimPage() {
       )}
 
       {/* HUD overlay — floats over canvas */}
-      {state && (
+      {state && !showMenu && !recap && (
         <HudBar
           state={state}
           tool={currentTool}
           waterCharges={waterCharges}
           selectedCrop={selectedCrop}
-          hasSelection={selectedIdx !== null}
+          paused={isPaused}
+          hideDock={showMarket}
+          endDayDisabled={simulationPaused}
+          timeScale={timeScale}
+          onTogglePause={() => setIsPaused((value) => !value)}
+          onCycleSpeed={() => setTimeScale((value) => value === 1 ? 2 : value === 2 ? 4 : 1)}
           onMenu={() => setMenuOpen(true)}
           onToolPick={handleToolChange}
           onCropPick={setSelectedCrop}
@@ -133,14 +145,15 @@ export default function FarmSimPage() {
         />
       )}
 
-      {state && selectedIdx !== null ? (
+      {state && selectedIdx !== null && !showMenu && !showMarket && !recap ? (
         <TileSheet
           state={state}
           idx={selectedIdx}
           inRange={selectionInRange}
-          isWalking={!!playerState?.isMoving && !selectionInRange}
+          isWalking={!simulationPaused && !!playerState?.isMoving && !selectionInRange}
           waterCharges={waterCharges}
           selectedCrop={selectedCrop}
+          paused={isPaused}
           dispatch={handleAction}
           onClose={() => setSelectedIdx(null)}
         />
@@ -173,7 +186,7 @@ export default function FarmSimPage() {
             </button>
           </div>
           <div className="min-h-0 flex-1 overflow-auto">
-            <MarketPanel state={state} dispatch={dispatch} />
+            <MarketPanel state={state} dispatch={handleAction} />
           </div>
         </div>
       )}
@@ -184,9 +197,20 @@ export default function FarmSimPage() {
           hasSave={game.hasSave}
           slots={game.slots}
           inGame={!!state}
-          onNewGame={(seed) => { game.startNewGame(seed); setMenuOpen(false); }}
-          onContinue={() => { game.continueGame(); setMenuOpen(false); }}
-          onLoadSlot={(slot) => { game.loadSlot(slot); setMenuOpen(false); }}
+          error={game.error}
+          onNewGame={(seed) => { game.startNewGame(seed); setIsPaused(false); setMenuOpen(false); }}
+          onContinue={() => {
+            if (game.continueGame()) {
+              setIsPaused(false);
+              setMenuOpen(false);
+            }
+          }}
+          onLoadSlot={(slot) => {
+            if (game.loadSlot(slot)) {
+              setIsPaused(false);
+              setMenuOpen(false);
+            }
+          }}
           onSaveSlot={game.saveToSlot}
           onDeleteSlot={game.deleteSlot}
           onClose={() => setMenuOpen(false)}

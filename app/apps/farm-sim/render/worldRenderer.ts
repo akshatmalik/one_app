@@ -18,6 +18,7 @@ import { Atlas } from './atlas';
 import { Camera, TILE_PX, tileToWorld, worldToScreen } from './camera';
 import { TimeOfDay, applyLighting } from './lighting';
 import { groundDetails, GroundDetail, lockedScenery } from '../lib/worldScenery';
+import { harvestYield } from '../lib/engine/crops';
 
 const IMG_CACHE: Record<string, HTMLImageElement> = {};
 function drawExternalImg(ctx: CanvasRenderingContext2D, src: string, sx: number, sy: number, w: number, h: number) {
@@ -423,8 +424,27 @@ export function renderWorld(
   cmds.sort((a, b) => a.wy - b.wy);
   for (const cmd of cmds) cmd.fn();
 
-  if (buildTool === 'crate') {
-    state.fieldCrates.forEach((crate) => {
+  const selectedTile = selectedIdx === null ? null : state.tiles[selectedIdx];
+  const selectedHarvestUnits = selectedTile?.crop?.mature ? harvestYield(selectedTile) : 0;
+  const selectedHarvestCrate = selectedTile?.crop?.mature && selectedTile.crop.cropId === 'wheat'
+    ? state.fieldCrates
+      .filter((crate) => {
+        const distance = Math.abs(Math.floor(crate.idx / GRID_SIZE) - Math.floor(selectedIdx! / GRID_SIZE)) + Math.abs(crate.idx % GRID_SIZE - selectedIdx! % GRID_SIZE);
+        return distance <= CRATE_CATCHMENT && crate.wheat + selectedHarvestUnits <= crate.capacity;
+      })
+      .sort((a, b) => {
+        const selectedRow = Math.floor(selectedIdx! / GRID_SIZE);
+        const selectedCol = selectedIdx! % GRID_SIZE;
+        const aDistance = Math.abs(Math.floor(a.idx / GRID_SIZE) - selectedRow) + Math.abs(a.idx % GRID_SIZE - selectedCol);
+        const bDistance = Math.abs(Math.floor(b.idx / GRID_SIZE) - selectedRow) + Math.abs(b.idx % GRID_SIZE - selectedCol);
+        return aDistance - bDistance || a.idx - b.idx;
+      })[0]
+    : undefined;
+  const selectedCrate = state.fieldCrates.find((crate) => crate.idx === selectedIdx) ?? selectedHarvestCrate;
+
+  if (buildTool === 'crate' || selectedCrate) {
+    const crates = selectedCrate ? [selectedCrate] : state.fieldCrates;
+    crates.forEach((crate) => {
       const crateRow = Math.floor(crate.idx / GRID_SIZE);
       const crateCol = crate.idx % GRID_SIZE;
       state.tiles.forEach((tile, idx) => {
@@ -434,7 +454,7 @@ export function renderWorld(
         if (Math.abs(row - crateRow) + Math.abs(col - crateCol) > CRATE_CATCHMENT) return;
         const [wx, wy] = tileToWorld(idx);
         const [sx, sy] = worldToScreen(cam, wx, wy);
-        ctx.fillStyle = 'rgba(241, 210, 122, 0.12)';
+        ctx.fillStyle = selectedCrate ? 'rgba(241, 210, 122, 0.17)' : 'rgba(241, 210, 122, 0.12)';
         ctx.fillRect(sx + 2, sy + 2, TILE_PX - 4, TILE_PX - 4);
       });
     });
@@ -451,9 +471,9 @@ export function renderWorld(
     });
   }
 
-  if (showIrrigation) {
+  if (showIrrigation || selectedTile?.kind === 'sprinkler') {
     state.tiles.forEach((tile, idx) => {
-      if (tile.kind !== 'sprinkler') return;
+      if (tile.kind !== 'sprinkler' || (selectedTile?.kind === 'sprinkler' && idx !== selectedIdx)) return;
       const row = Math.floor(idx / GRID_SIZE);
       const col = idx % GRID_SIZE;
       for (let dr = -1; dr <= 1; dr++) {

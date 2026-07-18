@@ -24,18 +24,12 @@ import {
 import { toolToAction } from '../lib/realtime/interact';
 import type { ToolId } from '../lib/realtime/player';
 import { clockToTimeOfDay } from '../render/lighting';
-import { lockedScenery } from '../lib/worldScenery';
 import { findTilePath, TilePosition } from '../lib/realtime/pathfinding';
+import { movePlayerWithCollision } from '../lib/realtime/collision';
 
 // Sprite footprint at 2× scale: source is 12×18 → 24×36 screen px
 const SPRITE_W = 24;
 const SPRITE_H = 36;
-// Hitbox inside the sprite (feet area)
-const HIT_X0 = 4;
-const HIT_X1 = 20;
-const HIT_Y0 = 20;
-const HIT_Y1 = 36;
-
 /** Fixed-timestep simulation rate. */
 const SIM_DT = 1 / 60;
 const WATER_EFFECT_MS = 900;
@@ -47,43 +41,11 @@ interface Props {
   activeTool: ToolId;           // controlled from parent — synced into playerRef each frame
   buildTool: BuildTool | null;
   selectedIdx: number | null;
+  paused: boolean;
   onAction: (action: PlayerAction) => boolean;
   onToolChange: (tool: ToolId) => void;
   onTileSelect: (idx: number | null, player: PlayerState) => void;
   onPlayerMove?: (player: PlayerState) => void;
-}
-
-// ── Collision helper ─────────────────────────────────────────────────────────
-
-function collidesWithTiles(
-  px: number,
-  py: number,
-  tiles: GameState['tiles'],
-  seed: number,
-): boolean {
-  const x0 = px + HIT_X0;
-  const x1 = px + HIT_X1;
-  const y0 = py + HIT_Y0;
-  const y1 = py + HIT_Y1;
-
-  const cols = [
-    Math.floor(x0 / TILE_PX),
-    Math.floor((x1 - 1) / TILE_PX),
-  ];
-  const rows = [
-    Math.floor(y0 / TILE_PX),
-    Math.floor((y1 - 1) / TILE_PX),
-  ];
-
-  for (const r of rows) {
-    for (const c of cols) {
-      if (r < 0 || r >= GRID_SIZE || c < 0 || c >= GRID_SIZE) return true;
-      const t = tiles[r * GRID_SIZE + c];
-      if (t.kind === 'reservoir' || t.kind === 'shed' || t.kind === 'mill' || t.kind === 'depot' || t.kind === 'crate' || t.kind === 'brush' || t.kind === 'rock' || t.kind === 'marsh' || t.kind === 'extractor') return true;
-      if (t.kind === 'locked' && lockedScenery(seed, r * GRID_SIZE + c)) return true;
-    }
-  }
-  return false;
 }
 
 // ── Player update (called at fixed 60 fps) ────────────────────────────────────
@@ -91,8 +53,7 @@ function collidesWithTiles(
 function updatePlayer(
   player: PlayerState,
   input: InputState,
-  tiles: GameState['tiles'],
-  seed: number,
+  state: Pick<GameState, 'tiles'>,
   dt: number,
 ): void {
   const speed = (input.run ? RUN_SPEED : WALK_SPEED) * TILE_PX * dt;
@@ -110,18 +71,23 @@ function updatePlayer(
   player.isMoving = dx !== 0 || dy !== 0;
 
   if (player.isMoving) {
-    const nx = player.x + dx * speed;
-    if (!collidesWithTiles(nx, player.y, tiles, seed)) player.x = nx;
-
-    const ny = player.y + dy * speed;
-    if (!collidesWithTiles(player.x, ny, tiles, seed)) player.y = ny;
+    const startX = player.x;
+    const startY = player.y;
+    const movement = movePlayerWithCollision(
+      state, GRID_SIZE, TILE_PX, player.x, player.y, dx * speed, dy * speed,
+    );
+    player.x = movement.x;
+    player.y = movement.y;
+    player.isMoving = player.x !== startX || player.y !== startY;
 
     // Walk animation: toggle frame every 8 ticks
-    player.walkTick++;
-    if (player.walkTick >= 8) {
-      player.walkTick = 0;
-      player.walkFrame = player.walkFrame === 0 ? 1 : 0;
-    }
+    if (player.isMoving) {
+      player.walkTick++;
+      if (player.walkTick >= 8) {
+        player.walkTick = 0;
+        player.walkFrame = player.walkFrame === 0 ? 1 : 0;
+      }
+    } else player.walkFrame = 0;
   } else {
     player.walkFrame = 0;
     player.walkTick  = 0;
@@ -141,7 +107,7 @@ function followPlayer(cam: Camera, player: PlayerState): Camera {
   });
 }
 
-function followPath(player: PlayerState, path: TilePosition[], dt: number): void {
+function followPath(player: PlayerState, path: TilePosition[], state: Pick<GameState, 'tiles'>, dt: number): void {
   const next = path[0];
   if (!next) return;
   const targetX = next.col * TILE_PX + 4;
@@ -150,6 +116,12 @@ function followPath(player: PlayerState, path: TilePosition[], dt: number): void
   const dy = targetY - player.y;
   const distance = Math.hypot(dx, dy);
   if (distance < 0.75) {
+    const movement = movePlayerWithCollision(state, GRID_SIZE, TILE_PX, player.x, player.y, dx, dy);
+    if (movement.blocked) {
+      path.length = 0;
+      player.isMoving = false;
+      return;
+    }
     player.x = targetX;
     player.y = targetY;
     path.shift();
@@ -160,8 +132,16 @@ function followPath(player: PlayerState, path: TilePosition[], dt: number): void
   if (Math.abs(dx) >= Math.abs(dy)) player.facing = dx >= 0 ? 'right' : 'left';
   else player.facing = dy >= 0 ? 'down' : 'up';
   const step = Math.min(distance, RUN_SPEED * TILE_PX * dt);
-  player.x += dx / distance * step;
-  player.y += dy / distance * step;
+  const movement = movePlayerWithCollision(
+    state, GRID_SIZE, TILE_PX, player.x, player.y, dx / distance * step, dy / distance * step,
+  );
+  player.x = movement.x;
+  player.y = movement.y;
+  if (movement.blocked) {
+    path.length = 0;
+    player.isMoving = false;
+    return;
+  }
   player.isMoving = true;
   player.walkTick++;
   if (player.walkTick >= 8) {
@@ -179,6 +159,7 @@ export function GameCanvas({
   activeTool,
   buildTool,
   selectedIdx,
+  paused,
   onAction,
   onToolChange,
   onTileSelect,
@@ -198,6 +179,7 @@ export function GameCanvas({
   const fpsCountRef  = useRef<number>(0);
   const fpsTimeRef   = useRef<number>(0);
   const waterEffectsRef = useRef<Array<{ idx: number; startedAt: number }>>([]);
+  const moistureRef = useRef(state.tiles.map((tile) => tile.moisture));
   const pathRef       = useRef<TilePosition[]>([]);
   const manualCameraUntilRef = useRef(0);
   const pointerRef = useRef<{ id: number; x: number; y: number; camX: number; camY: number; dragged: boolean } | null>(null);
@@ -209,6 +191,7 @@ export function GameCanvas({
   const activeToolRef   = useRef(activeTool);
   const buildToolRef    = useRef(buildTool);
   const selectedIdxRef  = useRef(selectedIdx);
+  const pausedRef       = useRef(paused);
   const onActionRef     = useRef(onAction);
   const onToolChangeRef = useRef(onToolChange);
   const onTileSelectRef = useRef(onTileSelect);
@@ -219,6 +202,7 @@ export function GameCanvas({
   activeToolRef.current   = activeTool;
   buildToolRef.current    = buildTool;
   selectedIdxRef.current  = selectedIdx;
+  pausedRef.current       = paused;
   onActionRef.current     = onAction;
   onToolChangeRef.current = onToolChange;
   onTileSelectRef.current = onTileSelect;
@@ -228,6 +212,23 @@ export function GameCanvas({
   // This prevents the rAF onPlayerMove callback from reverting tool picks.
   playerRef.current.tool = activeTool;
   playerRef.current.waterCharges = waterCharges;
+
+  // Tile-sheet watering and automated irrigation update React state outside the
+  // realtime action loop. Detect those changes so every watering path receives
+  // the same visible ripple feedback.
+  useEffect(() => {
+    const now = performance.now();
+    const previous = moistureRef.current;
+    const changed: number[] = [];
+    state.tiles.forEach((tile, idx) => {
+      if (tile.kind === 'tilled' && tile.moisture - (previous[idx] ?? tile.moisture) >= 10) changed.push(idx);
+    });
+    for (const idx of changed.slice(0, 24)) {
+      const recent = waterEffectsRef.current.some((effect) => effect.idx === idx && now - effect.startedAt < 180);
+      if (!recent) waterEffectsRef.current.push({ idx, startedAt: now });
+    }
+    moistureRef.current = state.tiles.map((tile) => tile.moisture);
+  }, [state]);
 
   // ── Boot ────────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -309,19 +310,29 @@ export function GameCanvas({
       if (!lastTimeRef.current) lastTimeRef.current = now;
       const rawDt = Math.min((now - lastTimeRef.current) / 1000, 0.1); // cap at 100ms
       lastTimeRef.current = now;
-      accumRef.current += rawDt;
-
       const player = playerRef.current;
       const input  = inputRef.current;
       const gs     = stateRef.current;
+
+      if (pausedRef.current) {
+        accumRef.current = 0;
+        player.isMoving = false;
+        input.left = false;
+        input.right = false;
+        input.up = false;
+        input.down = false;
+        input.run = false;
+        input.action = false;
+        input.actionQueued = false;
+      } else accumRef.current += rawDt;
 
       // Fixed-step simulation
       while (accumRef.current >= SIM_DT) {
         accumRef.current -= SIM_DT;
         const manualMovement = input.left || input.right || input.up || input.down;
         if (manualMovement) pathRef.current.length = 0;
-        updatePlayer(player, input, gs.tiles, gs.seed, SIM_DT);
-        if (!manualMovement && pathRef.current.length > 0) followPath(player, pathRef.current, SIM_DT);
+        updatePlayer(player, input, gs, SIM_DT);
+        if (!manualMovement && pathRef.current.length > 0) followPath(player, pathRef.current, gs, SIM_DT);
 
         const wantsAction = input.action || input.actionQueued;
 
@@ -492,7 +503,7 @@ export function GameCanvas({
   const selectWorldPoint = useCallback((clientX: number, clientY: number) => {
     const canvas = canvasRef.current;
     const cam = camRef.current;
-    if (!canvas || !cam) return;
+    if (!canvas || !cam || pausedRef.current) return;
     const rect = canvas.getBoundingClientRect();
     const screenX = (clientX - rect.left) * (canvas.width / rect.width);
     const screenY = (clientY - rect.top) * (canvas.height / rect.height);

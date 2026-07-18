@@ -215,6 +215,7 @@ export type PlayerAction =
   | { type: 'plant'; idx: number; crop: CropId }
   | { type: 'water'; idx: number }
   | { type: 'harvest'; idx: number }
+  | { type: 'harvestArea'; idx: number }
   | { type: 'buildChannel'; idx: number }
   | { type: 'buildSprinkler'; idx: number }
   | { type: 'clearLand'; idx: number }

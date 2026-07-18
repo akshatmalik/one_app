@@ -37,7 +37,7 @@ import { harvestYield } from './crops';
 import { clamp, cloneState } from './util';
 import { unlocksForReputation } from './contracts';
 import { syncProductionMilestones } from './production';
-import { PARCELS, depositFor, parcelIndices, revealedTerrain } from './parcels';
+import { PARCELS, depositFor, guaranteedParcelTerrain, parcelIndices, revealedTerrain } from './parcels';
 
 function fail(state: GameState, error: string): ActionResult {
   return { ok: false, state, error };
@@ -68,7 +68,7 @@ function tileDistance(a: number, b: number): number {
   return Math.abs(Math.floor(a / GRID_SIZE) - Math.floor(b / GRID_SIZE)) + Math.abs(a % GRID_SIZE - b % GRID_SIZE);
 }
 
-function nearestCrate(state: GameState, tileIdx: number, units = 0): FieldCrate | undefined {
+export function nearestCrateForHarvest(state: GameState, tileIdx: number, units = 0): FieldCrate | undefined {
   return state.fieldCrates
     .filter((crate) => tileDistance(crate.idx, tileIdx) <= CRATE_CATCHMENT && crate.wheat + units <= crate.capacity)
     .sort((a, b) => tileDistance(a.idx, tileIdx) - tileDistance(b.idx, tileIdx) || a.idx - b.idx)[0];
@@ -141,7 +141,7 @@ export function applyAction(state: GameState, action: PlayerAction): ActionResul
       const def = CROPS[t.crop.cropId];
       const units = harvestYield(t);
       if (t.crop.cropId === 'wheat') {
-        const destination = nearestCrate(state, action.idx, units);
+        const destination = nearestCrateForHarvest(state, action.idx, units);
         if (!destination) return fail(state, `No field crate within ${CRATE_CATCHMENT} tiles has room for this harvest.`);
         s.fieldCrates.find((crate) => crate.id === destination.id)!.wheat += units;
         s.production.harvestedWheat += units;
@@ -156,6 +156,28 @@ export function applyAction(state: GameState, action: PlayerAction): ActionResul
         newTile.crop = null;
       }
       s.tiles[action.idx] = newTile;
+      return { ok: true, state: s };
+    }
+
+    case 'harvestArea': {
+      if (!state.upgrades.includes('tractor')) return fail(state, 'Buy the tractor first.');
+      if (state.items.fuel < 1) return fail(state, 'The tractor needs one fuel.');
+      const centerRow = Math.floor(action.idx / GRID_SIZE), centerCol = action.idx % GRID_SIZE;
+      const targets = state.tiles
+        .map((tile, idx) => ({ tile, idx, row: Math.floor(idx / GRID_SIZE), col: idx % GRID_SIZE }))
+        .filter(({ tile, row, col }) => tile.crop?.mature && Math.abs(row - centerRow) <= 1 && Math.abs(col - centerCol) <= 1)
+        .map(({ idx }) => idx);
+      if (targets.length === 0) return fail(state, 'No mature crops in this 3x3 area.');
+
+      // Reuse the single-tile action so wheat crate capacity and all harvest rules stay identical.
+      let harvested = state;
+      for (const idx of targets) {
+        const result = applyAction(harvested, { type: 'harvest', idx });
+        if (!result.ok) return fail(state, result.error ?? 'The area harvest could not be completed.');
+        harvested = result.state;
+      }
+      const s = cloneState(harvested);
+      s.items.fuel -= 1;
       return { ok: true, state: s };
     }
 
@@ -200,7 +222,7 @@ export function applyAction(state: GameState, action: PlayerAction): ActionResul
       if (t.kind !== 'rock' && t.kind !== 'marsh') return fail(state, 'There is no exposed deposit here.');
       const deposit = t.deposit ?? depositFor(action.idx, state.seed, t.kind);
       if (!deposit || deposit.remaining < 1) return fail(state, 'This deposit is exhausted.');
-      const mined = Math.min(2, deposit.remaining);
+      const mined = Math.min(4, deposit.remaining);
       const s = cloneState(state);
       s.resources[deposit.resource] += mined;
       const remaining = deposit.remaining - mined;
@@ -215,13 +237,12 @@ export function applyAction(state: GameState, action: PlayerAction): ActionResul
       if (t.kind !== 'rock' && t.kind !== 'marsh') return fail(state, 'Extractors must sit on a resource deposit.');
       const deposit = t.deposit ?? depositFor(action.idx, state.seed, t.kind);
       if (!deposit || deposit.remaining < 1) return fail(state, 'This deposit is exhausted.');
-      if (state.facilities.workshop.level < 2) return fail(state, 'A level 2 workshop is required to assemble extractors.');
-      if (state.gold < EXTRACTOR_BUILD_COST.gold || state.items.bricks < EXTRACTOR_BUILD_COST.bricks || state.items.machineParts < EXTRACTOR_BUILD_COST.machineParts)
-        return fail(state, `Needs ${EXTRACTOR_BUILD_COST.gold}g, ${EXTRACTOR_BUILD_COST.bricks} bricks, and ${EXTRACTOR_BUILD_COST.machineParts} machine part.`);
+      if (state.facilities.workshop.level < 1) return fail(state, 'A level 1 workshop is required to assemble extractors.');
+      if (state.gold < EXTRACTOR_BUILD_COST.gold || state.items.bricks < EXTRACTOR_BUILD_COST.bricks)
+        return fail(state, `Needs ${EXTRACTOR_BUILD_COST.gold}g and ${EXTRACTOR_BUILD_COST.bricks} bricks.`);
       const s = cloneState(state);
       s.gold -= EXTRACTOR_BUILD_COST.gold;
       s.items.bricks -= EXTRACTOR_BUILD_COST.bricks;
-      s.items.machineParts -= EXTRACTOR_BUILD_COST.machineParts;
       s.tiles[action.idx] = { ...t, kind: 'extractor', deposit: { ...deposit } };
       s.extractors.push({ id: `extractor-${action.idx}`, idx: action.idx, level: 1 });
       return { ok: true, state: s };
@@ -273,8 +294,9 @@ export function applyAction(state: GameState, action: PlayerAction): ActionResul
       s.parcels[action.parcel] = true;
       for (const idx of parcelIndices(parcel)) {
         if (s.tiles[idx].kind === 'locked') {
-          const kind = revealedTerrain(parcel, idx, s.seed);
-          s.tiles[idx] = { ...s.tiles[idx], kind, deposit: depositFor(idx, s.seed, kind) };
+          const guaranteed = guaranteedParcelTerrain(parcel, idx);
+          const kind = guaranteed?.kind ?? revealedTerrain(parcel, idx, s.seed);
+          s.tiles[idx] = { ...s.tiles[idx], kind, deposit: guaranteed?.deposit ?? depositFor(idx, s.seed, kind) };
         }
       }
       return { ok: true, state: s };
@@ -737,6 +759,7 @@ export function validActions(state: GameState, idx: number): PlayerAction['type'
     case 'tilled':
       if (t.crop) {
         if (t.crop.mature) out.push('harvest');
+        if (t.crop.mature && state.upgrades.includes('tractor')) out.push('harvestArea');
         out.push('water');
       } else {
         out.push('plant', 'water');

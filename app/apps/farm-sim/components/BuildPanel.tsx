@@ -48,8 +48,8 @@ export function BuildPanel({ state, tool, onPick }: Props) {
     {
       id: 'clear',
       label: 'Clear land',
-      cost: `${GOLD_COST.clearBrush}-${GOLD_COST.drainMarsh}g`,
-      effect: 'Remove terrain',
+      cost: 'Manual work',
+      effect: 'Brush yields wood',
       icon: Brush,
     },
     { id: 'demolish', label: 'Demolish', cost: 'Free', effect: 'Remove structure', icon: Hammer },

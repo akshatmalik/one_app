@@ -152,6 +152,7 @@ function bottlenecks(state: GameState): string[] {
   if (storageUse >= 0.8) out.push(`Wheat storage is ${Math.round(storageUse * 100)}% full.`);
   if (!state.mill.commissioned) out.push('Mill foundation is not restored.');
   else if (state.mill.output >= state.mill.outputCapacity) out.push('Mill output is full; export flour.');
+  else if (state.mill.output > 0 && state.mill.input === 0) out.push(`${state.mill.output} flour is ready for export; the mill also needs wheat.`);
   else if (state.mill.input === 0) out.push('Mill is idle; load wheat.');
   else if (storageUse >= 0.5 && state.mill.input >= state.mill.ratePerDay)
     out.push('Mill throughput is below harvest inflow; storage is absorbing the queue.');
@@ -267,7 +268,7 @@ export function sessionStatus(session: PlaytestSession, includeState = false) {
 }
 
 export const actionCatalog = {
-  tile: ['till', 'plant', 'water', 'harvest', 'buildChannel', 'buildSprinkler', 'demolish', 'digWell', 'clearLand', 'mine', 'buildExtractor', 'upgradeExtractor', 'amendSoil', 'fertilize', 'buildFieldCrate', 'tillArea', 'plantArea'],
+  tile: ['till', 'plant', 'water', 'harvest', 'harvestArea', 'buildChannel', 'buildSprinkler', 'demolish', 'digWell', 'clearLand', 'mine', 'buildExtractor', 'upgradeExtractor', 'amendSoil', 'fertilize', 'buildFieldCrate', 'tillArea', 'plantArea'],
   land: ['purchaseParcel'],
   production: ['commissionMill', 'upgradeMill', 'loadMill', 'loadMillFromCrate', 'exportFlour', 'exportWheatFromCrate', 'upgradeFieldCrate', 'buildHaulRoute', 'upgradeHaulRoute'],
   economy: ['buySeeds', 'sell', 'sellItem', 'sellResource', 'buyUpgrade'],

@@ -137,7 +137,7 @@ export class LocalStorageFarmRepository implements FarmSaveRepository {
         deposit: tile.deposit ? { ...tile.deposit } : depositFor(idx, state.seed, tile.kind),
       }));
       const normalizedWeather = normalizeSeasonWeather(state.seed, state.day, state.weatherTruth ?? []);
-      if (normalizedWeather.some((weather, index) => weather !== state.weatherTruth?.[index])) {
+      if (!Array.isArray(state.forecast) || state.forecast.length !== 3 || normalizedWeather.some((weather, index) => weather !== state.weatherTruth?.[index])) {
         state.weatherTruth = normalizedWeather;
         state.forecast = buildForecast(state.seed, state.day, state.weatherTruth);
       }

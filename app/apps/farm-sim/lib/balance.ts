@@ -21,7 +21,8 @@ export const SEASONS: Season[] = ['Spring', 'Summer', 'Fall']; // Winter is M2
 
 // ── Player ─────────────────────────────────────────────
 export const START_GOLD = 120; // 🔧
-export const START_SEEDS = { wheat: 6, beans: 3, carrot: 3 } as const; // enough to discover rotation and soil affinity
+export const START_FUEL = 4;
+export const START_SEEDS = { wheat: 6, beans: 3, carrot: 3, rice: 3 } as const; // enough to discover rotation, soil affinity, and rice
 // ── Gold costs ─────────────────────────────────────────
 export const GOLD_COST = {
   channel: 15, // 🔧
@@ -43,9 +44,9 @@ export const WHEAT_STORAGE_UPGRADE = 12;
 export const MILL_INPUT_CAPACITY = 9;
 export const MILL_OUTPUT_CAPACITY = 9;
 export const MILL_RATE_PER_DAY = 3;
-export const FLOUR_EXPORT_PRICE = 22;
+export const FLOUR_EXPORT_PRICE = 14;
 export const CRATE_CATCHMENT = 4;
-export const FIELD_CRATE_CAPACITY = 12;
+export const FIELD_CRATE_CAPACITY = 24;
 export const FIELD_CRATE_UPGRADE = 12;
 export const HAUL_ROUTE_LEVELS = {
   1: { rate: 3, cost: 90 },
@@ -58,17 +59,17 @@ export const MILL_LEVELS = {
   3: { rate: 12, input: 36, output: 36, cost: 650, name: 'Roller Mill' },
 } as const;
 export const PARCEL_COST: Record<ParcelId, number> = {
-  north: 130,
-  south: 150,
-  west: 140,
-  east: 180,
-  northwest: 300,
-  northeast: 330,
-  southwest: 350,
-  southeast: 380,
+  north: 220,
+  south: 240,
+  west: 260,
+  east: 280,
+  northwest: 450,
+  northeast: 500,
+  southwest: 550,
+  southeast: 600,
 };
 export const MAX_WELLS = 3;
-export const EXTRACTOR_BUILD_COST = { gold: 80, bricks: 4, machineParts: 1 } as const;
+export const EXTRACTOR_BUILD_COST = { gold: 30, bricks: 2, machineParts: 0 } as const;
 export const EXTRACTOR_UPGRADE_COST = { gold: 150, bricks: 6, machineParts: 2 } as const;
 export const MACHINE_COST = {
   tractor: { gold: 450, machineParts: 3 },
@@ -133,8 +134,8 @@ export const PRICE_MOVE_RECAP_THRESHOLD = 0.15; // report price moves ≥ 15%
 // ── Upgrades (one-time, bought at market) ──────────────
 export const UPGRADES: Record<UpgradeId, { cost: number; name: string; effect: string }> = {
   bigCan: { cost: 80, name: 'Big Watering Can', effect: 'Watering gives +60 moisture instead of +40' },
-  tractor: { cost: 500, name: 'Tractor', effect: 'Plows multiple tiles' },
-  seeder: { cost: 500, name: 'Seeder', effect: 'Plants seeds in multiple tiles' },
+  tractor: { cost: 220, name: 'Tractor', effect: 'Tills or harvests a 3×3 area' },
+  seeder: { cost: 120, name: 'Seeder', effect: 'Plants seeds in a 3×3 area' },
   truck: { cost: 1000, name: 'Truck', effect: 'Allows quick selling' },
 };
 
