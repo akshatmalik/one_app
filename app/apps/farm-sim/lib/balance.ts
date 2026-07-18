@@ -22,7 +22,7 @@ export const SEASONS: Season[] = ['Spring', 'Summer', 'Fall']; // Winter is M2
 // ── Player ─────────────────────────────────────────────
 export const START_GOLD = 120; // 🔧
 export const START_FUEL = 4;
-export const START_SEEDS = { wheat: 6, beans: 3, carrot: 3, rice: 3 } as const; // enough to discover rotation, soil affinity, and rice
+export const START_SEEDS = { wheat: 6, potato: 2 } as const;
 // ── Gold costs ─────────────────────────────────────────
 export const GOLD_COST = {
   channel: 15, // 🔧

@@ -121,22 +121,27 @@ function drawCropReadability(
   ctx.imageSmoothingEnabled = false;
 
   if (stage === 0) {
-    // A planted tile should read immediately, even before the first growth tick.
-    px(9, 25, 14, 3, '#3f2c20');
-    px(11, 24, 10, 2, '#725038');
-    px(14, 18, 2, 7, '#355b35');
-    px(11, 18, 4, 2, '#70a653');
-    px(16, 16, 4, 2, '#8fc568');
-
-    // Small field tag: crop color is stable across every stage and UI surface.
-    px(23, 18, 2, 10, '#3b3128');
-    px(19, 13, 12, 10, '#241f1b');
-    px(20, 14, 10, 7, color.accent);
-    px(21, 15, 6, 2, color.highlight);
-    px(24, 18, 3, 2, '#3c3028');
+    // Three raised seed plugs make a newly planted row unmistakable against
+    // empty tilled soil. Crop-colored seed coats distinguish adjacent rows.
+    px(3, 24, 26, 4, '#302219');
+    px(4, 23, 24, 2, '#765038');
+    for (const x of [7, 15, 23]) {
+      px(x - 3, 21, 7, 4, '#4a3122');
+      px(x - 2, 20, 5, 3, '#81563a');
+      px(x, 15, 2, 6, '#315d39');
+      px(x - 3, 15, 4, 2, '#69a653');
+      px(x + 1, 13, 4, 2, '#91c66a');
+      px(x, 20, 3, 2, color.accent);
+      px(x + 1, 20, 1, 1, color.highlight);
+    }
+    if (cropId === 'rice') px(3, 27, 26, 2, '#5595a9');
+    if (cropId === 'carrot') for (const x of [7, 15, 23]) px(x, 21, 2, 4, color.accent);
+    if (cropId === 'potato') for (const x of [7, 15, 23]) px(x - 1, 21, 4, 3, color.accent);
     ctx.restore();
     return;
   }
+
+  px(5, 26, 22, 3, 'rgba(39, 29, 21, 0.65)');
 
   // Produce accents strengthen crops whose green silhouettes otherwise merge.
   if (cropId === 'potato' && stage >= 2) {
@@ -493,7 +498,9 @@ export function renderWorld(
     if (cropName) {
       const cropId = tile.crop!.cropId;
       const cropStage = cropVisualStage(tile) ?? 0;
-      if (cropName === 'crop_withered') {
+      if (cropStage === 0) {
+        cmds.push({ wy: wy + TILE_PX, fn: () => drawCropReadability(ctx, cropId, cropStage, sx, sy) });
+      } else if (cropName === 'crop_withered') {
         cmds.push({ wy: wy + TILE_PX, fn: () => atlas.draw(ctx, cropName, sx + 4, sy + 8, 1.5) });
       } else if (cropName.startsWith('crop_wheat_')) {
         const stage = cropName.at(-1);
@@ -509,7 +516,7 @@ export function renderWorld(
         cmds.push({
           wy: wy + TILE_PX,
           fn: () => {
-            atlas.draw(ctx, cropName, sx + 4, sy + 8, 1.5);
+            atlas.draw(ctx, cropName, sx, sy, 2);
             drawCropReadability(ctx, cropId, cropStage, sx, sy);
           },
         });

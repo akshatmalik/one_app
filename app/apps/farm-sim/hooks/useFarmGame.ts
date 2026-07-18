@@ -8,6 +8,7 @@ import { newGame as newGameEngine, randomSeed } from '../lib/engine/newGame';
 import { farmRepo, AUTOSAVE_SLOT } from '../lib/storage';
 import { advanceClock, FORCED_SLEEP_MINUTES } from '../lib/realtime/clock';
 import { buildForecast, normalizeSeasonWeather } from '../lib/engine/weather';
+import { advanceOpening } from '../lib/engine/opening';
 
 interface UseFarmGame {
   state: GameState | null;
@@ -81,11 +82,13 @@ export function useFarmGame(): UseFarmGame {
         flashError(result.error ?? 'That did not work.');
         return false;
       }
-      setState(result.state);
-      autosave(result.state);
+      const opening = advanceOpening(result.state, action);
+      setState(opening.state);
+      autosave(opening.state);
+      if (opening.completed) flashInfo(`${opening.completed.title} complete · ${opening.completed.reward}`);
       return true;
     },
-    [state, autosave, flashError]
+    [state, autosave, flashError, flashInfo]
   );
 
   // Apply a batch of actions, threading state through one render. Returns how

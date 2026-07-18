@@ -83,19 +83,14 @@ function buildTiles(seed: number): Tile[] {
     if (tiles[idx].kind === 'grass') tiles[idx] = { ...tiles[idx], kind: 'path' };
   }
 
-  // The opening farm is useful on day one while keeping the player spawn clear.
+  // The opening farm begins manually. Irrigation arrives after the player has
+  // learned the crop loop, so automation solves a problem they understand.
   tiles[idxOf(17, 21)] = { kind: 'well', moisture: 0, nitrogen: 0, crop: null, irrigated: false, soil: 'clay' };
-  for (const [r, c] of [[17, 19], [18, 19], [19, 19], [20, 19]] as const) {
-    tiles[idxOf(r, c)] = { kind: 'channel', moisture: 0, nitrogen: 0, crop: null, irrigated: false, soil: 'clay' };
-  }
-  tiles[idxOf(20, 18)] = { kind: 'sprinkler', moisture: 0, nitrogen: 0, crop: null, irrigated: false, soil: 'loam' };
 
-  const wheat = [[16, 14], [16, 15], [17, 14], [17, 15], [17, 16], [18, 15]] as const;
-  const carrots = [[21, 17], [21, 18], [21, 19]] as const;
-  const beans = [[23, 18], [23, 20], [23, 22]] as const;
+  const wheat = [[21, 16], [21, 17], [21, 18]] as const;
+  const potatoes = [[22, 16], [22, 17]] as const;
   for (const [r, c] of wheat) tiles[idxOf(r, c)] = starterCrop('wheat', 4, 'loam');
-  for (const [r, c] of carrots) tiles[idxOf(r, c)] = starterCrop('carrot', 2, 'sandy');
-  for (const [r, c] of beans) tiles[idxOf(r, c)] = { ...starterCrop('beans', 2, 'loam'), moisture: 90 };
+  for (const [r, c] of potatoes) tiles[idxOf(r, c)] = starterCrop('potato', 2, 'sandy');
 
   const supplied = connectedChannels(tiles);
   const irrigated = computeIrrigation(tiles);
@@ -161,7 +156,7 @@ export function newGame(seed: number): GameState {
     animals: [],
     contracts: createContractOffers(seed, day, reputation, 3),
     reputation,
-    unlocks: ['irrigation'],
+    unlocks: [],
     market: initMarket(),
     weatherTruth,
     forecast: [],
@@ -169,6 +164,7 @@ export function newGame(seed: number): GameState {
     upgrades: [],
     lastRecap: null,
     tutorialStep: 0,
+    opening: { stage: 0, progress: 0, complete: false },
   };
 
   state.forecast = buildForecast(seed, day, weatherTruth);

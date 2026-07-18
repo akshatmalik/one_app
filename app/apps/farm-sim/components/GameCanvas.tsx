@@ -44,7 +44,7 @@ interface Props {
   paused: boolean;
   onAction: (action: PlayerAction) => boolean;
   onToolChange: (tool: ToolId) => void;
-  onTileSelect: (idx: number | null, player: PlayerState) => void;
+  onTileSelect: (idx: number | null, player: PlayerState, anchor?: { x: number; y: number }) => void;
   onPlayerMove?: (player: PlayerState) => void;
 }
 
@@ -530,7 +530,7 @@ export function GameCanvas({
       target: { row, col },
       gridSize: GRID_SIZE,
     });
-    onTileSelectRef.current(row * GRID_SIZE + col, { ...player });
+    onTileSelectRef.current(row * GRID_SIZE + col, { ...player }, { x: clientX, y: clientY });
   }, []);
 
   // Tap selects/routes. Drag temporarily pans the camera.

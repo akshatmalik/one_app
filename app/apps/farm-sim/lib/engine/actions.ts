@@ -36,6 +36,7 @@ import { getPrice, previewSupplyAfterSell } from './market';
 import { harvestYield } from './crops';
 import { clamp, cloneState } from './util';
 import { unlocksForReputation } from './contracts';
+import { availableCrops, irrigationAvailable } from './opening';
 import { syncProductionMilestones } from './production';
 import { PARCELS, depositFor, guaranteedParcelTerrain, parcelIndices, revealedTerrain } from './parcels';
 
@@ -108,6 +109,7 @@ export function applyAction(state: GameState, action: PlayerAction): ActionResul
     case 'plant': {
       const t = state.tiles[action.idx];
       const def = CROPS[action.crop];
+      if (!availableCrops(state).includes(action.crop)) return fail(state, `${def.name} is not available yet.`);
       if (t.kind !== 'tilled') return fail(state, 'Till the soil before planting.');
       if (t.crop) return fail(state, 'Something is already growing here.');
       if (!def.seasons.includes(season))
@@ -754,7 +756,7 @@ export function validActions(state: GameState, idx: number): PlayerAction['type'
       out.push('till');
       if (state.upgrades.includes('tractor')) out.push('tillArea');
       out.push('amendSoil');
-      out.push('buildChannel', 'digWell', 'buildSprinkler', 'buildFieldCrate');
+      if (irrigationAvailable(state)) out.push('buildChannel', 'digWell', 'buildSprinkler', 'buildFieldCrate');
       break;
     case 'tilled':
       if (t.crop) {
@@ -790,7 +792,7 @@ export function validActions(state: GameState, idx: number): PlayerAction['type'
 // Which crops the player can plant right now (in season) — for the plant strip.
 export function plantableCrops(state: GameState): { crop: CropId; inSeason: boolean }[] {
   const season = seasonForDay(state.day);
-  return (Object.keys(CROPS) as CropId[]).map((crop) => ({
+  return availableCrops(state).map((crop) => ({
     crop,
     inSeason: CROPS[crop].seasons.includes(season),
   }));
