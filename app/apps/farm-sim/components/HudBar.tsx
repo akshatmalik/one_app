@@ -25,6 +25,7 @@ import { dayOfSeason, seasonForDay } from '../lib/engine/weather';
 import { CAN_MAX_CHARGES, ToolId } from '../lib/realtime/player';
 import { formatClock } from '../lib/realtime/clock';
 import { waterProjection } from '../lib/engine/engineering';
+import { availableCrops, irrigationAvailable } from '../lib/engine/opening';
 
 const BASE_TOOLS: { id: ToolId; Icon: LucideIcon; label: string }[] = [
   { id: 'hand', Icon: Hand, label: 'Harvest' },
@@ -43,6 +44,7 @@ interface Props {
   endDayDisabled: boolean;
   timeScale: 1 | 2 | 4;
   hideDock?: boolean;
+  operationsUnlocked?: boolean;
   onTogglePause: () => void;
   onCycleSpeed: () => void;
   onMenu: () => void;
@@ -61,6 +63,7 @@ export function HudBar({
   endDayDisabled,
   timeScale,
   hideDock = false,
+  operationsUnlocked = true,
   onTogglePause,
   onCycleSpeed,
   onMenu,
@@ -74,7 +77,7 @@ export function HudBar({
   const day = dayOfSeason(state.day) + 1;
   const weather = state.weatherTruth[dayOfSeason(state.day)];
   const water = waterProjection(state);
-  const tools = [...BASE_TOOLS];
+  const tools = BASE_TOOLS.filter((item) => item.id !== 'builder' || irrigationAvailable(state));
   if (state.upgrades.includes('tractor')) tools.push({ id: 'tractor', Icon: Tractor, label: 'Tractor' });
   if (state.upgrades.includes('seeder')) tools.push({ id: 'seeder', Icon: Wheat, label: 'Seeder' });
   const active = tools.find((item) => item.id === tool) ?? tools[0];
@@ -165,7 +168,7 @@ export function HudBar({
               </div>
             ) : panel === 'seeds' ? (
               <div className="flex gap-1 overflow-x-auto pb-1" role="group" aria-label="Seed inventory">
-                {(Object.keys(CROPS) as CropId[]).map((crop) => {
+                {availableCrops(state).map((crop) => {
                   const count = state.seeds[crop] ?? 0;
                   return (
                     <button
@@ -205,7 +208,7 @@ export function HudBar({
             <span className="text-base leading-4" aria-hidden="true">{CROPS[visibleCrop].emoji}</span>
             <span className="max-w-full truncate px-1 tabular-nums">{CROPS[visibleCrop].name} ×{state.seeds[visibleCrop] ?? 0}</span>
           </button>
-          <button type="button" onClick={() => { setPanel(null); onMarket(); }} className="grid place-items-center rounded-md text-white/65 hover:bg-white/[0.07]" aria-label="Farm operations"><Factory size={18} /></button>
+          <button type="button" onClick={() => { setPanel(null); onMarket(); }} disabled={!operationsUnlocked} className="grid place-items-center rounded-md text-white/65 hover:bg-white/[0.07] disabled:opacity-25" aria-label={operationsUnlocked ? 'Farm operations' : 'Farm operations unlock after the first harvest'}><Factory size={18} /></button>
           <button type="button" onClick={onEndDay} disabled={endDayDisabled} className="grid place-items-center rounded-md text-[#b7bde6] hover:bg-white/[0.07] disabled:opacity-35" aria-label="Sleep and end day"><Moon size={18} /></button>
         </nav>
         <span className="sr-only" aria-live="polite">{CROPS[visibleCrop].name}: {state.seeds[visibleCrop] ?? 0} seeds remaining</span>
