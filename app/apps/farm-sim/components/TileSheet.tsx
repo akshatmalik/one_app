@@ -21,6 +21,7 @@ import { validActions, plantableCrops, nearestCrateForHarvest } from '../lib/eng
 import { harvestYield } from '../lib/engine/crops';
 import { connectedChannels } from '../lib/engine/water';
 import { MANUAL_WATER_DRAW, GOLD_COST, MAX_WELLS, EXTRACTOR_BUILD_COST, EXTRACTOR_UPGRADE_COST, CRATE_CATCHMENT, GRID_SIZE } from '../lib/balance';
+import { CAN_MAX_CHARGES } from '../lib/realtime/player';
 
 interface Props {
   state: GameState;
@@ -31,6 +32,7 @@ interface Props {
   selectedCrop: CropId | null;
   paused: boolean;
   dispatch: (action: PlayerAction) => boolean;
+  onRefillWater: () => void;
   onClose: () => void;
 }
 
@@ -60,7 +62,7 @@ function tileTitle(state: GameState, idx: number) {
   return labels[tile.kind] ?? tile.kind;
 }
 
-export function TileSheet({ state, idx, inRange, isWalking, waterCharges, selectedCrop, paused, dispatch, onClose }: Props) {
+export function TileSheet({ state, idx, inRange, isWalking, waterCharges, selectedCrop, paused, dispatch, onRefillWater, onClose }: Props) {
   const [showSeeds, setShowSeeds] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const tile = state.tiles[idx];
@@ -111,6 +113,7 @@ export function TileSheet({ state, idx, inRange, isWalking, waterCharges, select
   const actionClass = 'flex min-h-11 min-w-0 items-center justify-center gap-1.5 rounded-md border border-white/10 bg-white/[0.06] px-2 text-[11px] font-semibold text-white transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-35';
   const status = isWalking ? 'Walking into range' : inRange ? 'Ready to work' : 'No reachable work position';
   const needsWater = !!tile.crop && !tile.crop.mature && tile.moisture < CROPS[tile.crop.cropId].waterNeed;
+  const isWaterSource = tile.kind === 'reservoir' || tile.kind === 'well' || (tile.kind === 'channel' && suppliedChannels.has(idx));
 
   return (
     <section
@@ -217,6 +220,7 @@ export function TileSheet({ state, idx, inRange, isWalking, waterCharges, select
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-1.5">
+            {isWaterSource ? <button className={actionClass} disabled={waterCharges >= CAN_MAX_CHARGES} onClick={() => { onRefillWater(); navigator.vibrate?.(18); }}><Droplets size={16} /> {waterCharges >= CAN_MAX_CHARGES ? `Can is full · ${CAN_MAX_CHARGES}/${CAN_MAX_CHARGES}` : `Refill can · ${waterCharges}/${CAN_MAX_CHARGES}`}</button> : null}
             {actions.includes('till') ? <button className={actionClass} onClick={() => run({ type: 'till', idx })}><Pickaxe size={16} /> Till soil</button> : null}
             {actions.includes('tillArea') ? <button className={actionClass} disabled={state.items.fuel < 1 || tillAreaCount < 1} onClick={() => run({ type: 'tillArea', idx })}><Pickaxe size={16} /> Till {tillAreaCount} tiles · 1 fuel</button> : null}
             {actions.includes('plant') ? <button className={actionClass} onClick={() => setShowSeeds((value) => !value)}><Sprout size={16} /> {showSeeds ? 'Hide seeds' : 'Plant crop'}</button> : null}
@@ -237,7 +241,7 @@ export function TileSheet({ state, idx, inRange, isWalking, waterCharges, select
           </div>
         )}
 
-        {inRange && actions.includes('water') && (waterCharges < 1 || state.reservoir < MANUAL_WATER_DRAW) ? <p className="text-[9px] text-[#efa08c]">{waterCharges < 1 ? 'Watering can empty. Walk beside a well, reservoir, or supplied channel and use the can.' : `Watering needs ${MANUAL_WATER_DRAW}; reservoir has ${Math.floor(state.reservoir)}.`}</p> : null}
+        {inRange && actions.includes('water') && (waterCharges < 1 || state.reservoir < MANUAL_WATER_DRAW) ? <p className="text-[9px] text-[#efa08c]">{waterCharges < 1 ? 'Watering can empty. Select a well, reservoir, or supplied channel to refill it.' : `Watering needs ${MANUAL_WATER_DRAW}; reservoir has ${Math.floor(state.reservoir)}.`}</p> : null}
         {inRange && actions.includes('buildSprinkler') && !sprinklerBuildSupplied ? <p className="text-[9px] text-[#efa08c]">A sprinkler must touch a channel connected to the reservoir.</p> : null}
 
         {inRange && expanded && actions.includes('amendSoil') ? (

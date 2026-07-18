@@ -77,6 +77,11 @@ export default function FarmSimPage() {
     }
   }, []);
 
+  const handleRefillWater = useCallback(() => {
+    setWaterCharges(CAN_MAX_CHARGES);
+    game.flashInfo(`Watering can refilled · ${CAN_MAX_CHARGES}/${CAN_MAX_CHARGES}`);
+  }, [game]);
+
   const handleTileSelect = useCallback((idx: number | null, player: PlayerState) => {
     setPlayerState(player);
     setSelectedIdx(idx);
@@ -155,6 +160,7 @@ export default function FarmSimPage() {
           selectedCrop={selectedCrop}
           paused={isPaused}
           dispatch={handleAction}
+          onRefillWater={handleRefillWater}
           onClose={() => setSelectedIdx(null)}
         />
       ) : null}
