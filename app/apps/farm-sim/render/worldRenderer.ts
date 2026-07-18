@@ -11,7 +11,7 @@
 //   6. Lighting overlay
 // ============================================================================
 
-import { GameState, Tile } from '../lib/types';
+import { CropId, GameState, Tile } from '../lib/types';
 import { CRATE_CATCHMENT, GRID_SIZE, RESERVOIR_POS } from '../lib/balance';
 import { PlayerState, facingTileIdx } from '../lib/realtime/player';
 import { Atlas } from './atlas';
@@ -19,6 +19,7 @@ import { Camera, TILE_PX, tileToWorld, worldToScreen } from './camera';
 import { TimeOfDay, applyLighting } from './lighting';
 import { groundDetails, GroundDetail, lockedScenery } from '../lib/worldScenery';
 import { harvestYield } from '../lib/engine/crops';
+import { CROPS } from '../data/crops';
 
 const IMG_CACHE: Record<string, HTMLImageElement> = {};
 function drawExternalImg(ctx: CanvasRenderingContext2D, src: string, sx: number, sy: number, w: number, h: number) {
@@ -76,13 +77,107 @@ function isReservoir(idx: number): boolean {
   return row === RESERVOIR_POS.r && col === RESERVOIR_POS.c;
 }
 
+const CROP_VISUALS: Record<CropId, { accent: string; highlight: string }> = {
+  wheat:   { accent: '#e4bd45', highlight: '#fff0a3' },
+  potato:  { accent: '#d9a36f', highlight: '#f5e2c2' },
+  beans:   { accent: '#9b63c7', highlight: '#dbc2ef' },
+  tomato:  { accent: '#df5549', highlight: '#ffaaa0' },
+  berries: { accent: '#526fc1', highlight: '#aabcf4' },
+  pumpkin: { accent: '#e77f2f', highlight: '#ffc078' },
+  rice:    { accent: '#d8cf78', highlight: '#fff4b0' },
+  corn:    { accent: '#f0c33c', highlight: '#fff09a' },
+  carrot:  { accent: '#ed8737', highlight: '#ffc17e' },
+};
+
+function cropVisualStage(tile: Tile): number | null {
+  if (!tile.crop) return null;
+  if (tile.crop.mature) return 3;
+  const growDays = CROPS[tile.crop.cropId].growDays;
+  return Math.min(2, Math.floor(tile.crop.growthDays * 3 / growDays));
+}
+
 function cropSpriteName(tile: Tile): string | null {
   if (!tile.crop) return null;
-  const { cropId, growthDays, mature } = tile.crop;
+  const { cropId, mature } = tile.crop;
   if (tile.crop.stressDays >= 2 && !mature) return 'crop_withered';
-  if (mature) return `crop_${cropId}_3`;
-  const stage = Math.min(2, Math.floor(growthDays * 3 / 7));
+  const stage = cropVisualStage(tile) ?? 0;
   return `crop_${cropId}_${stage}`;
+}
+
+function drawCropReadability(
+  ctx: CanvasRenderingContext2D,
+  cropId: CropId,
+  stage: number,
+  sx: number,
+  sy: number,
+) {
+  const color = CROP_VISUALS[cropId];
+  const px = (x: number, y: number, w: number, h: number, fill: string) => {
+    ctx.fillStyle = fill;
+    ctx.fillRect(Math.round(sx + x), Math.round(sy + y), w, h);
+  };
+
+  ctx.save();
+  ctx.imageSmoothingEnabled = false;
+
+  if (stage === 0) {
+    // A planted tile should read immediately, even before the first growth tick.
+    px(9, 25, 14, 3, '#3f2c20');
+    px(11, 24, 10, 2, '#725038');
+    px(14, 18, 2, 7, '#355b35');
+    px(11, 18, 4, 2, '#70a653');
+    px(16, 16, 4, 2, '#8fc568');
+
+    // Small field tag: crop color is stable across every stage and UI surface.
+    px(23, 18, 2, 10, '#3b3128');
+    px(19, 13, 12, 10, '#241f1b');
+    px(20, 14, 10, 7, color.accent);
+    px(21, 15, 6, 2, color.highlight);
+    px(24, 18, 3, 2, '#3c3028');
+    ctx.restore();
+    return;
+  }
+
+  // Produce accents strengthen crops whose green silhouettes otherwise merge.
+  if (cropId === 'potato' && stage >= 2) {
+    [[10, 12], [16, 10], [21, 13]].forEach(([x, y]) => {
+      px(x, y, 3, 3, color.highlight);
+      px(x + 1, y + 1, 1, 1, '#d39b54');
+    });
+    if (stage === 3) {
+      px(8, 25, 5, 3, color.accent);
+      px(19, 24, 5, 3, color.accent);
+    }
+  } else if (cropId === 'beans' && stage >= 2) {
+    px(10, 12, 3, stage === 3 ? 8 : 5, color.accent);
+    px(20, 15, 3, stage === 3 ? 7 : 4, color.highlight);
+    px(11, 13, 1, 4, '#d8b2eb');
+  } else if (cropId === 'rice') {
+    px(5, 27, 22, 2, 'rgba(87, 157, 175, 0.75)');
+    if (stage >= 2) {
+      [[9, 9], [15, 7], [21, 10]].forEach(([x, y]) => {
+        px(x, y, 2, stage === 3 ? 6 : 3, color.accent);
+        px(x + 1, y, 1, 2, color.highlight);
+      });
+    }
+  } else if (cropId === 'tomato' && stage >= 2) {
+    px(9, 17, stage === 3 ? 5 : 3, stage === 3 ? 5 : 3, color.accent);
+    px(19, 14, stage === 3 ? 5 : 3, stage === 3 ? 5 : 3, color.highlight);
+  } else if (cropId === 'berries' && stage >= 2) {
+    [[9, 15], [15, 12], [20, 17]].forEach(([x, y], index) => px(x, y, 3, 3, index === 1 ? color.highlight : color.accent));
+  } else if (cropId === 'corn' && stage >= 2) {
+    px(13, 10, 5, stage === 3 ? 9 : 5, color.accent);
+    px(14, 11, 2, stage === 3 ? 7 : 3, color.highlight);
+  } else if (cropId === 'carrot' && stage >= 2) {
+    px(14, 22, 4, stage === 3 ? 7 : 4, color.accent);
+    px(15, 23, 1, stage === 3 ? 4 : 2, color.highlight);
+  } else if (cropId === 'pumpkin' && stage >= 2) {
+    px(9, 21, stage === 3 ? 14 : 8, stage === 3 ? 8 : 5, color.accent);
+    px(14, 20, 2, 2, '#4f713f');
+    px(14, 23, 2, stage === 3 ? 5 : 3, color.highlight);
+  }
+
+  ctx.restore();
 }
 
 function drawGroundDetail(ctx: CanvasRenderingContext2D, detail: GroundDetail, wx: number, wy: number) {
@@ -396,15 +491,28 @@ export function renderWorld(
 
     const cropName = cropSpriteName(tile);
     if (cropName) {
-      if (cropName.startsWith('crop_wheat_')) {
+      const cropId = tile.crop!.cropId;
+      const cropStage = cropVisualStage(tile) ?? 0;
+      if (cropName === 'crop_withered') {
+        cmds.push({ wy: wy + TILE_PX, fn: () => atlas.draw(ctx, cropName, sx + 4, sy + 8, 1.5) });
+      } else if (cropName.startsWith('crop_wheat_')) {
         const stage = cropName.at(-1);
         const size = [18, 23, 28, 32][Number(stage)] ?? 24;
         cmds.push({
           wy: wy + TILE_PX,
-          fn: () => drawGenerated(ctx, `wheat-${stage}`, sx + (TILE_PX - size) / 2, sy + TILE_PX - size, size, size),
+          fn: () => {
+            drawGenerated(ctx, `wheat-${stage}`, sx + (TILE_PX - size) / 2, sy + TILE_PX - size, size, size);
+            drawCropReadability(ctx, cropId, cropStage, sx, sy);
+          },
         });
       } else {
-        cmds.push({ wy: wy + TILE_PX, fn: () => atlas.draw(ctx, cropName, sx + 4, sy + 8, 1.5) });
+        cmds.push({
+          wy: wy + TILE_PX,
+          fn: () => {
+            atlas.draw(ctx, cropName, sx + 4, sy + 8, 1.5);
+            drawCropReadability(ctx, cropId, cropStage, sx, sy);
+          },
+        });
       }
     }
   });
