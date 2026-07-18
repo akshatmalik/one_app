@@ -15,6 +15,8 @@ import { TileSheet } from './components/TileSheet';
 import { PlayerState, CAN_MAX_CHARGES, standingTileIdx } from './lib/realtime/player';
 import type { ToolId } from './lib/realtime/player';
 import { GRID_SIZE } from './lib/balance';
+import { OpeningObjective } from './components/OpeningObjective';
+import { operationsAvailable } from './lib/engine/opening';
 
 export default function FarmSimPage() {
   const game = useFarmGame();
@@ -31,25 +33,17 @@ export default function FarmSimPage() {
   const [playerState, setPlayerState]   = useState<PlayerState | null>(null);
   const [fps, setFps]                   = useState(60);
   const [selectedIdx, setSelectedIdx]   = useState<number | null>(null);
+  const [selectionAnchor, setSelectionAnchor] = useState({ x: 195, y: 360 });
 
   useEffect(() => { if (!state) setMenuOpen(true); }, [state]);
 
   const dispatch = useCallback((action: PlayerAction): boolean => {
-    const ok = game.dispatch(action);
-    if (ok && state) {
-      const expected: Record<number, PlayerAction['type']> = {
-        0: 'till', 1: 'plant', 2: 'water', 4: 'sell',
-      };
-      if (expected[state.tutorialStep] === action.type)
-        game.advanceTutorial(state.tutorialStep);
-    }
-    return ok;
-  }, [game, state]);
+    return game.dispatch(action);
+  }, [game]);
 
   const handleEndDay = useCallback(() => {
-    if (state?.tutorialStep === 3) game.advanceTutorial(3);
     game.endDay();
-  }, [game, state]);
+  }, [game]);
 
   const handleToolChange = useCallback((tool: ToolId) => {
     setCurrentTool(tool);
@@ -82,9 +76,10 @@ export default function FarmSimPage() {
     game.flashInfo(`Watering can refilled · ${CAN_MAX_CHARGES}/${CAN_MAX_CHARGES}`);
   }, [game]);
 
-  const handleTileSelect = useCallback((idx: number | null, player: PlayerState) => {
+  const handleTileSelect = useCallback((idx: number | null, player: PlayerState, anchor?: { x: number; y: number }) => {
     setPlayerState(player);
     setSelectedIdx(idx);
+    if (anchor) setSelectionAnchor(anchor);
   }, []);
 
   const showMenu = menuOpen || !state;
@@ -115,6 +110,7 @@ export default function FarmSimPage() {
       {/* Canvas is always full-screen, HUD floats above it */}
       {state && (
         <GameCanvas
+          key={state.seed}
           state={state}
           waterCharges={waterCharges}
           selectedCrop={selectedCrop}
@@ -138,6 +134,7 @@ export default function FarmSimPage() {
           selectedCrop={selectedCrop}
           paused={isPaused}
           hideDock={showMarket}
+          operationsUnlocked={operationsAvailable(state)}
           endDayDisabled={simulationPaused}
           timeScale={timeScale}
           onTogglePause={() => setIsPaused((value) => !value)}
@@ -150,6 +147,8 @@ export default function FarmSimPage() {
         />
       )}
 
+      {state && !showMenu && !showMarket && !recap ? <OpeningObjective state={state} /> : null}
+
       {state && selectedIdx !== null && !showMenu && !showMarket && !recap ? (
         <TileSheet
           state={state}
@@ -161,6 +160,7 @@ export default function FarmSimPage() {
           paused={isPaused}
           dispatch={handleAction}
           onRefillWater={handleRefillWater}
+          anchor={selectionAnchor}
           onClose={() => setSelectedIdx(null)}
         />
       ) : null}
@@ -182,7 +182,7 @@ export default function FarmSimPage() {
       )}
 
       {/* Farm operations — bottom sheet on mobile, side panel on desktop */}
-      {state && showMarket && (
+      {state && showMarket && operationsAvailable(state) && (
         <div className="absolute inset-x-0 bottom-0 top-16 z-30 flex flex-col border-t border-white/10 bg-[#111a15]/97 shadow-2xl backdrop-blur-md md:inset-y-0 md:left-auto md:right-0 md:top-0 md:w-[440px] md:border-l md:border-t-0">
           <div className="flex h-14 shrink-0 items-center justify-between border-b border-white/10 px-4">
             <span className="flex items-center gap-2 text-sm font-bold text-white"><ClipboardList size={18} className="text-[#d9b95f]" /> Farm operations</span>
@@ -204,7 +204,16 @@ export default function FarmSimPage() {
           slots={game.slots}
           inGame={!!state}
           error={game.error}
-          onNewGame={(seed) => { game.startNewGame(seed); setIsPaused(false); setMenuOpen(false); }}
+          onNewGame={(seed) => {
+            game.startNewGame(seed);
+            setIsPaused(false);
+            setMenuOpen(false);
+            setShowMarket(false);
+            setSelectedIdx(null);
+            setSelectedCrop(null);
+            setCurrentTool('hoe');
+            setWaterCharges(CAN_MAX_CHARGES);
+          }}
           onContinue={() => {
             if (game.continueGame()) {
               setIsPaused(false);

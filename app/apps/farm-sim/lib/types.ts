@@ -208,6 +208,13 @@ export interface GameState {
   upgrades: UpgradeId[];
   lastRecap: DayRecap | null;
   tutorialStep: number; // onboarding progress, -1 when done
+  opening?: OpeningProgress; // absent on legacy saves, which remain fully unlocked
+}
+
+export interface OpeningProgress {
+  stage: number;
+  progress: number;
+  complete: boolean;
 }
 
 export type PlayerAction =
