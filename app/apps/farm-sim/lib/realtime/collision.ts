@@ -36,7 +36,9 @@ export interface MovementResult {
 
 export function isTileBlocked(state: WorldCollisionState, idx: number): boolean {
   const tile = state.tiles[idx];
-  return !tile || BLOCKED_KINDS.has(tile.kind) || tile.crop !== null;
+  // Crops share the player's walkable field surface; only physical terrain and
+  // structures block movement.
+  return !tile || BLOCKED_KINDS.has(tile.kind);
 }
 
 export function canPlayerOccupy(
