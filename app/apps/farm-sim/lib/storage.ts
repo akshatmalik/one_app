@@ -4,7 +4,7 @@
 // ============================================================================
 
 import { CropId, FarmContract, FarmSaveRepository, GameState, SaveSlotInfo, TileKind } from './types';
-import { FARM_LANDMARKS, FIELD_CRATE_CAPACITY, GRID_SIZE, MILL_INPUT_CAPACITY, MILL_OUTPUT_CAPACITY, MILL_RATE_PER_DAY, WHEAT_STORAGE_START } from './balance';
+import { FARM_LANDMARKS, GRID_SIZE, MILL_INPUT_CAPACITY, MILL_OUTPUT_CAPACITY, MILL_RATE_PER_DAY, WHEAT_STORAGE_START } from './balance';
 import { createContractOffers, unlocksForReputation } from './engine/contracts';
 import { initialParcels } from './engine/parcels';
 import { FORCED_SLEEP_MINUTES, WAKE_MINUTES } from './realtime/clock';
@@ -31,7 +31,7 @@ const EMPTY_ITEMS: GameState['items'] = {
 };
 const EMPTY_RESOURCES: GameState['resources'] = { wood: 0, stone: 0, clay: 0, coal: 0, ironOre: 0 };
 
-function ensureLandmark(state: GameState, kind: Extract<TileKind, 'shed' | 'mill' | 'depot' | 'crate'>, preferred: number): void {
+function ensureLandmark(state: GameState, kind: Extract<TileKind, 'shed' | 'market' | 'mill' | 'depot' | 'crate'>, preferred: number): void {
   if (state.tiles.some((tile) => tile.kind === kind)) return;
   const candidates = [preferred, preferred - 1, preferred + 1, preferred - GRID_SIZE, preferred + GRID_SIZE];
   const idx = candidates.find((candidate) => state.tiles[candidate]?.kind === 'grass');
@@ -142,13 +142,8 @@ export class LocalStorageFarmRepository implements FarmSaveRepository {
         state.forecast = buildForecast(state.seed, state.day, state.weatherTruth);
       }
       ensureLandmark(state, 'shed', FARM_LANDMARKS.shed.r * GRID_SIZE + FARM_LANDMARKS.shed.c);
-      ensureLandmark(state, 'mill', FARM_LANDMARKS.mill.r * GRID_SIZE + FARM_LANDMARKS.mill.c);
-      ensureLandmark(state, 'depot', FARM_LANDMARKS.depot.r * GRID_SIZE + FARM_LANDMARKS.depot.c);
-      ensureLandmark(state, 'crate', FARM_LANDMARKS.crate.r * GRID_SIZE + FARM_LANDMARKS.crate.c);
-      if (state.fieldCrates.length === 0) {
-        const crateIdx = state.tiles.findIndex((tile) => tile.kind === 'crate');
-        state.fieldCrates = [{ id: 'crate-legacy', idx: crateIdx, wheat: 0, capacity: Math.max(FIELD_CRATE_CAPACITY, state.production.wheatStorageCapacity) }];
-      }
+      ensureLandmark(state, 'market', FARM_LANDMARKS.market.r * GRID_SIZE + FARM_LANDMARKS.market.c);
+      if (state.mill.commissioned) ensureLandmark(state, 'mill', FARM_LANDMARKS.mill.r * GRID_SIZE + FARM_LANDMARKS.mill.c);
       state.production.wheatStorageCapacity = state.fieldCrates.reduce((sum, crate) => sum + crate.capacity, 0);
       return state;
     } catch {

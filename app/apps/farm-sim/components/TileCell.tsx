@@ -33,6 +33,7 @@ const KIND_BG: Record<TileKind, string> = {
   barn: 'bg-red-800',
   coop: 'bg-yellow-700',
   shed: 'bg-amber-800',
+  market: 'bg-emerald-900',
   mill: 'bg-stone-500',
   depot: 'bg-stone-600',
   crate: 'bg-amber-700',

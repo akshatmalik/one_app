@@ -9,6 +9,7 @@ import {
   Package,
   Pickaxe,
   Route,
+  ShoppingBasket,
   Shovel,
   Sprout,
   Trash2,
@@ -34,6 +35,7 @@ interface Props {
   paused: boolean;
   dispatch: (action: PlayerAction) => boolean;
   onRefillWater: () => boolean;
+  onOpenMarket: () => void;
   anchor: { x: number; y: number };
   onClose: () => void;
 }
@@ -57,14 +59,14 @@ function tileTitle(state: GameState, idx: number) {
   const labels: Partial<Record<typeof tile.kind, string>> = {
     grass: 'Open ground', tilled: 'Tilled soil', channel: 'Irrigation channel',
     reservoir: 'Reservoir', well: 'Farm well', sprinkler: 'Sprinkler', barn: 'Barn', coop: 'Chicken coop', shed: 'Farmhouse',
-    mill: 'Flour mill', depot: 'Shipping depot', crate: 'Field crate', path: 'Farm road',
+    market: 'Farm-gate produce stand', mill: 'Flour mill', depot: 'Shipping depot', crate: 'Field crate', path: 'Farm road',
     brush: 'Dense brush', rock: 'Boulder', marsh: 'Wet ground', locked: 'Unowned land',
     extractor: 'Automated extractor',
   };
   return labels[tile.kind] ?? tile.kind;
 }
 
-export function TileSheet({ state, idx, inRange, isWalking, waterCharges, waterCapacity, selectedCrop, paused, dispatch, onRefillWater, anchor, onClose }: Props) {
+export function TileSheet({ state, idx, inRange, isWalking, waterCharges, waterCapacity, selectedCrop, paused, dispatch, onRefillWater, onOpenMarket, anchor, onClose }: Props) {
   const [showSeeds, setShowSeeds] = useState(false);
   const [showBuild, setShowBuild] = useState(false);
   const [expanded, setExpanded] = useState(false);
@@ -137,6 +139,7 @@ export function TileSheet({ state, idx, inRange, isWalking, waterCharges, waterC
   const isWaterSource = tile.kind === 'reservoir' || tile.kind === 'well' || (tile.kind === 'channel' && suppliedChannels.has(idx));
   const hasBuildActions = actions.some((action) => ['buildChannel', 'buildSprinkler', 'buildFieldCrate', 'digWell'].includes(action));
   const quickCrop = selectedCrop ?? recentCrop;
+  const marketOpen = !state.opening || state.opening.complete || state.opening.stage >= 5;
   const popupWidth = 224;
   const popupHeight = showSeeds || showBuild || expanded ? 350 : 240;
   const left = typeof window === 'undefined' ? anchor.x : Math.max(8, Math.min(anchor.x + (anchor.x > window.innerWidth - popupWidth - 28 ? -popupWidth - 18 : 18), window.innerWidth - popupWidth - 8));
@@ -239,6 +242,7 @@ export function TileSheet({ state, idx, inRange, isWalking, waterCharges, waterC
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-1.5">
+            {tile.kind === 'market' ? <button className={actionClass('market')} disabled={!marketOpen} onClick={onOpenMarket}><ShoppingBasket size={16} /> {marketOpen ? 'Sell produce and view orders' : 'Stand opens after first harvest'}</button> : null}
             {isWaterSource ? <button className={actionClass('refill')} disabled={waterCharges >= waterCapacity} onClick={() => { if (onRefillWater()) { window.localStorage.setItem(`farm-recent-${contextKey}`, 'refill'); setRecentAction('refill'); navigator.vibrate?.(18); } }}><Droplets size={16} /> {waterCharges >= waterCapacity ? `Can is full · ${waterCapacity}/${waterCapacity}` : `Refill can · ${waterCharges}/${waterCapacity}`}</button> : null}
             {actions.includes('till') ? <button className={actionClass('till')} onClick={() => run({ type: 'till', idx })}><Pickaxe size={16} /> Till soil</button> : null}
             {actions.includes('tillRow') ? <button className={actionClass('tillRow')} onClick={() => run({ type: 'tillRow', idx })}><Pickaxe size={16} /> Till three-tile row</button> : null}

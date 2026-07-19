@@ -1,5 +1,6 @@
 import { CropId, GameState, PlayerAction } from '../types';
-import { activeCrops, cultivatedTiles } from './toolProgression';
+import { activeCrops, cultivatedTiles, laborProgress } from './toolProgression';
+import { MILL_UNLOCK_WHEAT } from '../balance';
 
 export interface OpeningObjective {
   title: string;
@@ -9,14 +10,16 @@ export interface OpeningObjective {
 }
 
 export const OPENING_OBJECTIVES: OpeningObjective[] = [
-  { title: 'Prepare the field', instruction: 'Till 3 open tiles', target: 3, reward: 'Potato seeds' },
-  { title: 'Plant two crops', instruction: 'Plant wheat or potatoes', target: 3, reward: 'More starter seeds' },
-  { title: 'Care for the field', instruction: 'Water 3 planted tiles', target: 3, reward: '25 gold' },
-  { title: 'Bring in the crop', instruction: 'Harvest your first ready wheat', target: 1, reward: 'Farm operations' },
-  { title: 'Make the first sale', instruction: 'Sell wheat from your inventory', target: 1, reward: 'Carrots and an open farm' },
+  { title: 'Reclaim your field', instruction: 'Clear 3 patches of brush', target: 3, reward: '12 wood' },
+  { title: 'Prepare a crop bed', instruction: 'Till 6 open tiles', target: 6, reward: '4 potato seeds' },
+  { title: 'Plant your first field', instruction: 'Plant 6 wheat or potatoes', target: 6, reward: '4 more seeds' },
+  { title: 'Care for the field', instruction: 'Water 6 planted tiles', target: 6, reward: '25 gold' },
+  { title: 'Bring in the old crop', instruction: 'Harvest the 3 ready wheat plots', target: 3, reward: 'Roadside orders' },
+  { title: 'Earn your first money', instruction: 'Take wheat to the farm-gate stand and sell it', target: 1, reward: 'Carrots and an open farm' },
 ];
 
 const ACTION_FOR_STAGE: PlayerAction['type'][] = [
+  'clearLand',
   'till',
   'plant',
   'water',
@@ -59,7 +62,32 @@ export function nextCropUnlock(state: GameState): { crop: CropId; at: number; cu
 }
 
 export function operationsAvailable(state: GameState): boolean {
-  return !state.opening || state.opening.complete || state.opening.stage >= 4;
+  return !state.opening || state.opening.complete || state.opening.stage >= 5;
+}
+
+export function millAvailable(state: GameState): boolean {
+  return state.mill.commissioned || state.production.harvestedWheat >= MILL_UNLOCK_WHEAT;
+}
+
+export interface FarmGoal {
+  title: string;
+  progress: number;
+  target: number;
+  reward: string;
+}
+
+export function farmGoals(state: GameState): FarmGoal[] {
+  if (!state.opening?.complete) return [];
+  const cultivated = cultivatedTiles(state);
+  const crops = activeCrops(state);
+  const labor = laborProgress(state);
+  const goals: FarmGoal[] = [];
+  if (crops < 12) goals.push({ title: 'Grow a working field', progress: crops, target: 12, reward: 'Irrigation plans' });
+  if (cultivated < 24) goals.push({ title: 'Expand cultivation', progress: cultivated, target: 24, reward: 'Beans and row-tool paths' });
+  if (state.production.harvestedWheat < MILL_UNLOCK_WHEAT) goals.push({ title: 'Prove the grain crop', progress: state.production.harvestedWheat, target: MILL_UNLOCK_WHEAT, reward: 'Flour mill plans' });
+  if (labor.manualTills < 16) goals.push({ title: 'Work the soil by hand', progress: labor.manualTills, target: 16, reward: 'Row plow offer' });
+  if (state.reputation < 2) goals.push({ title: 'Serve local buyers', progress: state.reputation, target: 2, reward: 'Better farm orders' });
+  return goals.slice(0, 3);
 }
 
 export function irrigationAvailable(state: GameState): boolean {
@@ -85,13 +113,13 @@ export function advanceOpening(state: GameState, action: PlayerAction): { state:
     },
   };
 
-  if (opening.stage === 0) next.seeds.potato += 4;
-  if (opening.stage === 1) {
+  if (opening.stage === 1) next.seeds.potato += 4;
+  if (opening.stage === 2) {
     next.seeds.wheat += 2;
     next.seeds.potato += 2;
   }
-  if (opening.stage === 2) next.gold += 25;
-  if (opening.stage === 4) next.seeds.carrot += 4;
+  if (opening.stage === 3) next.gold += 25;
+  if (opening.stage === 5) next.seeds.carrot += 4;
 
   return { state: next, completed: objective };
 }
