@@ -37,7 +37,7 @@ function drawExternalImg(ctx: CanvasRenderingContext2D, src: string, sx: number,
 }
 
 const GENERATED_ASSET_ROOT = '/farm-generated-v2';
-const GENERATED_ASSET_VERSION = 4;
+const GENERATED_ASSET_VERSION = 5;
 
 function drawGenerated(
   ctx: CanvasRenderingContext2D,
@@ -70,6 +70,44 @@ function channelSprite(tiles: Tile[], idx: number): string {
   const right = col < GRID_SIZE - 1 ? tiles[idx + 1].kind : null;
   if (left === 'channel' || right === 'channel') return 'channel_h';
   return 'channel_v';
+}
+
+function drawPathTile(
+  ctx: CanvasRenderingContext2D,
+  tiles: Tile[],
+  idx: number,
+  wx: number,
+  wy: number,
+) {
+  const row = Math.floor(idx / GRID_SIZE);
+  const col = idx % GRID_SIZE;
+  const connects = (candidate: number | null) => {
+    if (candidate === null) return false;
+    return ['path', 'shed', 'market', 'mill', 'depot'].includes(tiles[candidate]?.kind);
+  };
+  const north = connects(row > 0 ? idx - GRID_SIZE : null);
+  const south = connects(row < GRID_SIZE - 1 ? idx + GRID_SIZE : null);
+  const west = connects(col > 0 ? idx - 1 : null);
+  const east = connects(col < GRID_SIZE - 1 ? idx + 1 : null);
+
+  drawGenerated(ctx, `grass-${String.fromCharCode(97 + Number(grassVariant(idx).at(-1)))}`, wx, wy, TILE_PX, TILE_PX);
+
+  const clippedRoad = (name: 'path' | 'path-h', x: number, y: number, w: number, h: number) => {
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(x, y, w, h);
+    ctx.clip();
+    drawGenerated(ctx, name, wx, wy, TILE_PX, TILE_PX);
+    ctx.restore();
+  };
+
+  if (north) clippedRoad('path', wx, wy, TILE_PX, TILE_PX / 2);
+  if (south) clippedRoad('path', wx, wy + TILE_PX / 2, TILE_PX, TILE_PX / 2);
+  if (west) clippedRoad('path-h', wx, wy, TILE_PX / 2, TILE_PX);
+  if (east) clippedRoad('path-h', wx + TILE_PX / 2, wy, TILE_PX / 2, TILE_PX);
+
+  // Fill the shared center last so corners and junctions have no grass seam.
+  clippedRoad(north || south || (!west && !east) ? 'path' : 'path-h', wx + 7, wy + 7, TILE_PX - 14, TILE_PX - 14);
 }
 
 function isReservoir(idx: number): boolean {
@@ -281,7 +319,7 @@ function buildGroundCache(
     } else if (spriteName === 'tilled_dry') {
       drawGenerated(ctx, 'soil-dry', wx, wy, TILE_PX, TILE_PX);
     } else if (spriteName === 'path') {
-      drawGenerated(ctx, 'path', wx, wy, TILE_PX, TILE_PX);
+      drawPathTile(ctx, tiles, idx, wx, wy);
     } else if (spriteName === 'channel_h') {
       drawGenerated(ctx, 'channel-h', wx, wy, TILE_PX, TILE_PX);
     } else if (spriteName === 'channel_v') {
