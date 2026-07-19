@@ -53,6 +53,8 @@ function nextPlannerAction(state: GameState): PlayerAction | undefined {
   if (state.mill.output > 0) return { type: 'exportFlour', qty: state.mill.output };
   if (!state.mill.commissioned && state.gold >= GOLD_COST.mill)
     return { type: 'commissionMill' };
+  if (state.mill.commissioned && state.inventory.wheat > 0 && state.mill.input < state.mill.inputCapacity)
+    return { type: 'loadMill', qty: Math.min(state.inventory.wheat, state.mill.inputCapacity - state.mill.input) };
   const loadedCrate = state.fieldCrates.find((crate) => crate.wheat > 0);
   if (state.mill.commissioned && loadedCrate && state.mill.input < state.mill.inputCapacity)
     return { type: 'loadMillFromCrate', crateId: loadedCrate.id, qty: Math.min(loadedCrate.wheat, state.mill.inputCapacity - state.mill.input) };
@@ -82,13 +84,14 @@ function nextPlannerAction(state: GameState): PlayerAction | undefined {
     return { type: 'plant', idx, crop };
   for (const idx of field) {
     const tile = state.tiles[idx];
-    if (tile.crop && tile.moisture < 50 && state.reservoir >= MANUAL_WATER_DRAW)
+    if (tile.crop && tile.moisture < 50)
       return { type: 'water', idx };
   }
 
   const rawCrate = state.fieldCrates.find((crate) => crate.wheat > 0);
   if (!state.mill.commissioned && rawCrate)
     return { type: 'exportWheatFromCrate', crateId: rawCrate.id, qty: rawCrate.wheat };
+  if (state.inventory.wheat > 9) return { type: 'sell', crop: 'wheat', qty: state.inventory.wheat - 9 };
   return undefined;
 }
 
@@ -97,9 +100,7 @@ function nextNaiveAction(state: GameState): PlayerAction | undefined {
   const field = farm(state).filter((idx) => isInCrateRange(state, idx)).slice(0, 6);
   const mature = field.find((idx) => state.tiles[idx].crop?.mature);
   if (mature !== undefined) return { type: 'harvest', idx: mature };
-  for (const crop of cropIds) {
-    if (crop !== 'wheat' && state.inventory[crop] > 0) return { type: 'sell', crop, qty: state.inventory[crop] };
-  }
+  for (const crop of cropIds) if (state.inventory[crop] > 0) return { type: 'sell', crop, qty: state.inventory[crop] };
   const empty = field.filter((idx) => !state.tiles[idx].crop).length;
   if (empty > 0 && state.seeds.wheat < empty) {
     const affordable = Math.floor(state.gold / CROPS.wheat.seedCost);
@@ -110,7 +111,7 @@ function nextNaiveAction(state: GameState): PlayerAction | undefined {
     return { type: 'plant', idx, crop: 'wheat' };
   for (const idx of field) {
     const tile = state.tiles[idx];
-    if (tile.crop && tile.moisture < CROPS[tile.crop.cropId].waterNeed && state.reservoir >= MANUAL_WATER_DRAW)
+    if (tile.crop && tile.moisture < CROPS[tile.crop.cropId].waterNeed)
       return { type: 'water', idx };
   }
   return undefined;

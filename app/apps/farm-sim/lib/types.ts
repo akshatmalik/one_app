@@ -8,7 +8,7 @@ export type CropId = 'wheat' | 'potato' | 'beans' | 'tomato' | 'berries' | 'pump
 export type SoilType = 'loam' | 'clay' | 'sandy';
 export type ResourceId = 'wood' | 'stone' | 'clay' | 'coal' | 'ironOre';
 export type TileKind = 'grass' | 'tilled' | 'channel' | 'reservoir' | 'well' | 'sprinkler' | 'barn' | 'coop' | 'shed' | 'mill' | 'depot' | 'crate' | 'path' | 'brush' | 'rock' | 'marsh' | 'extractor' | 'locked';
-export type UpgradeId = 'bigCan' | 'tractor' | 'seeder' | 'truck';
+export type UpgradeId = 'bigCan' | 'sickle' | 'rowPlow' | 'seedDrill' | 'tractor' | 'seeder' | 'truck';
 export type UnlockId = 'irrigation' | 'mechanization' | 'precisionPlanting' | 'logistics';
 export type ItemId = 'fertilizer' | 'flour' | 'bread' | 'milk' | 'egg' | 'fuel' | 'riceBag' | 'cornmeal' | 'vegetableCrate' | 'tomatoSauce' | 'bricks' | 'ironBars' | 'machineParts';
 export type MachineType = 'tractor' | 'seeder';
@@ -209,6 +209,14 @@ export interface GameState {
   lastRecap: DayRecap | null;
   tutorialStep: number; // onboarding progress, -1 when done
   opening?: OpeningProgress; // absent on legacy saves, which remain fully unlocked
+  labor?: LaborProgress;
+}
+
+export interface LaborProgress {
+  manualTills: number;
+  manualPlants: number;
+  manualWaterings: number;
+  manualHarvests: number;
 }
 
 export interface OpeningProgress {
@@ -221,7 +229,12 @@ export type PlayerAction =
   | { type: 'till'; idx: number }
   | { type: 'plant'; idx: number; crop: CropId }
   | { type: 'water'; idx: number }
+  | { type: 'refillCan'; charges: number }
   | { type: 'harvest'; idx: number }
+  | { type: 'tillRow'; idx: number }
+  | { type: 'plantRow'; idx: number; crop: CropId }
+  | { type: 'waterRow'; idx: number }
+  | { type: 'harvestRow'; idx: number }
   | { type: 'harvestArea'; idx: number }
   | { type: 'buildChannel'; idx: number }
   | { type: 'buildSprinkler'; idx: number }

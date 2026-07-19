@@ -72,8 +72,8 @@ export const MAX_WELLS = 3;
 export const EXTRACTOR_BUILD_COST = { gold: 30, bricks: 2, machineParts: 0 } as const;
 export const EXTRACTOR_UPGRADE_COST = { gold: 150, bricks: 6, machineParts: 2 } as const;
 export const MACHINE_COST = {
-  tractor: { gold: 450, machineParts: 3 },
-  seeder: { gold: 320, machineParts: 2 },
+  tractor: { gold: 1800, machineParts: 3 },
+  seeder: { gold: 550, machineParts: 2 },
 } as const;
 
 // ── Water ──────────────────────────────────────────────
@@ -82,8 +82,7 @@ export const RESERVOIR_START = 120;
 export const RAIN_RESERVOIR_GAIN = 100;
 export const WELL_DAILY_YIELD = 30;
 export const MANUAL_WATER_MOISTURE = 40; // moisture added per water action
-export const MANUAL_WATER_MOISTURE_BIGCAN = 60;
-export const MANUAL_WATER_DRAW = 20;
+export const MANUAL_WATER_DRAW = 4; // reservoir transferred into one can charge
 
 export const SPRINKLER_MOISTURE = 30;
 export const SPRINKLER_WATER_DRAW = 10; // reservoir cost per water action
@@ -133,9 +132,12 @@ export const PRICE_MOVE_RECAP_THRESHOLD = 0.15; // report price moves ≥ 15%
 
 // ── Upgrades (one-time, bought at market) ──────────────
 export const UPGRADES: Record<UpgradeId, { cost: number; name: string; effect: string }> = {
-  bigCan: { cost: 80, name: 'Big Watering Can', effect: 'Watering gives +60 moisture instead of +40' },
-  tractor: { cost: 220, name: 'Tractor', effect: 'Tills or harvests a 3×3 area' },
-  seeder: { cost: 120, name: 'Seeder', effect: 'Plants seeds in a 3×3 area' },
+  bigCan: { cost: 180, name: 'Large Watering Can', effect: 'Carries 20 charges instead of 10' },
+  sickle: { cost: 220, name: 'Field Sickle', effect: 'Harvests a three-tile row' },
+  rowPlow: { cost: 260, name: 'Row Plow', effect: 'Tills a three-tile row' },
+  seedDrill: { cost: 320, name: 'Seed Drill', effect: 'Plants a three-tile row' },
+  tractor: { cost: 1800, name: 'Tractor', effect: 'Tills or harvests a 3×3 area' },
+  seeder: { cost: 550, name: 'Seeder Attachment', effect: 'Plants seeds in a 3×3 area' },
   truck: { cost: 1000, name: 'Truck', effect: 'Allows quick selling' },
 };
 

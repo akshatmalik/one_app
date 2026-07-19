@@ -22,7 +22,7 @@ import { CropId, GameState } from '../lib/types';
 import { CROPS } from '../data/crops';
 import { WEATHER_META } from '../data/weather';
 import { dayOfSeason, seasonForDay } from '../lib/engine/weather';
-import { CAN_MAX_CHARGES, ToolId } from '../lib/realtime/player';
+import { ToolId } from '../lib/realtime/player';
 import { formatClock } from '../lib/realtime/clock';
 import { waterProjection } from '../lib/engine/engineering';
 import { availableCrops, irrigationAvailable } from '../lib/engine/opening';
@@ -39,6 +39,7 @@ interface Props {
   state: GameState;
   tool: ToolId;
   waterCharges: number;
+  waterCapacity: number;
   selectedCrop: CropId | null;
   paused: boolean;
   endDayDisabled: boolean;
@@ -58,6 +59,7 @@ export function HudBar({
   state,
   tool,
   waterCharges,
+  waterCapacity,
   selectedCrop,
   paused,
   endDayDisabled,
@@ -162,7 +164,7 @@ export function HudBar({
                   >
                     <item.Icon size={17} />
                     <span className="max-w-full truncate px-1">{item.label}</span>
-                    {item.id === 'can' ? <span className="absolute inset-x-2 bottom-0.5 h-0.5 bg-white/10"><span className="block h-full bg-[#71bddd]" style={{ width: `${waterCharges / CAN_MAX_CHARGES * 100}%` }} /></span> : null}
+                    {item.id === 'can' ? <span className="absolute inset-x-2 bottom-0.5 h-0.5 bg-white/10"><span className="block h-full bg-[#71bddd]" style={{ width: `${waterCharges / waterCapacity * 100}%` }} /></span> : null}
                   </button>
                 ))}
               </div>

@@ -14,7 +14,6 @@ import {
   WALK_SPEED,
   RUN_SPEED,
   facingTileIdx,
-  CAN_MAX_CHARGES,
 } from '../lib/realtime/player';
 import {
   InputState,
@@ -37,6 +36,7 @@ const WATER_EFFECT_MS = 900;
 interface Props {
   state: GameState;
   waterCharges: number;
+  waterCapacity: number;
   selectedCrop: CropId | null;
   activeTool: ToolId;           // controlled from parent — synced into playerRef each frame
   buildTool: BuildTool | null;
@@ -155,6 +155,7 @@ function followPath(player: PlayerState, path: TilePosition[], state: Pick<GameS
 export function GameCanvas({
   state,
   waterCharges,
+  waterCapacity,
   selectedCrop,
   activeTool,
   buildTool,
@@ -188,6 +189,7 @@ export function GameCanvas({
   // Mirror latest React state into refs so the rAF closure always reads fresh.
   const stateRef        = useRef(state);
   const selectedCropRef = useRef(selectedCrop);
+  const waterCapacityRef = useRef(waterCapacity);
   const activeToolRef   = useRef(activeTool);
   const buildToolRef    = useRef(buildTool);
   const selectedIdxRef  = useRef(selectedIdx);
@@ -199,6 +201,7 @@ export function GameCanvas({
 
   stateRef.current        = state;
   selectedCropRef.current = selectedCrop;
+  waterCapacityRef.current = waterCapacity;
   activeToolRef.current   = activeTool;
   buildToolRef.current    = buildTool;
   selectedIdxRef.current  = selectedIdx;
@@ -342,8 +345,11 @@ export function GameCanvas({
           if (facingIdx !== null) {
             const ft = gs.tiles[facingIdx];
             if (ft && (ft.kind === 'reservoir' || ft.kind === 'channel' || ft.kind === 'well')) {
-              player.waterCharges = CAN_MAX_CHARGES;
-              actionCooldownRef.current = 30;
+              const missing = waterCapacityRef.current - player.waterCharges;
+              if (missing > 0 && onActionRef.current({ type: 'refillCan', charges: missing })) {
+                player.waterCharges = waterCapacityRef.current;
+                actionCooldownRef.current = 30;
+              }
             }
           }
         }

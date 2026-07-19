@@ -165,6 +165,7 @@ export function newGame(seed: number): GameState {
     lastRecap: null,
     tutorialStep: 0,
     opening: { stage: 0, progress: 0, complete: false },
+    labor: { manualTills: 0, manualPlants: 0, manualWaterings: 0, manualHarvests: 0 },
   };
 
   state.forecast = buildForecast(seed, day, weatherTruth);

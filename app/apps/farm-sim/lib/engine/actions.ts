@@ -12,7 +12,6 @@ import {
   MAX_WELLS,
   TILLED_START_MOISTURE,
   MANUAL_WATER_MOISTURE,
-  MANUAL_WATER_MOISTURE_BIGCAN,
   MANUAL_WATER_DRAW,
   START_PLOT,
   UPGRADES,
@@ -37,6 +36,7 @@ import { harvestYield } from './crops';
 import { clamp, cloneState } from './util';
 import { unlocksForReputation } from './contracts';
 import { availableCrops, irrigationAvailable } from './opening';
+import { laborProgress, rowIndices, upgradeRequirement } from './toolProgression';
 import { syncProductionMilestones } from './production';
 import { PARCELS, depositFor, guaranteedParcelTerrain, parcelIndices, revealedTerrain } from './parcels';
 
@@ -62,7 +62,7 @@ export function expansionCost(idx: number): number {
 }
 
 function waterAmount(state: GameState): number {
-  return state.upgrades.includes('bigCan') ? MANUAL_WATER_MOISTURE_BIGCAN : MANUAL_WATER_MOISTURE;
+  return MANUAL_WATER_MOISTURE;
 }
 
 function tileDistance(a: number, b: number): number {
@@ -102,6 +102,7 @@ export function applyAction(state: GameState, action: PlayerAction): ActionResul
       if (t.kind !== 'grass') return fail(state, 'You can only till open grass.');
       const s = cloneState(state);
       s.tiles[action.idx] = { ...t, kind: 'tilled', moisture: TILLED_START_MOISTURE };
+      s.labor = { ...laborProgress(s), manualTills: laborProgress(s).manualTills + 1 };
       return { ok: true, state: s };
     }
 
@@ -121,6 +122,7 @@ export function applyAction(state: GameState, action: PlayerAction): ActionResul
         ...t,
         crop: { cropId: action.crop, growthDays: 0, mature: false, stressDays: 0 },
       };
+      s.labor = { ...laborProgress(s), manualPlants: laborProgress(s).manualPlants + 1 };
       return { ok: true, state: s };
     }
 
@@ -128,10 +130,18 @@ export function applyAction(state: GameState, action: PlayerAction): ActionResul
     case 'water': {
       const t = state.tiles[action.idx];
       if (t.kind !== 'tilled') return fail(state, 'Only tilled soil can be watered.');
-      if (state.reservoir < MANUAL_WATER_DRAW) return fail(state, 'The reservoir is empty.');
       const s = cloneState(state);
-      s.reservoir -= MANUAL_WATER_DRAW;
       s.tiles[action.idx] = { ...t, moisture: clamp(t.moisture + waterAmount(state), 0, 100) };
+      s.labor = { ...laborProgress(s), manualWaterings: laborProgress(s).manualWaterings + 1 };
+      return { ok: true, state: s };
+    }
+
+    case 'refillCan': {
+      if (!Number.isInteger(action.charges) || action.charges < 1) return fail(state, 'The watering can is already full.');
+      const draw = action.charges * MANUAL_WATER_DRAW;
+      if (state.reservoir < draw) return fail(state, `The reservoir needs ${draw} water to refill the can.`);
+      const s = cloneState(state);
+      s.reservoir -= draw;
       return { ok: true, state: s };
     }
 
@@ -142,14 +152,13 @@ export function applyAction(state: GameState, action: PlayerAction): ActionResul
       const s = cloneState(state);
       const def = CROPS[t.crop.cropId];
       const units = harvestYield(t);
+      s.inventory[t.crop.cropId] += units;
       if (t.crop.cropId === 'wheat') {
-        const destination = nearestCrateForHarvest(state, action.idx, units);
-        if (!destination) return fail(state, `No field crate within ${CRATE_CATCHMENT} tiles has room for this harvest.`);
-        s.fieldCrates.find((crate) => crate.id === destination.id)!.wheat += units;
         s.production.harvestedWheat += units;
         s.production.harvestedToday += units;
         syncProductionMilestones(s);
-      } else s.inventory[t.crop.cropId] += units;
+      }
+      s.labor = { ...laborProgress(s), manualHarvests: laborProgress(s).manualHarvests + 1 };
       const newTile: Tile = { ...t };
       if (def.regrowDays) {
         // Berries: keep the bush, schedule a regrow.
@@ -171,15 +180,74 @@ export function applyAction(state: GameState, action: PlayerAction): ActionResul
         .map(({ idx }) => idx);
       if (targets.length === 0) return fail(state, 'No mature crops in this 3x3 area.');
 
-      // Reuse the single-tile action so wheat crate capacity and all harvest rules stay identical.
+      // Machines harvest quickly into field logistics. Manual harvesting goes
+      // to personal inventory, but machine wheat requires nearby crate space.
       let harvested = state;
       for (const idx of targets) {
+        const target = harvested.tiles[idx];
+        const units = target.crop ? harvestYield(target) : 0;
+        const destination = target.crop?.cropId === 'wheat' ? nearestCrateForHarvest(harvested, idx, units) : undefined;
+        if (target.crop?.cropId === 'wheat' && !destination) return fail(state, `No field crate within ${CRATE_CATCHMENT} tiles has room for this machine harvest.`);
         const result = applyAction(harvested, { type: 'harvest', idx });
         if (!result.ok) return fail(state, result.error ?? 'The area harvest could not be completed.');
         harvested = result.state;
+        if (target.crop?.cropId === 'wheat' && destination) {
+          harvested.inventory.wheat -= units;
+          harvested.fieldCrates.find((crate) => crate.id === destination.id)!.wheat += units;
+        }
       }
       const s = cloneState(harvested);
       s.items.fuel -= 1;
+      s.labor = state.labor ? { ...state.labor } : undefined;
+      return { ok: true, state: s };
+    }
+
+    case 'tillRow': {
+      if (!state.upgrades.includes('rowPlow')) return fail(state, 'Buy the row plow first.');
+      const targets = rowIndices(action.idx).filter((idx) => state.tiles[idx].kind === 'grass');
+      if (targets.length === 0) return fail(state, 'No open ground in this row.');
+      let next = state;
+      for (const idx of targets) next = applyAction(next, { type: 'till', idx }).state;
+      const s = cloneState(next);
+      s.labor = state.labor ? { ...state.labor } : undefined;
+      return { ok: true, state: s };
+    }
+
+    case 'plantRow': {
+      if (!state.upgrades.includes('seedDrill')) return fail(state, 'Buy the seed drill first.');
+      const targets = rowIndices(action.idx).filter((idx) => state.tiles[idx].kind === 'tilled' && !state.tiles[idx].crop);
+      if (targets.length === 0) return fail(state, 'No empty tilled soil in this row.');
+      if ((state.seeds[action.crop] ?? 0) < targets.length) return fail(state, `You need ${targets.length} ${CROPS[action.crop].name} seeds.`);
+      let next = state;
+      for (const idx of targets) {
+        const result = applyAction(next, { type: 'plant', idx, crop: action.crop });
+        if (!result.ok) return fail(state, result.error ?? 'The row could not be planted.');
+        next = result.state;
+      }
+      const s = cloneState(next);
+      s.labor = state.labor ? { ...state.labor } : undefined;
+      return { ok: true, state: s };
+    }
+
+    case 'waterRow': {
+      if (!state.upgrades.includes('bigCan')) return fail(state, 'Buy the large watering can first.');
+      const targets = rowIndices(action.idx).filter((idx) => state.tiles[idx].kind === 'tilled');
+      if (targets.length === 0) return fail(state, 'No field tiles in this row.');
+      let next = state;
+      for (const idx of targets) next = applyAction(next, { type: 'water', idx }).state;
+      const s = cloneState(next);
+      s.labor = state.labor ? { ...state.labor } : undefined;
+      return { ok: true, state: s };
+    }
+
+    case 'harvestRow': {
+      if (!state.upgrades.includes('sickle')) return fail(state, 'Buy the field sickle first.');
+      const targets = rowIndices(action.idx).filter((idx) => state.tiles[idx].crop?.mature);
+      if (targets.length === 0) return fail(state, 'Nothing in this row is ready.');
+      let next = state;
+      for (const idx of targets) next = applyAction(next, { type: 'harvest', idx }).state;
+      const s = cloneState(next);
+      s.labor = state.labor ? { ...state.labor } : undefined;
       return { ok: true, state: s };
     }
 
@@ -544,6 +612,8 @@ export function applyAction(state: GameState, action: PlayerAction): ActionResul
     // ── BUY UPGRADE ─────────────────────────────────────
     case 'buyUpgrade': {
       if (state.upgrades.includes(action.upgrade)) return fail(state, 'Already owned.');
+      const requirement = upgradeRequirement(state, action.upgrade);
+      if (!requirement.met) return fail(state, requirement.text);
       const cost = UPGRADES[action.upgrade].cost;
       if (state.gold < cost) return fail(state, 'Not enough gold.');
       const parts = action.upgrade === 'tractor' ? 3 : action.upgrade === 'seeder' ? 2 : action.upgrade === 'truck' ? 4 : 0;
@@ -712,6 +782,8 @@ export function applyAction(state: GameState, action: PlayerAction): ActionResul
       return { ok: true, state: s };
     }
     case 'buyMachine': {
+      const requirement = upgradeRequirement(state, action.machineType);
+      if (!requirement.met) return fail(state, requirement.text);
       const cost = MACHINE_COST[action.machineType];
       if (state.gold < cost.gold || state.items.machineParts < cost.machineParts)
         return fail(state, `Needs ${cost.gold}g and ${cost.machineParts} machine parts.`);
@@ -754,6 +826,7 @@ export function validActions(state: GameState, idx: number): PlayerAction['type'
   switch (t.kind) {
     case 'grass':
       out.push('till');
+      if (state.upgrades.includes('rowPlow')) out.push('tillRow');
       if (state.upgrades.includes('tractor')) out.push('tillArea');
       out.push('amendSoil');
       if (irrigationAvailable(state)) out.push('buildChannel', 'digWell', 'buildSprinkler', 'buildFieldCrate');
@@ -761,10 +834,14 @@ export function validActions(state: GameState, idx: number): PlayerAction['type'
     case 'tilled':
       if (t.crop) {
         if (t.crop.mature) out.push('harvest');
+        if (t.crop.mature && state.upgrades.includes('sickle')) out.push('harvestRow');
         if (t.crop.mature && state.upgrades.includes('tractor')) out.push('harvestArea');
         out.push('water');
+        if (state.upgrades.includes('bigCan')) out.push('waterRow');
       } else {
         out.push('plant', 'water');
+        if (state.upgrades.includes('seedDrill')) out.push('plantRow');
+        if (state.upgrades.includes('bigCan')) out.push('waterRow');
         if (state.upgrades.includes('seeder')) out.push('plantArea');
       }
       out.push('fertilize');

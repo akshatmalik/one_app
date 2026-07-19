@@ -12,11 +12,12 @@ import { DayRecap } from './components/DayRecap';
 import { MenuScreen } from './components/MenuScreen';
 import { DevOverlay } from './components/DevOverlay';
 import { TileSheet } from './components/TileSheet';
-import { PlayerState, CAN_MAX_CHARGES, standingTileIdx } from './lib/realtime/player';
+import { PlayerState, BIG_CAN_MAX_CHARGES, CAN_MAX_CHARGES, standingTileIdx } from './lib/realtime/player';
 import type { ToolId } from './lib/realtime/player';
 import { GRID_SIZE } from './lib/balance';
 import { OpeningObjective } from './components/OpeningObjective';
 import { operationsAvailable } from './lib/engine/opening';
+import { rowIndices } from './lib/engine/toolProgression';
 
 export default function FarmSimPage() {
   const game = useFarmGame();
@@ -34,6 +35,7 @@ export default function FarmSimPage() {
   const [fps, setFps]                   = useState(60);
   const [selectedIdx, setSelectedIdx]   = useState<number | null>(null);
   const [selectionAnchor, setSelectionAnchor] = useState({ x: 195, y: 360 });
+  const waterCapacity = state?.upgrades.includes('bigCan') ? BIG_CAN_MAX_CHARGES : CAN_MAX_CHARGES;
 
   useEffect(() => { if (!state) setMenuOpen(true); }, [state]);
 
@@ -54,13 +56,20 @@ export default function FarmSimPage() {
       game.flashInfo('Resume the game to work this tile.');
       return false;
     }
-    if (action.type === 'water') {
+    if (action.type === 'water' || action.type === 'waterRow') {
+      const chargeCost = action.type === 'waterRow' && state
+        ? rowIndices(action.idx).filter((idx) => state.tiles[idx].kind === 'tilled').length
+        : 1;
+      if (waterCharges < chargeCost) {
+        game.flashInfo(`The watering can needs ${chargeCost} charges.`);
+        return false;
+      }
       const ok = dispatch(action);
-      if (ok) setWaterCharges((c) => Math.max(0, c - 1));
+      if (ok) setWaterCharges((c) => Math.max(0, c - chargeCost));
       return ok;
     }
     return dispatch(action);
-  }, [dispatch, game, isPaused]);
+  }, [dispatch, game, isPaused, state, waterCharges]);
 
   const handlePlayerMove = useCallback((player: PlayerState) => {
     setPlayerState({ ...player }); // shallow clone so DevOverlay sees fresh object
@@ -72,9 +81,15 @@ export default function FarmSimPage() {
   }, []);
 
   const handleRefillWater = useCallback(() => {
-    setWaterCharges(CAN_MAX_CHARGES);
-    game.flashInfo(`Watering can refilled · ${CAN_MAX_CHARGES}/${CAN_MAX_CHARGES}`);
-  }, [game]);
+    const missing = waterCapacity - waterCharges;
+    if (missing < 1) return false;
+    if (dispatch({ type: 'refillCan', charges: missing })) {
+      setWaterCharges(waterCapacity);
+      game.flashInfo(`Watering can refilled · ${waterCapacity}/${waterCapacity}`);
+      return true;
+    }
+    return false;
+  }, [dispatch, game, waterCapacity, waterCharges]);
 
   const handleTileSelect = useCallback((idx: number | null, player: PlayerState, anchor?: { x: number; y: number }) => {
     setPlayerState(player);
@@ -113,6 +128,7 @@ export default function FarmSimPage() {
           key={state.seed}
           state={state}
           waterCharges={waterCharges}
+          waterCapacity={waterCapacity}
           selectedCrop={selectedCrop}
           activeTool={currentTool}
           buildTool={null}
@@ -131,6 +147,7 @@ export default function FarmSimPage() {
           state={state}
           tool={currentTool}
           waterCharges={waterCharges}
+          waterCapacity={waterCapacity}
           selectedCrop={selectedCrop}
           paused={isPaused}
           hideDock={showMarket}
@@ -156,6 +173,7 @@ export default function FarmSimPage() {
           inRange={selectionInRange}
           isWalking={!simulationPaused && !!playerState?.isMoving && !selectionInRange}
           waterCharges={waterCharges}
+          waterCapacity={waterCapacity}
           selectedCrop={selectedCrop}
           paused={isPaused}
           dispatch={handleAction}
