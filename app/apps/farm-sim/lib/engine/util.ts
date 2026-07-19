@@ -34,5 +34,6 @@ export function cloneState(state: GameState): GameState {
     forecast: [...state.forecast],
     upgrades: [...state.upgrades],
     unlocks: [...state.unlocks],
+    labor: state.labor ? { ...state.labor } : undefined,
   };
 }

@@ -17,11 +17,11 @@ import {
 } from 'lucide-react';
 import { CropId, GameState, PlayerAction, SoilType } from '../lib/types';
 import { CROPS } from '../data/crops';
-import { validActions, plantableCrops, nearestCrateForHarvest } from '../lib/engine/actions';
+import { validActions, plantableCrops } from '../lib/engine/actions';
 import { harvestYield } from '../lib/engine/crops';
 import { connectedChannels } from '../lib/engine/water';
-import { MANUAL_WATER_DRAW, GOLD_COST, MAX_WELLS, EXTRACTOR_BUILD_COST, EXTRACTOR_UPGRADE_COST, CRATE_CATCHMENT, GRID_SIZE } from '../lib/balance';
-import { CAN_MAX_CHARGES } from '../lib/realtime/player';
+import { GOLD_COST, MAX_WELLS, EXTRACTOR_BUILD_COST, EXTRACTOR_UPGRADE_COST, CRATE_CATCHMENT, GRID_SIZE } from '../lib/balance';
+import { rowIndices } from '../lib/engine/toolProgression';
 
 interface Props {
   state: GameState;
@@ -29,10 +29,11 @@ interface Props {
   inRange: boolean;
   isWalking: boolean;
   waterCharges: number;
+  waterCapacity: number;
   selectedCrop: CropId | null;
   paused: boolean;
   dispatch: (action: PlayerAction) => boolean;
-  onRefillWater: () => void;
+  onRefillWater: () => boolean;
   anchor: { x: number; y: number };
   onClose: () => void;
 }
@@ -63,7 +64,7 @@ function tileTitle(state: GameState, idx: number) {
   return labels[tile.kind] ?? tile.kind;
 }
 
-export function TileSheet({ state, idx, inRange, isWalking, waterCharges, selectedCrop, paused, dispatch, onRefillWater, anchor, onClose }: Props) {
+export function TileSheet({ state, idx, inRange, isWalking, waterCharges, waterCapacity, selectedCrop, paused, dispatch, onRefillWater, anchor, onClose }: Props) {
   const [showSeeds, setShowSeeds] = useState(false);
   const [showBuild, setShowBuild] = useState(false);
   const [expanded, setExpanded] = useState(false);
@@ -80,9 +81,8 @@ export function TileSheet({ state, idx, inRange, isWalking, waterCharges, select
   const crate = tile.kind === 'crate' ? state.fieldCrates.find((candidate) => candidate.idx === idx) : undefined;
   const crateRoute = crate ? state.haulRoutes.find((candidate) => candidate.crateId === crate.id) : undefined;
   const harvestUnits = tile.crop?.mature ? harvestYield(tile) : 0;
-  const harvestCrate = tile.crop?.cropId === 'wheat' && tile.crop.mature
-    ? nearestCrateForHarvest(state, idx, harvestUnits)
-    : undefined;
+  const row = rowIndices(idx);
+  const rowWaterCount = row.filter((targetIdx) => state.tiles[targetIdx].kind === 'tilled').length;
   const sprinklerBuildSupplied = tile.kind === 'grass' && [...suppliedChannels].some((channelIdx) => {
     const rowDelta = Math.abs(Math.floor(channelIdx / GRID_SIZE) - Math.floor(idx / GRID_SIZE));
     const colDelta = Math.abs(channelIdx % GRID_SIZE - idx % GRID_SIZE);
@@ -179,14 +179,6 @@ export function TileSheet({ state, idx, inRange, isWalking, waterCharges, select
           </div>
         ) : null}
 
-        {tile.crop?.mature && tile.crop.cropId === 'wheat' ? (
-          <div className={`rounded-md px-2.5 py-2 text-[10px] ${harvestCrate ? 'bg-[#d9b95f]/10 text-[#f1d27a]' : 'bg-[#9f4938]/20 text-[#efa08c]'}`}>
-            {harvestCrate
-              ? `Harvest destination: crate ${state.fieldCrates.indexOf(harvestCrate) + 1} · ${harvestCrate.wheat}/${harvestCrate.capacity} stored`
-              : `No crate within ${CRATE_CATCHMENT} tiles has room for ${harvestUnits} wheat.`}
-          </div>
-        ) : null}
-
         {crate ? (
           <div className="rounded-md bg-black/20 px-2.5 py-2 text-[10px]">
             <div className="flex items-center justify-between"><span className="font-semibold text-white/70">Wheat storage</span><span className="font-bold tabular-nums text-[#f1d27a]">{crate.wheat}/{crate.capacity}</span></div>
@@ -247,14 +239,18 @@ export function TileSheet({ state, idx, inRange, isWalking, waterCharges, select
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-1.5">
-            {isWaterSource ? <button className={actionClass('refill')} disabled={waterCharges >= CAN_MAX_CHARGES} onClick={() => { onRefillWater(); window.localStorage.setItem(`farm-recent-${contextKey}`, 'refill'); setRecentAction('refill'); navigator.vibrate?.(18); }}><Droplets size={16} /> {waterCharges >= CAN_MAX_CHARGES ? `Can is full · ${CAN_MAX_CHARGES}/${CAN_MAX_CHARGES}` : `Refill can · ${waterCharges}/${CAN_MAX_CHARGES}`}</button> : null}
+            {isWaterSource ? <button className={actionClass('refill')} disabled={waterCharges >= waterCapacity} onClick={() => { if (onRefillWater()) { window.localStorage.setItem(`farm-recent-${contextKey}`, 'refill'); setRecentAction('refill'); navigator.vibrate?.(18); } }}><Droplets size={16} /> {waterCharges >= waterCapacity ? `Can is full · ${waterCapacity}/${waterCapacity}` : `Refill can · ${waterCharges}/${waterCapacity}`}</button> : null}
             {actions.includes('till') ? <button className={actionClass('till')} onClick={() => run({ type: 'till', idx })}><Pickaxe size={16} /> Till soil</button> : null}
+            {actions.includes('tillRow') ? <button className={actionClass('tillRow')} onClick={() => run({ type: 'tillRow', idx })}><Pickaxe size={16} /> Till three-tile row</button> : null}
             {actions.includes('tillArea') ? <button className={actionClass('tillArea')} disabled={state.items.fuel < 1 || tillAreaCount < 1} onClick={() => run({ type: 'tillArea', idx })}><Pickaxe size={16} /> Till {tillAreaCount} tiles · 1 fuel</button> : null}
             {actions.includes('plant') && quickCrop && !showSeeds ? <button className={actionClass('plant')} disabled={(state.seeds[quickCrop] ?? 0) < 1} onClick={() => run({ type: 'plant', idx, crop: quickCrop })}><Sprout size={16} /> Plant {CROPS[quickCrop].name} · {state.seeds[quickCrop]}</button> : null}
             {actions.includes('plant') ? <button className={actionClass('choose-crop')} onClick={() => setShowSeeds((value) => !value)}><Sprout size={16} /> {showSeeds ? 'Hide seeds' : quickCrop ? 'Choose another crop…' : 'Choose crop…'}</button> : null}
+            {actions.includes('plantRow') && quickCrop ? <button className={actionClass('plantRow')} onClick={() => run({ type: 'plantRow', idx, crop: quickCrop })}><Sprout size={16} /> Plant {CROPS[quickCrop].name} row</button> : null}
             {actions.includes('plantArea') && selectedCrop ? <button className={actionClass('plantArea')} disabled={state.items.fuel < 1 || plantAreaCount < 1} onClick={() => run({ type: 'plantArea', idx, crop: selectedCrop })}><Sprout size={16} /> Seed {plantAreaCount} tiles · 1 fuel</button> : null}
-            {actions.includes('water') ? <button className={actionClass('water')} title={waterCharges < 1 ? 'Refill at a well, reservoir, or supplied channel' : state.reservoir < MANUAL_WATER_DRAW ? `Needs ${MANUAL_WATER_DRAW} reservoir water` : undefined} disabled={state.reservoir < MANUAL_WATER_DRAW || waterCharges < 1} onClick={() => run({ type: 'water', idx })}><Droplets size={16} /> Water · {waterCharges}</button> : null}
-            {actions.includes('harvest') ? <button className={actionClass('harvest')} disabled={tile.crop?.cropId === 'wheat' && !harvestCrate} onClick={() => run({ type: 'harvest', idx })}><Wheat size={16} /> Harvest {harvestUnits}</button> : null}
+            {actions.includes('water') ? <button className={actionClass('water')} title={waterCharges < 1 ? 'Refill at a well, reservoir, or supplied channel' : undefined} disabled={waterCharges < 1} onClick={() => run({ type: 'water', idx })}><Droplets size={16} /> Water · {waterCharges}</button> : null}
+            {actions.includes('waterRow') ? <button className={actionClass('waterRow')} disabled={waterCharges < rowWaterCount} onClick={() => run({ type: 'waterRow', idx })}><Droplets size={16} /> Water row · {rowWaterCount} charges</button> : null}
+            {actions.includes('harvest') ? <button className={actionClass('harvest')} onClick={() => run({ type: 'harvest', idx })}><Wheat size={16} /> Harvest {harvestUnits}</button> : null}
+            {actions.includes('harvestRow') ? <button className={actionClass('harvestRow')} onClick={() => run({ type: 'harvestRow', idx })}><Wheat size={16} /> Harvest ready row</button> : null}
             {actions.includes('harvestArea') ? <button className={actionClass('harvestArea')} disabled={state.items.fuel < 1 || harvestAreaCount < 1} onClick={() => run({ type: 'harvestArea', idx })}><Wheat size={16} /> Harvest {harvestAreaCount} crops · 1 fuel</button> : null}
             {actions.includes('clearLand') ? <button className={actionClass('clearLand')} onClick={() => run({ type: 'clearLand', idx })}><Shovel size={16} /> Clear land</button> : null}
             {actions.includes('mine') ? <button className={actionClass('mine')} onClick={() => run({ type: 'mine', idx })}><Pickaxe size={16} /> Mine {tile.deposit?.resource ?? 'deposit'}</button> : null}
@@ -270,7 +266,7 @@ export function TileSheet({ state, idx, inRange, isWalking, waterCharges, select
           </div>
         )}
 
-        {inRange && actions.includes('water') && (waterCharges < 1 || state.reservoir < MANUAL_WATER_DRAW) ? <p className="text-[9px] text-[#efa08c]">{waterCharges < 1 ? 'Watering can empty. Select a well, reservoir, or supplied channel to refill it.' : `Watering needs ${MANUAL_WATER_DRAW}; reservoir has ${Math.floor(state.reservoir)}.`}</p> : null}
+        {inRange && actions.includes('water') && waterCharges < 1 ? <p className="text-[9px] text-[#efa08c]">Watering can empty. Select a well, reservoir, or supplied channel to refill it.</p> : null}
         {inRange && actions.includes('buildSprinkler') && !sprinklerBuildSupplied ? <p className="text-[9px] text-[#efa08c]">A sprinkler must touch a channel connected to the reservoir.</p> : null}
 
         {inRange && expanded && actions.includes('amendSoil') ? (

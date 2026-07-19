@@ -21,7 +21,8 @@ export interface PlayerState {
 
 export const WALK_SPEED = 2.5;  // tiles per second at 60 fps
 export const RUN_SPEED  = 4.0;  // tiles per second while Shift held
-export const CAN_MAX_CHARGES = 5;
+export const CAN_MAX_CHARGES = 10;
+export const BIG_CAN_MAX_CHARGES = 20;
 
 const TILE_PX = 32;
 // Sprite footprint drawn at 2× scale: 12×18 px source → 24×36 px on screen
