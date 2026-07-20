@@ -12,6 +12,7 @@ export const START_PLOT = { r0: 15, c0: 14, r1: 24, c1: 25 }; // compact starter
 export const RESERVOIR_POS = { r: 17, c: 20 };
 export const FARM_LANDMARKS = {
   shed: { r: 16, c: 16 },
+  market: { r: 23, c: 24 },
   mill: { r: 16, c: 24 },
   depot: { r: 21, c: 25 },
   crate: { r: 18, c: 16 },
@@ -44,6 +45,7 @@ export const WHEAT_STORAGE_UPGRADE = 12;
 export const MILL_INPUT_CAPACITY = 9;
 export const MILL_OUTPUT_CAPACITY = 9;
 export const MILL_RATE_PER_DAY = 3;
+export const MILL_UNLOCK_WHEAT = 24;
 export const FLOUR_EXPORT_PRICE = 14;
 export const CRATE_CATCHMENT = 4;
 export const FIELD_CRATE_CAPACITY = 24;

@@ -14,6 +14,7 @@ const BLOCKED_KINDS: ReadonlySet<TileKind> = new Set([
   'barn',
   'coop',
   'shed',
+  'market',
   'mill',
   'depot',
   'crate',

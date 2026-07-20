@@ -124,7 +124,7 @@ export function resolveSessionDay(session: PlaytestSession): PlaytestLogEntry {
 
 const MAP_CHAR: Record<TileKind, string> = {
   grass: '.', tilled: '=', channel: '~', reservoir: 'R', well: 'W', sprinkler: '*',
-  barn: 'B', coop: 'C', shed: 'S', mill: 'M', depot: 'D', crate: 'K', path: ':',
+  barn: 'B', coop: 'C', shed: 'S', market: '$', mill: 'M', depot: 'D', crate: 'K', path: ':',
   brush: 'b', rock: 'o', marsh: '%', locked: '#',
   extractor: 'X',
 };

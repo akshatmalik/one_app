@@ -20,6 +20,7 @@ import { TimeOfDay, applyLighting } from './lighting';
 import { groundDetails, GroundDetail, lockedScenery } from '../lib/worldScenery';
 import { harvestYield } from '../lib/engine/crops';
 import { CROPS } from '../data/crops';
+import { dayOfSeason } from '../lib/engine/weather';
 
 const IMG_CACHE: Record<string, HTMLImageElement> = {};
 function drawExternalImg(ctx: CanvasRenderingContext2D, src: string, sx: number, sy: number, w: number, h: number) {
@@ -36,7 +37,7 @@ function drawExternalImg(ctx: CanvasRenderingContext2D, src: string, sx: number,
 }
 
 const GENERATED_ASSET_ROOT = '/farm-generated-v2';
-const GENERATED_ASSET_VERSION = 3;
+const GENERATED_ASSET_VERSION = 5;
 
 function drawGenerated(
   ctx: CanvasRenderingContext2D,
@@ -69,6 +70,44 @@ function channelSprite(tiles: Tile[], idx: number): string {
   const right = col < GRID_SIZE - 1 ? tiles[idx + 1].kind : null;
   if (left === 'channel' || right === 'channel') return 'channel_h';
   return 'channel_v';
+}
+
+function drawPathTile(
+  ctx: CanvasRenderingContext2D,
+  tiles: Tile[],
+  idx: number,
+  wx: number,
+  wy: number,
+) {
+  const row = Math.floor(idx / GRID_SIZE);
+  const col = idx % GRID_SIZE;
+  const connects = (candidate: number | null) => {
+    if (candidate === null) return false;
+    return ['path', 'shed', 'market', 'mill', 'depot'].includes(tiles[candidate]?.kind);
+  };
+  const north = connects(row > 0 ? idx - GRID_SIZE : null);
+  const south = connects(row < GRID_SIZE - 1 ? idx + GRID_SIZE : null);
+  const west = connects(col > 0 ? idx - 1 : null);
+  const east = connects(col < GRID_SIZE - 1 ? idx + 1 : null);
+
+  drawGenerated(ctx, `grass-${String.fromCharCode(97 + Number(grassVariant(idx).at(-1)))}`, wx, wy, TILE_PX, TILE_PX);
+
+  const clippedRoad = (name: 'path' | 'path-h', x: number, y: number, w: number, h: number) => {
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(x, y, w, h);
+    ctx.clip();
+    drawGenerated(ctx, name, wx, wy, TILE_PX, TILE_PX);
+    ctx.restore();
+  };
+
+  if (north) clippedRoad('path', wx, wy, TILE_PX, TILE_PX / 2);
+  if (south) clippedRoad('path', wx, wy + TILE_PX / 2, TILE_PX, TILE_PX / 2);
+  if (west) clippedRoad('path-h', wx, wy, TILE_PX / 2, TILE_PX);
+  if (east) clippedRoad('path-h', wx + TILE_PX / 2, wy, TILE_PX / 2, TILE_PX);
+
+  // Fill the shared center last so corners and junctions have no grass seam.
+  clippedRoad(north || south || (!west && !east) ? 'path' : 'path-h', wx + 7, wy + 7, TILE_PX - 14, TILE_PX - 14);
 }
 
 function isReservoir(idx: number): boolean {
@@ -280,7 +319,7 @@ function buildGroundCache(
     } else if (spriteName === 'tilled_dry') {
       drawGenerated(ctx, 'soil-dry', wx, wy, TILE_PX, TILE_PX);
     } else if (spriteName === 'path') {
-      drawGenerated(ctx, 'path', wx, wy, TILE_PX, TILE_PX);
+      drawPathTile(ctx, tiles, idx, wx, wy);
     } else if (spriteName === 'channel_h') {
       drawGenerated(ctx, 'channel-h', wx, wy, TILE_PX, TILE_PX);
     } else if (spriteName === 'channel_v') {
@@ -296,6 +335,35 @@ function buildGroundCache(
 
     const terrain = tile.kind === 'locked' ? 'locked' : tile.kind === 'path' ? 'path' : tile.kind === 'tilled' ? 'tilled' : 'grass';
     for (const detail of groundDetails(seed, idx, terrain)) drawGroundDetail(ctx, detail, wx, wy);
+
+    if (tile.kind === 'locked') {
+      ctx.fillStyle = 'rgba(25, 50, 25, 0.2)';
+      ctx.fillRect(wx, wy, TILE_PX, TILE_PX);
+    }
+  });
+
+  // Property fence follows every owned-to-locked edge. Unlike a temporary
+  // selection glow, it remains readable while moving and at every zoom level.
+  tiles.forEach((tile, idx) => {
+    if (tile.kind === 'locked') return;
+    const row = Math.floor(idx / GRID_SIZE);
+    const col = idx % GRID_SIZE;
+    const [wx, wy] = tileToWorld(idx);
+    const edges = [
+      { blocked: row === 0 || tiles[idx - GRID_SIZE]?.kind === 'locked', x1: wx, y1: wy + 2, x2: wx + TILE_PX, y2: wy + 2 },
+      { blocked: row === GRID_SIZE - 1 || tiles[idx + GRID_SIZE]?.kind === 'locked', x1: wx, y1: wy + TILE_PX - 2, x2: wx + TILE_PX, y2: wy + TILE_PX - 2 },
+      { blocked: col === 0 || tiles[idx - 1]?.kind === 'locked', x1: wx + 2, y1: wy, x2: wx + 2, y2: wy + TILE_PX },
+      { blocked: col === GRID_SIZE - 1 || tiles[idx + 1]?.kind === 'locked', x1: wx + TILE_PX - 2, y1: wy, x2: wx + TILE_PX - 2, y2: wy + TILE_PX },
+    ];
+    for (const edge of edges) {
+      if (!edge.blocked) continue;
+      ctx.strokeStyle = '#3c2b1e';
+      ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.moveTo(edge.x1, edge.y1); ctx.lineTo(edge.x2, edge.y2); ctx.stroke();
+      ctx.strokeStyle = '#b88949';
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(edge.x1, edge.y1); ctx.lineTo(edge.x2, edge.y2); ctx.stroke();
+    }
   });
 
   return { canvas, tilesRef: tiles, seed };
@@ -419,6 +487,7 @@ export function renderWorld(
     }
 
     if (tile.kind === 'shed') cmds.push({ wy: wy + TILE_PX, fn: () => drawGenerated(ctx, 'farmhouse', sx - 24, sy - 52, 80, 80) });
+    if (tile.kind === 'market') cmds.push({ wy: wy + TILE_PX, fn: () => drawGenerated(ctx, 'market-stand', sx - 28, sy - 54, 88, 88) });
     if (tile.kind === 'mill') {
       const millSprite = !state.mill.commissioned
         ? 'mill-foundation'
@@ -654,6 +723,37 @@ export function renderWorld(
       const offsetX = (i - 1) * 6;
       const rise = effect.progress * (8 + i * 3);
       ctx.fillRect(Math.round(cx + offsetX - 2), Math.round(cy - rise), 4, 6);
+    }
+    ctx.restore();
+  }
+
+  if (state.weatherTruth[dayOfSeason(state.day)] === 'rain') {
+    const now = performance.now();
+    ctx.save();
+    ctx.fillStyle = 'rgba(52, 92, 112, 0.13)';
+    ctx.fillRect(0, 0, viewW, viewH);
+    ctx.lineCap = 'square';
+    for (let i = 0; i < 90; i++) {
+      const speed = 0.08 + (i % 5) * 0.018;
+      const x = ((i * 83 + now * 0.045) % (viewW + 80)) - 40;
+      const y = ((i * 47 + now * speed) % (viewH + 60)) - 30;
+      const length = 5 + i % 7;
+      ctx.strokeStyle = `rgba(174, 219, 239, ${0.28 + (i % 4) * 0.08})`;
+      ctx.lineWidth = i % 6 === 0 ? 2 : 1;
+      ctx.beginPath();
+      ctx.moveTo(Math.round(x), Math.round(y));
+      ctx.lineTo(Math.round(x - 3), Math.round(y + length));
+      ctx.stroke();
+    }
+    for (let i = 0; i < 12; i++) {
+      const cycle = (now / 700 + i * 0.31) % 1;
+      const x = (i * 127 + state.seed * 11) % Math.max(1, viewW);
+      const y = (i * 71 + state.seed * 7) % Math.max(1, viewH);
+      ctx.strokeStyle = `rgba(174, 219, 239, ${(1 - cycle) * 0.45})`;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.ellipse(x, y, 2 + cycle * 7, 1 + cycle * 3, 0, 0, Math.PI * 2);
+      ctx.stroke();
     }
     ctx.restore();
   }

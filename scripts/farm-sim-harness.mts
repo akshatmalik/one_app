@@ -1,12 +1,13 @@
 import { appendFileSync, readFileSync, writeFileSync } from 'node:fs';
 
 import { CROPS } from '../app/apps/farm-sim/data/crops';
-import { START_PLOT, GRID_SIZE, MANUAL_WATER_DRAW, GOLD_COST, CRATE_CATCHMENT, EXTRACTOR_BUILD_COST, PARCEL_COST, UPGRADES } from '../app/apps/farm-sim/lib/balance';
+import { START_PLOT, GRID_SIZE, MANUAL_WATER_DRAW, GOLD_COST, CRATE_CATCHMENT, EXTRACTOR_BUILD_COST, MILL_UNLOCK_WHEAT, PARCEL_COST, UPGRADES } from '../app/apps/farm-sim/lib/balance';
 import { applyAction } from '../app/apps/farm-sim/lib/engine/actions';
 import { endDay } from '../app/apps/farm-sim/lib/engine/resolveDay';
 import { newGame } from '../app/apps/farm-sim/lib/engine/newGame';
 import { seasonForDay } from '../app/apps/farm-sim/lib/engine/weather';
 import { PARCELS } from '../app/apps/farm-sim/lib/engine/parcels';
+import { advanceOpening, availableCrops } from '../app/apps/farm-sim/lib/engine/opening';
 import type { GameState, PlayerAction, CropId } from '../app/apps/farm-sim/lib/types';
 
 type Strategy = 'naive' | 'planner' | 'industrial';
@@ -37,6 +38,7 @@ function farm(state: GameState): number[] {
 }
 
 function isInCrateRange(state: GameState, idx: number): boolean {
+  if (state.fieldCrates.length === 0) return true;
   const row = Math.floor(idx / GRID_SIZE);
   const col = idx % GRID_SIZE;
   return state.fieldCrates.some((crate) => {
@@ -48,10 +50,12 @@ function isInCrateRange(state: GameState, idx: number): boolean {
 
 // One live-state decision at a time keeps dependent actions (till -> plant) valid.
 function nextPlannerAction(state: GameState): PlayerAction | undefined {
-  const channelIdx = 7 * GRID_SIZE + 9;
-  const sprinklerIdx = 7 * GRID_SIZE + 8;
+  const channelIdx = 18 * GRID_SIZE + 20;
+  const sprinklerIdx = 18 * GRID_SIZE + 19;
   if (state.mill.output > 0) return { type: 'exportFlour', qty: state.mill.output };
-  if (!state.mill.commissioned && state.gold >= GOLD_COST.mill)
+  const readyOrder = state.contracts.find((contract) => contract.status === 'available' && state.inventory[contract.crop] >= contract.quantity);
+  if (readyOrder) return { type: 'deliverContract', contractId: readyOrder.id };
+  if (!state.mill.commissioned && state.production.harvestedWheat >= MILL_UNLOCK_WHEAT && state.gold >= GOLD_COST.mill)
     return { type: 'commissionMill' };
   if (state.mill.commissioned && state.inventory.wheat > 0 && state.mill.input < state.mill.inputCapacity)
     return { type: 'loadMill', qty: Math.min(state.inventory.wheat, state.mill.inputCapacity - state.mill.input) };
@@ -120,7 +124,7 @@ function nextNaiveAction(state: GameState): PlayerAction | undefined {
 function bestCropFor(state: GameState, idx: number): CropId {
   const season = seasonForDay(state.day);
   const soil = state.tiles[idx].soil;
-  const legal = cropIds.filter((id) => CROPS[id].seasons.includes(season));
+  const legal = availableCrops(state).filter((id) => CROPS[id].seasons.includes(season));
   const ranked = legal.sort((a, b) => {
     const aFit = CROPS[a].preferredSoils.includes(soil) ? 1 : CROPS[a].soilPenalty;
     const bFit = CROPS[b].preferredSoils.includes(soil) ? 1 : CROPS[b].soilPenalty;
@@ -133,6 +137,10 @@ function bestCropFor(state: GameState, idx: number): CropId {
 
 function nextIndustrialAction(state: GameState): PlayerAction | undefined {
   if (state.mill.output > 0) return { type: 'exportFlour', qty: state.mill.output };
+  if (!state.mill.commissioned && state.production.harvestedWheat >= MILL_UNLOCK_WHEAT && state.gold >= GOLD_COST.mill)
+    return { type: 'commissionMill' };
+  if (state.mill.commissioned && state.inventory.wheat > 0 && state.mill.input < state.mill.inputCapacity)
+    return { type: 'loadMill', qty: Math.min(state.inventory.wheat, state.mill.inputCapacity - state.mill.input) };
   const mature = state.tiles.findIndex((tile) => tile.crop?.mature);
   if (mature >= 0) return state.upgrades.includes('tractor') && state.items.fuel > 0
     ? { type: 'harvestArea', idx: mature }
@@ -230,9 +238,49 @@ function nextIndustrialAction(state: GameState): PlayerAction | undefined {
 }
 
 function nextAction(state: GameState, strategy: Strategy): PlayerAction | undefined {
+  const opening = nextOpeningAction(state);
+  if (opening) return opening;
   if (strategy === 'industrial') return nextIndustrialAction(state);
   if (strategy === 'planner') return nextPlannerAction(state);
   return nextNaiveAction(state);
+}
+
+function nextOpeningAction(state: GameState): PlayerAction | undefined {
+  if (!state.opening || state.opening.complete) return undefined;
+  switch (state.opening.stage) {
+    case 0: {
+      const idx = state.tiles.findIndex((tile) => tile.kind === 'brush');
+      return idx >= 0 ? { type: 'clearLand', idx } : undefined;
+    }
+    case 1: {
+      const idx = farm(state).find((candidate) => state.tiles[candidate].kind === 'grass');
+      return idx !== undefined ? { type: 'till', idx } : undefined;
+    }
+    case 2: {
+      const idx = farm(state).find((candidate) => state.tiles[candidate].kind === 'tilled' && !state.tiles[candidate].crop);
+      const crop: CropId = state.seeds.wheat > 0 ? 'wheat' : 'potato';
+      return idx !== undefined ? { type: 'plant', idx, crop } : undefined;
+    }
+    case 3: {
+      const planted = farm(state).filter((candidate) => state.tiles[candidate].crop && !state.tiles[candidate].crop?.mature);
+      const idx = planted[state.opening.progress % Math.max(1, planted.length)];
+      return idx !== undefined ? { type: 'water', idx } : undefined;
+    }
+    case 4: {
+      const idx = state.tiles.findIndex((tile) => tile.crop?.mature);
+      return idx >= 0 ? { type: 'harvest', idx } : undefined;
+    }
+    case 5:
+      return state.inventory.wheat > 0 ? { type: 'sell', crop: 'wheat', qty: state.inventory.wheat } : undefined;
+    default:
+      return undefined;
+  }
+}
+
+function applyWithProgress(state: GameState, action: PlayerAction) {
+  const result = applyAction(state, action);
+  if (!result.ok) return result;
+  return { ...result, state: advanceOpening(result.state, action).state };
 }
 
 function canonical(value: unknown): unknown {
@@ -248,7 +296,7 @@ function metrics(state: GameState, accepted: number, rejected: number, losses: n
     accepted, rejected, losses, contractsCompleted,
     production: state.production, mill: state.mill, crates: state.fieldCrates, routes: state.haulRoutes,
     resources: state.resources, items: state.items, facilities: state.facilities, extractors: state.extractors,
-    reputation: state.reputation, unlocks: state.unlocks, upgrades: state.upgrades, parcels: state.parcels, maxRejectedPerDay };
+    reputation: state.reputation, unlocks: state.unlocks, upgrades: state.upgrades, parcels: state.parcels, opening: state.opening, maxRejectedPerDay };
 }
 
 function runReplay(path: string, seed: number) {
@@ -257,7 +305,7 @@ function runReplay(path: string, seed: number) {
   for (const raw of readFileSync(path, 'utf8').split('\n').filter(Boolean)) {
     const line = JSON.parse(raw) as Line & { kind: string; state?: unknown };
     if (line.kind === 'final') { expected = line.state; continue; }
-    if (line.kind === 'action') { const r = applyAction(state, line.action); state = r.ok ? r.state : state; if (r.ok) { accepted++; if (line.action.type === 'deliverContract') contractsCompleted++; } else { rejected++; rejectedToday++; } }
+    if (line.kind === 'action') { const r = applyWithProgress(state, line.action); state = r.ok ? r.state : state; if (r.ok) { accepted++; if (line.action.type === 'deliverContract') contractsCompleted++; } else { rejected++; rejectedToday++; } }
     else { maxRejectedPerDay = Math.max(maxRejectedPerDay, rejectedToday); rejectedToday = 0; const r = endDay(state); state = r.state; losses += r.recap.events.filter(e => e.kind === 'cropDied' || e.kind === 'stormLoss' || e.kind === 'frostLoss').length; }
   }
   const actual = canonical(state);
@@ -274,7 +322,7 @@ function main() {
     let rejectedToday = 0;
     for (let attempts = 0; attempts < MAX_ACTIONS_PER_DAY; attempts++) {
       const action = nextAction(state, opt.strategy); if (!action) break;
-      const r = applyAction(state, action); record({ kind: 'action', action, ok: r.ok, ...(r.error ? { error: r.error } : {}) });
+      const r = applyWithProgress(state, action); record({ kind: 'action', action, ok: r.ok, ...(r.error ? { error: r.error } : {}) });
       if (r.ok) { state = r.state; accepted++; if (action.type === 'deliverContract') contractsCompleted++; } else { rejected++; rejectedToday++; break; }
     }
     maxRejectedPerDay = Math.max(maxRejectedPerDay, rejectedToday);

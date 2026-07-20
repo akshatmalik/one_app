@@ -25,6 +25,7 @@ export default function FarmSimPage() {
 
   const [menuOpen, setMenuOpen]       = useState(false);
   const [showMarket, setShowMarket]   = useState(false);
+  const [marketAtStand, setMarketAtStand] = useState(false);
   const [isPaused, setIsPaused]       = useState(false);
   const [timeScale, setTimeScale]     = useState<1 | 2 | 4>(1);
 
@@ -151,7 +152,7 @@ export default function FarmSimPage() {
           selectedCrop={selectedCrop}
           paused={isPaused}
           hideDock={showMarket}
-          operationsUnlocked={operationsAvailable(state)}
+          operationsUnlocked={!state.opening || state.opening.complete}
           endDayDisabled={simulationPaused}
           timeScale={timeScale}
           onTogglePause={() => setIsPaused((value) => !value)}
@@ -159,7 +160,7 @@ export default function FarmSimPage() {
           onMenu={() => setMenuOpen(true)}
           onToolPick={handleToolChange}
           onCropPick={setSelectedCrop}
-          onMarket={() => setShowMarket(true)}
+          onMarket={() => { setMarketAtStand(false); setShowMarket(true); }}
           onEndDay={handleEndDay}
         />
       )}
@@ -178,6 +179,7 @@ export default function FarmSimPage() {
           paused={isPaused}
           dispatch={handleAction}
           onRefillWater={handleRefillWater}
+          onOpenMarket={() => { setSelectedIdx(null); setMarketAtStand(true); setShowMarket(true); }}
           anchor={selectionAnchor}
           onClose={() => setSelectedIdx(null)}
         />
@@ -203,14 +205,14 @@ export default function FarmSimPage() {
       {state && showMarket && operationsAvailable(state) && (
         <div className="absolute inset-x-0 bottom-0 top-16 z-30 flex flex-col border-t border-white/10 bg-[#111a15]/97 shadow-2xl backdrop-blur-md md:inset-y-0 md:left-auto md:right-0 md:top-0 md:w-[440px] md:border-l md:border-t-0">
           <div className="flex h-14 shrink-0 items-center justify-between border-b border-white/10 px-4">
-            <span className="flex items-center gap-2 text-sm font-bold text-white"><ClipboardList size={18} className="text-[#d9b95f]" /> Farm operations</span>
+            <span className="flex items-center gap-2 text-sm font-bold text-white"><ClipboardList size={18} className="text-[#d9b95f]" /> {marketAtStand ? 'Farm-gate stand' : 'Farm operations'}</span>
             <button type="button" onClick={() => setShowMarket(false)} aria-label="Close farm operations"
               className="grid h-9 w-9 place-items-center rounded-md text-white/50 hover:bg-white/10 hover:text-white">
               <X size={18} />
             </button>
           </div>
           <div className="min-h-0 flex-1 overflow-auto">
-            <MarketPanel state={state} dispatch={handleAction} />
+            <MarketPanel state={state} dispatch={handleAction} standMode={marketAtStand} />
           </div>
         </div>
       )}
@@ -227,6 +229,7 @@ export default function FarmSimPage() {
             setIsPaused(false);
             setMenuOpen(false);
             setShowMarket(false);
+            setMarketAtStand(false);
             setSelectedIdx(null);
             setSelectedCrop(null);
             setCurrentTool('hoe');

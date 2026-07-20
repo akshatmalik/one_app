@@ -26,6 +26,8 @@ import {
   EXTRACTOR_BUILD_COST,
   EXTRACTOR_UPGRADE_COST,
   MACHINE_COST,
+  FARM_LANDMARKS,
+  MILL_UNLOCK_WHEAT,
 } from '../balance';
 import { CROPS } from '../../data/crops';
 import { FACILITY_CAPACITY, FACILITY_NAMES, FACILITY_UPGRADES, ITEM_SELL_VALUES, RECIPES, RESOURCE_SELL_VALUES } from '../../data/economy';
@@ -35,7 +37,7 @@ import { getPrice, previewSupplyAfterSell } from './market';
 import { harvestYield } from './crops';
 import { clamp, cloneState } from './util';
 import { unlocksForReputation } from './contracts';
-import { availableCrops, irrigationAvailable } from './opening';
+import { availableCrops, irrigationAvailable, millAvailable } from './opening';
 import { laborProgress, rowIndices, upgradeRequirement } from './toolProgression';
 import { syncProductionMilestones } from './production';
 import { PARCELS, depositFor, guaranteedParcelTerrain, parcelIndices, revealedTerrain } from './parcels';
@@ -374,6 +376,7 @@ export function applyAction(state: GameState, action: PlayerAction): ActionResul
 
     case 'buildFieldCrate': {
       const t = state.tiles[action.idx];
+      if (!state.mill.commissioned) return fail(state, 'Field storage unlocks after the flour mill is running.');
       if (t.kind !== 'grass') return fail(state, 'Field crates go on cleared grass.');
       if (state.gold < GOLD_COST.fieldCrate) return fail(state, 'Not enough gold for a field crate.');
       const s = cloneState(state);
@@ -502,7 +505,8 @@ export function applyAction(state: GameState, action: PlayerAction): ActionResul
 
     case 'commissionMill': {
       if (state.mill.commissioned) return fail(state, 'The mill is already running.');
-      if (state.gold < GOLD_COST.mill) return fail(state, 'Not enough gold to restore the mill.');
+      if (!millAvailable(state)) return fail(state, `Harvest ${MILL_UNLOCK_WHEAT} wheat before building a flour mill.`);
+      if (state.gold < GOLD_COST.mill) return fail(state, 'Not enough gold to build the mill.');
       const s = cloneState(state);
       s.gold -= GOLD_COST.mill;
       s.mill.commissioned = true;
@@ -510,6 +514,10 @@ export function applyAction(state: GameState, action: PlayerAction): ActionResul
       s.mill.ratePerDay = MILL_LEVELS[1].rate;
       s.mill.inputCapacity = MILL_LEVELS[1].input;
       s.mill.outputCapacity = MILL_LEVELS[1].output;
+      const preferred = FARM_LANDMARKS.mill.r * GRID_SIZE + FARM_LANDMARKS.mill.c;
+      const millIdx = [preferred, preferred - 1, preferred + GRID_SIZE, preferred - GRID_SIZE]
+        .find((idx) => s.tiles[idx]?.kind === 'grass' || s.tiles[idx]?.kind === 'path');
+      if (millIdx !== undefined) s.tiles[millIdx] = { ...s.tiles[millIdx], kind: 'mill', crop: null };
       return { ok: true, state: s };
     }
 
@@ -829,7 +837,8 @@ export function validActions(state: GameState, idx: number): PlayerAction['type'
       if (state.upgrades.includes('rowPlow')) out.push('tillRow');
       if (state.upgrades.includes('tractor')) out.push('tillArea');
       out.push('amendSoil');
-      if (irrigationAvailable(state)) out.push('buildChannel', 'digWell', 'buildSprinkler', 'buildFieldCrate');
+      if (irrigationAvailable(state)) out.push('buildChannel', 'digWell', 'buildSprinkler');
+      if (state.mill.commissioned) out.push('buildFieldCrate');
       break;
     case 'tilled':
       if (t.crop) {

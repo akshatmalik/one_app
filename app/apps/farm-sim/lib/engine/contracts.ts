@@ -39,7 +39,14 @@ export function createContractOffers(
 ): FarmContract[] {
   const rng = streamRng(seed, day, 'contracts');
   const season = seasonForDay(day);
-  const crops = (Object.keys(CROPS) as CropId[]).filter((crop) =>
+  const supplierCrops: CropId[] = reputation < 4
+    ? ['wheat', 'potato']
+    : reputation < 8
+      ? ['wheat', 'potato', 'carrot', 'beans']
+      : reputation < 16
+        ? ['wheat', 'potato', 'carrot', 'beans', 'corn', 'rice']
+        : Object.keys(CROPS) as CropId[];
+  const crops = supplierCrops.filter((crop) =>
     CROPS[crop].seasons.includes(season)
   );
 

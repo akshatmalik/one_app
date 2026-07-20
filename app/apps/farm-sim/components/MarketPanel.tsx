@@ -1,31 +1,34 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ArrowRight, Boxes, Factory, Hammer, LandPlot, PackageOpen, Pickaxe, Route, Sprout, Waves } from 'lucide-react';
 import { FacilityId, GameState, ItemId, ParcelId, PlayerAction, ResourceId, UpgradeId } from '../lib/types';
 import { CROPS, CROP_IDS } from '../data/crops';
-import { availableCrops, nextCropUnlock } from '../lib/engine/opening';
-import { upgradeRequirement } from '../lib/engine/toolProgression';
+import { availableCrops, millAvailable, nextCropUnlock } from '../lib/engine/opening';
+import { cultivatedTiles, upgradeRequirement } from '../lib/engine/toolProgression';
 import { getPrice } from '../lib/engine/market';
 import { FLOUR_EXPORT_PRICE, GOLD_COST, GRID_SIZE, HAUL_ROUTE_LEVELS, MACHINE_COST, MILL_LEVELS, PARCEL_COST, UPGRADES } from '../lib/balance';
 import { millStatus } from '../lib/engine/production';
 import { productionProjection, waterProjection } from '../lib/engine/engineering';
 import { PARCELS, parcelIndices } from '../lib/engine/parcels';
-import { FACILITY_CAPACITY, FACILITY_NAMES, FACILITY_UPGRADES, ITEM_SELL_VALUES, RECIPES, RECIPE_IDS, RESOURCE_SELL_VALUES } from '../data/economy';
+import { FACILITY_CAPACITY, FACILITY_NAMES, FACILITY_UPGRADES, ITEM_SELL_VALUES, RECIPES, RECIPE_IDS } from '../data/economy';
+import { ContractBoard } from './ContractBoard';
 
 interface Props {
   state: GameState;
   dispatch: (action: PlayerAction) => boolean;
+  standMode?: boolean;
 }
 
-type Tab = 'production' | 'crafting' | 'stock' | 'land' | 'export' | 'seeds' | 'equipment';
+type Tab = 'production' | 'crafting' | 'stock' | 'land' | 'export' | 'orders' | 'seeds' | 'equipment';
 
 const TABS: Array<{ id: Tab; label: string }> = [
   { id: 'production', label: 'Production' },
   { id: 'crafting', label: 'Craft' },
   { id: 'stock', label: 'Stock' },
   { id: 'land', label: 'Land' },
-  { id: 'export', label: 'Export' },
+  { id: 'export', label: 'Sell' },
+  { id: 'orders', label: 'Orders' },
   { id: 'seeds', label: 'Seeds' },
   { id: 'equipment', label: 'Tools' },
 ];
@@ -52,15 +55,38 @@ function fieldLocation(idx: number): string {
   return `${vertical}${horizontal}` || 'Central';
 }
 
-export function MarketPanel({ state, dispatch }: Props) {
+export function MarketPanel({ state, dispatch, standMode = false }: Props) {
   const guidedOpening = !!state.opening && !state.opening.complete;
-  const [tab, setTab] = useState<Tab>(guidedOpening ? 'export' : 'production');
-  const visibleTabs = guidedOpening ? TABS.filter((item) => item.id === 'export' || item.id === 'seeds') : TABS;
+  const [tab, setTab] = useState<Tab>(standMode || guidedOpening ? 'export' : 'stock');
+  const [saleReceipt, setSaleReceipt] = useState<string | null>(null);
+  const productionUnlocked = millAvailable(state);
+  const craftingUnlocked = Object.values(state.facilities).some((facility) => facility.level > 0) || cultivatedTiles(state) >= 75;
+  const equipmentUnlocked = (Object.keys(UPGRADES) as UpgradeId[]).some((id) => state.upgrades.includes(id) || upgradeRequirement(state, id).met);
+  const visibleTabs = standMode || guidedOpening
+    ? TABS.filter((item) => item.id === 'export' || (!guidedOpening && (item.id === 'orders' || item.id === 'seeds')))
+    : TABS.filter((item) => {
+      if (item.id === 'export' || item.id === 'orders') return false;
+      if (item.id === 'production') return productionUnlocked;
+      if (item.id === 'crafting') return craftingUnlocked;
+      if (item.id === 'equipment') return equipmentUnlocked;
+      return true;
+    });
   const production = productionProjection(state);
   const water = waterProjection(state);
   const nextMillLevel = state.mill.level < 3 ? (state.mill.level + 1 as 1 | 2 | 3) : null;
   const nextMill = nextMillLevel ? MILL_LEVELS[nextMillLevel] : null;
   const cropUnlock = nextCropUnlock(state);
+
+  useEffect(() => {
+    if (!visibleTabs.some((item) => item.id === tab)) setTab(visibleTabs[0]?.id ?? 'stock');
+  }, [standMode, guidedOpening, productionUnlocked, craftingUnlocked, equipmentUnlocked, tab]);
+
+  const sell = (action: PlayerAction, receipt: string) => {
+    if (!dispatch(action)) return;
+    setSaleReceipt(receipt);
+    window.setTimeout(() => setSaleReceipt(null), 2200);
+    navigator.vibrate?.([18, 25, 28]);
+  };
 
   return (
     <div className="h-full overflow-y-auto bg-[#111a15] p-3 text-white md:p-4">
@@ -70,8 +96,11 @@ export function MarketPanel({ state, dispatch }: Props) {
         ))}
       </div>
 
+      {saleReceipt ? <div role="status" className="mb-3 border border-[#efd275]/35 bg-[#efd275]/10 px-3 py-2 text-center text-sm font-bold text-[#f4d978] shadow-[0_0_24px_rgba(239,210,117,0.08)]">{saleReceipt}</div> : null}
+
       {tab === 'production' && (
         <div className="space-y-4">
+          {state.mill.commissioned ? <>
           <div>
             <div className="mb-2 text-[10px] font-semibold uppercase text-white/40">Wheat flow</div>
             <div className="flex items-stretch border border-white/10 bg-[#0c130f] p-2">
@@ -91,23 +120,25 @@ export function MarketPanel({ state, dispatch }: Props) {
             <Metric icon={<Factory size={14} />} label="Mill capacity" value={`${state.mill.ratePerDay}/day`} sub={production.daysToClear === null ? 'No queue' : `${production.daysToClear.toFixed(1)} days queued`} />
             <Metric icon={<Waves size={14} />} label="Water balance" value={`${water.supply}/${water.demand}`} sub={water.sustainable ? 'Supply covers demand' : `${water.netDraw} short at dawn`} warning={!water.sustainable} />
           </div>
+          </> : null}
 
           <section className="border-y border-white/10 py-3">
             <div className="mb-2 flex items-start justify-between gap-3">
-              <div><h3 className="text-sm font-bold">{state.mill.commissioned ? MILL_LEVELS[state.mill.level as 1 | 2 | 3].name : 'Mill foundation'}</h3><p className="mt-0.5 text-xs text-white/45">{millStatus(state)}</p></div>
+              <div><h3 className="text-sm font-bold">{state.mill.commissioned ? MILL_LEVELS[state.mill.level as 1 | 2 | 3].name : 'Flour mill plans'}</h3><p className="mt-0.5 text-xs text-white/45">{state.mill.commissioned ? millStatus(state) : 'Build your first grain-processing line'}</p></div>
               <span className="text-xs tabular-nums text-white/55">{state.mill.input} → {state.mill.output}</span>
             </div>
             <Progress value={state.mill.input} max={state.mill.inputCapacity} tone="bg-[#8fd6a1]" />
             {!state.mill.commissioned ? (
-              <Command onClick={() => dispatch({ type: 'commissionMill' })} disabled={state.gold < GOLD_COST.mill}>Restore mill · {GOLD_COST.mill}g</Command>
+              <Command onClick={() => dispatch({ type: 'commissionMill' })} disabled={state.gold < GOLD_COST.mill}>Build mill · {GOLD_COST.mill}g</Command>
             ) : nextMill ? (
               <Command onClick={() => dispatch({ type: 'upgradeMill' })} disabled={state.gold < nextMill.cost}>Install {nextMill.name} · {nextMill.cost}g · {nextMill.rate}/day</Command>
             ) : <div className="text-xs text-emerald-300">Maximum 12-unit grinding line installed.</div>}
           </section>
 
-          <div>
+          {state.mill.commissioned ? <div>
             <h3 className="mb-2 text-[11px] font-semibold uppercase text-white/40">Field storage and routes</h3>
             <div className="space-y-2">
+              {state.fieldCrates.length === 0 ? <p className="text-xs text-white/45">Build field storage from a grass tile when carrying grain to the mill becomes slow.</p> : null}
               {state.fieldCrates.map((crate, index) => {
                 const route = state.haulRoutes.find((candidate) => candidate.crateId === crate.id);
                 const routeStatus = production.crateStatuses.find((candidate) => candidate.crateId === crate.id);
@@ -129,7 +160,7 @@ export function MarketPanel({ state, dispatch }: Props) {
                 );
               })}
             </div>
-          </div>
+          </div> : null}
         </div>
       )}
 
@@ -157,16 +188,16 @@ export function MarketPanel({ state, dispatch }: Props) {
 
       {tab === 'stock' && (
         <div className="space-y-4">
-          <StockGroup title="Materials" icon={<Pickaxe size={14} />} entries={RESOURCE_IDS.map((id) => ({ id, value: state.resources[id], note: id }))} />
+          <StockGroup title="Materials" icon={<Pickaxe size={14} />} entries={RESOURCE_IDS.filter((id) => state.resources[id] > 0).map((id) => ({ id, value: state.resources[id], note: id }))} empty="Cleared and mined materials appear here." />
           <StockGroup title="Processed goods" icon={<Hammer size={14} />} entries={ITEM_IDS.filter((id) => state.items[id] > 0).map((id) => ({ id, value: state.items[id], note: `${itemLabel(id)} · ${ITEM_SELL_VALUES[id]}g` }))} empty="Crafted goods will appear here." />
-          <StockGroup title="Harvest storage" icon={<Boxes size={14} />} entries={CROP_IDS.filter((id) => state.inventory[id] > 0).map((id) => ({ id, value: state.inventory[id], note: CROPS[id].name }))} empty="Non-wheat harvests appear here; wheat is stored in field crates." />
+          <StockGroup title="Harvest inventory" icon={<Boxes size={14} />} entries={CROP_IDS.filter((id) => state.inventory[id] > 0).map((id) => ({ id, value: state.inventory[id], note: CROPS[id].name }))} empty="Harvested crops appear here." />
         </div>
       )}
 
       {tab === 'land' && (
         <div className="space-y-2">
           <div className="mb-3 flex items-center gap-2 text-xs text-white/50"><LandPlot size={15} /> Buy space when the current layout becomes the constraint.</div>
-          {(Object.keys(PARCELS) as ParcelId[]).map((id) => {
+          {(Object.keys(PARCELS) as ParcelId[]).filter((id) => state.parcels[id] || PARCELS[id].requires.every((required) => state.parcels[required])).map((id) => {
             const parcel = PARCELS[id];
             const owned = state.parcels[id];
             const available = parcel.requires.every((required) => state.parcels[required]);
@@ -178,15 +209,16 @@ export function MarketPanel({ state, dispatch }: Props) {
 
       {tab === 'export' && (
         <div className="space-y-3">
-          <div className="flex items-center justify-between border-b border-[#d9b95f]/30 pb-3"><div><div className="text-sm font-bold">Flour shipment</div><div className="text-xs text-white/45">{FLOUR_EXPORT_PRICE}g each · {state.mill.output} ready</div></div><Command onClick={() => dispatch({ type: 'exportFlour', qty: state.mill.output })} disabled={state.mill.output < 1}>Export flour</Command></div>
-          {state.fieldCrates.map((crate, index) => <div key={crate.id} className="flex items-center justify-between border-b border-white/[0.08] py-2"><span className="text-xs">Raw wheat · crate {index + 1}</span><SmallButton onClick={() => dispatch({ type: 'exportWheatFromCrate', crateId: crate.id, qty: crate.wheat })} disabled={crate.wheat < 1}>Sell {crate.wheat}</SmallButton></div>)}
-          {availableCrops(state).map((crop) => { const have = state.inventory[crop]; return <div key={crop} className="flex items-center gap-2 border-b border-white/[0.08] py-2"><span>{CROPS[crop].emoji}</span><span className="flex-1 text-xs font-semibold">{CROPS[crop].name}</span><span className="text-xs text-white/45">{have} · {getPrice(state, crop).toFixed(1)}g</span><SmallButton onClick={() => dispatch({ type: 'sell', crop, qty: have })} disabled={have < 1}>Sell all</SmallButton></div>; })}
-          <div className="pt-2 text-[10px] font-semibold uppercase text-white/35">Processed goods</div>
-          {ITEM_IDS.filter((item) => item !== 'flour').map((item) => { const have = state.items[item]; return <div key={item} className="flex items-center gap-2 border-b border-white/[0.08] py-2"><span className="min-w-0 flex-1 text-xs font-semibold">{itemLabel(item)}</span><span className="text-xs text-white/45">{have} · {ITEM_SELL_VALUES[item]}g</span><SmallButton onClick={() => dispatch({ type: 'sellItem', item, qty: have })} disabled={have < 1}>Sell all</SmallButton></div>; })}
-          <div className="pt-2 text-[10px] font-semibold uppercase text-white/35">Raw materials</div>
-          {RESOURCE_IDS.map((resource) => { const have = state.resources[resource]; return <div key={resource} className="flex items-center gap-2 border-b border-white/[0.08] py-2"><span className="min-w-0 flex-1 text-xs font-semibold">{resource}</span><span className="text-xs text-white/45">{have} · {RESOURCE_SELL_VALUES[resource]}g</span><SmallButton onClick={() => dispatch({ type: 'sellResource', resource, qty: have })} disabled={have < 1}>Sell all</SmallButton></div>; })}
+          <div className="border-b border-[#d9b95f]/30 pb-3"><div className="text-sm font-bold">Today at the farm gate</div><div className="mt-0.5 text-xs text-white/45">Choose produce, confirm sale, collect earnings immediately.</div></div>
+          {state.mill.commissioned || state.mill.output > 0 ? <div className="flex items-center justify-between border-b border-white/[0.08] py-2"><div><div className="text-xs font-semibold">Flour</div><div className="text-[10px] text-white/45">{FLOUR_EXPORT_PRICE}g each · {state.mill.output} ready</div></div><Command onClick={() => sell({ type: 'exportFlour', qty: state.mill.output }, `Sold ${state.mill.output} flour · +${state.mill.output * FLOUR_EXPORT_PRICE}g`)} disabled={state.mill.output < 1}>Sell all</Command></div> : null}
+          {state.fieldCrates.map((crate, index) => <div key={crate.id} className="flex items-center justify-between border-b border-white/[0.08] py-2"><span className="text-xs">Raw wheat · field store {index + 1}</span><SmallButton onClick={() => sell({ type: 'exportWheatFromCrate', crateId: crate.id, qty: crate.wheat }, `Sold ${crate.wheat} wheat`)} disabled={crate.wheat < 1}>Sell {crate.wheat}</SmallButton></div>)}
+          {availableCrops(state).map((crop) => { const have = state.inventory[crop]; const total = Math.round(getPrice(state, crop) * have * 10) / 10; return <div key={crop} className="flex items-center gap-2 border-b border-white/[0.08] py-2"><span className="text-lg">{CROPS[crop].emoji}</span><span className="flex-1 text-xs font-semibold">{CROPS[crop].name}<span className="mt-0.5 block text-[9px] font-normal text-white/40">{getPrice(state, crop).toFixed(1)}g each</span></span><span className="text-xs font-bold tabular-nums text-white/70">×{have}</span><SmallButton onClick={() => sell({ type: 'sell', crop, qty: have }, `Sold ${have} ${CROPS[crop].name} · +${total}g`)} disabled={have < 1}>Sell · {total}g</SmallButton></div>; })}
+          {ITEM_IDS.filter((item) => item !== 'flour' && state.items[item] > 0).length > 0 ? <div className="pt-2 text-[10px] font-semibold uppercase text-white/35">Processed goods</div> : null}
+          {ITEM_IDS.filter((item) => item !== 'flour' && state.items[item] > 0).map((item) => { const have = state.items[item]; return <div key={item} className="flex items-center gap-2 border-b border-white/[0.08] py-2"><span className="min-w-0 flex-1 text-xs font-semibold">{itemLabel(item)}</span><span className="text-xs text-white/45">{have} · {ITEM_SELL_VALUES[item]}g</span><SmallButton onClick={() => sell({ type: 'sellItem', item, qty: have }, `Sold ${have} ${itemLabel(item)} · +${have * ITEM_SELL_VALUES[item]}g`)} disabled={have < 1}>Sell all</SmallButton></div>; })}
         </div>
       )}
+
+      {tab === 'orders' && <ContractBoard state={state} dispatch={dispatch} />}
 
       {tab === 'seeds' && <div><div className="grid grid-cols-1 gap-2 min-[380px]:grid-cols-2">{availableCrops(state).map((crop) => <div key={crop} className="flex items-center gap-2 border border-white/[0.08] bg-black/[0.15] p-2"><Sprout size={15} className="shrink-0 text-emerald-300" /><div className="min-w-0 flex-1"><div className="truncate text-xs font-semibold">{CROPS[crop].name}</div><div className="text-[10px] text-white/40">{CROPS[crop].seedCost}g · {state.seeds[crop]} seeds</div><div className="truncate text-[9px] text-white/30">{CROPS[crop].growDays} days · {CROPS[crop].yieldUnits} yield · {CROPS[crop].preferredSoils.join('/')}</div></div><div className="flex shrink-0 flex-col gap-1"><SmallButton ariaLabel={`Buy one ${CROPS[crop].name} seed`} onClick={() => dispatch({ type: 'buySeeds', crop, qty: 1 })} disabled={state.gold < CROPS[crop].seedCost}>+1</SmallButton><SmallButton ariaLabel={`Buy five ${CROPS[crop].name} seeds`} onClick={() => dispatch({ type: 'buySeeds', crop, qty: 5 })} disabled={state.gold < CROPS[crop].seedCost * 5}>+5</SmallButton></div></div>)}</div>{cropUnlock ? <p className="mt-3 text-[10px] text-[#e6c36b]">Next supplier crop: {CROPS[cropUnlock.crop].name} at {cropUnlock.at} cultivated tiles · currently {cropUnlock.current}</p> : null}</div>}
 
@@ -194,7 +226,7 @@ export function MarketPanel({ state, dispatch }: Props) {
         <section className="border-y border-white/[0.08] py-3">
           <div className="flex items-center gap-2"><div className="min-w-0 flex-1"><div className="text-xs font-semibold">Fuel reserve</div><div className="text-[10px] text-white/40">Current reserve: {state.items.fuel ?? 0} · 10g each</div></div><div className="flex shrink-0 gap-1"><SmallButton ariaLabel="Buy one fuel" onClick={() => dispatch({ type: 'buyItem', item: 'fuel', qty: 1 })} disabled={state.gold < 10}>Buy 1</SmallButton><SmallButton ariaLabel="Buy five fuel" onClick={() => dispatch({ type: 'buyItem', item: 'fuel', qty: 5 })} disabled={state.gold < 50}>Buy 5</SmallButton></div></div>
         </section>
-        {(Object.keys(UPGRADES) as UpgradeId[]).filter((id) => id !== 'truck').map((id) => { const upgrade = UPGRADES[id]; const owned = state.upgrades.includes(id); const requirement = upgradeRequirement(state, id); const parts = id === 'tractor' ? MACHINE_COST.tractor.machineParts : id === 'seeder' ? MACHINE_COST.seeder.machineParts : 0; return <div key={id} className="flex items-center gap-2 border-b border-white/[0.08] py-3"><div className="min-w-0 flex-1"><div className="text-xs font-semibold">{upgrade.name}</div><div className="text-[10px] text-white/40">{upgrade.effect}</div>{!requirement.met ? <div className="text-[10px] text-[#e6c36b]">Available later · {requirement.text}</div> : null}{parts > 0 ? <div className="text-[10px] text-white/35">Requires {parts} machine parts · current {state.items.machineParts}</div> : null}</div><SmallButton onClick={() => dispatch({ type: 'buyUpgrade', upgrade: id })} disabled={owned || !requirement.met || state.gold < upgrade.cost || state.items.machineParts < parts}>{owned ? 'Owned' : `${upgrade.cost}g`}</SmallButton></div>; })}
+        {(Object.keys(UPGRADES) as UpgradeId[]).filter((id) => id !== 'truck' && (state.upgrades.includes(id) || upgradeRequirement(state, id).met)).map((id) => { const upgrade = UPGRADES[id]; const owned = state.upgrades.includes(id); const requirement = upgradeRequirement(state, id); const parts = id === 'tractor' ? MACHINE_COST.tractor.machineParts : id === 'seeder' ? MACHINE_COST.seeder.machineParts : 0; return <div key={id} className="flex items-center gap-2 border-b border-white/[0.08] py-3"><div className="min-w-0 flex-1"><div className="text-xs font-semibold">{upgrade.name}</div><div className="text-[10px] text-white/40">{upgrade.effect}</div>{parts > 0 ? <div className="text-[10px] text-white/35">Requires {parts} machine parts · current {state.items.machineParts}</div> : null}</div><SmallButton onClick={() => dispatch({ type: 'buyUpgrade', upgrade: id })} disabled={owned || !requirement.met || state.gold < upgrade.cost || state.items.machineParts < parts}>{owned ? 'Owned' : `${upgrade.cost}g`}</SmallButton></div>; })}
       </div>}
     </div>
   );

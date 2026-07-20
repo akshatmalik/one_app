@@ -33,6 +33,22 @@ const SPRITE_H = 36;
 const SIM_DT = 1 / 60;
 const WATER_EFFECT_MS = 900;
 
+function landmarkAtPoint(state: GameState, worldX: number, worldY: number): number | null {
+  const bounds: Partial<Record<GameState['tiles'][number]['kind'], { left: number; top: number; width: number; height: number }>> = {
+    market: { left: -28, top: -54, width: 88, height: 88 },
+    shed: { left: -24, top: -52, width: 80, height: 80 },
+    depot: { left: -16, top: -40, width: 64, height: 64 },
+  };
+  for (let idx = state.tiles.length - 1; idx >= 0; idx--) {
+    const box = bounds[state.tiles[idx].kind];
+    if (!box) continue;
+    const tileX = idx % GRID_SIZE * TILE_PX;
+    const tileY = Math.floor(idx / GRID_SIZE) * TILE_PX;
+    if (worldX >= tileX + box.left && worldX <= tileX + box.left + box.width && worldY >= tileY + box.top && worldY <= tileY + box.top + box.height) return idx;
+  }
+  return null;
+}
+
 interface Props {
   state: GameState;
   waterCharges: number;
@@ -515,8 +531,8 @@ export function GameCanvas({
     const screenY = (clientY - rect.top) * (canvas.height / rect.height);
     const worldX = screenX + cam.x;
     const worldY = screenY + cam.y;
-    const col = Math.floor(worldX / TILE_PX);
-    const row = Math.floor(worldY / TILE_PX);
+    let col = Math.floor(worldX / TILE_PX);
+    let row = Math.floor(worldY / TILE_PX);
     if (col < 0 || col >= GRID_SIZE || row < 0 || row >= GRID_SIZE) return;
 
     const player = playerRef.current;
@@ -526,6 +542,12 @@ export function GameCanvas({
       pathRef.current.length = 0;
       onTileSelectRef.current(null, { ...player });
       return;
+    }
+
+    const landmarkIdx = landmarkAtPoint(stateRef.current, worldX, worldY);
+    if (landmarkIdx !== null) {
+      row = Math.floor(landmarkIdx / GRID_SIZE);
+      col = landmarkIdx % GRID_SIZE;
     }
 
     const startRow = Math.floor((player.y + 24) / TILE_PX);

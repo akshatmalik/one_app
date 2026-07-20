@@ -15,8 +15,6 @@ import {
   MILL_INPUT_CAPACITY,
   MILL_OUTPUT_CAPACITY,
   MILL_RATE_PER_DAY,
-  FIELD_CRATE_CAPACITY,
-  HAUL_ROUTE_LEVELS,
   FARM_LANDMARKS,
 } from '../balance';
 import { CROP_IDS } from '../../data/crops';
@@ -68,17 +66,14 @@ function buildTiles(seed: number): Tile[] {
   // Place the reservoir at the start of the farm zone.
   const rIdx = idxOf(RESERVOIR_POS.r, RESERVOIR_POS.c);
   tiles[rIdx] = { kind: 'reservoir', moisture: 0, nitrogen: 0, crop: null, irrigated: false, soil: 'clay' };
-  // A compact authored operations yard frames the starting field.
+  // The opening farm is personal and manual: home, water, and a roadside
+  // produce stand. Industrial buildings arrive only after their need is felt.
   tiles[idxOf(FARM_LANDMARKS.shed.r, FARM_LANDMARKS.shed.c)] = { kind: 'shed', moisture: 0, nitrogen: 0, crop: null, irrigated: false, soil: 'loam' };
-  tiles[idxOf(FARM_LANDMARKS.mill.r, FARM_LANDMARKS.mill.c)] = { kind: 'mill', moisture: 0, nitrogen: 0, crop: null, irrigated: false, soil: 'loam' };
-  tiles[idxOf(FARM_LANDMARKS.depot.r, FARM_LANDMARKS.depot.c)] = { kind: 'depot', moisture: 0, nitrogen: 0, crop: null, irrigated: false, soil: 'loam' };
-  tiles[idxOf(FARM_LANDMARKS.crate.r, FARM_LANDMARKS.crate.c)] = { kind: 'crate', moisture: 0, nitrogen: 0, crop: null, irrigated: false, soil: 'loam' };
+  tiles[idxOf(FARM_LANDMARKS.market.r, FARM_LANDMARKS.market.c)] = { kind: 'market', moisture: 0, nitrogen: 0, crop: null, irrigated: false, soil: 'loam' };
   const yardPaths = new Set<number>();
-  for (let c = FARM_LANDMARKS.shed.c; c <= FARM_LANDMARKS.depot.c; c++) yardPaths.add(idxOf(19, c));
-  for (let r = 17; r <= 19; r++) yardPaths.add(idxOf(r, FARM_LANDMARKS.shed.c + 1));
-  for (let r = 18; r <= 19; r++) yardPaths.add(idxOf(r, RESERVOIR_POS.c));
-  for (let r = 17; r <= 19; r++) yardPaths.add(idxOf(r, FARM_LANDMARKS.mill.c - 1));
-  for (let r = 19; r <= FARM_LANDMARKS.depot.r; r++) yardPaths.add(idxOf(r, FARM_LANDMARKS.depot.c));
+  for (let r = 17; r <= FARM_LANDMARKS.market.r; r++) yardPaths.add(idxOf(r, FARM_LANDMARKS.shed.c + 1));
+  for (let c = FARM_LANDMARKS.shed.c + 1; c <= FARM_LANDMARKS.market.c; c++) yardPaths.add(idxOf(FARM_LANDMARKS.market.r, c));
+  for (let c = FARM_LANDMARKS.shed.c + 1; c <= RESERVOIR_POS.c; c++) yardPaths.add(idxOf(19, c));
   for (const idx of yardPaths) {
     if (tiles[idx].kind === 'grass') tiles[idx] = { ...tiles[idx], kind: 'path' };
   }
@@ -86,6 +81,17 @@ function buildTiles(seed: number): Tile[] {
   // The opening farm begins manually. Irrigation arrives after the player has
   // learned the crop loop, so automation solves a problem they understand.
   tiles[idxOf(17, 21)] = { kind: 'well', moisture: 0, nitrogen: 0, crop: null, irrigated: false, soil: 'clay' };
+
+  // A few open tiles prevent cleanup from becoming a chore. Clutter teaches
+  // that this land is being reclaimed and pays useful early materials.
+  const brush = [[15, 20], [15, 22], [16, 19], [20, 14], [22, 14], [24, 19], [24, 21]] as const;
+  const rocks = [[15, 24], [21, 24], [24, 15]] as const;
+  for (const [r, c] of brush) tiles[idxOf(r, c)] = { ...tiles[idxOf(r, c)], kind: 'brush' };
+  for (const [r, c] of rocks) tiles[idxOf(r, c)] = {
+    ...tiles[idxOf(r, c)],
+    kind: 'rock',
+    deposit: { resource: 'stone', remaining: 8, max: 8 },
+  };
 
   const wheat = [[21, 16], [21, 17], [21, 18]] as const;
   const potatoes = [[22, 16], [22, 17]] as const;
@@ -130,19 +136,19 @@ export function newGame(seed: number): GameState {
     facilities: { kiln: { level: 0, usedToday: 0 }, kitchen: { level: 0, usedToday: 0 }, workshop: { level: 0, usedToday: 0 } },
     extractors: [],
     mill: {
-      commissioned: true,
-      level: 1,
-      input: 3,
+      commissioned: false,
+      level: 0,
+      input: 0,
       output: 0,
       inputCapacity: MILL_INPUT_CAPACITY,
       outputCapacity: MILL_OUTPUT_CAPACITY,
       ratePerDay: MILL_RATE_PER_DAY,
     },
-    fieldCrates: [{ id: 'crate-start', idx: idxOf(FARM_LANDMARKS.crate.r, FARM_LANDMARKS.crate.c), wheat: 0, capacity: FIELD_CRATE_CAPACITY }],
-    haulRoutes: [{ id: 'route-crate-start', crateId: 'crate-start', level: 1, ratePerDay: HAUL_ROUTE_LEVELS[1].rate }],
+    fieldCrates: [],
+    haulRoutes: [],
     parcels: initialParcels(false),
     production: {
-      wheatStorageCapacity: FIELD_CRATE_CAPACITY,
+      wheatStorageCapacity: 0,
       harvestedWheat: 0,
       rawWheatExported: 0,
       wheatMilled: 0,
