@@ -8,7 +8,7 @@ import { ParcelId, Season, UpgradeId } from './types';
 
 // ── World ──────────────────────────────────────────────
 export const GRID_SIZE = 40; // 40×40 world grid
-export const START_PLOT = { r0: 15, c0: 14, r1: 24, c1: 25 }; // compact starter farm inside the wider landscape
+export const START_PLOT = { r0: 13, c0: 12, r1: 26, c1: 27 }; // 14×16 working homestead inside the wider landscape
 export const RESERVOIR_POS = { r: 17, c: 20 };
 export const FARM_LANDMARKS = {
   shed: { r: 16, c: 16 },

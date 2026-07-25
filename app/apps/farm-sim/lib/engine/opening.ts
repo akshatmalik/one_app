@@ -1,4 +1,4 @@
-import { CropId, GameState, PlayerAction } from '../types';
+import { CropId, GameState, OpeningActionType, PlayerAction } from '../types';
 import { activeCrops, cultivatedTiles, laborProgress } from './toolProgression';
 import { MILL_UNLOCK_WHEAT } from '../balance';
 
@@ -10,7 +10,7 @@ export interface OpeningObjective {
 }
 
 export const OPENING_OBJECTIVES: OpeningObjective[] = [
-  { title: 'Reclaim your field', instruction: 'Clear 3 patches of brush', target: 3, reward: '12 wood' },
+  { title: 'Reclaim your field', instruction: 'Clear 3 patches of brush or trees', target: 3, reward: 'A starter wood stockpile' },
   { title: 'Prepare a crop bed', instruction: 'Till 6 open tiles', target: 6, reward: '4 potato seeds' },
   { title: 'Plant your first field', instruction: 'Plant 6 wheat or potatoes', target: 6, reward: '4 more seeds' },
   { title: 'Care for the field', instruction: 'Water 6 planted tiles', target: 6, reward: '25 gold' },
@@ -26,6 +26,28 @@ const ACTION_FOR_STAGE: PlayerAction['type'][] = [
   'harvest',
   'sell',
 ];
+
+function actionCount(state: GameState, type: OpeningActionType): number {
+  const recorded = state.opening?.activity?.[type] ?? 0;
+  const labor = laborProgress(state);
+  if (type === 'till') return Math.max(recorded, labor.manualTills);
+  if (type === 'plant') return Math.max(recorded, labor.manualPlants);
+  if (type === 'water') return Math.max(recorded, labor.manualWaterings);
+  if (type === 'harvest') return Math.max(recorded, labor.manualHarvests);
+  return recorded;
+}
+
+function rewardOpeningStage(state: GameState, stage: number): GameState {
+  const next = { ...state, seeds: { ...state.seeds }, unlocks: [...state.unlocks] };
+  if (stage === 1) next.seeds.potato += 4;
+  if (stage === 2) {
+    next.seeds.wheat += 2;
+    next.seeds.potato += 2;
+  }
+  if (stage === 3) next.gold += 25;
+  if (stage === 5) next.seeds.carrot += 4;
+  return next;
+}
 
 export function openingObjective(state: GameState): OpeningObjective | null {
   if (!state.opening || state.opening.complete) return null;
@@ -94,32 +116,48 @@ export function irrigationAvailable(state: GameState): boolean {
   return !state.opening || (state.opening.complete && activeCrops(state) >= 12);
 }
 
-export function advanceOpening(state: GameState, action: PlayerAction): { state: GameState; completed?: OpeningObjective } {
+export function reconcileOpening(state: GameState): { state: GameState; completed: OpeningObjective[] } {
   const opening = state.opening;
-  if (!opening || opening.complete || ACTION_FOR_STAGE[opening.stage] !== action.type) return { state };
+  if (!opening || opening.complete) return { state, completed: [] };
+  let next = state;
+  const completed: OpeningObjective[] = [];
+  let stage = opening.stage;
 
-  const objective = OPENING_OBJECTIVES[opening.stage];
-  const progress = opening.progress + 1;
-  if (progress < objective.target) return { state: { ...state, opening: { ...opening, progress } } };
+  while (stage < OPENING_OBJECTIVES.length) {
+    const objective = OPENING_OBJECTIVES[stage];
+    const type = ACTION_FOR_STAGE[stage] as OpeningActionType;
+    const progress = Math.min(objective.target, actionCount(next, type));
+    if (progress < objective.target) {
+      next = { ...next, opening: { ...next.opening!, stage, progress, complete: false } };
+      return { state: next, completed };
+    }
+    next = rewardOpeningStage(next, stage);
+    completed.push(objective);
+    stage++;
+  }
 
-  const next: GameState = {
-    ...state,
-    seeds: { ...state.seeds },
-    unlocks: [...state.unlocks],
+  next = {
+    ...next,
     opening: {
-      stage: opening.stage + 1,
+      ...next.opening!,
+      stage,
       progress: 0,
-      complete: opening.stage + 1 >= OPENING_OBJECTIVES.length,
+      complete: true,
     },
   };
+  return { state: next, completed };
+}
 
-  if (opening.stage === 1) next.seeds.potato += 4;
-  if (opening.stage === 2) {
-    next.seeds.wheat += 2;
-    next.seeds.potato += 2;
-  }
-  if (opening.stage === 3) next.gold += 25;
-  if (opening.stage === 5) next.seeds.carrot += 4;
+export function advanceOpening(state: GameState, action: PlayerAction): { state: GameState; completed: OpeningObjective[] } {
+  const opening = state.opening;
+  if (!opening || opening.complete) return { state, completed: [] };
 
-  return { state: next, completed: objective };
+  const trackedType = ACTION_FOR_STAGE.includes(action.type)
+    ? action.type as OpeningActionType
+    : null;
+  const shouldRecord = trackedType && (trackedType !== 'sell' || (action.type === 'sell' && action.qty > 0));
+  const activity = { ...(opening.activity ?? {}) };
+  if (shouldRecord && trackedType) activity[trackedType] = (activity[trackedType] ?? 0) + 1;
+
+  return reconcileOpening({ ...state, opening: { ...opening, activity } });
 }

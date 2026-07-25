@@ -304,6 +304,7 @@ function buildGroundCache(
         spriteName = grassVariant(idx);
         break;
       case 'brush':
+      case 'tree':
       case 'rock':
       case 'marsh':
         spriteName = grassVariant(idx);
@@ -389,6 +390,8 @@ export interface RenderOptions {
   waterEffects?: Array<{ idx: number; progress: number }>;
   showIrrigation?: boolean;
   buildTool?: string | null;
+  queuedTargets?: number[];
+  activeWork?: { idx: number; progress: number } | null;
 }
 
 export function renderWorld(
@@ -398,7 +401,17 @@ export function renderWorld(
   cam: Camera,
   opts: RenderOptions = {}
 ) {
-  const { tod = 'day', selectedIdx = null, player, navigationPath = [], waterEffects = [], showIrrigation = false, buildTool = null } = opts;
+  const {
+    tod = 'day',
+    selectedIdx = null,
+    player,
+    navigationPath = [],
+    waterEffects = [],
+    showIrrigation = false,
+    buildTool = null,
+    queuedTargets = [],
+    activeWork = null,
+  } = opts;
   const { viewW, viewH, worldW, worldH } = cam;
 
   ctx.imageSmoothingEnabled = false;
@@ -408,6 +421,23 @@ export function renderWorld(
   // 1. Ground layer (cached offscreen canvas)
   const ground = getGroundCache(state.tiles, atlas, state.seed, worldW, worldH);
   ctx.drawImage(ground.canvas, Math.round(-cam.x), Math.round(-cam.y));
+
+  queuedTargets.slice(0, 100).forEach((idx) => {
+    const [wx, wy] = tileToWorld(idx);
+    const [sx, sy] = worldToScreen(cam, wx, wy);
+    ctx.strokeStyle = idx === activeWork?.idx ? 'rgba(255, 221, 112, 0.95)' : 'rgba(255, 240, 168, 0.48)';
+    ctx.lineWidth = idx === activeWork?.idx ? 2 : 1;
+    ctx.strokeRect(Math.round(sx) + 3, Math.round(sy) + 3, TILE_PX - 6, TILE_PX - 6);
+  });
+
+  if (activeWork) {
+    const [wx, wy] = tileToWorld(activeWork.idx);
+    const [sx, sy] = worldToScreen(cam, wx, wy);
+    ctx.fillStyle = 'rgba(12, 18, 14, 0.82)';
+    ctx.fillRect(Math.round(sx) + 3, Math.round(sy) - 5, TILE_PX - 6, 4);
+    ctx.fillStyle = '#f1d27a';
+    ctx.fillRect(Math.round(sx) + 4, Math.round(sy) - 4, Math.round((TILE_PX - 8) * activeWork.progress), 2);
+  }
 
   if (player && navigationPath.length > 0) {
     const [playerX, playerY] = worldToScreen(cam, player.x + 12, player.y + 28);
@@ -522,6 +552,10 @@ export function renderWorld(
     if (tile.kind === 'brush' || tile.kind === 'rock') cmds.push({
       wy: wy + TILE_PX,
       fn: () => drawGenerated(ctx, tile.kind, sx, sy - 8, 32, 32),
+    });
+    if (tile.kind === 'tree') cmds.push({
+      wy: wy + TILE_PX,
+      fn: () => drawGenerated(ctx, 'tree', sx - 10, sy - 34, 52, 64),
     });
     if (tile.kind === 'marsh') cmds.push({
       wy: wy + TILE_PX,
@@ -646,7 +680,7 @@ export function renderWorld(
 
   if (buildTool === 'clear') {
     state.tiles.forEach((tile, idx) => {
-      if (!['brush', 'rock', 'marsh'].includes(tile.kind)) return;
+      if (!['brush', 'tree', 'rock', 'marsh'].includes(tile.kind)) return;
       const [wx, wy] = tileToWorld(idx);
       const [sx, sy] = worldToScreen(cam, wx, wy);
       ctx.strokeStyle = 'rgba(242, 193, 78, 0.9)';

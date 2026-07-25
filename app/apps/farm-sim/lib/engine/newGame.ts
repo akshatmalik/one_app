@@ -84,9 +84,11 @@ function buildTiles(seed: number): Tile[] {
 
   // A few open tiles prevent cleanup from becoming a chore. Clutter teaches
   // that this land is being reclaimed and pays useful early materials.
-  const brush = [[15, 20], [15, 22], [16, 19], [20, 14], [22, 14], [24, 19], [24, 21]] as const;
-  const rocks = [[15, 24], [21, 24], [24, 15]] as const;
+  const brush = [[13, 19], [13, 22], [15, 20], [15, 22], [16, 19], [20, 13], [22, 13], [24, 19], [24, 21], [26, 15], [26, 25]] as const;
+  const trees = [[14, 13], [14, 26], [19, 27], [25, 13], [26, 18], [26, 23]] as const;
+  const rocks = [[13, 24], [15, 25], [21, 26], [24, 14], [25, 27]] as const;
   for (const [r, c] of brush) tiles[idxOf(r, c)] = { ...tiles[idxOf(r, c)], kind: 'brush' };
+  for (const [r, c] of trees) tiles[idxOf(r, c)] = { ...tiles[idxOf(r, c)], kind: 'tree' };
   for (const [r, c] of rocks) tiles[idxOf(r, c)] = {
     ...tiles[idxOf(r, c)],
     kind: 'rock',
@@ -170,7 +172,7 @@ export function newGame(seed: number): GameState {
     upgrades: [],
     lastRecap: null,
     tutorialStep: 0,
-    opening: { stage: 0, progress: 0, complete: false },
+    opening: { stage: 0, progress: 0, complete: false, activity: {} },
     labor: { manualTills: 0, manualPlants: 0, manualWaterings: 0, manualHarvests: 0 },
   };
 

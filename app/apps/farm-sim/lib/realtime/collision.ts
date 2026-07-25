@@ -19,6 +19,7 @@ const BLOCKED_KINDS: ReadonlySet<TileKind> = new Set([
   'depot',
   'crate',
   'brush',
+  'tree',
   'rock',
   'marsh',
   'extractor',

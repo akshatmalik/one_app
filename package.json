@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "farm:playtest": "tsx scripts/farm-sim-harness.mts",
-    "farm:economy": "tsx scripts/farm-sim-economy.ts"
+    "farm:economy": "tsx scripts/farm-sim-economy.ts",
+    "farm:regression": "tsx scripts/farm-sim-opening-regression.mts"
   },
   "dependencies": {
     "@chatscope/chat-ui-kit-react": "^2.1.1",

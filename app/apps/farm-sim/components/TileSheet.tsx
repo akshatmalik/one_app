@@ -60,7 +60,7 @@ function tileTitle(state: GameState, idx: number) {
     grass: 'Open ground', tilled: 'Tilled soil', channel: 'Irrigation channel',
     reservoir: 'Reservoir', well: 'Farm well', sprinkler: 'Sprinkler', barn: 'Barn', coop: 'Chicken coop', shed: 'Farmhouse',
     market: 'Farm-gate produce stand', mill: 'Flour mill', depot: 'Shipping depot', crate: 'Field crate', path: 'Farm road',
-    brush: 'Dense brush', rock: 'Boulder', marsh: 'Wet ground', locked: 'Unowned land',
+    brush: 'Dense brush', tree: 'Mature tree', rock: 'Boulder', marsh: 'Wet ground', locked: 'Unowned land',
     extractor: 'Automated extractor',
   };
   return labels[tile.kind] ?? tile.kind;
@@ -122,7 +122,6 @@ export function TileSheet({ state, idx, inRange, isWalking, waterCharges, waterC
   }, [contextKey]);
 
   const run = (action: PlayerAction) => {
-    if (!inRange) return;
     if (dispatch(action)) {
       window.localStorage.setItem(`farm-recent-${contextKey}`, action.type);
       if (action.type === 'plant') {
@@ -134,7 +133,7 @@ export function TileSheet({ state, idx, inRange, isWalking, waterCharges, waterC
     }
   };
   const actionClass = (action: string) => `flex min-h-10 min-w-0 items-center justify-start gap-2 rounded-md border px-2.5 text-[11px] font-semibold text-white transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-35 ${recentAction === action ? 'border-[#efd275]/55 bg-[#efd275]/12' : 'border-white/10 bg-white/[0.06]'}`;
-  const status = isWalking ? 'Walking into range' : inRange ? 'Ready to work' : 'No reachable work position';
+  const status = isWalking ? 'Walking into range' : inRange ? 'Ready to queue' : 'Add work and the farmer will route here';
   const needsWater = !!tile.crop && !tile.crop.mature && tile.moisture < CROPS[tile.crop.cropId].waterNeed;
   const isWaterSource = tile.kind === 'reservoir' || tile.kind === 'well' || (tile.kind === 'channel' && suppliedChannels.has(idx));
   const hasBuildActions = actions.some((action) => ['buildChannel', 'buildSprinkler', 'buildFieldCrate', 'digWell'].includes(action));
@@ -206,6 +205,7 @@ export function TileSheet({ state, idx, inRange, isWalking, waterCharges, waterC
             {tile.crop ? <p className="text-[10px] text-white/60">{soilNames[tile.soil]} soil. {CROPS[tile.crop.cropId].preferredSoils.includes(tile.soil) ? 'Ideal soil for this crop.' : `Reduced to ${Math.round(CROPS[tile.crop.cropId].soilPenalty * 100)}% base yield.`}</p> : null}
             {tile.kind === 'locked' ? <p className="text-[10px] text-white/60">Purchase this parcel in Farm operations before entering or working it.</p> : null}
             {tile.kind === 'brush' ? <p className="text-[10px] text-white/60">Clear brush for 4 wood and usable land.</p> : null}
+            {tile.kind === 'tree' ? <p className="text-[10px] text-white/60">Chop this tree for 8 wood. Trees take 3.5 seconds by hand.</p> : null}
             {(tile.kind === 'rock' || tile.kind === 'marsh') && tile.deposit ? <p className="text-[10px] text-white/60">{tile.deposit.resource}: {tile.deposit.remaining}/{tile.deposit.max} remaining.</p> : null}
             {tile.kind === 'extractor' && tile.deposit ? <p className="text-[10px] text-[#91ca8d]">Extracting {tile.deposit.resource} each dawn. {tile.deposit.remaining} remaining.</p> : null}
             {tile.kind === 'channel' ? <p className={`text-[10px] ${suppliedChannels.has(idx) ? 'text-[#91ca8d]' : 'text-[#efa08c]'}`}>{suppliedChannels.has(idx) ? 'Connected and carrying water.' : 'Disconnected from the reservoir.'}</p> : null}
@@ -221,7 +221,7 @@ export function TileSheet({ state, idx, inRange, isWalking, waterCharges, waterC
                 <button
                   key={crop}
                   type="button"
-                  disabled={!inRange || !inSeason || owned < 1}
+                  disabled={!inSeason || owned < 1}
                   aria-label={`${def.name}: ${owned} seeds${inSeason ? '' : ', out of season'}`}
                   onClick={() => { if (dispatch({ type: 'plant', idx, crop })) { window.localStorage.setItem('farm-recent-crop', crop); window.localStorage.setItem(`farm-recent-${contextKey}`, 'plant'); setRecentCrop(crop); setRecentAction('plant'); navigator.vibrate?.(12); setShowSeeds(false); } }}
                   className="min-h-14 min-w-0 rounded-md border border-white/10 bg-black/20 p-1 text-center disabled:opacity-35"
@@ -238,10 +238,10 @@ export function TileSheet({ state, idx, inRange, isWalking, waterCharges, waterC
         {!inRange ? (
           <div className="flex h-11 items-center justify-center gap-2 rounded-md bg-[#d9b95f]/10 text-[11px] font-semibold text-[#f1d27a]" role="status">
             <Route size={15} className={isWalking ? 'motion-safe:animate-pulse' : ''} />
-            {isWalking ? 'Farmer is on the way' : 'No clear route to this tile'}
+            {isWalking ? 'Farmer is on the way' : 'Choose an action to add it to the queue'}
           </div>
-        ) : (
-          <div className="grid grid-cols-1 gap-1.5">
+        ) : null}
+        <div className="grid grid-cols-1 gap-1.5">
             {tile.kind === 'market' ? <button className={actionClass('market')} disabled={!marketOpen} onClick={onOpenMarket}><ShoppingBasket size={16} /> {marketOpen ? 'Sell produce and view orders' : 'Stand opens after first harvest'}</button> : null}
             {isWaterSource ? <button className={actionClass('refill')} disabled={waterCharges >= waterCapacity} onClick={() => { if (onRefillWater()) { window.localStorage.setItem(`farm-recent-${contextKey}`, 'refill'); setRecentAction('refill'); navigator.vibrate?.(18); } }}><Droplets size={16} /> {waterCharges >= waterCapacity ? `Can is full · ${waterCapacity}/${waterCapacity}` : `Refill can · ${waterCharges}/${waterCapacity}`}</button> : null}
             {actions.includes('till') ? <button className={actionClass('till')} onClick={() => run({ type: 'till', idx })}><Pickaxe size={16} /> Till soil</button> : null}
@@ -256,7 +256,7 @@ export function TileSheet({ state, idx, inRange, isWalking, waterCharges, waterC
             {actions.includes('harvest') ? <button className={actionClass('harvest')} onClick={() => run({ type: 'harvest', idx })}><Wheat size={16} /> Harvest {harvestUnits}</button> : null}
             {actions.includes('harvestRow') ? <button className={actionClass('harvestRow')} onClick={() => run({ type: 'harvestRow', idx })}><Wheat size={16} /> Harvest ready row</button> : null}
             {actions.includes('harvestArea') ? <button className={actionClass('harvestArea')} disabled={state.items.fuel < 1 || harvestAreaCount < 1} onClick={() => run({ type: 'harvestArea', idx })}><Wheat size={16} /> Harvest {harvestAreaCount} crops · 1 fuel</button> : null}
-            {actions.includes('clearLand') ? <button className={actionClass('clearLand')} onClick={() => run({ type: 'clearLand', idx })}><Shovel size={16} /> Clear land</button> : null}
+            {actions.includes('clearLand') ? <button className={actionClass('clearLand')} onClick={() => run({ type: 'clearLand', idx })}><Shovel size={16} /> {tile.kind === 'tree' ? 'Chop tree' : 'Clear land'}</button> : null}
             {actions.includes('mine') ? <button className={actionClass('mine')} onClick={() => run({ type: 'mine', idx })}><Pickaxe size={16} /> Mine {tile.deposit?.resource ?? 'deposit'}</button> : null}
             {actions.includes('buildExtractor') ? <button className={actionClass('buildExtractor')} disabled={state.facilities.workshop.level < 1 || state.gold < EXTRACTOR_BUILD_COST.gold || state.items.bricks < EXTRACTOR_BUILD_COST.bricks} onClick={() => run({ type: 'buildExtractor', idx })}><Hammer size={16} /> Automate deposit</button> : null}
             {actions.includes('upgradeExtractor') ? <button className={actionClass('upgradeExtractor')} disabled={state.gold < EXTRACTOR_UPGRADE_COST.gold || state.items.bricks < EXTRACTOR_UPGRADE_COST.bricks || state.items.machineParts < EXTRACTOR_UPGRADE_COST.machineParts} onClick={() => { const extractor = state.extractors.find((candidate) => candidate.idx === idx); if (extractor) run({ type: 'upgradeExtractor', extractorId: extractor.id }); }}><Hammer size={16} /> Upgrade extractor</button> : null}
@@ -267,13 +267,12 @@ export function TileSheet({ state, idx, inRange, isWalking, waterCharges, waterC
             {showBuild && actions.includes('buildFieldCrate') ? <button className={actionClass('buildFieldCrate')} disabled={state.gold < GOLD_COST.fieldCrate} onClick={() => run({ type: 'buildFieldCrate', idx })}><Package size={16} /> Field crate · {GOLD_COST.fieldCrate}g</button> : null}
             {showBuild && actions.includes('digWell') ? <button className={actionClass('digWell')} disabled={state.gold < GOLD_COST.well || state.wells >= MAX_WELLS} onClick={() => run({ type: 'digWell', idx })}><Hammer size={16} /> Well · {GOLD_COST.well}g</button> : null}
             {expanded && actions.includes('demolish') ? <button className={`${actionClass('demolish')} text-[#efa08c]`} onClick={() => run({ type: 'demolish', idx })}><Trash2 size={16} /> Remove</button> : null}
-          </div>
-        )}
+        </div>
 
-        {inRange && actions.includes('water') && waterCharges < 1 ? <p className="text-[9px] text-[#efa08c]">Watering can empty. Select a well, reservoir, or supplied channel to refill it.</p> : null}
-        {inRange && actions.includes('buildSprinkler') && !sprinklerBuildSupplied ? <p className="text-[9px] text-[#efa08c]">A sprinkler must touch a channel connected to the reservoir.</p> : null}
+        {actions.includes('water') && waterCharges < 1 ? <p className="text-[9px] text-[#efa08c]">Watering can empty. Select a well, reservoir, or supplied channel to refill it.</p> : null}
+        {actions.includes('buildSprinkler') && !sprinklerBuildSupplied ? <p className="text-[9px] text-[#efa08c]">A sprinkler must touch a channel connected to the reservoir.</p> : null}
 
-        {inRange && expanded && actions.includes('amendSoil') ? (
+        {expanded && actions.includes('amendSoil') ? (
           <div>
             <div className="mb-1 text-[9px] font-bold uppercase text-white/40">Amend soil</div>
             <div className="grid grid-cols-3 gap-1.5">

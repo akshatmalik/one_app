@@ -125,7 +125,7 @@ export function resolveSessionDay(session: PlaytestSession): PlaytestLogEntry {
 const MAP_CHAR: Record<TileKind, string> = {
   grass: '.', tilled: '=', channel: '~', reservoir: 'R', well: 'W', sprinkler: '*',
   barn: 'B', coop: 'C', shed: 'S', market: '$', mill: 'M', depot: 'D', crate: 'K', path: ':',
-  brush: 'b', rock: 'o', marsh: '%', locked: '#',
+  brush: 'b', tree: 'T', rock: 'o', marsh: '%', locked: '#',
   extractor: 'X',
 };
 
@@ -260,7 +260,7 @@ export function sessionStatus(session: PlaytestSession, includeState = false) {
       }, []),
     },
     bottlenecks: bottlenecks(state),
-    mapLegend: '. grass, = tilled, w wheat, c other crop, H harvest-ready, ~ channel, * sprinkler, R reservoir, S shed, M mill, K crate, D depot, X extractor, : path, b brush, o rock, % marsh, # locked',
+    mapLegend: '. grass, = tilled, w wheat, c other crop, H harvest-ready, ~ channel, * sprinkler, R reservoir, S shed, M mill, K crate, D depot, X extractor, : path, b brush, T tree, o rock, % marsh, # locked',
     map: worldMap(state),
     actionableTiles,
     ...(includeState ? { state } : {}),
