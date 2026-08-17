@@ -81,6 +81,16 @@ export const MINI_APPS: MiniApp[] = [
     tags: ['game', 'strategy', 'simulation'],
     isNew: true,
   },
+  {
+    id: 'simulation-world',
+    name: 'Simulation World',
+    description: 'Govern a living medieval economy where wages, prices, work, hunger, and migration respond on their own',
+    icon: '⚖️',
+    path: '/apps/simulation-world',
+    color: '#B7893F',
+    tags: ['game', 'economy', 'simulation'],
+    isNew: true,
+  },
 ];
 
 export function getMiniAppById(id: string): MiniApp | undefined {

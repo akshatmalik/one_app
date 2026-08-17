@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "farm:playtest": "tsx scripts/farm-sim-harness.mts"
+    "farm:playtest": "tsx scripts/farm-sim-harness.mts",
+    "simulation:audit": "tsx scripts/simulation-world-audit.mts"
   },
   "dependencies": {
     "@chatscope/chat-ui-kit-react": "^2.1.1",
