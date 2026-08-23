@@ -5,7 +5,6 @@ import {
   ArrowLeft,
   ArrowRight,
   Check,
-  Clock,
   Gamepad2,
   Library,
   Plus,
@@ -30,7 +29,6 @@ export interface CatchUpSessionInput {
 
 export interface MissedDaySubmission {
   date: string;
-  noGaming: boolean;
   sessions: CatchUpSessionInput[];
 }
 
@@ -45,7 +43,7 @@ interface DraftSession {
 
 interface DayDraft {
   date: string;
-  status: 'pending' | 'complete' | 'no-gaming';
+  status: 'pending' | 'complete';
   sessions: DraftSession[];
 }
 
@@ -114,18 +112,6 @@ export function MissedPlaytimeCheckInModal({ games, dates, userId, onSave, onPos
     () => games.filter(game => game.status !== 'Wishlist').sort((a, b) => a.name.localeCompare(b.name)),
     [games],
   );
-  const existingByDate = useMemo(() => {
-    const result = new Map<string, Array<{ game: Game; hours: number }>>();
-    for (const game of games) {
-      for (const log of game.playLogs ?? []) {
-        if (!dates.includes(log.date)) continue;
-        const existing = result.get(log.date) ?? [];
-        existing.push({ game, hours: log.hours });
-        result.set(log.date, existing);
-      }
-    }
-    return result;
-  }, [dates, games]);
   const suggestions = useMemo(
     () => current ? getSuggestedCheckInGames(games, current.date) : [],
     [current, games],
@@ -200,18 +186,10 @@ export function MissedPlaytimeCheckInModal({ games, dates, userId, onSave, onPos
     });
   };
 
-  const markNoGaming = () => {
-    updateCurrent(day => ({ ...day, status: 'no-gaming', sessions: [] }));
-  };
-
-  const confirmExisting = () => {
-    updateCurrent(day => ({ ...day, status: 'complete' }));
-  };
-
   const currentValid = current
-    ? current.status === 'no-gaming' || (
-      current.status === 'complete' && current.sessions.every(session => Number(session.hours) > 0)
-    )
+    ? current.status === 'complete' &&
+      current.sessions.length > 0 &&
+      current.sessions.every(session => Number(session.hours) > 0)
     : false;
 
   const goNext = () => {
@@ -227,7 +205,6 @@ export function MissedPlaytimeCheckInModal({ games, dates, userId, onSave, onPos
     try {
       await onSave(drafts.map(day => ({
         date: day.date,
-        noGaming: day.status === 'no-gaming',
         sessions: day.sessions.map(session => ({
           id: session.id,
           date: day.date,
@@ -294,42 +271,10 @@ export function MissedPlaytimeCheckInModal({ games, dates, userId, onSave, onPos
 
         <div className="flex-1 overflow-y-auto px-5 py-5 sm:px-7">
           {isReview ? (
-            <ReviewStep drafts={drafts} games={games} existingByDate={existingByDate} />
+            <ReviewStep drafts={drafts} games={games} />
           ) : (
             <div className="space-y-5">
-              {(existingByDate.get(current!.date)?.length ?? 0) > 0 && (
-                <section className="rounded-2xl border border-emerald-400/20 bg-emerald-500/[0.07] p-4">
-                  <div className="flex items-center gap-2 text-sm font-medium text-emerald-300">
-                    <Check size={15} /> Already logged
-                  </div>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {existingByDate.get(current!.date)!.map((entry, index) => (
-                      <span key={`${entry.game.id}-${index}`} className="rounded-lg bg-black/20 px-2.5 py-1.5 text-xs text-white/60">
-                        {entry.game.name} · {formatHours(entry.hours)}
-                      </span>
-                    ))}
-                  </div>
-                  {current!.status === 'pending' && (
-                    <button type="button" onClick={confirmExisting} className="mt-3 text-xs font-medium text-emerald-300 hover:text-emerald-200">
-                      That&apos;s everything for this day
-                    </button>
-                  )}
-                </section>
-              )}
-
-              {current!.status === 'no-gaming' ? (
-                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6 text-center">
-                  <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-white/5 text-white/40">
-                    <Check size={20} />
-                  </div>
-                  <p className="mt-3 font-medium text-white">Rest day marked</p>
-                  <p className="mt-1 text-sm text-white/35">No play session will be created.</p>
-                  <button type="button" onClick={() => updateCurrent(day => ({ ...day, status: 'pending' }))} className="mt-3 text-xs text-indigo-300 hover:text-indigo-200">
-                    Actually, I played something
-                  </button>
-                </div>
-              ) : (
-                <>
+              <>
                   {current!.sessions.length === 0 && suggestions.length > 0 && (
                     <section>
                       <div className="mb-2.5 flex items-center gap-2">
@@ -380,15 +325,12 @@ export function MissedPlaytimeCheckInModal({ games, dates, userId, onSave, onPos
                     </section>
                   )}
 
-                  <section className="grid gap-2 sm:grid-cols-3">
+                  <section className="grid gap-2 sm:grid-cols-2">
                     <button type="button" onClick={() => { setSearchOpen(value => !value); setNewGameOpen(false); }} className="flex items-center justify-center gap-2 rounded-xl border border-white/8 bg-white/[0.025] px-3 py-3 text-xs font-medium text-white/60 hover:bg-white/5 hover:text-white">
                       <Library size={15} /> Something else
                     </button>
                     <button type="button" onClick={() => { setNewGameOpen(value => !value); setSearchOpen(false); }} className="flex items-center justify-center gap-2 rounded-xl border border-indigo-400/15 bg-indigo-500/[0.06] px-3 py-3 text-xs font-medium text-indigo-300 hover:bg-indigo-500/10">
                       <Sparkles size={15} /> Started something new
-                    </button>
-                    <button type="button" onClick={markNoGaming} className="flex items-center justify-center gap-2 rounded-xl border border-white/8 bg-white/[0.025] px-3 py-3 text-xs font-medium text-white/45 hover:bg-white/5 hover:text-white/70">
-                      <Clock size={15} /> No gaming
                     </button>
                   </section>
 
@@ -420,8 +362,7 @@ export function MissedPlaytimeCheckInModal({ games, dates, userId, onSave, onPos
                       <p className="mt-2 text-[11px] text-white/30">It will be marked In Progress. You can add price, genre, and artwork later.</p>
                     </section>
                   )}
-                </>
-              )}
+              </>
             </div>
           )}
         </div>
@@ -484,29 +425,25 @@ function SessionEditor({ session, game, onChange, onRemove }: {
   );
 }
 
-function ReviewStep({ drafts, games, existingByDate }: {
+function ReviewStep({ drafts, games }: {
   drafts: DayDraft[];
   games: Game[];
-  existingByDate: Map<string, Array<{ game: Game; hours: number }>>;
 }) {
   return (
     <div className="space-y-3">
       {drafts.map(day => {
         const additions = day.sessions.reduce((sum, session) => sum + Number(session.hours || 0), 0);
-        const existing = existingByDate.get(day.date) ?? [];
         return (
           <div key={day.date} className="rounded-2xl border border-white/8 bg-white/[0.025] p-4">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="text-sm font-medium text-white">{formatDate(day.date)}</p>
                 <p className="mt-0.5 text-xs text-white/35">
-                  {day.status === 'no-gaming'
-                    ? 'No gaming'
-                    : `${day.sessions.length} new session${day.sessions.length === 1 ? '' : 's'}${existing.length ? ` · ${existing.length} already logged` : ''}`}
+                  {day.sessions.length} new session{day.sessions.length === 1 ? '' : 's'}
                 </p>
               </div>
-              <span className={clsx('rounded-lg px-2.5 py-1 text-xs font-semibold', day.status === 'no-gaming' ? 'bg-white/5 text-white/35' : 'bg-indigo-500/15 text-indigo-300')}>
-                {day.status === 'no-gaming' ? 'Rest day' : additions > 0 ? `+${formatHours(additions)}` : 'Confirmed'}
+              <span className="rounded-lg bg-indigo-500/15 px-2.5 py-1 text-xs font-semibold text-indigo-300">
+                +{formatHours(additions)}
               </span>
             </div>
             {day.sessions.length > 0 && (

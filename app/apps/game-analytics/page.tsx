@@ -173,6 +173,7 @@ export default function GameAnalyticsPage() {
   const { games, loading, error, addGame, updateGame, updateManyGames, deleteGame, refresh } = useGames(user?.uid ?? null);
   const missedPlaytimeCheckIn = useMissedPlaytimeCheckIn(
     user?.uid ?? 'local-user',
+    games,
     !authLoading && !loading,
   );
   const librarySnapshots = useLibrarySnapshots(user?.uid ?? null, games, loading, { addGame, updateGame, deleteGame });
@@ -670,7 +671,9 @@ export default function GameAnalyticsPage() {
       });
     }
 
-    missedPlaytimeCheckIn.resolveDates(days.map(day => day.date));
+    missedPlaytimeCheckIn.resolveDates(
+      days.filter(day => day.sessions.length > 0).map(day => day.date),
+    );
     const sessionCount = days.reduce((sum, day) => sum + day.sessions.length, 0);
     showToast(
       sessionCount > 0

@@ -1,9 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Game } from '../lib/types';
 import {
+  discoverUnloggedDates,
   MissedCheckInState,
-  recordVisit,
   resolveCheckInDates,
   toLocalDateString,
 } from '../lib/missed-check-in';
@@ -20,9 +21,8 @@ function readState(key: string): MissedCheckInState | null {
     const raw = localStorage.getItem(key);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<MissedCheckInState>;
-    if (typeof parsed.lastVisitDate !== 'string' || !Array.isArray(parsed.unresolvedDates)) return null;
+    if (!Array.isArray(parsed.unresolvedDates)) return null;
     return {
-      lastVisitDate: parsed.lastVisitDate,
       unresolvedDates: parsed.unresolvedDates.filter((date): date is string => typeof date === 'string'),
     };
   } catch {
@@ -39,18 +39,21 @@ function writeState(key: string, state: MissedCheckInState): void {
   }
 }
 
-export function useMissedPlaytimeCheckIn(userId: string, ready: boolean) {
+export function useMissedPlaytimeCheckIn(userId: string, games: Game[], ready: boolean) {
   const key = useMemo(() => storageKey(userId), [userId]);
   const [state, setState] = useState<MissedCheckInState | null>(null);
   const [postponedForVisit, setPostponedForVisit] = useState(false);
 
   useEffect(() => {
+    if (ready) setPostponedForVisit(false);
+  }, [key, ready]);
+
+  useEffect(() => {
     if (!ready) return;
-    const next = recordVisit(readState(key), toLocalDateString());
+    const next = discoverUnloggedDates(readState(key), games, toLocalDateString());
     writeState(key, next);
     setState(next);
-    setPostponedForVisit(false);
-  }, [key, ready]);
+  }, [games, key, ready]);
 
   const postpone = useCallback(() => {
     setPostponedForVisit(true);

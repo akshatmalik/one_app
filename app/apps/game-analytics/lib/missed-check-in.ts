@@ -1,7 +1,6 @@
 import { Game } from './types';
 
 export interface MissedCheckInState {
-  lastVisitDate: string;
   unresolvedDates: string[];
 }
 
@@ -32,9 +31,9 @@ export function parseCheckInDate(date: string): Date | null {
   return parsed;
 }
 
-/** Return complete local-calendar days strictly between two visits. */
-export function getMissedDates(lastVisitDate: string, today: string): string[] {
-  const lastVisit = parseCheckInDate(lastVisitDate);
+/** Return complete local-calendar days strictly between two dates. */
+export function getMissedDates(lastLoggedDate: string, today: string): string[] {
+  const lastVisit = parseCheckInDate(lastLoggedDate);
   const current = parseCheckInDate(today);
   if (!lastVisit || !current || lastVisit >= current) return [];
 
@@ -48,23 +47,34 @@ export function getMissedDates(lastVisitDate: string, today: string): string[] {
   return result;
 }
 
-/** Merge a new visit into persisted state without dropping postponed dates. */
-export function recordVisit(
+/**
+ * Find every trailing unlogged day after the most recent past play session.
+ * Previously discovered gaps remain pending until a log exists for that date,
+ * even if the user later logs a newer day first.
+ */
+export function discoverUnloggedDates(
   previous: MissedCheckInState | null,
+  games: Game[],
   today: string,
 ): MissedCheckInState {
-  if (!previous || !parseCheckInDate(previous.lastVisitDate)) {
-    return { lastVisitDate: today, unresolvedDates: [] };
-  }
+  const loggedDates = new Set(
+    games.flatMap(game => game.playLogs ?? [])
+      .map(log => log.date)
+      .filter(date => parseCheckInDate(date) && date < today),
+  );
+  const latestLoggedDate = Array.from(loggedDates).sort().at(-1);
 
   const unresolved = new Set([
-    ...previous.unresolvedDates.filter(date => parseCheckInDate(date) && date < today),
-    ...getMissedDates(previous.lastVisitDate, today),
+    ...(previous?.unresolvedDates ?? []).filter(date => (
+      parseCheckInDate(date) && date < today && !loggedDates.has(date)
+    )),
+    ...(latestLoggedDate ? getMissedDates(latestLoggedDate, today) : []),
   ]);
 
   return {
-    lastVisitDate: today,
-    unresolvedDates: Array.from(unresolved).sort(),
+    unresolvedDates: Array.from(unresolved)
+      .filter(date => !loggedDates.has(date))
+      .sort(),
   };
 }
 
