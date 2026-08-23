@@ -81,6 +81,8 @@ import { BacklogBracketModal } from './components/BacklogBracketModal';
 import { useUndoToast } from './hooks/useUndoToast';
 import { UndoToast } from './components/UndoToast';
 import { GlobalCommandPalette, PaletteCommand } from './components/GlobalCommandPalette';
+import { useMissedPlaytimeCheckIn } from './hooks/useMissedPlaytimeCheckIn';
+import { CatchUpSessionInput, MissedDaySubmission, MissedPlaytimeCheckInModal } from './components/MissedPlaytimeCheckInModal';
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist' | 'ps-plus';
@@ -169,6 +171,10 @@ export default function GameAnalyticsPage() {
   const { user, loading: authLoading } = useAuthContext();
   const { showToast } = useToast();
   const { games, loading, error, addGame, updateGame, updateManyGames, deleteGame, refresh } = useGames(user?.uid ?? null);
+  const missedPlaytimeCheckIn = useMissedPlaytimeCheckIn(
+    user?.uid ?? 'local-user',
+    !authLoading && !loading,
+  );
   const librarySnapshots = useLibrarySnapshots(user?.uid ?? null, games, loading, { addGame, updateGame, deleteGame });
   const timeCapsules = useTimeCapsules(user?.uid ?? null, games);
   const { pending: pendingUndo, showUndo, dismiss: dismissUndo, confirmUndo } = useUndoToast();
@@ -593,6 +599,85 @@ export default function GameAnalyticsPage() {
 
     await updateGame(game.id, updates);
     showToast(`Logged ${hours}h`, 'success');
+  };
+
+  const handleMissedPlaytimeSave = async (days: MissedDaySubmission[]) => {
+    const byExistingGame = new Map<string, CatchUpSessionInput[]>();
+    const byNewGame = new Map<string, CatchUpSessionInput[]>();
+
+    for (const session of days.flatMap(day => day.sessions)) {
+      if (session.gameId) {
+        byExistingGame.set(session.gameId, [...(byExistingGame.get(session.gameId) ?? []), session]);
+      } else if (session.newGameName) {
+        const key = session.newGameName.trim().toLowerCase();
+        byNewGame.set(key, [...(byNewGame.get(key) ?? []), session]);
+      }
+    }
+
+    // A retry may see a game that was created by a partially successful save.
+    // Fold it into normal updates instead of creating a duplicate title.
+    for (const [key, sessions] of byNewGame) {
+      const existing = games.find(game => game.status !== 'Wishlist' && game.name.trim().toLowerCase() === key);
+      if (existing) {
+        byExistingGame.set(existing.id, [...(byExistingGame.get(existing.id) ?? []), ...sessions]);
+        byNewGame.delete(key);
+      }
+    }
+
+    const updates: Array<{ id: string; changes: Partial<Game> }> = [];
+    for (const [gameId, sessions] of byExistingGame) {
+      const game = games.find(candidate => candidate.id === gameId);
+      if (!game) throw new Error('One of the selected games is no longer in your library.');
+      const existingIds = new Set((game.playLogs ?? []).map(log => log.id));
+      const newLogs: PlayLog[] = sessions
+        .filter(session => !existingIds.has(session.id))
+        .map(session => ({
+          id: session.id,
+          date: session.date,
+          hours: session.hours,
+          notes: session.notes,
+        }));
+      if (newLogs.length === 0) continue;
+
+      const changes: Partial<Game> = { playLogs: [...(game.playLogs ?? []), ...newLogs] };
+      if (game.status === 'Not Started' && (game.playLogs?.length ?? 0) === 0) {
+        changes.status = 'In Progress';
+        changes.startDate = [...newLogs].sort((a, b) => a.date.localeCompare(b.date))[0].date;
+      }
+      updates.push({ id: gameId, changes });
+    }
+
+    if (updates.length > 0) await updateManyGames(updates);
+
+    for (const sessions of byNewGame.values()) {
+      const first = sessions[0];
+      const playLogs: PlayLog[] = sessions.map(session => ({
+        id: session.id,
+        date: session.date,
+        hours: session.hours,
+        notes: session.notes,
+      }));
+      const startDate = [...playLogs].sort((a, b) => a.date.localeCompare(b.date))[0].date;
+      await addGame({
+        name: first.newGameName!.trim(),
+        price: 0,
+        hours: 0,
+        rating: 0,
+        status: 'In Progress',
+        platform: first.newGamePlatform,
+        startDate,
+        playLogs,
+      });
+    }
+
+    missedPlaytimeCheckIn.resolveDates(days.map(day => day.date));
+    const sessionCount = days.reduce((sum, day) => sum + day.sessions.length, 0);
+    showToast(
+      sessionCount > 0
+        ? `Catch-up saved · ${sessionCount} session${sessionCount === 1 ? '' : 's'} logged`
+        : 'Catch-up saved',
+      'success',
+    );
   };
 
   const handleStartTimer = (game: GameWithMetrics) => {
@@ -1832,6 +1917,16 @@ export default function GameAnalyticsPage() {
           )}
         </div>
       </div>
+
+      {missedPlaytimeCheckIn.shouldPrompt && (
+        <MissedPlaytimeCheckInModal
+          games={games}
+          dates={missedPlaytimeCheckIn.pendingDates}
+          userId={user?.uid ?? 'local-user'}
+          onSave={handleMissedPlaytimeSave}
+          onPostpone={missedPlaytimeCheckIn.postpone}
+        />
+      )}
 
       {/* Game Form Modal */}
       {isFormOpen && (
