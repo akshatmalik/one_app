@@ -11,6 +11,7 @@ export interface TilePathOptions {
   start: TilePosition;
   target: TilePosition;
   gridSize: number;
+  stopAdjacent?: boolean;
 }
 
 /**
@@ -54,7 +55,7 @@ export function findTilePath(
 
   const startIdx = indexOf(start, size);
 
-  const destination = isTileBlocked(state, indexOf(target, size))
+  const destination = options.stopAdjacent || isTileBlocked(state, indexOf(target, size))
     ? adjacentTargets(target, size).filter((position) => !isTileBlocked(state, indexOf(position, size)))
     : [target];
   if (destination.length === 0) return [];

@@ -4,7 +4,7 @@
 // ============================================================================
 
 import { CropId, FarmContract, FarmSaveRepository, GameState, SaveSlotInfo, TileKind } from './types';
-import { FARM_LANDMARKS, GRID_SIZE, MILL_INPUT_CAPACITY, MILL_OUTPUT_CAPACITY, MILL_RATE_PER_DAY, WHEAT_STORAGE_START } from './balance';
+import { FARM_LANDMARKS, GRID_SIZE, MILL_INPUT_CAPACITY, MILL_OUTPUT_CAPACITY, MILL_RATE_PER_DAY, START_PLOT, WHEAT_STORAGE_START } from './balance';
 import { createContractOffers, unlocksForReputation } from './engine/contracts';
 import { initialParcels } from './engine/parcels';
 import { FORCED_SLEEP_MINUTES, WAKE_MINUTES } from './realtime/clock';
@@ -12,6 +12,7 @@ import { buildForecast, normalizeSeasonWeather } from './engine/weather';
 import { CROP_IDS } from '../data/crops';
 import { initMarket } from './engine/market';
 import { depositFor } from './engine/parcels';
+import { reconcileOpening } from './engine/opening';
 
 const EXPECTED_TILE_COUNT = GRID_SIZE * GRID_SIZE;
 const EMPTY_ITEMS: GameState['items'] = {
@@ -126,6 +127,10 @@ export class LocalStorageFarmRepository implements FarmSaveRepository {
         contracts: validContracts(parsed.contracts)
           ? parsed.contracts
           : createContractOffers(parsed.seed ?? 1, parsed.day ?? 1, reputation, 3),
+        opening: parsed.opening ? {
+          ...parsed.opening,
+          activity: { ...(parsed.opening.activity ?? {}) },
+        } : undefined,
       } as GameState;
       if (state.version !== 1) return null;
       // Grid expansions invalidate positional saves from earlier world layouts.
@@ -136,6 +141,16 @@ export class LocalStorageFarmRepository implements FarmSaveRepository {
         soil: tile.soil ?? 'loam',
         deposit: tile.deposit ? { ...tile.deposit } : depositFor(idx, state.seed, tile.kind),
       }));
+      // Opening saves made before the larger homestead keep their work while
+      // receiving the newly owned one-tile perimeter.
+      if (state.opening && !Object.values(state.parcels).some(Boolean)) {
+        for (let row = START_PLOT.r0; row <= START_PLOT.r1; row++) {
+          for (let col = START_PLOT.c0; col <= START_PLOT.c1; col++) {
+            const idx = row * GRID_SIZE + col;
+            if (state.tiles[idx].kind === 'locked') state.tiles[idx] = { ...state.tiles[idx], kind: 'grass' };
+          }
+        }
+      }
       const normalizedWeather = normalizeSeasonWeather(state.seed, state.day, state.weatherTruth ?? []);
       if (!Array.isArray(state.forecast) || state.forecast.length !== 3 || normalizedWeather.some((weather, index) => weather !== state.weatherTruth?.[index])) {
         state.weatherTruth = normalizedWeather;
@@ -145,7 +160,7 @@ export class LocalStorageFarmRepository implements FarmSaveRepository {
       ensureLandmark(state, 'market', FARM_LANDMARKS.market.r * GRID_SIZE + FARM_LANDMARKS.market.c);
       if (state.mill.commissioned) ensureLandmark(state, 'mill', FARM_LANDMARKS.mill.r * GRID_SIZE + FARM_LANDMARKS.mill.c);
       state.production.wheatStorageCapacity = state.fieldCrates.reduce((sum, crate) => sum + crate.capacity, 0);
-      return state;
+      return reconcileOpening(state).state;
     } catch {
       return null;
     }

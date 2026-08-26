@@ -85,7 +85,11 @@ export function useFarmGame(): UseFarmGame {
       const opening = advanceOpening(result.state, action);
       setState(opening.state);
       autosave(opening.state);
-      if (opening.completed) flashInfo(`${opening.completed.title} complete · ${opening.completed.reward}`);
+      if (opening.completed.length) {
+        const latest = opening.completed[opening.completed.length - 1];
+        const prefix = opening.completed.length > 1 ? `${opening.completed.length} objectives complete` : `${latest.title} complete`;
+        flashInfo(`${prefix} · ${latest.reward}`);
+      }
       return true;
     },
     [state, autosave, flashError, flashInfo]
@@ -99,10 +103,13 @@ export function useFarmGame(): UseFarmGame {
       let cur = state;
       let applied = 0;
       let lastError: string | undefined;
+      const completed = [];
       for (const a of actions) {
         const res = applyAction(cur, a);
         if (res.ok) {
-          cur = res.state;
+          const opening = advanceOpening(res.state, a);
+          cur = opening.state;
+          completed.push(...opening.completed);
           applied++;
         } else {
           lastError = res.error;
@@ -111,12 +118,16 @@ export function useFarmGame(): UseFarmGame {
       if (applied > 0) {
         setState(cur);
         autosave(cur);
+        if (completed.length) {
+          const latest = completed[completed.length - 1];
+          flashInfo(`${completed.length} objective${completed.length === 1 ? '' : 's'} complete · ${latest.reward}`);
+        }
       } else if (lastError) {
         flashError(lastError);
       }
       return applied;
     },
-    [state, autosave, flashError]
+    [state, autosave, flashError, flashInfo]
   );
 
   const endDay = useCallback(() => {

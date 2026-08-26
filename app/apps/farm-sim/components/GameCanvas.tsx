@@ -25,6 +25,7 @@ import type { ToolId } from '../lib/realtime/player';
 import { clockToTimeOfDay } from '../render/lighting';
 import { findTilePath, TilePosition } from '../lib/realtime/pathfinding';
 import { movePlayerWithCollision } from '../lib/realtime/collision';
+import { WorkOrder } from '../lib/workOrders';
 
 // Sprite footprint at 2× scale: source is 12×18 → 24×36 screen px
 const SPRITE_W = 24;
@@ -38,6 +39,7 @@ function landmarkAtPoint(state: GameState, worldX: number, worldY: number): numb
     market: { left: -28, top: -54, width: 88, height: 88 },
     shed: { left: -24, top: -52, width: 80, height: 80 },
     depot: { left: -16, top: -40, width: 64, height: 64 },
+    tree: { left: -10, top: -34, width: 52, height: 64 },
   };
   for (let idx = state.tiles.length - 1; idx >= 0; idx--) {
     const box = bounds[state.tiles[idx].kind];
@@ -58,7 +60,15 @@ interface Props {
   buildTool: BuildTool | null;
   selectedIdx: number | null;
   paused: boolean;
+  selectionMode: boolean;
+  workOrder: WorkOrder | null;
+  queuedTargets: number[];
+  queuePaused: boolean;
   onAction: (action: PlayerAction) => boolean;
+  onQueueAction: (action: PlayerAction, targetIdx: number) => boolean;
+  onWorkProgress: (id: string, progress: number) => void;
+  onWorkComplete: (order: WorkOrder) => void;
+  onWorkFailed: (order: WorkOrder, reason: string) => void;
   onToolChange: (tool: ToolId) => void;
   onTileSelect: (idx: number | null, player: PlayerState, anchor?: { x: number; y: number }) => void;
   onPlayerMove?: (player: PlayerState) => void;
@@ -177,7 +187,15 @@ export function GameCanvas({
   buildTool,
   selectedIdx,
   paused,
+  selectionMode,
+  workOrder,
+  queuedTargets,
+  queuePaused,
   onAction,
+  onQueueAction,
+  onWorkProgress,
+  onWorkComplete,
+  onWorkFailed,
   onToolChange,
   onTileSelect,
   onPlayerMove,
@@ -201,6 +219,11 @@ export function GameCanvas({
   const manualCameraUntilRef = useRef(0);
   const pointerRef = useRef<{ id: number; x: number; y: number; camX: number; camY: number; dragged: boolean } | null>(null);
   const lastPlayerNotifyRef = useRef(0);
+  const workElapsedRef = useRef(0);
+  const workProgressRef = useRef(0);
+  const workProgressNotifyRef = useRef(0);
+  const completedWorkRef = useRef<string | null>(null);
+  const manualWorkResumeRef = useRef(0);
 
   // Mirror latest React state into refs so the rAF closure always reads fresh.
   const stateRef        = useRef(state);
@@ -210,7 +233,15 @@ export function GameCanvas({
   const buildToolRef    = useRef(buildTool);
   const selectedIdxRef  = useRef(selectedIdx);
   const pausedRef       = useRef(paused);
+  const selectionModeRef = useRef(selectionMode);
+  const workOrderRef = useRef(workOrder);
+  const queuedTargetsRef = useRef(queuedTargets);
+  const queuePausedRef = useRef(queuePaused);
   const onActionRef     = useRef(onAction);
+  const onQueueActionRef = useRef(onQueueAction);
+  const onWorkProgressRef = useRef(onWorkProgress);
+  const onWorkCompleteRef = useRef(onWorkComplete);
+  const onWorkFailedRef = useRef(onWorkFailed);
   const onToolChangeRef = useRef(onToolChange);
   const onTileSelectRef = useRef(onTileSelect);
   const onPlayerMoveRef = useRef(onPlayerMove);
@@ -222,7 +253,15 @@ export function GameCanvas({
   buildToolRef.current    = buildTool;
   selectedIdxRef.current  = selectedIdx;
   pausedRef.current       = paused;
+  selectionModeRef.current = selectionMode;
+  workOrderRef.current = workOrder;
+  queuedTargetsRef.current = queuedTargets;
+  queuePausedRef.current = queuePaused;
   onActionRef.current     = onAction;
+  onQueueActionRef.current = onQueueAction;
+  onWorkProgressRef.current = onWorkProgress;
+  onWorkCompleteRef.current = onWorkComplete;
+  onWorkFailedRef.current = onWorkFailed;
   onToolChangeRef.current = onToolChange;
   onTileSelectRef.current = onTileSelect;
   onPlayerMoveRef.current = onPlayerMove;
@@ -231,6 +270,15 @@ export function GameCanvas({
   // This prevents the rAF onPlayerMove callback from reverting tool picks.
   playerRef.current.tool = activeTool;
   playerRef.current.waterCharges = waterCharges;
+
+  useEffect(() => {
+    pathRef.current.length = 0;
+    workElapsedRef.current = 0;
+    workProgressRef.current = 0;
+    workProgressNotifyRef.current = 0;
+    completedWorkRef.current = null;
+    if (workOrder) onWorkProgressRef.current(workOrder.id, 0);
+  }, [workOrder?.id]);
 
   // Tile-sheet watering and automated irrigation update React state outside the
   // realtime action loop. Detect those changes so every watering path receives
@@ -349,11 +397,15 @@ export function GameCanvas({
       while (accumRef.current >= SIM_DT) {
         accumRef.current -= SIM_DT;
         const manualMovement = input.left || input.right || input.up || input.down;
-        if (manualMovement) pathRef.current.length = 0;
+        if (manualMovement) {
+          pathRef.current.length = 0;
+          manualWorkResumeRef.current = now + 750;
+        }
         updatePlayer(player, input, gs, SIM_DT);
         if (!manualMovement && pathRef.current.length > 0) followPath(player, pathRef.current, gs, SIM_DT);
 
-        const wantsAction = input.action || input.actionQueued;
+        const activeWork = workOrderRef.current;
+        const wantsAction = !activeWork && (input.action || input.actionQueued);
 
         // Refill watering can: action while can is equipped + facing reservoir/channel/well
         if (wantsAction && player.tool === 'can' && actionCooldownRef.current <= 0) {
@@ -362,8 +414,7 @@ export function GameCanvas({
             const ft = gs.tiles[facingIdx];
             if (ft && (ft.kind === 'reservoir' || ft.kind === 'channel' || ft.kind === 'well')) {
               const missing = waterCapacityRef.current - player.waterCharges;
-              if (missing > 0 && onActionRef.current({ type: 'refillCan', charges: missing })) {
-                player.waterCharges = waterCapacityRef.current;
+              if (missing > 0 && onQueueActionRef.current({ type: 'refillCan', charges: missing }, facingIdx)) {
                 actionCooldownRef.current = 30;
               }
             }
@@ -375,12 +426,9 @@ export function GameCanvas({
           if (actionCooldownRef.current <= 0) {
             const act = toolToAction(player, gs, selectedCropRef.current);
             if (act) {
-              const ok = onActionRef.current(act);
+              const targetIdx = 'idx' in act ? act.idx : facingTileIdx(player, GRID_SIZE);
+              const ok = targetIdx !== null && onQueueActionRef.current(act, targetIdx);
               if (ok) {
-                if (act.type === 'water') {
-                  waterEffectsRef.current.push({ idx: act.idx, startedAt: now });
-                  player.waterCharges = Math.max(0, player.waterCharges - 1);
-                }
                 // First press: 30-frame delay before repeat; then 12-frame repeat
                 actionCooldownRef.current = actionCooldownRef.current === 0 ? 30 : 12;
               }
@@ -392,6 +440,57 @@ export function GameCanvas({
           actionCooldownRef.current = 0;
         }
         input.actionQueued = false;
+
+        if (
+          activeWork &&
+          !queuePausedRef.current &&
+          !manualMovement &&
+          now >= manualWorkResumeRef.current &&
+          completedWorkRef.current !== activeWork.id
+        ) {
+          const targetRow = Math.floor(activeWork.targetIdx / GRID_SIZE);
+          const targetCol = activeWork.targetIdx % GRID_SIZE;
+          const standingRow = Math.floor((player.y + 24) / TILE_PX);
+          const standingCol = Math.floor((player.x + 12) / TILE_PX);
+          const inWorkRange = Math.max(Math.abs(targetRow - standingRow), Math.abs(targetCol - standingCol)) <= 1;
+
+          if (!inWorkRange) {
+            workElapsedRef.current = 0;
+            workProgressRef.current = 0;
+            if (pathRef.current.length === 0) {
+              pathRef.current = findTilePath({
+                state: gs,
+                start: { row: standingRow, col: standingCol },
+                target: { row: targetRow, col: targetCol },
+                gridSize: GRID_SIZE,
+                stopAdjacent: true,
+              });
+              if (pathRef.current.length === 0) {
+                completedWorkRef.current = activeWork.id;
+                onWorkFailedRef.current(activeWork, 'No clear route to this tile.');
+              }
+            }
+          } else {
+            pathRef.current.length = 0;
+            player.isMoving = false;
+            const rowDelta = targetRow - standingRow;
+            const colDelta = targetCol - standingCol;
+            if (Math.abs(colDelta) >= Math.abs(rowDelta) && colDelta !== 0) player.facing = colDelta > 0 ? 'right' : 'left';
+            else if (rowDelta !== 0) player.facing = rowDelta > 0 ? 'down' : 'up';
+
+            workElapsedRef.current += SIM_DT * 1000;
+            workProgressRef.current = Math.min(1, workElapsedRef.current / activeWork.durationMs);
+            if (now - workProgressNotifyRef.current >= 100) {
+              workProgressNotifyRef.current = now;
+              onWorkProgressRef.current(activeWork.id, workProgressRef.current);
+            }
+            if (workProgressRef.current >= 1) {
+              completedWorkRef.current = activeWork.id;
+              onWorkProgressRef.current(activeWork.id, 1);
+              onWorkCompleteRef.current(activeWork);
+            }
+          }
+        }
       }
 
       // Camera follow
@@ -437,6 +536,11 @@ export function GameCanvas({
           })),
           showIrrigation: activeToolRef.current === 'builder',
           buildTool: buildToolRef.current,
+          queuedTargets: queuedTargetsRef.current,
+          activeWork: workOrderRef.current ? {
+            idx: workOrderRef.current.targetIdx,
+            progress: workProgressRef.current,
+          } : null,
         });
       }
     };
@@ -519,8 +623,8 @@ export function GameCanvas({
   }, []);
 
   useEffect(() => {
-    if (selectedIdx === null) pathRef.current.length = 0;
-  }, [selectedIdx]);
+    if (selectedIdx === null && !workOrder) pathRef.current.length = 0;
+  }, [selectedIdx, workOrder]);
 
   const selectWorldPoint = useCallback((clientX: number, clientY: number) => {
     const canvas = canvasRef.current;
@@ -548,6 +652,11 @@ export function GameCanvas({
     if (landmarkIdx !== null) {
       row = Math.floor(landmarkIdx / GRID_SIZE);
       col = landmarkIdx % GRID_SIZE;
+    }
+
+    if (selectionModeRef.current) {
+      onTileSelectRef.current(row * GRID_SIZE + col, { ...player }, { x: clientX, y: clientY });
+      return;
     }
 
     const startRow = Math.floor((player.y + 24) / TILE_PX);

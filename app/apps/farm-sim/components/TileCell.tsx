@@ -39,6 +39,7 @@ const KIND_BG: Record<TileKind, string> = {
   crate: 'bg-amber-700',
   path: 'bg-amber-200',
   brush: 'bg-green-800',
+  tree: 'bg-green-950',
   rock: 'bg-stone-500',
   marsh: 'bg-cyan-900',
   extractor: 'bg-stone-700',

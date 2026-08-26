@@ -11,14 +11,14 @@ export interface ParcelDef {
 }
 
 export const PARCELS: Record<ParcelId, ParcelDef> = {
-  north: { id: 'north', name: 'North Meadow', rows: [0, 14], cols: [14, 25], requires: [], terrain: 'brush' },
-  south: { id: 'south', name: 'South Flats', rows: [25, 39], cols: [14, 25], requires: [], terrain: 'marsh' },
-  west: { id: 'west', name: 'West Works', rows: [15, 24], cols: [0, 13], requires: [], terrain: 'mixed' },
-  east: { id: 'east', name: 'East Field', rows: [15, 24], cols: [26, 39], requires: [], terrain: 'mixed' },
-  northwest: { id: 'northwest', name: 'Northwest Copse', rows: [0, 14], cols: [0, 13], requires: ['north', 'west'], terrain: 'brush' },
-  northeast: { id: 'northeast', name: 'Northeast Shelf', rows: [0, 14], cols: [26, 39], requires: ['north', 'east'], terrain: 'rock' },
-  southwest: { id: 'southwest', name: 'Southwest Fen', rows: [25, 39], cols: [0, 13], requires: ['south', 'west'], terrain: 'marsh' },
-  southeast: { id: 'southeast', name: 'Southeast Reach', rows: [25, 39], cols: [26, 39], requires: ['south', 'east'], terrain: 'mixed' },
+  north: { id: 'north', name: 'North Meadow', rows: [0, 12], cols: [12, 27], requires: [], terrain: 'brush' },
+  south: { id: 'south', name: 'South Flats', rows: [27, 39], cols: [12, 27], requires: [], terrain: 'marsh' },
+  west: { id: 'west', name: 'West Works', rows: [13, 26], cols: [0, 11], requires: [], terrain: 'mixed' },
+  east: { id: 'east', name: 'East Field', rows: [13, 26], cols: [28, 39], requires: [], terrain: 'mixed' },
+  northwest: { id: 'northwest', name: 'Northwest Copse', rows: [0, 12], cols: [0, 11], requires: ['north', 'west'], terrain: 'brush' },
+  northeast: { id: 'northeast', name: 'Northeast Shelf', rows: [0, 12], cols: [28, 39], requires: ['north', 'east'], terrain: 'rock' },
+  southwest: { id: 'southwest', name: 'Southwest Fen', rows: [27, 39], cols: [0, 11], requires: ['south', 'west'], terrain: 'marsh' },
+  southeast: { id: 'southeast', name: 'Southeast Reach', rows: [27, 39], cols: [28, 39], requires: ['south', 'east'], terrain: 'mixed' },
 };
 
 export function parcelIndices(parcel: ParcelDef): number[] {

@@ -282,9 +282,9 @@ export function applyAction(state: GameState, action: PlayerAction): ActionResul
 
     case 'clearLand': {
       const t = state.tiles[action.idx];
-      if (t.kind !== 'brush') return fail(state, t.kind === 'rock' || t.kind === 'marsh' ? 'Mine this resource deposit before farming here.' : 'This tile does not need clearing.');
+      if (t.kind !== 'brush' && t.kind !== 'tree') return fail(state, t.kind === 'rock' || t.kind === 'marsh' ? 'Mine this resource deposit before farming here.' : 'This tile does not need clearing.');
       const s = cloneState(state);
-      s.resources.wood += 4;
+      s.resources.wood += t.kind === 'tree' ? 8 : 4;
       s.tiles[action.idx] = { ...t, kind: 'grass', moisture: 0, crop: null };
       return { ok: true, state: s };
     }
@@ -862,6 +862,7 @@ export function validActions(state: GameState, idx: number): PlayerAction['type'
       out.push('demolish');
       break;
     case 'brush':
+    case 'tree':
       out.push('clearLand');
       break;
     case 'rock':
