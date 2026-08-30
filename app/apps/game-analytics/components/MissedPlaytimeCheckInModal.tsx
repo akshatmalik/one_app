@@ -224,62 +224,58 @@ export function MissedPlaytimeCheckInModal({ games, dates, userId, onSave, onPos
   };
 
   return (
-    <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/85 p-3 backdrop-blur-md sm:p-6">
-      <div className="flex max-h-[94vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl border border-white/10 bg-[#111119] shadow-2xl shadow-indigo-950/40">
-        <div className="border-b border-white/5 px-5 py-4 sm:px-7">
+    <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
+      <div className="flex max-h-[90vh] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#12121a] shadow-2xl">
+        <div className="border-b border-white/5 p-4 sm:p-5">
           <div className="flex items-start justify-between gap-4">
             <div className="flex items-start gap-3">
-              <div className="mt-0.5 rounded-xl bg-indigo-500/15 p-2.5 text-indigo-300">
-                <Sparkles size={20} />
+              <div className="mt-0.5 rounded-lg bg-purple-500/15 p-2 text-purple-400">
+                <Gamepad2 size={19} />
               </div>
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-indigo-300/70">
-                  Gaming catch-up
-                </p>
-                <h2 className="mt-1 text-xl font-semibold text-white">
-                  {isReview ? 'Review your missing days' : 'Welcome back — what did you play?'}
+                <h2 className="text-lg font-semibold text-white">
+                  {isReview ? 'Review play time' : 'Catch up your play time'}
                 </h2>
-                <p className="mt-1 text-sm text-white/40">
+                <p className="mt-0.5 text-xs text-white/40">
                   {isReview
                     ? 'Nothing is saved until you confirm below.'
-                    : `${formatDate(current!.date)} · Day ${step + 1} of ${dates.length}`}
+                    : `${formatDate(current!.date)} · ${step + 1} of ${dates.length}`}
                 </p>
               </div>
             </div>
             <button
               type="button"
               onClick={onPostpone}
-              className="rounded-lg p-2 text-white/30 transition-colors hover:bg-white/5 hover:text-white/70"
+              className="rounded-lg p-1.5 text-white/40 transition-all hover:bg-white/5 hover:text-white/70"
               aria-label="Not now"
               title="Not now"
             >
-              <X size={19} />
+              <X size={20} />
             </button>
           </div>
-          <div className="mt-4 flex gap-1.5">
+          <div className="mt-4 flex gap-1">
             {dates.map((date, index) => (
               <div
                 key={date}
                 className={clsx(
-                  'h-1.5 flex-1 rounded-full transition-colors',
-                  index < step ? 'bg-indigo-400' : index === step && !isReview ? 'bg-indigo-400/60' : 'bg-white/10',
+                  'h-1 flex-1 rounded-full transition-colors',
+                  index < step ? 'bg-purple-500' : index === step && !isReview ? 'bg-purple-500/60' : 'bg-white/10',
                 )}
               />
             ))}
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-5 py-5 sm:px-7">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-5">
           {isReview ? (
             <ReviewStep drafts={drafts} games={games} />
           ) : (
-            <div className="space-y-5">
-              <>
+            <div className="space-y-4">
                   {current!.sessions.length === 0 && suggestions.length > 0 && (
                     <section>
                       <div className="mb-2.5 flex items-center gap-2">
-                        <Gamepad2 size={15} className="text-indigo-300" />
-                        <h3 className="text-sm font-medium text-white">You were playing</h3>
+                        <Gamepad2 size={15} className="text-purple-400" />
+                        <h3 className="text-xs font-medium text-white/50">What did you play?</h3>
                       </div>
                       <div className="grid gap-2 sm:grid-cols-2">
                         {suggestions.map(suggestion => (
@@ -287,7 +283,7 @@ export function MissedPlaytimeCheckInModal({ games, dates, userId, onSave, onPos
                             key={suggestion.game.id}
                             type="button"
                             onClick={() => addTrackedSession(suggestion.game.id, suggestion.averageSessionHours)}
-                            className="flex items-center gap-3 rounded-xl border border-white/8 bg-white/[0.025] p-3 text-left transition-all hover:border-indigo-400/30 hover:bg-indigo-500/[0.08]"
+                            className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-3 text-left transition-all hover:border-purple-500/40 hover:bg-purple-500/10"
                           >
                             {suggestion.game.thumbnail ? (
                               <div
@@ -303,7 +299,7 @@ export function MissedPlaytimeCheckInModal({ games, dates, userId, onSave, onPos
                               <p className="truncate text-sm font-medium text-white/85">{suggestion.game.name}</p>
                               <p className="mt-0.5 truncate text-[11px] text-white/35">{suggestion.context}</p>
                             </div>
-                            <Plus size={15} className="shrink-0 text-indigo-300" />
+                            <Plus size={15} className="shrink-0 text-purple-400" />
                           </button>
                         ))}
                       </div>
@@ -312,7 +308,7 @@ export function MissedPlaytimeCheckInModal({ games, dates, userId, onSave, onPos
 
                   {current!.sessions.length > 0 && (
                     <section className="space-y-3">
-                      <h3 className="text-sm font-medium text-white">Sessions to add</h3>
+                      <h3 className="text-xs font-medium text-white/50">Sessions to add</h3>
                       {current!.sessions.map(session => (
                         <SessionEditor
                           key={session.id}
@@ -326,24 +322,24 @@ export function MissedPlaytimeCheckInModal({ games, dates, userId, onSave, onPos
                   )}
 
                   <section className="grid gap-2 sm:grid-cols-2">
-                    <button type="button" onClick={() => { setSearchOpen(value => !value); setNewGameOpen(false); }} className="flex items-center justify-center gap-2 rounded-xl border border-white/8 bg-white/[0.025] px-3 py-3 text-xs font-medium text-white/60 hover:bg-white/5 hover:text-white">
+                    <button type="button" onClick={() => { setSearchOpen(value => !value); setNewGameOpen(false); }} className="flex items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2.5 text-xs font-medium text-white/60 transition-all hover:bg-white/[0.06] hover:text-white">
                       <Library size={15} /> Something else
                     </button>
-                    <button type="button" onClick={() => { setNewGameOpen(value => !value); setSearchOpen(false); }} className="flex items-center justify-center gap-2 rounded-xl border border-indigo-400/15 bg-indigo-500/[0.06] px-3 py-3 text-xs font-medium text-indigo-300 hover:bg-indigo-500/10">
+                    <button type="button" onClick={() => { setNewGameOpen(value => !value); setSearchOpen(false); }} className="flex items-center justify-center gap-2 rounded-lg border border-purple-500/20 bg-purple-500/10 px-3 py-2.5 text-xs font-medium text-purple-400 transition-all hover:bg-purple-500/20">
                       <Sparkles size={15} /> Started something new
                     </button>
                   </section>
 
                   {searchOpen && (
-                    <section className="rounded-2xl border border-white/10 bg-black/20 p-3">
+                    <section className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
                       <div className="relative">
                         <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/25" />
-                        <input autoFocus value={search} onChange={event => setSearch(event.target.value)} placeholder="Search your library" className="w-full rounded-xl border border-white/10 bg-white/[0.04] py-2.5 pl-9 pr-3 text-sm text-white outline-none placeholder:text-white/25 focus:border-indigo-400/40" />
+                        <input autoFocus value={search} onChange={event => setSearch(event.target.value)} placeholder="Search your library" className="w-full rounded-lg border border-white/10 bg-white/[0.03] py-2.5 pl-9 pr-3 text-sm text-white outline-none transition-all placeholder:text-white/25 focus:border-purple-500/50 focus:bg-white/[0.05]" />
                       </div>
                       <div className="mt-2 max-h-44 space-y-1 overflow-y-auto">
                         {filteredGames.map(game => (
                           <button key={game.id} type="button" onClick={() => addTrackedSession(game.id)} className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm text-white/65 hover:bg-white/5 hover:text-white">
-                            <span className="truncate">{game.name}</span><Plus size={14} className="text-indigo-300" />
+                            <span className="truncate">{game.name}</span><Plus size={14} className="text-purple-400" />
                           </button>
                         ))}
                         {filteredGames.length === 0 && <p className="px-3 py-3 text-center text-xs text-white/30">No matching library game.</p>}
@@ -352,37 +348,36 @@ export function MissedPlaytimeCheckInModal({ games, dates, userId, onSave, onPos
                   )}
 
                   {newGameOpen && (
-                    <section className="rounded-2xl border border-indigo-400/20 bg-indigo-500/[0.05] p-4">
+                    <section className="rounded-xl border border-purple-500/20 bg-purple-500/[0.06] p-4">
                       <p className="text-sm font-medium text-white">Add the game and this session</p>
                       <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_160px_auto]">
-                        <input autoFocus value={newGameName} onChange={event => setNewGameName(event.target.value)} placeholder="Game name" className="rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-sm text-white outline-none placeholder:text-white/25 focus:border-indigo-400/40" />
-                        <input value={newGamePlatform} onChange={event => setNewGamePlatform(event.target.value)} placeholder="Platform (optional)" className="rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-sm text-white outline-none placeholder:text-white/25 focus:border-indigo-400/40" />
-                        <button type="button" disabled={!newGameName.trim()} onClick={addNewGameSession} className="rounded-xl bg-indigo-500 px-4 py-2.5 text-sm font-medium text-white hover:bg-indigo-400 disabled:cursor-not-allowed disabled:opacity-40">Add</button>
+                        <input autoFocus value={newGameName} onChange={event => setNewGameName(event.target.value)} placeholder="Game name" className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2.5 text-sm text-white outline-none transition-all placeholder:text-white/25 focus:border-purple-500/50 focus:bg-white/[0.05]" />
+                        <input value={newGamePlatform} onChange={event => setNewGamePlatform(event.target.value)} placeholder="Platform (optional)" className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2.5 text-sm text-white outline-none transition-all placeholder:text-white/25 focus:border-purple-500/50 focus:bg-white/[0.05]" />
+                        <button type="button" disabled={!newGameName.trim()} onClick={addNewGameSession} className="rounded-lg bg-purple-600 px-4 py-2.5 text-sm font-medium text-white transition-all hover:bg-purple-500 disabled:cursor-not-allowed disabled:opacity-40">Add</button>
                       </div>
                       <p className="mt-2 text-[11px] text-white/30">It will be marked In Progress. You can add price, genre, and artwork later.</p>
                     </section>
                   )}
-              </>
             </div>
           )}
         </div>
 
-        <div className="border-t border-white/5 bg-black/10 px-5 py-4 sm:px-7">
+        <div className="border-t border-white/5 bg-white/[0.01] p-4 sm:px-5">
           {error && <p className="mb-3 rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-300">{error}</p>}
           <div className="flex items-center justify-between gap-3">
             <button
               type="button"
               onClick={() => step === 0 ? onPostpone() : setStep(value => value - 1)}
-              className="flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium text-white/45 hover:bg-white/5 hover:text-white/75"
+              className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium text-white/50 transition-all hover:bg-white/5 hover:text-white/75"
             >
               {step === 0 ? 'Not now' : <><ArrowLeft size={15} /> Back</>}
             </button>
             {isReview ? (
-              <button type="button" disabled={saving} onClick={handleSave} className="flex items-center gap-2 rounded-xl bg-indigo-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-400 disabled:cursor-wait disabled:opacity-60">
+              <button type="button" disabled={saving} onClick={handleSave} className="flex items-center gap-2 rounded-lg bg-purple-600 px-5 py-2.5 text-sm font-medium text-white transition-all hover:bg-purple-500 disabled:cursor-wait disabled:opacity-60">
                 <Check size={16} /> {saving ? 'Saving…' : `Save ${dates.length} day${dates.length === 1 ? '' : 's'}`}
               </button>
             ) : (
-              <button type="button" disabled={!currentValid} onClick={goNext} className="flex items-center gap-2 rounded-xl bg-indigo-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-400 disabled:cursor-not-allowed disabled:opacity-35">
+              <button type="button" disabled={!currentValid} onClick={goNext} className="flex items-center gap-2 rounded-lg bg-purple-600 px-5 py-2.5 text-sm font-medium text-white transition-all hover:bg-purple-500 disabled:cursor-not-allowed disabled:opacity-35">
                 {step === dates.length - 1 ? 'Review' : 'Next day'} <ArrowRight size={16} />
               </button>
             )}
@@ -401,26 +396,26 @@ function SessionEditor({ session, game, onChange, onRemove }: {
 }) {
   const label = game?.name ?? session.newGameName ?? 'New game';
   return (
-    <div className="rounded-2xl border border-white/8 bg-white/[0.025] p-4">
+    <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
           <p className="truncate text-sm font-medium text-white/85">{label}</p>
-          {session.newGameName && <p className="mt-0.5 text-[11px] text-indigo-300/60">New game · {session.newGamePlatform || 'Platform not set'}</p>}
+          {session.newGameName && <p className="mt-0.5 text-[11px] text-purple-400/70">New game · {session.newGamePlatform || 'Platform not set'}</p>}
         </div>
         <button type="button" onClick={onRemove} className="rounded-lg p-1.5 text-white/25 hover:bg-red-500/10 hover:text-red-300" aria-label={`Remove ${label}`}><Trash2 size={15} /></button>
       </div>
       <div className="mt-3 flex flex-wrap items-center gap-2">
         {[0.5, 1, 2, 3].map(value => (
-          <button key={value} type="button" onClick={() => onChange({ hours: String(value) })} className={clsx('rounded-lg border px-2.5 py-1.5 text-xs font-medium', Number(session.hours) === value ? 'border-indigo-400/40 bg-indigo-500/15 text-indigo-300' : 'border-white/8 bg-white/[0.02] text-white/40 hover:text-white/70')}>
+          <button key={value} type="button" onClick={() => onChange({ hours: String(value) })} className={clsx('rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-all', Number(session.hours) === value ? 'border-purple-500/30 bg-purple-500/15 text-purple-400' : 'border-white/10 bg-white/[0.02] text-white/40 hover:bg-white/5 hover:text-white/70')}>
             {value === 0.5 ? '30m' : `${value}h`}
           </button>
         ))}
         <label className="ml-auto flex items-center gap-2 text-xs text-white/35">
           Custom
-          <input type="number" min="0.1" step="0.1" value={session.hours} onChange={event => onChange({ hours: event.target.value })} className="w-20 rounded-lg border border-white/10 bg-black/20 px-2 py-1.5 text-right text-sm text-white outline-none focus:border-indigo-400/40" />
+          <input type="number" min="0.1" step="0.1" value={session.hours} onChange={event => onChange({ hours: event.target.value })} className="w-20 rounded-lg border border-white/10 bg-white/[0.03] px-2 py-1.5 text-right text-sm text-white outline-none focus:border-purple-500/50" />
         </label>
       </div>
-      <input value={session.notes} onChange={event => onChange({ notes: event.target.value })} placeholder="Session note (optional)" className="mt-3 w-full rounded-lg border border-white/8 bg-black/15 px-3 py-2 text-xs text-white/70 outline-none placeholder:text-white/20 focus:border-indigo-400/30" />
+      <input value={session.notes} onChange={event => onChange({ notes: event.target.value })} placeholder="Session note (optional)" className="mt-3 w-full rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-white/70 outline-none placeholder:text-white/20 focus:border-purple-500/50" />
     </div>
   );
 }
@@ -434,7 +429,7 @@ function ReviewStep({ drafts, games }: {
       {drafts.map(day => {
         const additions = day.sessions.reduce((sum, session) => sum + Number(session.hours || 0), 0);
         return (
-          <div key={day.date} className="rounded-2xl border border-white/8 bg-white/[0.025] p-4">
+          <div key={day.date} className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="text-sm font-medium text-white">{formatDate(day.date)}</p>
@@ -442,7 +437,7 @@ function ReviewStep({ drafts, games }: {
                   {day.sessions.length} new session{day.sessions.length === 1 ? '' : 's'}
                 </p>
               </div>
-              <span className="rounded-lg bg-indigo-500/15 px-2.5 py-1 text-xs font-semibold text-indigo-300">
+              <span className="rounded-lg bg-purple-500/15 px-2.5 py-1 text-xs font-semibold text-purple-400">
                 +{formatHours(additions)}
               </span>
             </div>
