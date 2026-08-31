@@ -26,10 +26,11 @@ interface PlayerProfileViewProps {
   summary: AnalyticsSummary;
   preferredEcosystem: 'PlayStation' | 'Multi-platform';
   onOpenStory: () => void;
+  onOpenRankings: () => void;
   deepStats: ReactNode;
 }
 
-export function PlayerProfileView({ games, summary, preferredEcosystem, onOpenStory, deepStats }: PlayerProfileViewProps) {
+export function PlayerProfileView({ games, summary, preferredEcosystem, onOpenStory, onOpenRankings, deepStats }: PlayerProfileViewProps) {
   const [showDeepStats, setShowDeepStats] = useState(false);
   const profile = useMemo(() => {
     const owned = games.filter(game => game.status !== 'Wishlist');
@@ -131,6 +132,15 @@ export function PlayerProfileView({ games, summary, preferredEcosystem, onOpenSt
           <ProfileStat value={String(profile.yearDays)} label="play days" muted />
         </div>
       </section>
+
+      <button onClick={onOpenRankings} className="flex min-h-16 w-full items-center gap-4 rounded-3xl border border-amber-300/15 bg-gradient-to-r from-amber-500/[0.09] to-purple-500/[0.06] px-5 text-left">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-amber-400/10 text-amber-300"><Trophy size={18} /></span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-semibold text-white/85">Open your ELO rankings</span>
+          <span className="mt-0.5 block text-xs text-white/40">Head-to-head battles, tiers, and your all-time game order</span>
+        </span>
+        <ArrowRight size={16} className="shrink-0 text-white/25" />
+      </button>
 
       <section>
         <div className="mb-3">

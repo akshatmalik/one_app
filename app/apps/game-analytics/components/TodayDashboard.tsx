@@ -4,7 +4,6 @@ import { useMemo } from 'react';
 import {
   ArrowRight,
   BarChart3,
-  Bell,
   BookOpen,
   CalendarDays,
   Clock3,
@@ -19,8 +18,6 @@ import {
 } from 'lucide-react';
 import { Game } from '../lib/types';
 import {
-  ALERT_SEVERITY_ORDER,
-  GameAlert,
   ReplayCandidate,
   WishlistAffordabilityItem,
   getTotalHours,
@@ -37,8 +34,6 @@ interface TodayDashboardProps {
   userId: string;
   replayCandidate?: ReplayCandidate;
   wishlistNextAffordable?: WishlistAffordabilityItem;
-  alerts: GameAlert[];
-  onAlertAction: (alert: GameAlert) => void;
   onPlayTonight: () => void;
   onOpenGame: (game: Game) => void;
   onLogTime: (game: Game) => void;
@@ -77,8 +72,6 @@ export function TodayDashboard({
   userId,
   replayCandidate,
   wishlistNextAffordable,
-  alerts,
-  onAlertAction,
   onPlayTonight,
   onOpenGame,
   onLogTime,
@@ -120,11 +113,6 @@ export function TodayDashboard({
     const top = [...perGame.values()].sort((a, b) => b.hours - a.hours)[0];
     return { hours, days, sessions: logs.length, top };
   }, [games]);
-
-  const topAlert = useMemo(() => {
-    if (alerts.length === 0) return undefined;
-    return [...alerts].sort((a, b) => ALERT_SEVERITY_ORDER[a.severity] - ALERT_SEVERITY_ORDER[b.severity])[0];
-  }, [alerts]);
 
   const nextRelease = useMemo(() => games
     .filter(game => game.status === 'Wishlist' && game.releaseDate && parseLocalDate(game.releaseDate).getTime() >= Date.now())
@@ -249,17 +237,6 @@ export function TodayDashboard({
           )}
         </div>
       </section>
-
-      {topAlert && (
-        <button onClick={() => onAlertAction(topAlert)} className="flex w-full items-center gap-3 rounded-2xl border border-amber-400/15 bg-amber-400/[0.06] p-4 text-left">
-          <Bell size={16} className="shrink-0 text-amber-300" />
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold text-white/80">{topAlert.title}</p>
-            <p className="mt-0.5 truncate text-xs text-white/40">{topAlert.message}</p>
-          </div>
-          <ArrowRight size={15} className="shrink-0 text-white/30" />
-        </button>
-      )}
 
       {dueCapsules && dueCapsules.length > 0 && onOpenTimeCapsule && (
         <button onClick={onOpenTimeCapsule} className="flex w-full items-center gap-3 rounded-2xl border border-violet-400/20 bg-violet-500/[0.08] p-4 text-left">

@@ -12,7 +12,6 @@ import { useGameColors } from './hooks/useGameColors';
 import { useGameQuips } from './hooks/useGameQuips';
 import { useLiveSession } from './hooks/useLiveSession';
 import { useGoals } from './hooks/useGoals';
-import { useAlerts } from './hooks/useAlerts';
 import { GameForm } from './components/GameForm';
 import { PlayLogModal } from './components/PlayLogModal';
 import { TimelineView } from './components/TimelineView';
@@ -35,7 +34,7 @@ import { purchaseQueueRepository } from './lib/purchase-queue-storage';
 import { recommendationRepository } from './lib/recommendation-storage';
 import { useAuthContext } from '@/lib/AuthContext';
 import { useToast } from '@/components/Toast';
-import { getROIRating, getWeekStatsForOffset, getGamesPlayedInTimeRange, getCompletionProbability, getGameHealthDot, getRelativeTime, getDaysContext, getSessionMomentum, getValueTrajectory, getGameSmartOneLiner, getFranchiseInfo, getProgressPercent, getShelfLife, parseLocalDate, getCardRarity, getRelationshipStatus, getGameStreak, getHeroNumber, getCardFreshness, getGameSections, getCardBackData, getContextualWhisper, getLibraryRank, getCardMoodPulse, getProgressRingData, getStatPopoverData, getWeekRecapData, getSmartNudges, getGamingCreditScore, getRotationStats, getSpendingForecast, getSpendingByMonth, getShelfLifeExpiry, formatRating, getRatingRank, getYearInReviewFullData, getBacklogTriageCandidates, GameAlert, getReplayCandidates, getWishlistAffordabilityPlan } from './lib/calculations';
+import { getROIRating, getWeekStatsForOffset, getGamesPlayedInTimeRange, getCompletionProbability, getGameHealthDot, getRelativeTime, getDaysContext, getSessionMomentum, getValueTrajectory, getGameSmartOneLiner, getFranchiseInfo, getProgressPercent, getShelfLife, parseLocalDate, getCardRarity, getRelationshipStatus, getGameStreak, getHeroNumber, getCardFreshness, getGameSections, getCardBackData, getContextualWhisper, getLibraryRank, getCardMoodPulse, getProgressRingData, getStatPopoverData, getWeekRecapData, getSmartNudges, getGamingCreditScore, getRotationStats, getSpendingForecast, getSpendingByMonth, getShelfLifeExpiry, formatRating, getRatingRank, getYearInReviewFullData, getBacklogTriageCandidates, getReplayCandidates, getWishlistAffordabilityPlan } from './lib/calculations';
 import { TodayDashboard } from './components/TodayDashboard';
 import { ActivityPulse } from './components/ActivityPulse';
 import { RandomPicker } from './components/RandomPicker';
@@ -79,7 +78,6 @@ import { useGenreLevelUps } from './hooks/useGenreLevelUps';
 import { GenreLevelUpToast } from './components/GenreLevelUpToast';
 import { ErrorLogPanel, ErrorLogButton } from './components/ErrorLogPanel';
 import { WhatsNewModal } from './components/WhatsNewModal';
-import { AlertsCenter } from './components/AlertsCenter';
 import { GameReviewChat } from './components/GameReviewChat';
 import { GameCompareModal } from './components/GameCompareModal';
 import { PlayTonightModal } from './components/PlayTonightModal';
@@ -205,24 +203,7 @@ export default function GameAnalyticsPage() {
   const { quips: gameQuips } = useGameQuips(games, user?.uid ?? null);
   const liveSession = useLiveSession();
   const { goals } = useGoals(user?.uid ?? null);
-  const alertsLiveSession = useMemo(
-    () => liveSession.activeSession
-      ? { gameId: liveSession.activeSession.gameId, gameName: liveSession.activeSession.gameName, elapsedMs: liveSession.elapsedMs }
-      : null,
-    [liveSession.activeSession, liveSession.elapsedMs]
-  );
   const { allTrophies, summary: trophySummary, pinnedTrophies, pinnedIds: pinnedTrophyIds, togglePin: toggleTrophyPin, toastQueue: trophyToastQueue, dismissToast: dismissTrophyToast } = useTrophies(games, user?.uid ?? null);
-  const {
-    alerts,
-    criticalCount: alertsCriticalCount,
-    warningCount: alertsWarningCount,
-    permission: alertsPermission,
-    requestPermission: requestAlertsPermission,
-    dismissAlert,
-    snoozeAlert,
-    mutedCategories: alertsMutedCategories,
-    toggleCategoryMute: toggleAlertCategoryMute,
-  } = useAlerts(games, budgets, goals, user?.uid ?? null, alertsLiveSession, purchaseQueueEntries, allTrophies);
   const { rankings: allTimeRankings } = useRankings(user?.uid ?? null, 'all', 'all');
   const { toastQueue: genreToastQueue, dismissToast: dismissGenreToast } = useGenreLevelUps(games, user?.uid ?? null);
   const { assignments: allTimeTiers } = useTierAssignments(user?.uid ?? null, 'all');
@@ -565,29 +546,6 @@ export default function GameAnalyticsPage() {
   const handleOpenPlayLog = (game: GameWithMetrics, date?: string) => {
     setPlayLogGame(game);
     setPlayLogDefaultDate(date);
-  };
-
-  const handleAlertAction = (alert: GameAlert) => {
-    if (alert.category === 'budget' || alert.category === 'goal') {
-      setTabMode('stats');
-      return;
-    }
-    if (alert.category === 'queue') {
-      setTabMode('up-next');
-      return;
-    }
-    if (alert.category === 'price') {
-      setTabMode('buy-queue');
-      return;
-    }
-    if (alert.category === 'milestone') {
-      setTabMode('stats');
-      return;
-    }
-    if (alert.gameId) {
-      const game = gamesWithMetrics.find(g => g.id === alert.gameId);
-      if (game) setDetailGame(game);
-    }
   };
 
   const handleSavePlayLogs = async (playLogs: PlayLog[]) => {
@@ -1129,20 +1087,6 @@ export default function GameAnalyticsPage() {
                 )}
               </div>
               <div className="hidden sm:block"><ErrorLogButton onClick={() => setShowErrorLog(true)} /></div>
-              {games.length > 0 && (
-                <AlertsCenter
-                  alerts={alerts}
-                  criticalCount={alertsCriticalCount}
-                  warningCount={alertsWarningCount}
-                  permission={alertsPermission}
-                  onRequestPermission={requestAlertsPermission}
-                  onDismiss={dismissAlert}
-                  onSnooze={snoozeAlert}
-                  onAction={handleAlertAction}
-                  mutedCategories={alertsMutedCategories}
-                  onToggleCategoryMute={toggleAlertCategoryMute}
-                />
-              )}
               <button
                 onClick={() => setShowWhatsNew(true)}
                 className="hidden items-center gap-1.5 rounded-lg bg-white/5 px-2.5 py-2 text-sm text-white/60 transition-all hover:text-white/80 sm:flex"
@@ -1493,8 +1437,6 @@ export default function GameAnalyticsPage() {
                 userId={user?.uid ?? 'local-user'}
                 replayCandidate={topReplayCandidate}
                 wishlistNextAffordable={wishlistNextAffordable}
-                alerts={alerts}
-                onAlertAction={handleAlertAction}
                 onPlayTonight={() => setShowPlayTonight(true)}
                 onOpenGame={(game) => {
                   const gameWithMetrics = gamesWithMetrics.find(item => item.id === game.id);
@@ -1663,11 +1605,12 @@ export default function GameAnalyticsPage() {
               </div>
             )}
 
-            {(['timeline', 'stats', 'ai-coach'] as TabMode[]).includes(tabMode) && (
-              <div className="grid grid-cols-3 gap-2 sm:hidden">
+            {(['timeline', 'stats', 'leaderboard', 'ai-coach'] as TabMode[]).includes(tabMode) && (
+              <div className="grid grid-cols-4 gap-2 sm:hidden">
                 {([
                   { id: 'timeline' as TabMode, label: 'Story' },
-                  { id: 'stats' as TabMode, label: 'Player profile' },
+                  { id: 'stats' as TabMode, label: 'Profile' },
+                  { id: 'leaderboard' as TabMode, label: 'ELO ranks' },
                   { id: 'ai-coach' as TabMode, label: 'Coach' },
                 ]).map(item => (
                   <button
@@ -1952,6 +1895,7 @@ export default function GameAnalyticsPage() {
               summary={summary}
               preferredEcosystem={preferences.ecosystem}
               onOpenStory={() => setTabMode('timeline')}
+              onOpenRankings={() => setTabMode('leaderboard')}
               deepStats={(
                 <StatsView
                   games={gamesWithMetrics}
@@ -2150,7 +2094,7 @@ export default function GameAnalyticsPage() {
             { id: 'today' as TabMode, label: 'Today', icon: <Home size={17} />, active: tabMode === 'today' },
             { id: 'games' as TabMode, label: 'Library', icon: <List size={17} />, active: tabMode === 'games' },
             { id: 'up-next' as TabMode, label: 'Plan', icon: <Compass size={17} />, active: ['up-next', 'discover', 'release-radar', 'buy-queue', 'estimator'].includes(tabMode) },
-            { id: 'timeline' as TabMode, label: 'Chronicle', icon: <Calendar size={17} />, active: tabMode === 'timeline' },
+            { id: 'timeline' as TabMode, label: 'Chronicle', icon: <Calendar size={17} />, active: ['timeline', 'stats', 'leaderboard', 'ai-coach'].includes(tabMode) },
           ]).map(item => (
             <button key={item.id} onClick={() => setTabMode(item.id)} className={clsx('flex min-h-12 flex-col items-center justify-center gap-0.5 rounded-xl text-[9px] font-semibold transition-colors', item.active ? 'bg-purple-500/15 text-purple-200' : 'text-white/35')}>
               {item.icon}<span>{item.label}</span>
