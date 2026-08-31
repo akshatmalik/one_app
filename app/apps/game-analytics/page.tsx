@@ -26,7 +26,9 @@ import { useRankings } from './hooks/useRankings';
 import { rankingRepository } from './lib/ranking-storage';
 import { BASELINE_GAMES_2025 } from './data/baseline-games';
 import { BASELINE_BUY_QUEUE } from './data/baseline-buy-queue';
+import { getBaselineReleaseRadar } from './data/baseline-release-radar';
 import { purchaseQueueRepository } from './lib/purchase-queue-storage';
+import { recommendationRepository } from './lib/recommendation-storage';
 import { useAuthContext } from '@/lib/AuthContext';
 import { useToast } from '@/components/Toast';
 import { getROIRating, getWeekStatsForOffset, getGamesPlayedInTimeRange, getCompletionProbability, getGameHealthDot, getRelativeTime, getDaysContext, getSessionMomentum, getValueTrajectory, getGameSmartOneLiner, getFranchiseInfo, getProgressPercent, getShelfLife, parseLocalDate, getCardRarity, getRelationshipStatus, getGameStreak, getHeroNumber, getCardFreshness, getGameSections, getCardBackData, getContextualWhisper, getLibraryRank, getCardMoodPulse, getProgressRingData, getStatPopoverData, getWeekRecapData, getSmartNudges, getGamingCreditScore, getRotationStats, getSpendingForecast, getSpendingByMonth, getShelfLifeExpiry, formatRating, getRatingRank, getYearInReviewFullData, getBacklogTriageCandidates, GameAlert, getReplayCandidates, getWishlistAffordabilityPlan } from './lib/calculations';
@@ -733,6 +735,13 @@ export default function GameAnalyticsPage() {
         await purchaseQueueRepository.create(entry);
       }
 
+      // Seed both sides of Release Radar so My Radar and AI Picks are testable
+      // immediately without spending an API or AI request.
+      recommendationRepository.setUserId(user?.uid || 'local-user');
+      for (const recommendation of getBaselineReleaseRadar()) {
+        await recommendationRepository.create(recommendation);
+      }
+
       // Give the current year a budget if one isn't set, so the "how many fit"
       // headline and budget ring are populated out of the box.
       const seedYear = new Date().getFullYear();
@@ -740,7 +749,7 @@ export default function GameAnalyticsPage() {
         await setBudget(seedYear, 300);
       }
 
-      showToast('Sample games + buy queue loaded', 'success');
+      showToast('Sample games, buy queue + release radar loaded', 'success');
       await refresh();
     } catch (e) {
       showToast(`Failed to seed data: ${(e as Error).message}`, 'error');

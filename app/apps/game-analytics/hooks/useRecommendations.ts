@@ -84,7 +84,9 @@ export function useRecommendations(userId: string | null, games: Game[]) {
     }
   }, []);
 
-  useEffect(() => { refresh(); }, [refresh, userId]);
+  // Re-read when an empty library is populated by the global sample loader;
+  // recommendations are seeded outside this hook in that flow.
+  useEffect(() => { refresh(); }, [refresh, userId, games.length]);
 
   // Derived lists — released recommendations.
   // Subscription drops (PS Plus) are owned by the PS Plus panel, not the

@@ -80,7 +80,7 @@ export interface Game {
   releaseDate?: string; // YYYY-MM-DD; undefined when the release is still TBA
   releaseDateStatus?: 'dated' | 'tba' | 'released' | 'delayed';
   releaseDateCheckedAt?: string;
-  releaseDateSource?: 'rawg' | 'manual';
+  releaseDateSource?: 'rawg' | 'manual' | 'sample';
   awards?: GameAward[]; // User-given awards across all tiers
   isSpecial?: boolean; // Exceptional games the user loved despite any flaws
   queuePosition?: number; // Position in "Up Next" queue (1 = next to play, 2 = after that, etc.)
@@ -218,7 +218,7 @@ export interface GameRecommendation {
   releaseDate?: string;
   rawgId?: number;
   releaseDateCheckedAt?: string;
-  releaseDateSource?: 'rawg' | 'grounded-search';
+  releaseDateSource?: 'rawg' | 'grounded-search' | 'sample';
   aiReason: string;           // "Why you'd love this" — personalized to user's library
   status: RecommendationStatus;
   isUpcoming?: boolean;       // true for unreleased/upcoming games

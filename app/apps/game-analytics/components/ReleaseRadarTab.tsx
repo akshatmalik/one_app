@@ -240,7 +240,7 @@ export function ReleaseRadarTab({ games, userId, onAddGame, onUpdateGame, onDele
       releaseDate: rec.releaseDate,
       releaseDateStatus: releaseStatus(rec.releaseDate),
       releaseDateCheckedAt: rec.releaseDateCheckedAt || new Date().toISOString(),
-      releaseDateSource: 'rawg',
+      releaseDateSource: rec.releaseDateSource === 'sample' ? 'sample' : 'rawg',
     });
     await markWishlisted(rec.id);
     onNotify?.(`${rec.gameName} added to Wishlist`, 'success');
