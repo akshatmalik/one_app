@@ -37,6 +37,7 @@ import { BulkWishlistModal } from './components/BulkWishlistModal';
 import { GameBottomSheet } from './components/GameBottomSheet';
 import { LiveSessionBar } from './components/LiveSessionBar';
 import { DiscoverTab } from './components/DiscoverTab';
+import { ReleaseRadarTab } from './components/ReleaseRadarTab';
 import { LeaderboardTab } from './components/LeaderboardTab';
 import { BuyQueueTab } from './components/BuyQueueTab';
 import { TimelineEstimatorTab } from './components/TimelineEstimatorTab';
@@ -86,7 +87,7 @@ import { CatchUpSessionInput, MissedDaySubmission, MissedPlaytimeCheckInModal } 
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist' | 'ps-plus';
-type TabMode = 'today' | 'games' | 'timeline' | 'stats' | 'ai-coach' | 'up-next' | 'discover' | 'leaderboard' | 'buy-queue' | 'estimator';
+type TabMode = 'today' | 'games' | 'timeline' | 'stats' | 'ai-coach' | 'up-next' | 'discover' | 'release-radar' | 'leaderboard' | 'buy-queue' | 'estimator';
 type CardViewMode = 'poster' | 'compact';
 
 function getValueColor(rating: string): string {
@@ -256,7 +257,7 @@ export default function GameAnalyticsPage() {
     // "Continue where you left off" — restore the last viewed tab.
     if (typeof window === 'undefined') return 'games';
     const saved = localStorage.getItem('ga-last-tab') as TabMode | null;
-    const valid: TabMode[] = ['today', 'games', 'timeline', 'stats', 'ai-coach', 'up-next', 'discover', 'leaderboard', 'buy-queue', 'estimator'];
+    const valid: TabMode[] = ['today', 'games', 'timeline', 'stats', 'ai-coach', 'up-next', 'discover', 'release-radar', 'leaderboard', 'buy-queue', 'estimator'];
     return saved && valid.includes(saved) ? saved : 'games';
   });
   useEffect(() => {
@@ -859,6 +860,7 @@ export default function GameAnalyticsPage() {
     { id: 'nav-ai-coach', label: 'AI Coach', subtitle: 'Chat about your gaming habits', group: 'Navigate', icon: <MessageCircle size={15} />, onRun: () => setTabMode('ai-coach') },
     { id: 'nav-up-next', label: 'Up Next', subtitle: 'Priority queue', group: 'Navigate', icon: <ListOrdered size={15} />, onRun: () => setTabMode('up-next') },
     { id: 'nav-discover', label: 'Discover', subtitle: 'Recommendations & PS Plus', group: 'Navigate', icon: <Compass size={15} />, onRun: () => setTabMode('discover') },
+    { id: 'nav-release-radar', label: 'Release Radar', subtitle: 'Upcoming games, dates, and AI picks', group: 'Navigate', icon: <Radar size={15} />, onRun: () => setTabMode('release-radar') },
     { id: 'nav-leaderboard', label: 'Ranks', subtitle: 'Leaderboards & rival check', group: 'Navigate', icon: <Trophy size={15} />, onRun: () => setTabMode('leaderboard') },
     { id: 'nav-buy-queue', label: 'Buy Queue', subtitle: 'Games you plan to buy', group: 'Navigate', icon: <ShoppingCart size={15} />, onRun: () => setTabMode('buy-queue') },
     { id: 'nav-estimator', label: 'Timeline Estimator', subtitle: 'Project when you’ll finish your backlog', group: 'Navigate', icon: <CalendarClock size={15} />, onRun: () => setTabMode('estimator') },
@@ -1438,9 +1440,9 @@ export default function GameAnalyticsPage() {
                 {([
                   { id: 'up-next',     icon: <ListOrdered size={16} />, title: 'Up Next' },
                   { id: 'discover',    icon: <Compass size={16} />,     title: 'Discover' },
+                  { id: 'release-radar', icon: <Radar size={16} />,    title: 'Release Radar' },
                   { id: 'leaderboard', icon: <Trophy size={16} />,      title: 'Ranks' },
                   { id: 'buy-queue',   icon: <ShoppingCart size={16} />, title: 'Buy Queue' },
-                  { id: 'estimator',   icon: <CalendarClock size={16} />, title: 'Timeline Estimator' },
                 ] as const).map((tab) => (
                   <button
                     key={tab.id}
@@ -1486,6 +1488,7 @@ export default function GameAnalyticsPage() {
                           { icon: <PiggyBank size={15} className="text-emerald-400" />, label: 'Wishlist Planner', onClick: () => setShowWishlistPlanner(true) },
                           { icon: <Radar size={15} className="text-emerald-400" />, label: 'Replay Radar', onClick: () => setShowReplayRadar(true) },
                           { icon: <CalendarPlus size={15} className="text-indigo-400" />, label: 'Calendar Sync', onClick: () => setShowCalendarSync(true) },
+                          { icon: <CalendarClock size={15} className="text-cyan-400" />, label: 'Timeline Estimator', onClick: () => setTabMode('estimator') },
                         ].map(item => (
                           <button key={item.label}
                             onClick={() => { item.onClick(); setShowMoreMenu(false); }}
@@ -1847,6 +1850,17 @@ export default function GameAnalyticsPage() {
               onAddToQueue={addToQueue}
               onUpdateGame={updateGame}
               focusPsPlusSignal={discoverFocusSignal}
+            />
+          )}
+
+          {tabMode === 'release-radar' && (
+            <ReleaseRadarTab
+              games={games}
+              userId={user?.uid ?? null}
+              onAddGame={addGame}
+              onUpdateGame={updateGame}
+              onDeleteGame={deleteGame}
+              onNotify={(message, type = 'success') => showToast(message, type)}
             />
           )}
 
