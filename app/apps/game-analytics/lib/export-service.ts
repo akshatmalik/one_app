@@ -6,7 +6,7 @@ import { getTotalHours, calculateMetrics } from './calculations';
  */
 export function exportAsCSV(games: Game[]): string {
   const headers = [
-    'Name', 'Status', 'Price', 'Total Hours', 'Rating',
+    'Name', 'Status', 'Price', 'Total Hours', 'Rating', 'Love',
     'Platform', 'Genre', 'Franchise', 'Purchase Source',
     'Date Purchased', 'Start Date', 'End Date',
     'Cost Per Hour', 'Value Rating', 'ROI', 'Blend Score',
@@ -24,6 +24,7 @@ export function exportAsCSV(games: Game[]): string {
       game.price.toFixed(2),
       totalHours.toFixed(1),
       game.rating.toString(),
+      game.loveLevel?.toString() || '',
       game.platform || '',
       game.genre || '',
       game.franchise || '',
@@ -66,6 +67,7 @@ export function exportAsJSON(games: Game[]): string {
       totalHours,
       baselineHours: game.hours,
       rating: game.rating,
+      loveLevel: game.loveLevel || null,
       platform: game.platform || null,
       genre: game.genre || null,
       franchise: game.franchise || null,

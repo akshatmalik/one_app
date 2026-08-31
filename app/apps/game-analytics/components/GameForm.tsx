@@ -7,6 +7,8 @@ import { Game, GameStatus, PurchaseSource, SubscriptionSource, BudgetSettings } 
 import { calculateCostPerHour, getValueRating, formatRating, getTotalHours, getBudgetImpactPreview } from '../lib/calculations';
 import { lookupGameLength } from '../lib/ai-timeline-service';
 import { AIReviewInterview } from './AIReviewInterview';
+import { LovePicker } from './LovePicker';
+import { getEffectiveLoveLevel } from '../lib/love';
 import clsx from 'clsx';
 
 interface GameFormProps {
@@ -128,7 +130,7 @@ export function GameForm({ onSubmit, onClose, initialGame, allGames = [], existi
     startDate: initialGame?.startDate || '',
     endDate: initialGame?.endDate || '',
     playLogs: initialGame?.playLogs || [],
-    isSpecial: initialGame?.isSpecial || false,
+    loveLevel: initialGame ? getEffectiveLoveLevel(initialGame) : undefined,
   });
 
   // RAWG name autocomplete
@@ -246,7 +248,10 @@ export function GameForm({ onSubmit, onClose, initialGame, allGames = [], existi
         subscriptionSource: formData.acquiredFree && formData.subscriptionSource ? formData.subscriptionSource : undefined,
         startDate: formData.startDate || undefined,
         endDate: formData.endDate || undefined,
-        isSpecial: formData.isSpecial || undefined,
+        loveLevel: formData.loveLevel,
+        // Keep the legacy signal in sync for recommendation/biography code that
+        // has not yet graduated to the richer Love scale.
+        isSpecial: formData.loveLevel && formData.loveLevel >= 3 ? true : undefined,
       });
       onClose();
     } finally {
@@ -817,29 +822,7 @@ export function GameForm({ onSubmit, onClose, initialGame, allGames = [], existi
                 />
               </div>
 
-              {/* Special Game Toggle */}
-              <div className="flex items-center justify-between p-3 bg-white/[0.02] rounded-xl">
-                <div className="flex items-center gap-2">
-                  <Sparkles size={14} className={clsx(formData.isSpecial ? 'text-amber-400' : 'text-white/30')} />
-                  <div>
-                    <div className="text-sm text-white/80">Special Game</div>
-                    <div className="text-[10px] text-white/40">Mark as an exceptional game you love</div>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setFormData({ ...formData, isSpecial: !formData.isSpecial })}
-                  className={clsx(
-                    'w-11 h-6 rounded-full transition-all relative',
-                    formData.isSpecial ? 'bg-amber-500' : 'bg-white/10'
-                  )}
-                >
-                  <div className={clsx(
-                    'w-5 h-5 rounded-full bg-white absolute top-0.5 transition-all',
-                    formData.isSpecial ? 'left-5' : 'left-0.5'
-                  )} />
-                </button>
-              </div>
+              <LovePicker value={formData.loveLevel} onChange={loveLevel => setFormData({ ...formData, loveLevel })} />
             </Section>
           </div>
         </form>
@@ -882,6 +865,7 @@ export function GameForm({ onSubmit, onClose, initialGame, allGames = [], existi
             hours: parseFloat(formData.hours) || (initialGame ? getTotalHours(initialGame) : 0),
             status: formData.status,
             platform: formData.platform || undefined,
+            loveLevel: formData.loveLevel,
           }}
           allGames={allGames}
           initialReview={formData.review}

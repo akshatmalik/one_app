@@ -361,7 +361,7 @@ export function LeaderboardTab({ gamesWithMetrics, userId, eloTierConfig }: Lead
   const [showAll, setShowAll] = useState(false);
 
   // ── View + ELO state ────────────────────────────────────────────
-  const [view, setView] = useState<LeaderboardView>('classic');
+  const [view, setView] = useState<LeaderboardView>('elo-rankings');
   const [eloPeriod, setEloPeriod] = useState<RankingPeriod>('all');
   const [periodOffset, setPeriodOffset] = useState(0); // 0 = current, 1 = one back, etc.
 

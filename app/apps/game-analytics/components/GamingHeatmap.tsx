@@ -70,13 +70,8 @@ export function GamingHeatmap({ games }: GamingHeatmapProps) {
     return 'bg-emerald-500';
   };
 
-  const getTotalHours = () => {
-    return Object.values(dateHoursMap).reduce((sum, h) => sum + h, 0);
-  };
-
-  const getActiveDays = () => {
-    return Object.keys(dateHoursMap).length;
-  };
+  const visibleHours = days.reduce((sum, day) => sum + day.hours, 0);
+  const visibleActiveDays = days.filter(day => day.hours > 0).length;
 
   const dayLabels = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
@@ -104,16 +99,16 @@ export function GamingHeatmap({ games }: GamingHeatmapProps) {
       {/* Stats Row */}
       <div className="grid grid-cols-3 gap-3 mb-4">
         <div className="text-center p-2 bg-white/5 rounded-lg">
-          <div className="text-lg font-bold text-emerald-400">{getTotalHours().toFixed(0)}h</div>
+          <div className="text-lg font-bold text-emerald-400">{visibleHours.toFixed(0)}h</div>
           <div className="text-xs text-white/40">total hours</div>
         </div>
         <div className="text-center p-2 bg-white/5 rounded-lg">
-          <div className="text-lg font-bold text-cyan-400">{getActiveDays()}</div>
+          <div className="text-lg font-bold text-cyan-400">{visibleActiveDays}</div>
           <div className="text-xs text-white/40">active days</div>
         </div>
         <div className="text-center p-2 bg-white/5 rounded-lg">
-          <div className="text-lg font-bold text-blue-400">{(getTotalHours() / 84).toFixed(1)}h</div>
-          <div className="text-xs text-white/40">avg/day</div>
+          <div className="text-lg font-bold text-blue-400">{visibleActiveDays > 0 ? (visibleHours / visibleActiveDays).toFixed(1) : '0.0'}h</div>
+          <div className="text-xs text-white/40">avg/play day</div>
         </div>
       </div>
 

@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { Clock, ChevronDown, ChevronUp, ListPlus, Check, Heart, Edit3, Trash2, Trophy, Sparkles, Zap, MessageCircle, ArrowLeftRight, Share2, Play } from 'lucide-react';
-import { Game } from '../lib/types';
+import { Game, LoveLevel } from '../lib/types';
 import { GameWithMetrics } from '../hooks/useAnalytics';
 import {
   getTotalHours,
@@ -26,6 +26,8 @@ import { RatingStars } from './RatingStars';
 import { ReviewCard } from './ReviewCard';
 import { GameJourney } from './GameJourney';
 import { QuickCheckIn } from './QuickCheckIn';
+import { LovePicker } from './LovePicker';
+import { getEffectiveLoveLevel, getLoveMeta } from '../lib/love';
 import clsx from 'clsx';
 
 interface GameBottomSheetProps {
@@ -37,7 +39,7 @@ interface GameBottomSheetProps {
   onLogTime: (hours?: number) => void;
   onOpenPlayLog: () => void;
   onToggleQueue: () => void;
-  onToggleSpecial: () => void;
+  onLoveChange: (level: LoveLevel | undefined) => void;
   onOpenReviewChat: () => void;
   onCompare: () => void;
   isInQueue: boolean;
@@ -64,7 +66,7 @@ export function GameBottomSheet({
   onLogTime,
   onOpenPlayLog,
   onToggleQueue,
-  onToggleSpecial,
+  onLoveChange,
   onOpenReviewChat,
   onCompare,
   isInQueue,
@@ -94,6 +96,8 @@ export function GameBottomSheet({
   const milestoneTimings = useMemo(() => getMilestoneTimings(game, allGames), [game, allGames]);
   const nextMilestone = useMemo(() => getNextMilestone(game, allGames), [game, allGames]);
   const uniqueness = useMemo(() => getLibraryUniqueness(game, allGames), [game, allGames]);
+  const loveLevel = getEffectiveLoveLevel(game);
+  const loveMeta = getLoveMeta(loveLevel);
 
   // Load AI insight pack in background when sheet opens
   useEffect(() => {
@@ -229,9 +233,9 @@ export function GameBottomSheet({
                 >
                   {rarity.label}
                 </span>
-                {game.isSpecial && (
-                  <span className="text-xs px-2.5 py-1 bg-amber-500/20 text-amber-400 rounded-full font-medium flex items-center gap-1">
-                    <Heart size={10} className="fill-amber-400" /> Special
+                {loveMeta && (
+                  <span className="text-xs px-2.5 py-1 bg-rose-500/15 text-rose-300 rounded-full font-medium flex items-center gap-1">
+                    <Heart size={10} className={loveLevel && loveLevel >= 3 ? 'fill-rose-400' : ''} /> {loveMeta.label}
                   </span>
                 )}
               </div>
@@ -293,6 +297,10 @@ export function GameBottomSheet({
               )}
               <div className="text-[10px] text-white/30 mt-0.5">per hr</div>
             </div>
+          </div>
+
+          <div className="px-5 pb-4">
+            <LovePicker value={loveLevel} onChange={onLoveChange} compact />
           </div>
 
           {/* AI Narrative Sentence */}
@@ -763,17 +771,6 @@ export function GameBottomSheet({
           >
             {isInQueue ? <Check size={14} /> : <ListPlus size={14} />}
             {isInQueue ? 'Queued' : 'Queue'}
-          </button>
-          <button
-            onClick={onToggleSpecial}
-            className={clsx(
-              'p-2.5 rounded-lg transition-all',
-              game.isSpecial
-                ? 'bg-amber-500/20 text-amber-400 active:bg-amber-500/30'
-                : 'bg-white/5 text-white/50 active:bg-white/10'
-            )}
-          >
-            <Heart size={14} className={game.isSpecial ? 'fill-amber-400' : ''} />
           </button>
           <button
             onClick={onCompare}

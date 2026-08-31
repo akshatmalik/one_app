@@ -27,6 +27,8 @@ import { QuarterPlotTwistsScreen } from './story-screens/QuarterPlotTwistsScreen
 import { QuarterAIBlurbScreen } from './story-screens/QuarterAIBlurbScreen';
 import { QuarterClosingScreen } from './story-screens/QuarterClosingScreen';
 import { useStorySwipe } from '../hooks/useStorySwipe';
+import { MostLovedScreen } from './story-screens/MostLovedScreen';
+import { isLovedGame } from '../lib/love';
 
 interface QuarterStoryModeProps {
   data: QuarterInReviewData;
@@ -129,6 +131,7 @@ export function QuarterStoryMode({ data, allGames, onClose, quarterTitle, update
     // ─── ACT 2: THE STARS ───
     data.top3Games.length >= 3 ? <QuarterTop3Screen key="top3" data={data} /> : null,
     data.topGame ? <QuarterTopGameScreen key="top-game" data={data} /> : null,
+    data.gamesPlayed.some(entry => isLovedGame(entry.game)) ? <MostLovedScreen key="most-loved" games={data.gamesPlayed.map(entry => entry.game)} periodLabel={data.quarterLabel} /> : null,
     data.genreBreakdown.length > 0 ? <QuarterGenreScreen key="genre" data={data} /> : null,
     <QuarterCompletionsScreen key="completions" data={data} />,
 

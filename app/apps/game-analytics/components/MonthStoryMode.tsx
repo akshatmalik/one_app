@@ -33,6 +33,8 @@ import { MonthVsLastScreen } from './story-screens/MonthVsLastScreen';
 import { MonthAIBlurbScreen } from './story-screens/MonthAIBlurbScreen';
 import { MonthClosingScreen } from './story-screens/MonthClosingScreen';
 import { useStorySwipe } from '../hooks/useStorySwipe';
+import { MostLovedScreen } from './story-screens/MostLovedScreen';
+import { isLovedGame } from '../lib/love';
 
 interface MonthStoryModeProps {
   data: MonthInReviewData;
@@ -168,6 +170,7 @@ export function MonthStoryMode({ data, allGames, onClose, monthTitle, updateGame
     // ─── ACT 2: SPOTLIGHT ───
     data.top3Games.length >= 3 ? <MonthTop3Screen key="top3" data={data} /> : null,
     data.topGame ? <MonthTopGameScreen key="top-game" data={data} /> : null,
+    data.gamesPlayed.some(entry => isLovedGame(entry.game)) ? <MostLovedScreen key="most-loved" games={data.gamesPlayed.map(entry => entry.game)} periodLabel={data.monthLabel} /> : null,
     data.discoveryGame ? <MonthDiscoveryScreen key="discovery" data={data} /> : null,
     data.biggestDay ? <MonthBiggestDayScreen key="biggest-day" data={data} /> : null,
 

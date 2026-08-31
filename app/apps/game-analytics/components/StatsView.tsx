@@ -99,7 +99,7 @@ const CHART_COLORS = ['#8b5cf6', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#e
 
 export function StatsView({ games, summary, budgets = [], onSetBudget, trophies, trophySummary, pinnedTrophyIds = [], onToggleTrophyPin, userId = '' }: StatsViewProps) {
   const currentYear = new Date().getFullYear();
-  const [selectedPeriod, setSelectedPeriod] = useState<'all' | number>(currentYear);
+  const [selectedPeriod, setSelectedPeriod] = useState<'all' | number>('all');
   const [isEditingBudget, setIsEditingBudget] = useState(false);
   const [savingBudget, setSavingBudget] = useState(false);
   const [showDiscountGames, setShowDiscountGames] = useState(false);
@@ -126,18 +126,22 @@ export function StatsView({ games, summary, budgets = [], onSetBudget, trophies,
     setIsEditingBudget(false);
   }, [selectedPeriod, selectedYear, budgets, isAllTime]);
 
-  // Get available years from games
+  // A year can matter because the user bought something or played something.
+  // Keeping both prevents active years from disappearing when purchases happened earlier.
   const availableYears = Array.from(new Set(
-    games
-      .filter(g => g.datePurchased)
-      .map(g => parseInt(g.datePurchased!.split('-')[0]))
+    games.flatMap(g => [
+      ...(g.datePurchased ? [parseInt(g.datePurchased.split('-')[0])] : []),
+      ...(g.playLogs ?? []).map(log => parseLocalDate(log.date).getFullYear()),
+    ])
   )).sort((a, b) => b - a);
 
   if (!availableYears.includes(currentYear)) {
     availableYears.unshift(currentYear);
   }
 
-  // Filter games by selected period
+  // Purchase cohorts drive spending; play logs drive activity. These must not
+  // share one date filter or a year view quietly turns into lifetime activity
+  // for games that happened to be bought that year.
   const filteredGames = isAllTime
     ? games
     : games.filter(g => {
@@ -147,8 +151,17 @@ export function StatsView({ games, summary, budgets = [], onSetBudget, trophies,
 
   // Calculate period-specific stats
   const periodSpent = filteredGames.reduce((sum, g) => sum + (g.status !== 'Wishlist' ? g.price : 0), 0);
-  const periodHours = filteredGames.reduce((sum, g) => sum + g.totalHours, 0);
-  const periodGamesCount = filteredGames.filter(g => g.status !== 'Wishlist').length;
+  const periodPlayLogs = isAllTime
+    ? games.flatMap(g => (g.playLogs ?? []).map(log => ({ gameId: g.id, log })))
+    : games.flatMap(g => (g.playLogs ?? [])
+        .filter(log => parseLocalDate(log.date).getFullYear() === selectedYear)
+        .map(log => ({ gameId: g.id, log })));
+  const periodHours = isAllTime
+    ? games.filter(g => g.status !== 'Wishlist').reduce((sum, g) => sum + g.totalHours, 0)
+    : periodPlayLogs.reduce((sum, item) => sum + item.log.hours, 0);
+  const periodGamesCount = isAllTime
+    ? games.filter(g => g.status !== 'Wishlist').length
+    : new Set(periodPlayLogs.map(item => item.gameId)).size;
   const periodAvgCostPerHour = periodHours > 0 ? periodSpent / periodHours : 0;
 
   // Budget calculations (only for specific years)
@@ -437,7 +450,7 @@ export function StatsView({ games, summary, budgets = [], onSetBudget, trophies,
           <div className="flex items-center gap-3">
             <CalendarDays size={18} className="text-purple-400" />
             <h2 className="text-lg font-semibold text-white">
-              {isAllTime ? 'All Time' : selectedYear} Overview
+              {isAllTime ? 'All Time' : selectedYear} Play & Purchase Overview
             </h2>
           </div>
           <div className="relative">
@@ -467,21 +480,21 @@ export function StatsView({ games, summary, budgets = [], onSetBudget, trophies,
           <div className="p-4 bg-white/[0.02] border border-white/5 rounded-xl">
             <div className="flex items-center gap-2 mb-1">
               <Clock size={14} className="text-blue-400" />
-              <span className="text-xs text-white/40">Hours Played</span>
+              <span className="text-xs text-white/40">{isAllTime ? 'Hours Played' : 'Hours Logged'}</span>
             </div>
             <div className="text-xl font-bold text-white">{periodHours.toFixed(0)}h</div>
           </div>
           <div className="p-4 bg-white/[0.02] border border-white/5 rounded-xl">
             <div className="flex items-center gap-2 mb-1">
               <Gamepad2 size={14} className="text-purple-400" />
-              <span className="text-xs text-white/40">Games</span>
+              <span className="text-xs text-white/40">{isAllTime ? 'Games Owned' : 'Games Played'}</span>
             </div>
             <div className="text-xl font-bold text-white">{periodGamesCount}</div>
           </div>
           <div className="p-4 bg-white/[0.02] border border-white/5 rounded-xl">
             <div className="flex items-center gap-2 mb-1">
               <TrendingUp size={14} className="text-yellow-400" />
-              <span className="text-xs text-white/40">Avg $/Hour</span>
+              <span className="text-xs text-white/40">Spend / Played Hour</span>
             </div>
             <div className={clsx(
               'text-xl font-bold',
@@ -688,7 +701,7 @@ export function StatsView({ games, summary, budgets = [], onSetBudget, trophies,
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-medium text-white/70 flex items-center gap-2">
                 <Trophy size={14} className="text-emerald-400" />
-                {isAllTime ? 'All-Time' : selectedYear} ROI Rankings
+                {isAllTime ? 'All-Time ROI Rankings' : `Games Bought in ${selectedYear} · Lifetime ROI`}
               </h3>
               <button
                 onClick={() => setShowROIRankings(!showROIRankings)}
@@ -752,7 +765,7 @@ export function StatsView({ games, summary, budgets = [], onSetBudget, trophies,
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-medium text-white/70 flex items-center gap-2">
                 <ListIcon size={14} className="text-purple-400" />
-                {isAllTime ? 'All' : selectedYear} Games Played
+                {isAllTime ? 'All Games Played' : `Games Bought in ${selectedYear} · Lifetime Play`}
               </h3>
               <button
                 onClick={() => setShowAllGamesPlayed(!showAllGamesPlayed)}
@@ -766,13 +779,13 @@ export function StatsView({ games, summary, budgets = [], onSetBudget, trophies,
             <div className="grid grid-cols-2 gap-3 mb-3">
               <div className="p-3 bg-white/5 rounded-xl text-center">
                 <div className="text-lg font-bold text-purple-400">{periodAllGamesPlayed.length}</div>
-                <div className="text-[10px] text-white/40">games played</div>
+                <div className="text-[10px] text-white/40">{isAllTime ? 'games played' : 'bought and played'}</div>
               </div>
               <div className="p-3 bg-white/5 rounded-xl text-center">
                 <div className="text-lg font-bold text-blue-400">
                   {periodAllGamesPlayed.reduce((sum, g) => sum + g.hours, 0).toFixed(0)}h
                 </div>
-                <div className="text-[10px] text-white/40">total hours</div>
+                <div className="text-[10px] text-white/40">{isAllTime ? 'total hours' : 'lifetime hours'}</div>
               </div>
             </div>
 
@@ -1002,8 +1015,17 @@ export function StatsView({ games, summary, budgets = [], onSetBudget, trophies,
       {/* Gaming Activity Heatmap */}
       <GamingHeatmap games={games} />
 
-      {/* Fun Stats Panel */}
-      <FunStatsPanel games={games} />
+      <details className="group rounded-3xl border border-white/[0.08] bg-white/[0.02]">
+        <summary className="flex min-h-16 cursor-pointer list-none items-center justify-between gap-4 px-5">
+          <div>
+            <p className="text-sm font-semibold text-white/80">Explore advanced & playful stats</p>
+            <p className="mt-0.5 text-xs text-white/35">Taste patterns, mastery, comparisons, simulations, trophies, and detailed charts</p>
+          </div>
+          <ChevronDown size={17} className="shrink-0 text-white/35 transition-transform group-open:rotate-180" />
+        </summary>
+        <div className="space-y-8 border-t border-white/[0.07] p-4 sm:p-5">
+          {/* Fun Stats Panel */}
+          <FunStatsPanel games={games} />
 
       {/* Genre Mastery — RPG-style per-genre leveling */}
       <GenreMasteryPanel games={games} />
@@ -1053,7 +1075,9 @@ export function StatsView({ games, summary, budgets = [], onSetBudget, trophies,
       <ExpandedStatsPanel games={games} />
 
       {/* Advanced Charts */}
-      <AdvancedCharts games={games} />
+          <AdvancedCharts games={games} />
+        </div>
+      </details>
 
       {/* Highlights - Last Month (Horizontal Scroll) */}
       {(() => {
