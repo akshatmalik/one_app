@@ -4,7 +4,8 @@ import { Schema, FunctionDeclaration, Content } from 'firebase/ai';
 import { getAIModel } from './ai-client';
 import { stripJsonFences } from './ai-json';
 import { WeekInReviewData, MonthInReviewData, OscarAward, buildTasteProfile, getTotalHours } from './calculations';
-import { Game, TasteProfile } from './types';
+import { Game, TasteProfile, LoveLevel } from './types';
+import { getLoveMeta, isLovedGame } from './love';
 import { WRITE_FUNCTION_DECLARATIONS, parseFunctionCall, PendingAction } from './ai-actions';
 import { searchRAWGGame } from './rawg-api';
 
@@ -522,6 +523,7 @@ export interface ReviewGameContext {
   hours: number;
   status: string;
   platform?: string;
+  loveLevel?: LoveLevel;
 }
 
 export interface ReviewInterviewTurn {
@@ -557,18 +559,21 @@ export function buildTasteSummary(allGames: Game[], excludeGameName?: string): s
     .slice(0, 4)
     .map(g => `${g.name} ${g.rating.toFixed(1)}/10`)
     .join(', ');
+  const loved = games.filter(isLovedGame).slice(0, 6).map(game => game.name).join(', ');
 
   return [
     `Overall avg rating: ${profile.avgRating.toFixed(1)}/10.`,
     profile.topGenres.length ? `Favorite genres: ${profile.topGenres.slice(0, 4).join(', ')}.` : '',
     genreDetail ? `Genre ratings: ${genreDetail}.` : '',
     top ? `Top-rated games: ${top}.` : '',
+    loved ? `Games they personally love: ${loved}.` : '',
     profile.avoidGenres.length ? `Tends to dislike: ${profile.avoidGenres.slice(0, 3).join(', ')}.` : '',
   ].filter(Boolean).join(' ');
 }
 
 function gameContextLine(game: ReviewGameContext): string {
-  return `"${game.name}" — rated ${game.rating.toFixed(1)}/10, ${game.genre || 'unknown genre'}, ${game.hours.toFixed(0)}h played, status: ${game.status}${game.platform ? `, on ${game.platform}` : ''}.`;
+  const love = getLoveMeta(game.loveLevel)?.label;
+  return `"${game.name}" — rated ${game.rating.toFixed(1)}/10${love ? `, Love: ${love}` : ''}, ${game.genre || 'unknown genre'}, ${game.hours.toFixed(0)}h played, status: ${game.status}${game.platform ? `, on ${game.platform}` : ''}.`;
 }
 
 function historyText(history: ReviewInterviewTurn[]): string {
@@ -715,7 +720,8 @@ export async function generateReviewChatResponse(params: {
   const { game, tasteSummary, history, userMessage } = params;
   const model = getAIModel();
 
-  const gameInfo = `"${game.name}" — ${game.hours.toFixed(0)}h played, rated ${game.rating.toFixed(1)}/10, status: ${game.status}${game.genre ? `, genre: ${game.genre}` : ''}${game.platform ? `, on ${game.platform}` : ''}.`;
+  const love = getLoveMeta(game.loveLevel)?.label;
+  const gameInfo = `"${game.name}" — ${game.hours.toFixed(0)}h played, rated ${game.rating.toFixed(1)}/10${love ? `, Love: ${love}` : ''}, status: ${game.status}${game.genre ? `, genre: ${game.genre}` : ''}${game.platform ? `, on ${game.platform}` : ''}.`;
 
   const historyText = history.length > 0
     ? history.map(m => `${m.role === 'user' ? 'Player' : 'You'}: ${m.text}`).join('\n')
@@ -736,7 +742,7 @@ export async function generateReviewChatResponse(params: {
 Game: ${gameInfo}
 Player's broader taste: ${tasteSummary}
 
-Write your opening message. Reference something specific from the data — their rating, hours, or status — to make it feel personal. Ask ONE focused question to kick things off. NOT "what did you think?" — something more specific, like what surprised them, how it compared to their expectations, or what they'd tell a friend.
+Write your opening message. Reference something specific from the data — their rating, Love, hours, or status — to make it feel personal. If rating and Love point in different directions, ask about that Head vs Heart gap. Ask ONE focused question to kick things off. NOT "what did you think?" — something more specific, like what surprised them, how it compared to their expectations, or what they'd tell a friend.
 
 Keep it to 2-3 sentences total. Casual, warm, curious. No greeting like "Hey!" or "Hi there!".`;
   } else {
@@ -1048,4 +1054,3 @@ export async function runAgentTurn(params: {
     return { kind: 'text', text: "Sorry, I hit a snag processing that. Mind trying again?" };
   }
 }
-

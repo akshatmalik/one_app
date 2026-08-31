@@ -4,6 +4,7 @@ import { getAIModel, getGroundedAIModel } from './ai-client';
 import { TasteProfile, GameRecommendation, Game, RecommendationCategory } from './types';
 import { getTotalHours } from './calculations';
 import { RAWGGameData, batchFetchRAWGData } from './rawg-api';
+import { isLovedGame } from './love';
 
 // After AI generates game names, batch-fetch RAWG data (thumbnail, metacritic, rating) and attach
 async function enrichWithRAWGData<T extends AIRecommendation>(recommendations: T[]): Promise<T[]> {
@@ -56,7 +57,7 @@ function buildProfileContext(
   const completed = games.filter(g => g.status === 'Completed');
   const abandoned = games.filter(g => g.status === 'Abandoned');
   const notStarted = games.filter(g => g.status === 'Not Started');
-  const special = games.filter(g => g.isSpecial);
+  const special = games.filter(isLovedGame);
 
   // Recently played (last 30 days)
   const now = new Date();
@@ -76,7 +77,7 @@ function buildProfileContext(
     if (g.genre) parts.push(g.genre);
     if (g.platform) parts.push(g.platform);
     if (g.franchise) parts.push(`[${g.franchise}]`);
-    if (g.isSpecial) parts.push('★SPECIAL');
+    if (isLovedGame(g)) parts.push('♥LOVED');
     if (g.endDate) parts.push(`finished:${g.endDate}`);
     else if (g.startDate) parts.push(`started:${g.startDate}`);
     return parts.join(' | ');

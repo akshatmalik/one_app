@@ -26,6 +26,7 @@ export function getBaselineExperienceGames(): SeedGame[] {
       hours: 0,
       expectedHours: 28,
       rating: 9.2,
+      loveLevel: 4,
       status: 'In Progress',
       platform: 'PS5',
       genre: 'Action-Adventure',
@@ -52,6 +53,7 @@ export function getBaselineExperienceGames(): SeedGame[] {
       hours: 0,
       expectedHours: 16,
       rating: 9.5,
+      loveLevel: 3,
       status: 'Completed',
       platform: 'PS5',
       genre: 'Action-Adventure',
@@ -99,6 +101,7 @@ export function getBaselineExperienceGames(): SeedGame[] {
       hours: 0,
       expectedHours: 12,
       rating: 8.1,
+      loveLevel: 4,
       status: 'Completed',
       platform: 'PS5',
       genre: 'Adventure',
@@ -223,4 +226,3 @@ export function getBaselinePsPlusRecommendations(): SeedRecommendation[] {
     },
   ];
 }
-

@@ -660,7 +660,7 @@ export async function executeAction(
       await executors.updateGame(action.args.gameId, { review: action.args.review });
       return `Saved your review on "${nameOf(games, action.args.gameId)}".`;
     case 'markSpecial':
-      await executors.updateGame(action.args.gameId, { isSpecial: action.args.special });
-      return `${action.args.special ? 'Marked' : 'Unmarked'} "${nameOf(games, action.args.gameId)}" as special.`;
+      await executors.updateGame(action.args.gameId, { isSpecial: action.args.special, loveLevel: action.args.special ? 3 : undefined });
+      return `${action.args.special ? 'Marked' : 'Unmarked'} "${nameOf(games, action.args.gameId)}" as loved.`;
   }
 }

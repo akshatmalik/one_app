@@ -14675,7 +14675,7 @@ function buildNudge(game: Game): ReviewNudge | null {
   }
 
   // Special / loved game with no review — capture why it mattered
-  if (game.isSpecial) {
+  if ((game.loveLevel ?? (game.isSpecial ? 3 : 0)) >= 3) {
     return {
       game, reason: 'special-unreviewed',
       headline: `${name} is one of your specials — but you never said why. Tell its story?`,

@@ -1,12 +1,13 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Loader2, MessageCircle, Send, Sparkles, X } from 'lucide-react';
 import clsx from 'clsx';
 import { v4 as uuidv4 } from 'uuid';
 import { Game, ReviewMessage } from '../lib/types';
 import { generateReviewChatResponse, buildTasteSummary } from '../lib/ai-service';
 import { formatRating } from '../lib/calculations';
+import { getEffectiveLoveLevel, getLoveMeta } from '../lib/love';
 
 interface GameReviewChatProps {
   game: Game;
@@ -32,15 +33,18 @@ export function GameReviewChat({ game, allGames, onSave, onClose }: GameReviewCh
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const tasteSummary = buildTasteSummary(allGames, game.name);
-  const gameCtx = {
+  const tasteSummary = useMemo(() => buildTasteSummary(allGames, game.name), [allGames, game.name]);
+  const loveLevel = getEffectiveLoveLevel(game);
+  const loveMeta = getLoveMeta(loveLevel);
+  const gameCtx = useMemo(() => ({
     name: game.name,
     rating: game.rating,
     genre: game.genre,
     hours: game.hours,
     status: game.status,
     platform: game.platform,
-  };
+    loveLevel,
+  }), [game.name, game.rating, game.genre, game.hours, game.status, game.platform, loveLevel]);
 
   // Lock body scroll
   useEffect(() => {
@@ -116,7 +120,7 @@ export function GameReviewChat({ game, allGames, onSave, onClose }: GameReviewCh
               <div className="min-w-0">
                 <h2 className="text-sm font-semibold text-white truncate">Review · {game.name}</h2>
                 <p className="text-[11px] text-white/40">
-                  {formatRating(game.rating)}/10 ·{' '}
+                  {formatRating(game.rating)}/10{loveMeta ? ` · ${loveMeta.label}` : ''} ·{' '}
                   {hasReview
                     ? `${messages.length} message${messages.length === 1 ? '' : 's'} · last ${formatTime(lastDate!)}`
                     : 'Start your review conversation'}

@@ -1,4 +1,4 @@
-import { Game, GameStatus, PurchaseSource, SubscriptionSource, PlayLog } from './types';
+import { Game, GameStatus, PurchaseSource, SubscriptionSource, PlayLog, LoveLevel } from './types';
 
 export type ImportedGameData = Omit<Game, 'id' | 'userId' | 'createdAt' | 'updatedAt'>;
 
@@ -34,6 +34,7 @@ const HEADER_ALIASES: Record<string, string> = {
   price: 'price', cost: 'price',
   'total hours': 'hours', hours: 'hours', hoursplayed: 'hours', 'hours played': 'hours',
   rating: 'rating', score: 'rating',
+  love: 'loveLevel', 'love level': 'loveLevel', attachment: 'loveLevel',
   platform: 'platform',
   genre: 'genre',
   franchise: 'franchise', series: 'franchise',
@@ -66,6 +67,23 @@ function normalizeSubscription(value: string | undefined): SubscriptionSource | 
   if (!value) return undefined;
   const trimmed = value.trim();
   return VALID_SUBSCRIPTIONS.find(s => s.toLowerCase() === trimmed.toLowerCase());
+}
+
+function normalizeLoveLevel(value: string | number | undefined): LoveLevel | undefined {
+  if (value === undefined || value === null || value === '') return undefined;
+  const labels: Record<string, LoveLevel> = {
+    "didn't connect": 1,
+    'did not connect': 1,
+    liked: 2,
+    'liked it': 2,
+    loved: 3,
+    'loved it': 3,
+    'all-time': 4,
+    'all-time love': 4,
+  };
+  const parsed = typeof value === 'number' ? value : Number(value);
+  if (Number.isInteger(parsed) && parsed >= 1 && parsed <= 4) return parsed as LoveLevel;
+  return labels[String(value).trim().toLowerCase()];
 }
 
 function parseNumber(value: string | undefined): number {
@@ -194,6 +212,7 @@ export function parseImportCSV(content: string, existingNames: Set<string>): Imp
       price: parseNumber(cells.price),
       hours: parseNumber(cells.hours),
       rating: parseNumber(cells.rating),
+      loveLevel: normalizeLoveLevel(cells.loveLevel),
       status,
       platform: cells.platform?.trim() || undefined,
       genre: cells.genre?.trim() || undefined,
@@ -232,6 +251,7 @@ interface ImportJSONGame {
   baselineHours?: number;
   hours?: number;
   rating?: number;
+  loveLevel?: number;
   platform?: string;
   genre?: string;
   franchise?: string;
@@ -270,6 +290,7 @@ function mapJSONGame(raw: ImportJSONGame): ImportedGameData {
     price: typeof raw.price === 'number' ? raw.price : 0,
     hours,
     rating: typeof raw.rating === 'number' ? raw.rating : 0,
+    loveLevel: normalizeLoveLevel(raw.loveLevel),
     status,
     platform: raw.platform || undefined,
     genre: raw.genre || undefined,

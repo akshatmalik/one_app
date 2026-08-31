@@ -38,6 +38,8 @@ import { generateMultipleBlurbs, AIBlurbType, AIBlurbResult } from '../lib/ai-se
 import { useAwards, awardWeekKey, awardWeekLabel } from '../hooks/useAwards';
 import { GameWithMetrics } from '../hooks/useAnalytics';
 import { useStorySwipe } from '../hooks/useStorySwipe';
+import { MostLovedScreen } from './story-screens/MostLovedScreen';
+import { isLovedGame } from '../lib/love';
 
 interface WeekStoryModeProps {
   data: WeekInReviewData;
@@ -185,6 +187,7 @@ const ignoredGames = useMemo(() => getIgnoredGames(data, allGames), [data, allGa
     // ─── ACT 2: DEEP DIVE ───
     data.gamesPlayed.length >= 3 ? <Top3GamesScreen key="top-3" data={data} /> : null,
     data.topGame ? <TopGameScreen key="top-game" data={data} /> : null,
+    data.gamesPlayed.some(entry => isLovedGame(entry.game)) ? <MostLovedScreen key="most-loved" games={data.gamesPlayed.map(entry => entry.game)} periodLabel={data.weekLabel} /> : null,
 
     <DailyBreakdownScreen key="daily" data={data} />,
     <WeekVsWeekScreen key="vs-week" data={data} />,

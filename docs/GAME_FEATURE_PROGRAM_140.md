@@ -40,11 +40,11 @@ connected in this PR; **Retained** = already implemented and protected by the PR
 22. **Refined** — Now Playing cards participate in bulk selection.
 23. **Refined** — Card selection uses a one-handed full-card tap target.
 24. **Refined** — PS Plus is named explicitly instead of appearing only as Free.
-25. **Refined** — Mood pulse disappears when session details are disabled.
+25. **Added** — Optional four-level Love is separate from the ten-point rating.
 26. **Retained** — Relationship status and lifecycle-aware actions.
 27. **Retained** — Hero number and progress ring.
 28. **Retained** — Card backs hold deeper passport-style detail.
-29. **Retained** — Rarity, freshness, awards, rank, and streak signals.
+29. **Refined** — Loved cards receive a quiet heart badge; lower Love levels stay private.
 30. **Retained** — Poster art, tint, and motion adapt to game state.
 
 ## 4. Shelves and library organization
@@ -57,7 +57,7 @@ connected in this PR; **Retained** = already implemented and protected by the PR
 36. **Added** — Generate a shelf cover collage from game artwork.
 37. **Added** — Persist shelves per player and device.
 38. **Added** — Automatic Current Rotation, Claimed Unplayed, Short PS5, and Favorites shelves.
-39. **Added** — Delete a shelf without deleting its games.
+39. **Added** — Automatic Games I Love shelf, independent of quality score.
 40. **Added** — Filter by shelf, with testable PS Plus and short-story sample shelves.
 
 ## 5. Playing and backlog decisions
@@ -109,7 +109,7 @@ connected in this PR; **Retained** = already implemented and protected by the PR
 76. **Retained** — Purchases, starts, plays, completions, and milestones.
 77. **Retained** — Month, quarter, and year chapter boundaries.
 78. **Retained** — Game journey arcs.
-79. **Retained** — Plot twists and story-arc interpretation.
+79. **Added** — Head vs Heart contrasts Loved, flawed-favorite, and admired games.
 80. **Retained** — Quick-add play time from the Chronicle.
 
 ## 9. Recaps and Wrapped
@@ -122,7 +122,7 @@ connected in this PR; **Retained** = already implemented and protected by the PR
 86. **Retained** — Quarter story mode.
 87. **Retained** — Year Wrapped story mode.
 88. **Retained** — AI chapter titles and recap reflections.
-89. **Retained** — Awards inside recap periods.
+89. **Added** — Most Loved screen across Week, Month, Quarter, and Year Wrapped.
 90. **Retained** — Regeneration reflects corrected source data.
 
 ## 10. Share Studio and identity
@@ -156,7 +156,7 @@ connected in this PR; **Retained** = already implemented and protected by the PR
 111. **Retained** — AI Coach conversation.
 112. **Retained** — AI review interview.
 113. **Retained** — Recommendation chat.
-114. **Retained** — Explainable game recommendations.
+114. **Refined** — Recommendations learn from Love separately from quality ratings.
 115. **Retained** — AI-generated card quips.
 116. **Retained** — AI-generated recap blurbs and chapter names.
 117. **Retained** — Grounded web lookup for releases.
@@ -166,8 +166,8 @@ connected in this PR; **Retained** = already implemented and protected by the PR
 
 ## 13. Data, safety, and control
 
-121. **Retained** — Export library data.
-122. **Retained** — Import library data.
+121. **Refined** — CSV and JSON exports preserve Love.
+122. **Refined** — CSV and JSON imports understand numeric and named Love levels.
 123. **Retained** — Steam library sync remains available for mixed libraries.
 124. **Retained** — Time Machine snapshots and restore.
 125. **Retained** — Time Capsules for future-player notes and predictions.

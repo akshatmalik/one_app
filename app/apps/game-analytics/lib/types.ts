@@ -51,6 +51,8 @@ export interface ReviewMessage {
   timestamp: string;
 }
 
+export type LoveLevel = 1 | 2 | 3 | 4;
+
 export interface Game {
   id: string;
   userId: string;
@@ -59,6 +61,7 @@ export interface Game {
   hours: number; // Total hours (manual entry or sum of logs)
   expectedHours?: number; // Estimated hours to finish the game (manual or AI-looked-up) — used by Timeline Estimator
   rating: number;
+  loveLevel?: LoveLevel; // Personal attachment, separate from the quality rating
   status: GameStatus;
   platform?: string;
   genre?: string;

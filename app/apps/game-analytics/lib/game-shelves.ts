@@ -1,6 +1,7 @@
 'use client';
 
 import { Game, GameStatus, SubscriptionSource } from './types';
+import { getEffectiveLoveLevel } from './love';
 
 export interface GameShelfRule {
   platforms?: string[];
@@ -9,6 +10,7 @@ export interface GameShelfRule {
   subscriptionSource?: SubscriptionSource;
   maxExpectedHours?: number;
   minRating?: number;
+  minLoveLevel?: number;
 }
 
 export interface GameShelf {
@@ -60,7 +62,15 @@ export function inferShelfFromSelection(selected: Game[]): {
   const status = commonValue(selected.map(game => game.status)) as GameStatus | undefined;
   const allPsPlus = selected.length > 0 && selected.every(game => game.acquiredFree && game.subscriptionSource === 'PS Plus');
   const allShort = selected.length > 0 && selected.every(game => (game.expectedHours ?? Infinity) <= 15);
+  const allLoved = selected.length > 0 && selected.every(game => (getEffectiveLoveLevel(game) ?? 0) >= 3);
 
+  if (allLoved) {
+    return {
+      name: 'Games I Love',
+      description: 'Personal favorites that meant more than their score.',
+      rules: { minLoveLevel: 3 },
+    };
+  }
   if (allPsPlus) {
     return {
       name: 'PS Plus Picks',
@@ -116,6 +126,7 @@ export function getShelfGames(shelf: GameShelf, games: Game[]): Game[] {
     if (rules.subscriptionSource && game.subscriptionSource !== rules.subscriptionSource) return false;
     if (rules.maxExpectedHours !== undefined && (game.expectedHours ?? Infinity) > rules.maxExpectedHours) return false;
     if (rules.minRating !== undefined && (game.rating || 0) < rules.minRating) return false;
+    if (rules.minLoveLevel !== undefined && (getEffectiveLoveLevel(game) ?? 0) < rules.minLoveLevel) return false;
     return true;
   });
 }
@@ -140,6 +151,12 @@ export function getAutomaticGameShelves(games: Game[]): GameShelf[] {
       name: 'Short PS5 Stories',
       description: 'Focused PlayStation games estimated at fifteen hours or less.',
       mode: 'smart', gameIds: [], rules: { platforms: ['PS5'], maxExpectedHours: 15 }, isSystem: true,
+    },
+    {
+      id: 'system-games-i-love',
+      name: 'Games I Love',
+      description: 'Personal favorites that meant more than their score.',
+      mode: 'smart', gameIds: [], rules: { minLoveLevel: 3 }, isSystem: true,
     },
     {
       id: 'system-all-time-favorites',

@@ -15,6 +15,9 @@ dashboard, or collection of unrelated analytics panels.
   power-user capability.
 - Lightweight reactions over mood tracking. Mood and vibe are optional details,
   never required and never primary card content.
+- Rating and Love answer different questions. Rating records critical quality;
+  the optional four-level Love signal records personal attachment and never gets
+  averaged into rating, ELO, value, or quality rankings.
 - Cards, shelves, Chronicle, recaps, Wrapped, and sharing are the emotional core.
 - Sample data must exercise every new surface without becoming indistinguishable
   from personal data.
@@ -55,6 +58,8 @@ remain available as contextual tools inside these spaces.
   edition/playthrough stacks, and shareable single-game cards.
 - Preserve poster and compact density choices while keeping tap targets and text
   readable on mobile.
+- Show a heart badge only for genuinely Loved and All-time Love games; lower Love
+  answers remain useful privately without decorating every card.
 
 ### 3. Automatic and selected shelves
 
@@ -93,6 +98,8 @@ remain available as contextual tools inside these spaces.
   or forward-looking thread.
 - Users can edit titles, hide screens, choose cover art, and regenerate after data
   corrections without losing the original snapshot.
+- Include a Most Loved story distinct from Game of the Period, so a lower-rated
+  personal favorite can outrank a technically stronger game in the emotional story.
 
 ### 6. Share Studio
 

@@ -95,6 +95,8 @@ import { getAutomaticGameShelves, getShelfGames } from './lib/game-shelves';
 import { CreateShelfModal } from './components/CreateShelfModal';
 import { GameShelfRail } from './components/GameShelfRail';
 import { PlaySnapshotModal } from './components/PlaySnapshotModal';
+import { LoveBadge } from './components/LovePicker';
+import { getEffectiveLoveLevel } from './lib/love';
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist' | 'ps-plus';
@@ -501,6 +503,7 @@ export default function GameAnalyticsPage() {
               hours: snapshot.hours,
               expectedHours: snapshot.expectedHours,
               rating: snapshot.rating,
+              loveLevel: snapshot.loveLevel,
               status: snapshot.status,
               platform: snapshot.platform,
               genre: snapshot.genre,
@@ -1812,14 +1815,6 @@ export default function GameAnalyticsPage() {
                       showToast('Failed to update queue', 'error');
                     }
                   }}
-                  onToggleSpecial={async (game) => {
-                    try {
-                      await updateGame(game.id, { isSpecial: !game.isSpecial });
-                      showToast(game.isSpecial ? 'Removed special tag' : 'Marked as special', 'success');
-                    } catch (err) {
-                      showToast('Failed to update', 'error');
-                    }
-                  }}
                   onDelete={(game) => handleDelete(game.id, game.name)}
                   onStartGame={async (game) => {
                     const today = new Date().toISOString().split('T')[0];
@@ -2414,11 +2409,11 @@ export default function GameAnalyticsPage() {
               showToast('Failed to update queue', 'error');
             }
           }}
-          onToggleSpecial={async () => {
+          onLoveChange={async (loveLevel) => {
             try {
-              await updateGame(detailGame.id, { isSpecial: !detailGame.isSpecial });
-              showToast(detailGame.isSpecial ? 'Removed special tag' : 'Marked as special', 'success');
-              setDetailGame(null);
+              await updateGame(detailGame.id, { loveLevel, isSpecial: loveLevel && loveLevel >= 3 ? true : undefined });
+              setDetailGame({ ...detailGame, loveLevel, isSpecial: !!loveLevel && loveLevel >= 3 });
+              showToast(loveLevel ? 'Love updated' : 'Love cleared', 'success');
             } catch (err) {
               showToast('Failed to update', 'error');
             }
@@ -2623,7 +2618,6 @@ interface GameCardListProps {
   onLogTime: (game: GameWithMetrics, date?: string) => void;
   onQuickLog: (game: GameWithMetrics, hours: number, date?: string) => void;
   onToggleQueue: (game: GameWithMetrics) => void;
-  onToggleSpecial: (game: GameWithMetrics) => void;
   onDelete: (game: GameWithMetrics) => void;
   onStartGame: (game: GameWithMetrics) => void;
   isInQueue: (id: string) => boolean;
@@ -2648,7 +2642,6 @@ function GameCardList({
   onLogTime,
   onQuickLog,
   onToggleQueue,
-  onToggleSpecial,
   onDelete,
   onStartGame,
   isInQueue,
@@ -2970,10 +2963,11 @@ function NowPlayingCard({ game, allGames, onClick, onQuickLog, sortBy = 'hours',
             )}
 
             {game.acquiredFree && game.subscriptionSource === 'PS Plus' && (
-              <div className="absolute bottom-2 right-2 rounded-md border border-yellow-200/20 bg-black/65 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wider text-yellow-100 backdrop-blur-sm">
+              <div className={clsx('absolute right-2 rounded-md border border-yellow-200/20 bg-black/65 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wider text-yellow-100 backdrop-blur-sm', (getEffectiveLoveLevel(game) ?? 0) >= 3 ? 'bottom-8' : 'bottom-2')}>
                 PS Plus
               </div>
             )}
+            <LoveBadge game={game} className="absolute bottom-2 right-2 bg-black/65" />
 
             {/* Streak flame badge */}
             {streak.isActive && (
@@ -3253,10 +3247,11 @@ function PosterCard({ game, allGames, idx, onClick, onQuickLog, onStartGame, isI
             )}
 
             {game.acquiredFree && game.subscriptionSource === 'PS Plus' && (
-              <div className="absolute bottom-2 right-2 rounded-md border border-yellow-200/20 bg-black/65 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wider text-yellow-100 backdrop-blur-sm">
+              <div className={clsx('absolute right-2 rounded-md border border-yellow-200/20 bg-black/65 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wider text-yellow-100 backdrop-blur-sm', (getEffectiveLoveLevel(game) ?? 0) >= 3 ? 'bottom-8' : 'bottom-2')}>
                 PS Plus
               </div>
             )}
+            <LoveBadge game={game} className="absolute bottom-2 right-2 bg-black/65" />
 
             {/* Streak flame badge */}
             {streak.isActive && (
@@ -3775,11 +3770,7 @@ function CompactCard({ game, allGames, idx, onClick, onLogTime, onToggleQueue, o
               </span>
             )}
             {game.acquiredFree && <span className="text-[10px] px-2 py-0.5 bg-yellow-400/15 text-yellow-200 rounded font-bold">{game.subscriptionSource === 'PS Plus' ? 'PS PLUS' : 'FREE'}</span>}
-            {game.isSpecial && (
-              <span className="text-[10px] px-2 py-0.5 bg-amber-500/20 text-amber-400 rounded font-medium flex items-center gap-0.5">
-                <Heart size={8} className="fill-amber-400" /> Special
-              </span>
-            )}
+            <LoveBadge game={game} />
           </div>
 
           {/* Row 3: Stats grid with momentum dots */}

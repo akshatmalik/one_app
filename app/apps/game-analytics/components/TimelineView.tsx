@@ -25,6 +25,7 @@ import { CumulativeHoursCounter } from './CumulativeHoursCounter';
 import { StoryArcOverlay } from './StoryArcOverlay';
 import { StorySoFar } from './StorySoFar';
 import { WrappedVault } from './WrappedVault';
+import { HeadAndHeart } from './HeadAndHeart';
 import clsx from 'clsx';
 
 interface TimelineViewProps {
@@ -596,6 +597,8 @@ export function TimelineView({ games, gamesWithMetrics, updateGame, onLogTime, o
 
       {/* Story So Far — scrollable chronicle of what you played and for how long */}
       <StorySoFar games={games} />
+
+      <HeadAndHeart games={games} />
 
       <WeekInReview data={weekInReviewData} allGames={games} weekOffset={weekOffset} maxWeeksBack={maxWeeksBack} onWeekChange={handleWeekChange} updateGame={updateGame} />
 

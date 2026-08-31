@@ -201,6 +201,7 @@ export function toCreatePayload(game: Game): Omit<Game, 'id' | 'userId' | 'creat
     hours: game.hours,
     expectedHours: game.expectedHours,
     rating: game.rating,
+    loveLevel: game.loveLevel,
     status: game.status,
     platform: game.platform,
     genre: game.genre,

@@ -6,6 +6,8 @@ import { Check, ChevronDown, Gamepad2, Shield, Sparkles, X } from 'lucide-react'
 import clsx from 'clsx';
 import { Game } from '../lib/types';
 import { ShareButton } from './ShareButton';
+import { LoveBadge } from './LovePicker';
+import { isLovedGame } from '../lib/love';
 
 type SnapshotRange = 'week' | 'month' | 'year' | 'all';
 type SnapshotFormat = 'story' | 'portrait' | 'square';
@@ -82,6 +84,7 @@ export function PlaySnapshotModal({ games, defaultPrivacy = 'hide-spending', onC
       sessions: played.reduce((sum, item) => sum + item.logs.length, 0),
       psPlus: played.filter(item => item.game.acquiredFree && item.game.subscriptionSource === 'PS Plus').length,
       spent: purchased.reduce((sum, game) => sum + (game.price || 0), 0),
+      loved: played.filter(item => isLovedGame(item.game)).length,
     };
   }, [games, range]);
 
@@ -126,6 +129,7 @@ export function PlaySnapshotModal({ games, defaultPrivacy = 'hide-spending', onC
                       <div className="absolute inset-x-0 bottom-0 p-2.5">
                         <div className="line-clamp-1 text-[11px] font-bold">{index === 0 && '★ '}{game.name}</div>
                         {game.acquiredFree && game.subscriptionSource === 'PS Plus' && <div className="mt-0.5 text-[8px] font-bold uppercase tracking-widest text-yellow-200">PS Plus</div>}
+                        <LoveBadge game={game} className="mt-1" />
                       </div>
                     </div>
                   ))}
@@ -140,7 +144,7 @@ export function PlaySnapshotModal({ games, defaultPrivacy = 'hide-spending', onC
                   <SnapshotStat value={includeCompletions ? `${snapshot.completed.length}` : `${snapshot.psPlus}`} label={includeCompletions ? 'finished' : 'PS Plus'} />
                 </div>
                 <div className="mt-3 flex items-center justify-between border-t border-white/10 pt-3 text-[9px] uppercase tracking-[0.18em] text-white/35">
-                  <span>{includeSpending ? `$${snapshot.spent.toFixed(0)} spent · ` : ''}Played, remembered</span><span>Game Chronicle</span>
+                  <span>{snapshot.loved > 0 ? `${snapshot.loved} loved · ` : ''}{includeSpending ? `$${snapshot.spent.toFixed(0)} spent · ` : ''}Remembered</span><span>Game Chronicle</span>
                 </div>
               </div>
             </div>

@@ -26,6 +26,8 @@ import { YearPersonalityEvolutionScreen } from './story-screens/YearPersonalityE
 import { YearAIBlurbScreen } from './story-screens/YearAIBlurbScreen';
 import { YearClosingScreen } from './story-screens/YearClosingScreen';
 import { useStorySwipe } from '../hooks/useStorySwipe';
+import { MostLovedScreen } from './story-screens/MostLovedScreen';
+import { isLovedGame } from '../lib/love';
 
 interface YearStoryModeProps {
   data: YearInReviewFullData;
@@ -110,6 +112,7 @@ export function YearStoryMode({ data, allGames, onClose, yearTitle, chapterTitle
 
     // ─── ACT 2: THE HALL OF FAME ───
     data.topGame ? <YearGameOfYearScreen key="goty" data={data} /> : null,
+    data.gamesPlayed.some(entry => isLovedGame(entry.game)) ? <MostLovedScreen key="most-loved" games={data.gamesPlayed.map(entry => entry.game)} periodLabel={`${data.year}`} /> : null,
     data.top10Games.length >= 3 ? <YearTop10Screen key="top10" data={data} /> : null,
     data.genreBreakdown.length > 0 ? <YearGenreScreen key="genre" data={data} /> : null,
     data.peakMonth ? <YearBestMonthScreen key="best-month" data={data} /> : null,
