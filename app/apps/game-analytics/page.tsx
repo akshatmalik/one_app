@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, CalendarClock, CalendarPlus, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical, Download, Upload, Gift, ShoppingCart, Search, X, Moon, CreditCard, Swords, Inbox, History, RefreshCw, Crown, Users, Users2, PiggyBank, Radar, Home, Play } from 'lucide-react';
+import type { ReactNode } from 'react';
+import { Plus, Sparkles, Gamepad2, Clock, DollarSign, Star, TrendingUp, Eye, Trophy, Flame, BarChart3, Calendar, CalendarClock, CalendarPlus, List, MessageCircle, ListOrdered, ListPlus, Check, Heart, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Compass, Zap, Target, ArrowUpRight, ArrowDownRight, Minus, Shield, MoreVertical, Download, Upload, Gift, ShoppingCart, Search, X, Moon, CreditCard, Swords, Inbox, History, RefreshCw, Crown, Users, Users2, PiggyBank, Radar, Home, Play, Settings2, Layers3, Share2 } from 'lucide-react';
 import { useGames } from './hooks/useGames';
 import { useAnalytics, GameWithMetrics } from './hooks/useAnalytics';
 import { useBudget } from './hooks/useBudget';
@@ -27,6 +28,7 @@ import { rankingRepository } from './lib/ranking-storage';
 import { BASELINE_GAMES_2025 } from './data/baseline-games';
 import { BASELINE_BUY_QUEUE } from './data/baseline-buy-queue';
 import { getBaselineReleaseRadar } from './data/baseline-release-radar';
+import { getBaselineExperienceGames, getBaselinePsPlusRecommendations } from './data/baseline-experience';
 import { purchaseQueueRepository } from './lib/purchase-queue-storage';
 import { recommendationRepository } from './lib/recommendation-storage';
 import { useAuthContext } from '@/lib/AuthContext';
@@ -65,7 +67,7 @@ import { MeVsMe } from './components/MeVsMe';
 import { VersusModal } from './components/VersusModal';
 import { CoOpMatchModal } from './components/CoOpMatchModal';
 import { SubscriptionSyncBanner } from './components/SubscriptionSyncBanner';
-import { loadSubscriptionSettings, hasNewDrop } from './lib/subscription-settings';
+import { loadSubscriptionSettings, saveSubscriptionSettings, hasNewDrop } from './lib/subscription-settings';
 import { ReviewNudgeBanner } from './components/ReviewNudgeBanner';
 import { AwardsHub } from './components/AwardsHub';
 import { useTrophies } from './hooks/useTrophies';
@@ -86,6 +88,13 @@ import { UndoToast } from './components/UndoToast';
 import { GlobalCommandPalette, PaletteCommand } from './components/GlobalCommandPalette';
 import { useMissedPlaytimeCheckIn } from './hooks/useMissedPlaytimeCheckIn';
 import { CatchUpSessionInput, MissedDaySubmission, MissedPlaytimeCheckInModal } from './components/MissedPlaytimeCheckInModal';
+import { useExperiencePreferences } from './hooks/useExperiencePreferences';
+import { ExperiencePreferencesModal } from './components/ExperiencePreferencesModal';
+import { useGameShelves } from './hooks/useGameShelves';
+import { getAutomaticGameShelves, getShelfGames } from './lib/game-shelves';
+import { CreateShelfModal } from './components/CreateShelfModal';
+import { GameShelfRail } from './components/GameShelfRail';
+import { PlaySnapshotModal } from './components/PlaySnapshotModal';
 import clsx from 'clsx';
 
 type ViewMode = 'all' | 'owned' | 'wishlist' | 'ps-plus';
@@ -173,6 +182,8 @@ function getTopAwardBadge(awards: GameAward[]): { label: string; color: string; 
 export default function GameAnalyticsPage() {
   const { user, loading: authLoading } = useAuthContext();
   const { showToast } = useToast();
+  const { preferences, updatePreferences, resetPreferences } = useExperiencePreferences(user?.uid ?? null);
+  const { shelves, createShelf, deleteShelf } = useGameShelves(user?.uid ?? null);
   const { games, loading, error, addGame, updateGame, updateManyGames, deleteGame, refresh } = useGames(user?.uid ?? null);
   const missedPlaytimeCheckIn = useMissedPlaytimeCheckIn(
     user?.uid ?? 'local-user',
@@ -273,6 +284,17 @@ export default function GameAnalyticsPage() {
     setPsPlusNewDrop(hasNewDrop(loadSubscriptionSettings(user?.uid ?? '')));
   }, [user?.uid, tabMode, games.length]);
   useEffect(() => {
+    const storageUserId = user?.uid || 'local-user';
+    const current = loadSubscriptionSettings(storageUserId);
+    const next = {
+      ...current,
+      psPlusEnabled: preferences.ecosystem === 'PlayStation' ? true : current.psPlusEnabled,
+      psPlusTier: preferences.psPlusTier,
+    };
+    saveSubscriptionSettings(storageUserId, next);
+    setPsPlusNewDrop(hasNewDrop(next));
+  }, [preferences.ecosystem, preferences.psPlusTier, user?.uid]);
+  useEffect(() => {
     setWishlistPriorityOrder(loadWishlistPriority(user?.uid ?? ''));
   }, [user?.uid]);
   const [sortBy, setSortBy] = useState<'name' | 'price' | 'hours' | 'rating' | 'costPerHour' | 'dateAdded' | 'recentlyPlayed'>('recentlyPlayed');
@@ -322,6 +344,12 @@ export default function GameAnalyticsPage() {
   const [showBacklogTriage, setShowBacklogTriage] = useState(false);
   const [showBacklogBracket, setShowBacklogBracket] = useState(false);
   const [showGlobalPalette, setShowGlobalPalette] = useState(false);
+  const [showExperiencePreferences, setShowExperiencePreferences] = useState(false);
+  const [activeShelfId, setActiveShelfId] = useState<string | null>(null);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedGameIds, setSelectedGameIds] = useState<Set<string>>(new Set());
+  const [showCreateShelf, setShowCreateShelf] = useState(false);
+  const [showPlaySnapshot, setShowPlaySnapshot] = useState(false);
 
   // Global ⌘K / Ctrl+K shortcut — opens the searchable command palette from anywhere in the app.
   useEffect(() => {
@@ -725,8 +753,9 @@ export default function GameAnalyticsPage() {
   const handleSeedData = async () => {
     try {
       gameRepository.setUserId(user?.uid || 'local-user');
-      for (const gameData of BASELINE_GAMES_2025) {
-        await gameRepository.create(gameData);
+      const seededGames: Game[] = [];
+      for (const gameData of [...getBaselineExperienceGames(), ...BASELINE_GAMES_2025]) {
+        seededGames.push(await gameRepository.create(gameData));
       }
 
       // Seed sample Buy Queue entries so the budget tools have data to test against.
@@ -741,6 +770,16 @@ export default function GameAnalyticsPage() {
       for (const recommendation of getBaselineReleaseRadar()) {
         await recommendationRepository.create(recommendation);
       }
+      for (const recommendation of getBaselinePsPlusRecommendations()) {
+        await recommendationRepository.create(recommendation);
+      }
+
+      const subscriptionSettings = loadSubscriptionSettings(user?.uid || 'local-user');
+      saveSubscriptionSettings(user?.uid || 'local-user', {
+        ...subscriptionSettings,
+        psPlusEnabled: true,
+        psPlusTier: preferences.psPlusTier,
+      });
 
       // Give the current year a budget if one isn't set, so the "how many fit"
       // headline and budget ring are populated out of the box.
@@ -749,7 +788,30 @@ export default function GameAnalyticsPage() {
         await setBudget(seedYear, 300);
       }
 
-      showToast('Sample games, buy queue + release radar loaded', 'success');
+      if (shelves.length === 0) {
+        const psPlusGames = seededGames.filter(game => game.acquiredFree && game.subscriptionSource === 'PS Plus');
+        const shortPs5Games = seededGames.filter(game => game.platform === 'PS5' && (game.expectedHours ?? Infinity) <= 15);
+        if (psPlusGames.length > 0) {
+          createShelf({
+            name: 'PS Plus Discoveries',
+            description: 'Claimed PlayStation Plus games ready to become part of your story.',
+            mode: 'smart',
+            gameIds: psPlusGames.map(game => game.id),
+            rules: { subscriptionSource: 'PS Plus' },
+          });
+        }
+        if (shortPs5Games.length > 0) {
+          createShelf({
+            name: 'Short PS5 Stories',
+            description: 'Focused PlayStation games estimated at fifteen hours or less.',
+            mode: 'smart',
+            gameIds: shortPs5Games.map(game => game.id),
+            rules: { platforms: ['PS5'], maxExpectedHours: 15 },
+          });
+        }
+      }
+
+      showToast('PlayStation samples, PS Plus, recaps + release radar loaded', 'success');
       await refresh();
     } catch (e) {
       showToast(`Failed to seed data: ${(e as Error).message}`, 'error');
@@ -859,12 +921,37 @@ export default function GameAnalyticsPage() {
       }
     });
 
+  const automaticShelves = getAutomaticGameShelves(games);
+  const allShelves = [...shelves, ...automaticShelves];
+  const activeShelf = allShelves.find(shelf => shelf.id === activeShelfId) ?? null;
+  const activeShelfGameIds = activeShelf
+    ? new Set(getShelfGames(activeShelf, games).map(game => game.id))
+    : null;
+  const visibleGames = activeShelfGameIds
+    ? filteredGames.filter(game => activeShelfGameIds.has(game.id))
+    : filteredGames;
+  const selectedGames = games.filter(game => selectedGameIds.has(game.id));
+
+  const toggleSelectedGame = (gameId: string) => {
+    setSelectedGameIds(current => {
+      const next = new Set(current);
+      if (next.has(gameId)) next.delete(gameId);
+      else next.add(gameId);
+      return next;
+    });
+  };
+
+  const endSelection = () => {
+    setSelectionMode(false);
+    setSelectedGameIds(new Set());
+  };
+
   const hasActiveBacklog = games.filter(g => g.status !== 'Wishlist' && g.status !== 'Completed' && g.status !== 'Abandoned').length > 0;
 
   const paletteCommands: PaletteCommand[] = [
     // Navigate — jump straight to any tab
     { id: 'nav-games', label: 'Games', subtitle: 'Your full library', group: 'Navigate', icon: <List size={15} />, onRun: () => setTabMode('games') },
-    { id: 'nav-timeline', label: 'Timeline', subtitle: 'Monthly history of events', group: 'Navigate', icon: <Calendar size={15} />, onRun: () => setTabMode('timeline') },
+    { id: 'nav-timeline', label: 'Chronicle', subtitle: 'Your play story, recaps, and Wrapped vault', group: 'Navigate', icon: <Calendar size={15} />, onRun: () => setTabMode('timeline') },
     { id: 'nav-stats', label: 'Stats', subtitle: 'Charts, trophies, breakdowns', group: 'Navigate', icon: <BarChart3 size={15} />, onRun: () => setTabMode('stats') },
     { id: 'nav-ai-coach', label: 'AI Coach', subtitle: 'Chat about your gaming habits', group: 'Navigate', icon: <MessageCircle size={15} />, onRun: () => setTabMode('ai-coach') },
     { id: 'nav-up-next', label: 'Up Next', subtitle: 'Priority queue', group: 'Navigate', icon: <ListOrdered size={15} />, onRun: () => setTabMode('up-next') },
@@ -891,6 +978,7 @@ export default function GameAnalyticsPage() {
     ...(games.length === 0 ? [{ id: 'action-load-samples', label: 'Load Samples', subtitle: 'Try the app with demo data', group: 'Actions' as const, icon: <Sparkles size={15} />, onRun: () => handleSeedData() }] : []),
     // Recap & Share
     { id: 'recap-gamer-card', label: 'Gamer Card', subtitle: 'Shareable summary of your library', group: 'Recap & Share', icon: <CreditCard size={15} />, onRun: () => setShowGamerCard(true) },
+    { id: 'recap-play-snapshot', label: 'What I Played', subtitle: 'Make a private, shareable play snapshot', group: 'Recap & Share', icon: <Share2 size={15} />, onRun: () => setShowPlaySnapshot(true) },
     { id: 'recap-me-vs-me', label: 'Me vs Me', subtitle: 'Compare yourself over time', group: 'Recap & Share', icon: <Swords size={15} />, onRun: () => setShowMeVsMe(true) },
     { id: 'recap-rival-check', label: 'Rival Check', subtitle: 'Compare against a friend', group: 'Recap & Share', icon: <Users size={15} />, onRun: () => setShowVersusModal(true) },
     { id: 'recap-game-night', label: 'Game Night', subtitle: 'Find what you and a friend can play together', group: 'Recap & Share', icon: <Users2 size={15} />, onRun: () => setShowCoOpMatch(true) },
@@ -900,12 +988,13 @@ export default function GameAnalyticsPage() {
     { id: 'data-export', label: 'Export Data', subtitle: 'Download your library as a file', group: 'Data', icon: <Download size={15} />, onRun: () => setShowExport(true) },
     { id: 'data-whats-new', label: "What's New", subtitle: 'See recent app updates', group: 'Data', icon: <Sparkles size={15} />, onRun: () => setShowWhatsNew(true) },
     { id: 'data-error-log', label: 'Error Log', subtitle: 'View sync/save issues', group: 'Data', icon: <Shield size={15} />, onRun: () => setShowErrorLog(true) },
+    { id: 'data-experience', label: 'Experience Preferences', subtitle: 'PlayStation, logging, and display defaults', group: 'Data', icon: <Settings2 size={15} />, onRun: () => setShowExperiencePreferences(true) },
   ];
 
   return (
-    <div className="min-h-[calc(100vh-60px)] flex flex-col">
+    <div className="min-h-[calc(100vh-60px)] flex flex-col pb-20 sm:pb-0">
       {/* Header */}
-      <div className="px-6 pt-8 pb-6 border-b border-white/5">
+      <div className="px-4 pt-5 pb-5 border-b border-white/5 sm:px-6 sm:pt-8 sm:pb-6">
         <div className="max-w-6xl mx-auto">
           {/* Title Row — Dynamic */}
           <div className="flex items-center justify-between mb-4">
@@ -1373,7 +1462,7 @@ export default function GameAnalyticsPage() {
       )}
 
       {/* Main Content */}
-      <div className="flex-1 px-6 py-6">
+      <div className="flex-1 px-4 py-4 sm:px-6 sm:py-6">
         <div className="max-w-6xl mx-auto">
           {/* Today dashboard — daily-engagement widgets live here now instead of cluttering every tab */}
           {tabMode === 'today' && (
@@ -1419,12 +1508,12 @@ export default function GameAnalyticsPage() {
           <div className="space-y-4 mb-6">
             {/* Tabs - Two icon-only rows */}
             <div className="space-y-1.5">
-              {/* Row 1: Games, Timeline, Stats, AI Coach */}
+              {/* Row 1: Games, Chronicle, Stats, AI Coach */}
               <div className="flex items-center gap-1.5">
                 {([
                   { id: 'today',    icon: <Home size={16} />,          title: 'Today' },
                   { id: 'games',    icon: <List size={16} />,          title: 'Games' },
-                  { id: 'timeline', icon: <Calendar size={16} />,      title: 'Timeline' },
+                  { id: 'timeline', icon: <Calendar size={16} />,      title: 'Chronicle' },
                   { id: 'stats',    icon: <BarChart3 size={16} />,     title: 'Stats' },
                   { id: 'ai-coach', icon: <MessageCircle size={16} />, title: 'AI Coach' },
                 ] as const).map((tab) => (
@@ -1487,6 +1576,7 @@ export default function GameAnalyticsPage() {
                           { icon: <Users size={15} className="text-emerald-400" />, label: 'Rival Check', onClick: () => setShowVersusModal(true) },
                           { icon: <Users2 size={15} className="text-orange-400" />, label: 'Game Night', onClick: () => setShowCoOpMatch(true) },
                           { icon: <Gift size={15} className="text-purple-400" />, label: 'Yearly Wrapped', onClick: () => setWrappedYear(new Date().getFullYear()) },
+                          { icon: <Share2 size={15} className="text-fuchsia-400" />, label: 'What I Played', onClick: () => setShowPlaySnapshot(true) },
                           { icon: <Star size={15} className="text-amber-400" />, label: 'Awards Hub', onClick: () => setShowAwardsHub(true) },
                           { icon: <Download size={15} className="text-white/50" />, label: 'Export data', onClick: () => setShowExport(true) },
                           { icon: <Upload size={15} className="text-white/50" />, label: 'Import games', onClick: () => setShowImport(true) },
@@ -1498,6 +1588,7 @@ export default function GameAnalyticsPage() {
                           { icon: <Radar size={15} className="text-emerald-400" />, label: 'Replay Radar', onClick: () => setShowReplayRadar(true) },
                           { icon: <CalendarPlus size={15} className="text-indigo-400" />, label: 'Calendar Sync', onClick: () => setShowCalendarSync(true) },
                           { icon: <CalendarClock size={15} className="text-cyan-400" />, label: 'Timeline Estimator', onClick: () => setTabMode('estimator') },
+                          { icon: <Settings2 size={15} className="text-blue-400" />, label: 'Experience Preferences', onClick: () => setShowExperiencePreferences(true) },
                         ].map(item => (
                           <button key={item.label}
                             onClick={() => { item.onClick(); setShowMoreMenu(false); }}
@@ -1601,6 +1692,15 @@ export default function GameAnalyticsPage() {
                   >
                     Sections
                   </button>
+                  <button
+                    onClick={() => selectionMode ? endSelection() : setSelectionMode(true)}
+                    className={clsx(
+                      'flex min-h-8 items-center gap-1 border px-2 text-[10px] rounded-lg',
+                      selectionMode ? 'bg-purple-500/15 border-purple-400/25 text-purple-200' : 'bg-white/[0.02] border-white/10 text-white/40',
+                    )}
+                  >
+                    <Layers3 size={11} /> {selectionMode ? 'Cancel' : 'Select'}
+                  </button>
                   {/* ELO tier config */}
                   <div className="relative">
                     <button
@@ -1657,13 +1757,26 @@ export default function GameAnalyticsPage() {
           {/* Tab Content */}
           {tabMode === 'games' && (
             <>
+              {games.length > 0 && (
+                <GameShelfRail
+                  shelves={allShelves}
+                  games={games}
+                  activeShelfId={activeShelfId}
+                  onSelect={setActiveShelfId}
+                  onDelete={(shelfId) => {
+                    if (activeShelfId === shelfId) setActiveShelfId(null);
+                    deleteShelf(shelfId);
+                    showToast('Shelf removed · games kept', 'success');
+                  }}
+                />
+              )}
               {games.length === 0 ? (
                 <div className="text-center py-16">
                   <Gamepad2 size={48} className="mx-auto mb-4 text-white/10" />
                   <p className="text-white/30 text-sm">No games in your library</p>
                   <p className="text-white/20 text-xs mt-1">Add a game or load sample data to get started</p>
                 </div>
-              ) : filteredGames.length === 0 ? (
+              ) : visibleGames.length === 0 ? (
                 <div className="text-center py-16">
                   {searchQuery.trim() ? (
                     <>
@@ -1679,7 +1792,7 @@ export default function GameAnalyticsPage() {
                 </div>
               ) : (
                 <GameCardList
-                  games={filteredGames}
+                  games={visibleGames}
                   allGames={games}
                   cardViewMode={cardViewMode}
                   groupBySection={groupBySection}
@@ -1723,6 +1836,10 @@ export default function GameAnalyticsPage() {
                   eloByGameId={eloByGameId}
                   tierAssignments={allTimeTiers}
                   eloTierRanks={eloTierRanks}
+                  selectionMode={selectionMode}
+                  selectedGameIds={selectedGameIds}
+                  onToggleSelected={toggleSelectedGame}
+                  showSessionDetails={preferences.showSessionDetails}
                 />
               )}
             </>
@@ -1944,6 +2061,21 @@ export default function GameAnalyticsPage() {
         </div>
       </div>
 
+      {!selectionMode && (
+        <nav className="fixed inset-x-3 bottom-3 z-40 grid grid-cols-4 rounded-2xl border border-white/10 bg-[#13131b]/95 p-1.5 shadow-2xl backdrop-blur-xl sm:hidden" aria-label="Primary game navigation">
+          {([
+            { id: 'today' as TabMode, label: 'Today', icon: <Home size={17} />, active: tabMode === 'today' },
+            { id: 'games' as TabMode, label: 'Library', icon: <List size={17} />, active: tabMode === 'games' },
+            { id: 'up-next' as TabMode, label: 'Plan', icon: <Compass size={17} />, active: ['up-next', 'discover', 'release-radar', 'buy-queue', 'estimator'].includes(tabMode) },
+            { id: 'timeline' as TabMode, label: 'Chronicle', icon: <Calendar size={17} />, active: tabMode === 'timeline' },
+          ]).map(item => (
+            <button key={item.id} onClick={() => setTabMode(item.id)} className={clsx('flex min-h-12 flex-col items-center justify-center gap-0.5 rounded-xl text-[9px] font-semibold transition-colors', item.active ? 'bg-purple-500/15 text-purple-200' : 'text-white/35')}>
+              {item.icon}<span>{item.label}</span>
+            </button>
+          ))}
+        </nav>
+      )}
+
       {missedPlaytimeCheckIn.shouldPrompt && (
         <MissedPlaytimeCheckInModal
           games={games}
@@ -1973,6 +2105,7 @@ export default function GameAnalyticsPage() {
           onSave={handleSavePlayLogs}
           onClose={() => { setPlayLogGame(null); setPlayLogDefaultDate(undefined); }}
           defaultDate={playLogDefaultDate}
+          showSessionDetails={preferences.showSessionDetails}
         />
       )}
 
@@ -2194,6 +2327,10 @@ export default function GameAnalyticsPage() {
       )}
 
       {/* Gamer Identity Card (shareable) */}
+      {showPlaySnapshot && (
+        <PlaySnapshotModal games={games} defaultPrivacy={preferences.defaultSharePrivacy} onClose={() => setShowPlaySnapshot(false)} />
+      )}
+
       {showGamerCard && (
         <GamerCard
           games={games}
@@ -2295,8 +2432,8 @@ export default function GameAnalyticsPage() {
             setDetailGame(null);
           }}
           isInQueue={isInQueue(detailGame.id)}
-          isTimerActive={liveSession.activeSession?.gameId === detailGame.id}
-          onStartTimer={() => handleStartTimer(detailGame)}
+          isTimerActive={preferences.showTimers && liveSession.activeSession?.gameId === detailGame.id}
+          onStartTimer={preferences.showTimers ? () => handleStartTimer(detailGame) : undefined}
         />
       )}
 
@@ -2326,7 +2463,7 @@ export default function GameAnalyticsPage() {
       )}
 
       {/* Live Session Timer — persists across tabs */}
-      {liveSession.activeSession && (
+      {preferences.showTimers && liveSession.activeSession && (
         <LiveSessionBar
           gameName={liveSession.activeSession.gameName}
           thumbnail={liveSession.activeSession.thumbnail}
@@ -2336,6 +2473,42 @@ export default function GameAnalyticsPage() {
           onResume={liveSession.resume}
           onStopAndLog={handleStopTimerAndLog}
           onDiscard={handleDiscardTimer}
+        />
+      )}
+
+      {showExperiencePreferences && (
+        <ExperiencePreferencesModal
+          preferences={preferences}
+          onChange={updatePreferences}
+          onReset={resetPreferences}
+          onClose={() => setShowExperiencePreferences(false)}
+        />
+      )}
+
+      {selectionMode && (
+        <div className="fixed inset-x-3 bottom-3 z-40 mx-auto flex max-w-md items-center gap-2 rounded-2xl border border-purple-400/20 bg-[#171321]/95 p-2.5 shadow-2xl backdrop-blur-md">
+          <div className="min-w-0 flex-1 px-2">
+            <div className="text-sm font-semibold text-white/85">{selectedGameIds.size} selected</div>
+            <div className="text-[10px] text-white/35">Build a shelf from this selection</div>
+          </div>
+          <button onClick={() => setShowCreateShelf(true)} disabled={selectedGameIds.size === 0} className="flex min-h-11 items-center gap-1.5 rounded-xl bg-purple-600 px-4 text-xs font-semibold text-white disabled:opacity-35">
+            <Layers3 size={14} /> Make Shelf
+          </button>
+          <button onClick={endSelection} className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/5 text-white/40" aria-label="Cancel selection"><X size={16} /></button>
+        </div>
+      )}
+
+      {showCreateShelf && selectedGames.length > 0 && (
+        <CreateShelfModal
+          games={selectedGames}
+          onCreate={(input) => {
+            const shelf = createShelf(input);
+            setActiveShelfId(shelf.id);
+            setShowCreateShelf(false);
+            endSelection();
+            showToast(`Shelf “${shelf.name}” created`, 'success');
+          }}
+          onClose={() => setShowCreateShelf(false)}
         />
       )}
 
@@ -2460,6 +2633,10 @@ interface GameCardListProps {
   eloByGameId?: Map<string, GameRanking>;
   tierAssignments?: TierAssignmentMap;
   eloTierRanks?: Map<string, { tier: GameTier; rank: number }>;
+  selectionMode: boolean;
+  selectedGameIds: Set<string>;
+  onToggleSelected: (gameId: string) => void;
+  showSessionDetails: boolean;
 }
 
 function GameCardList({
@@ -2481,6 +2658,10 @@ function GameCardList({
   eloByGameId = new Map(),
   tierAssignments = {},
   eloTierRanks = new Map(),
+  selectionMode,
+  selectedGameIds,
+  onToggleSelected,
+  showSessionDetails,
 }: GameCardListProps) {
   const sections = useMemo(() => groupBySection ? getGameSections(allGames) : [], [allGames, groupBySection]);
 
@@ -2523,6 +2704,43 @@ function GameCardList({
 
   const nowPlayingIds = useMemo(() => new Set(nowPlayingGames.map(g => g.id)), [nowPlayingGames]);
 
+  const wrapSelectable = (game: GameWithMetrics, child: ReactNode, className = '') => {
+    const selected = selectedGameIds.has(game.id);
+    return (
+      <div
+        key={game.id}
+        className={clsx(
+          'relative rounded-2xl transition-shadow',
+          className,
+          selectionMode && selected && 'ring-2 ring-purple-400 ring-offset-2 ring-offset-[#0b0b10]',
+        )}
+      >
+        {child}
+        {selectionMode && (
+          <button
+            type="button"
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              onToggleSelected(game.id);
+            }}
+            className="absolute inset-0 z-30 rounded-2xl bg-black/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-300"
+            aria-label={`${selected ? 'Remove' : 'Add'} ${game.name} ${selected ? 'from' : 'to'} selection`}
+          >
+            <span className={clsx(
+              'absolute right-3 top-3 flex h-7 w-7 items-center justify-center rounded-full border shadow-lg backdrop-blur-md',
+              selected
+                ? 'border-purple-300 bg-purple-500 text-white'
+                : 'border-white/25 bg-[#111118]/80 text-white/40',
+            )}>
+              {selected && <Check size={15} strokeWidth={3} />}
+            </span>
+          </button>
+        )}
+      </div>
+    );
+  };
+
   const renderCard = (game: GameWithMetrics, idx: number) => {
     const isEntering = enteringCards.has(game.id);
     const animClass = `game-card-animate${isEntering ? ' game-card-enter' : ''}`;
@@ -2530,16 +2748,16 @@ function GameCardList({
     const gameTier = tierAssignments[game.id] as GameTier | undefined;
     const eloTierRank = eloTierRanks.get(game.id);
     if (cardViewMode === 'poster') {
-      return (
-        <div key={game.id} className={animClass}>
-          <PosterCard game={game} allGames={allGames} idx={idx} onClick={() => onCardClick(game)} onQuickLog={(h, d) => onQuickLog(game, h, d)} onStartGame={() => onStartGame(game)} isInQueue={isInQueue(game.id)} sortBy={sortBy} tintColor={gameColors.get(game.id)} aiQuip={gameQuips[game.id]?.quip} eloRanking={eloRanking} gameTier={gameTier} eloTierRank={eloTierRank} />
-        </div>
+      return wrapSelectable(game,
+        <div className={animClass}>
+          <PosterCard game={game} allGames={allGames} idx={idx} onClick={() => onCardClick(game)} onQuickLog={(h, d) => onQuickLog(game, h, d)} onStartGame={() => onStartGame(game)} isInQueue={isInQueue(game.id)} sortBy={sortBy} tintColor={gameColors.get(game.id)} aiQuip={gameQuips[game.id]?.quip} eloRanking={eloRanking} gameTier={gameTier} eloTierRank={eloTierRank} showSessionDetails={showSessionDetails} />
+        </div>,
       );
     }
-    return (
-      <div key={game.id} className={animClass}>
-        <CompactCard game={game} allGames={allGames} idx={idx} onClick={() => onCardClick(game)} onLogTime={(d) => onLogTime(game, d)} onToggleQueue={() => onToggleQueue(game)} onDelete={() => onDelete(game)} onStartGame={() => onStartGame(game)} isInQueue={isInQueue(game.id)} sortBy={sortBy} tintColor={gameColors.get(game.id)} aiQuip={gameQuips[game.id]?.quip} eloRanking={eloRanking} gameTier={gameTier} eloTierRank={eloTierRank} />
-      </div>
+    return wrapSelectable(game,
+      <div className={animClass}>
+        <CompactCard game={game} allGames={allGames} idx={idx} onClick={() => onCardClick(game)} onLogTime={(d) => onLogTime(game, d)} onToggleQueue={() => onToggleQueue(game)} onDelete={() => onDelete(game)} onStartGame={() => onStartGame(game)} isInQueue={isInQueue(game.id)} sortBy={sortBy} tintColor={gameColors.get(game.id)} aiQuip={gameQuips[game.id]?.quip} eloRanking={eloRanking} gameTier={gameTier} eloTierRank={eloTierRank} showSessionDetails={showSessionDetails} />
+      </div>,
     );
   };
 
@@ -2558,10 +2776,10 @@ function GameCardList({
               <span className="text-[10px] text-white/20">{nowPlayingGames.length}</span>
             </div>
             <div className="space-y-3">
-              {nowPlayingGames.map(g => (
-                <div key={g.id} className={`game-card-animate${enteringCards.has(g.id) ? ' game-card-enter' : ''}`}>
-                  <NowPlayingCard game={g} allGames={allGames} onClick={() => onCardClick(g)} onQuickLog={(h, d) => onQuickLog(g, h, d)} sortBy={sortBy} tintColor={gameColors.get(g.id)} eloRanking={eloByGameId.get(g.id)} gameTier={tierAssignments[g.id] as GameTier | undefined} eloTierRank={eloTierRanks.get(g.id)} />
-                </div>
+              {nowPlayingGames.map(g => wrapSelectable(g,
+                <div className={`game-card-animate${enteringCards.has(g.id) ? ' game-card-enter' : ''}`}>
+                  <NowPlayingCard game={g} allGames={allGames} onClick={() => onCardClick(g)} onQuickLog={(h, d) => onQuickLog(g, h, d)} sortBy={sortBy} tintColor={gameColors.get(g.id)} eloRanking={eloByGameId.get(g.id)} gameTier={tierAssignments[g.id] as GameTier | undefined} eloTierRank={eloTierRanks.get(g.id)} showSessionDetails={showSessionDetails} />
+                </div>,
               ))}
             </div>
           </div>
@@ -2601,10 +2819,10 @@ function GameCardList({
             <span className="text-[10px] text-white/20">{nowPlayingGames.length}</span>
           </div>
           <div className="space-y-3">
-            {nowPlayingGames.map(g => (
-              <div key={g.id} className={`game-card-animate${enteringCards.has(g.id) ? ' game-card-enter' : ''}`}>
-                <NowPlayingCard game={g} allGames={allGames} onClick={() => onCardClick(g)} onQuickLog={(h, d) => onQuickLog(g, h, d)} eloRanking={eloByGameId.get(g.id)} gameTier={tierAssignments[g.id] as GameTier | undefined} />
-              </div>
+            {nowPlayingGames.map(g => wrapSelectable(g,
+              <div className={`game-card-animate${enteringCards.has(g.id) ? ' game-card-enter' : ''}`}>
+                <NowPlayingCard game={g} allGames={allGames} onClick={() => onCardClick(g)} onQuickLog={(h, d) => onQuickLog(g, h, d)} eloRanking={eloByGameId.get(g.id)} gameTier={tierAssignments[g.id] as GameTier | undefined} showSessionDetails={showSessionDetails} />
+              </div>,
             ))}
           </div>
         </div>
@@ -2681,7 +2899,7 @@ function CheckInDateNav({ date, onChange, size = 'sm' }: { date: string; onChang
 
 // --- Now Playing Card ---
 
-function NowPlayingCard({ game, allGames, onClick, onQuickLog, sortBy = 'hours', tintColor, eloRanking, gameTier, eloTierRank }: {
+function NowPlayingCard({ game, allGames, onClick, onQuickLog, sortBy = 'hours', tintColor, eloRanking, gameTier, eloTierRank, showSessionDetails }: {
   game: GameWithMetrics;
   allGames: Game[];
   onClick: () => void;
@@ -2691,6 +2909,7 @@ function NowPlayingCard({ game, allGames, onClick, onQuickLog, sortBy = 'hours',
   eloRanking?: GameRanking;
   gameTier?: GameTier;
   eloTierRank?: { tier: GameTier; rank: number };
+  showSessionDetails: boolean;
 }) {
   const [isFlipped, setIsFlipped] = useState(false);
   const [checkInHours, setCheckInHours] = useState(1);
@@ -2747,6 +2966,12 @@ function NowPlayingCard({ game, allGames, onClick, onQuickLog, sortBy = 'hours',
             ) : (
               <div className="h-20 bg-gradient-to-r from-blue-900/10 to-purple-900/10 flex items-center justify-center">
                 <Gamepad2 size={28} className="text-white/10" />
+              </div>
+            )}
+
+            {game.acquiredFree && game.subscriptionSource === 'PS Plus' && (
+              <div className="absolute bottom-2 right-2 rounded-md border border-yellow-200/20 bg-black/65 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wider text-yellow-100 backdrop-blur-sm">
+                PS Plus
               </div>
             )}
 
@@ -2920,7 +3145,7 @@ function NowPlayingCard({ game, allGames, onClick, onQuickLog, sortBy = 'hours',
           </div>
 
           {/* Mood pulse strip */}
-          {moodPulse.level !== 'never' && (
+          {showSessionDetails && moodPulse.level !== 'never' && (
             <div
               className="h-[2px] mood-pulse-strip"
               style={{ backgroundColor: moodPulse.color }}
@@ -2948,7 +3173,7 @@ function NowPlayingCard({ game, allGames, onClick, onQuickLog, sortBy = 'hours',
 
 // --- Poster Card ---
 
-function PosterCard({ game, allGames, idx, onClick, onQuickLog, onStartGame, isInQueue, sortBy = 'hours', tintColor, aiQuip, eloRanking, gameTier, eloTierRank }: {
+function PosterCard({ game, allGames, idx, onClick, onQuickLog, onStartGame, isInQueue, sortBy = 'hours', tintColor, aiQuip, eloRanking, gameTier, eloTierRank, showSessionDetails }: {
   game: GameWithMetrics;
   allGames: Game[];
   idx: number;
@@ -2962,6 +3187,7 @@ function PosterCard({ game, allGames, idx, onClick, onQuickLog, onStartGame, isI
   eloRanking?: GameRanking;
   gameTier?: GameTier;
   eloTierRank?: { tier: GameTier; rank: number };
+  showSessionDetails: boolean;
 }) {
   const [isFlipped, setIsFlipped] = useState(false);
   const [checkInDate, setCheckInDate] = useState(() => getTodayDateString());
@@ -3023,6 +3249,12 @@ function PosterCard({ game, allGames, idx, onClick, onQuickLog, onStartGame, isI
             ) : (
               <div className="h-20 bg-gradient-to-r from-purple-900/10 to-blue-900/10 flex items-center justify-center">
                 <Gamepad2 size={28} className="text-white/10" />
+              </div>
+            )}
+
+            {game.acquiredFree && game.subscriptionSource === 'PS Plus' && (
+              <div className="absolute bottom-2 right-2 rounded-md border border-yellow-200/20 bg-black/65 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wider text-yellow-100 backdrop-blur-sm">
+                PS Plus
               </div>
             )}
 
@@ -3192,7 +3424,7 @@ function PosterCard({ game, allGames, idx, onClick, onQuickLog, onStartGame, isI
           </div>
 
           {/* Mood pulse strip */}
-          {moodPulse.level !== 'never' && (
+          {showSessionDetails && moodPulse.level !== 'never' && (
             <div
               className="h-[2px] mood-pulse-strip"
               style={{ backgroundColor: moodPulse.color }}
@@ -3343,7 +3575,7 @@ function PosterCardBack({ game, allGames, onFlip, rarity, freshness, relationshi
 
 // --- Compact Card (original layout, fixed) ---
 
-function CompactCard({ game, allGames, idx, onClick, onLogTime, onToggleQueue, onDelete, onStartGame, isInQueue, sortBy = 'hours', tintColor, aiQuip, eloRanking, gameTier, eloTierRank }: {
+function CompactCard({ game, allGames, idx, onClick, onLogTime, onToggleQueue, onDelete, onStartGame, isInQueue, sortBy = 'hours', tintColor, aiQuip, eloRanking, gameTier, eloTierRank, showSessionDetails }: {
   game: GameWithMetrics;
   allGames: Game[];
   idx: number;
@@ -3359,6 +3591,7 @@ function CompactCard({ game, allGames, idx, onClick, onLogTime, onToggleQueue, o
   eloRanking?: GameRanking;
   gameTier?: GameTier;
   eloTierRank?: { tier: GameTier; rank: number };
+  showSessionDetails: boolean;
 }) {
   const [isFlipped, setIsFlipped] = useState(false);
   const [checkInDate, setCheckInDate] = useState(() => getTodayDateString());
@@ -3541,7 +3774,7 @@ function CompactCard({ game, allGames, idx, onClick, onLogTime, onToggleQueue, o
                 {rarity.label}
               </span>
             )}
-            {game.acquiredFree && <span className="text-[10px] px-2 py-0.5 bg-emerald-500/20 text-emerald-400 rounded font-medium">FREE</span>}
+            {game.acquiredFree && <span className="text-[10px] px-2 py-0.5 bg-yellow-400/15 text-yellow-200 rounded font-bold">{game.subscriptionSource === 'PS Plus' ? 'PS PLUS' : 'FREE'}</span>}
             {game.isSpecial && (
               <span className="text-[10px] px-2 py-0.5 bg-amber-500/20 text-amber-400 rounded font-medium flex items-center gap-0.5">
                 <Heart size={8} className="fill-amber-400" /> Special
@@ -3647,7 +3880,7 @@ function CompactCard({ game, allGames, idx, onClick, onLogTime, onToggleQueue, o
           </div>
 
           {/* Mood pulse strip */}
-          {moodPulse.level !== 'never' && (
+          {showSessionDetails && moodPulse.level !== 'never' && (
             <div
               className="absolute bottom-0 left-0 right-0 h-[2px] rounded-b-xl mood-pulse-strip"
               style={{ backgroundColor: moodPulse.color }}

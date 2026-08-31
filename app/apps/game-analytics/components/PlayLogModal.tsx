@@ -12,6 +12,7 @@ interface PlayLogModalProps {
   onSave: (playLogs: PlayLog[]) => Promise<void>;
   onClose: () => void;
   defaultDate?: string;
+  showSessionDetails?: boolean;
 }
 
 // Get local date in YYYY-MM-DD format (not UTC)
@@ -33,7 +34,7 @@ const NOTE_PROMPTS = [
   'Making good progress?',
 ];
 
-export function PlayLogModal({ game, onSave, onClose, defaultDate }: PlayLogModalProps) {
+export function PlayLogModal({ game, onSave, onClose, defaultDate, showSessionDetails = false }: PlayLogModalProps) {
   const [logs, setLogs] = useState<PlayLog[]>(game.playLogs || []);
   const [loading, setLoading] = useState(false);
   const [notesExpanded, setNotesExpanded] = useState(false);
@@ -182,8 +183,8 @@ export function PlayLogModal({ game, onSave, onClose, defaultDate }: PlayLogModa
             </button>
           </div>
 
-          {/* Mood & Vibe Tags */}
-          <div className="mt-3 space-y-2">
+          {/* Optional session texture — hidden by default for fast after-the-fact logging. */}
+          {showSessionDetails && <div className="mt-3 space-y-2">
             <div>
               <label className="block text-[10px] text-white/30 mb-1.5">Mood (optional)</label>
               <div className="flex gap-1.5">
@@ -262,7 +263,7 @@ export function PlayLogModal({ game, onSave, onClose, defaultDate }: PlayLogModa
                 ))}
               </div>
             </div>
-          </div>
+          </div>}
         </div>
 
         {/* Logs List */}
@@ -294,7 +295,7 @@ export function PlayLogModal({ game, onSave, onClose, defaultDate }: PlayLogModa
                       {log.hours}h
                     </span>
                   </div>
-                  {(log.mood || log.vibe || log.context) && (
+                  {showSessionDetails && (log.mood || log.vibe || log.context) && (
                     <div className="flex items-center gap-1.5 mt-1">
                       {log.mood && (
                         <span className={clsx(

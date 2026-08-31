@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState, useEffect } from 'react';
-import { Calendar, Clock, Gamepad2, DollarSign, Play, CheckCircle, XCircle, Plus, Flame, TrendingUp, TrendingDown, Sparkles, ChevronDown, ChevronUp } from 'lucide-react';
+import { Calendar, Clock, Gamepad2, DollarSign, Play, CheckCircle, XCircle, Plus, Flame, TrendingUp, TrendingDown, Sparkles, ChevronDown, ChevronUp, Film, SlidersHorizontal } from 'lucide-react';
 import { Game, PlayLog } from '../lib/types';
 import { getAllPlayLogs, getWeekStatsForOffset, getAvailableWeeksCount, getTotalHours, getMonthlyVibe, getTimelineMilestones, getMonthlyComparison, getStreakSegments, getGameJourneyArc, getCumulativeHoursAtDate, getMonthInReviewData, parseLocalDate, getTimelineWeather, getPlotTwists, getStoryArc } from '../lib/calculations';
 import { TimelinePeriodCards } from './TimelinePeriodCards';
@@ -24,6 +24,7 @@ import { GamingCalendar } from './GamingCalendar';
 import { CumulativeHoursCounter } from './CumulativeHoursCounter';
 import { StoryArcOverlay } from './StoryArcOverlay';
 import { StorySoFar } from './StorySoFar';
+import { WrappedVault } from './WrappedVault';
 import clsx from 'clsx';
 
 interface TimelineViewProps {
@@ -54,6 +55,8 @@ export function TimelineView({ games, gamesWithMetrics, updateGame, onLogTime, o
   const [quarterRecapConfig, setQuarterRecapConfig] = useState<{ year: number; quarter: number } | null>(null);
   const [yearRecapConfig, setYearRecapConfig] = useState<number | null>(null);
   const [awardsHubConfig, setAwardsHubConfig] = useState<{ tab: 'quarter' | 'year'; periodKey: string } | null>(null);
+  const [showWrappedVault, setShowWrappedVault] = useState(false);
+  const [directorCut, setDirectorCut] = useState(true);
 
   const maxWeeksBack = useMemo(() => {
     return Math.max(1, getAvailableWeeksCount(games));
@@ -560,16 +563,49 @@ export function TimelineView({ games, gamesWithMetrics, updateGame, onLogTime, o
         />
       )}
 
+      {showWrappedVault && (
+        <WrappedVault
+          monthKeys={monthKeys}
+          years={yearsWithData}
+          onOpenWeek={(offset) => { setWeekOffset(offset); setShowWrappedVault(false); }}
+          onOpenMonth={(monthKey) => { setMonthRecapKey(monthKey); setShowWrappedVault(false); }}
+          onOpenQuarter={(year, quarter) => { setQuarterRecapConfig({ year, quarter }); setShowWrappedVault(false); }}
+          onOpenYear={(year) => { setYearRecapConfig(year); setShowWrappedVault(false); }}
+          onClose={() => setShowWrappedVault(false)}
+        />
+      )}
+
+      <div className="relative overflow-hidden rounded-2xl border border-purple-400/15 bg-gradient-to-br from-purple-500/10 via-white/[0.025] to-blue-500/5 p-4 sm:p-5">
+        <div className="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-purple-500/10 blur-3xl" />
+        <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="mb-1 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.2em] text-purple-300/60"><Film size={12} /> Your Chronicle</div>
+            <h2 className="text-xl font-black text-white">The story of what you played</h2>
+            <p className="mt-1 max-w-xl text-xs text-white/40">Play logs become chapters, journeys, and Wrapped stories—without needing a live timer.</p>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={() => setDirectorCut(!directorCut)} className="flex min-h-10 items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 text-xs font-semibold text-white/50">
+              <SlidersHorizontal size={13} /> {directorCut ? 'Director’s Cut' : 'Full History'}
+            </button>
+            <button onClick={() => setShowWrappedVault(true)} className="flex min-h-10 flex-1 items-center justify-center gap-1.5 rounded-xl bg-purple-600 px-4 text-xs font-bold text-white sm:flex-none">
+              <Sparkles size={13} /> Wrapped Vault
+            </button>
+          </div>
+        </div>
+      </div>
+
       {/* Story So Far — scrollable chronicle of what you played and for how long */}
       <StorySoFar games={games} />
 
       <WeekInReview data={weekInReviewData} allGames={games} weekOffset={weekOffset} maxWeeksBack={maxWeeksBack} onWeekChange={handleWeekChange} updateGame={updateGame} />
 
-      {/* Hours Race — daily/monthly/lifetime racing bar chart */}
-      <HoursRace games={games} />
-
       {/* Filmstrip — horizontal month snapshots */}
       <FilmstripTimeline games={games} />
+
+      {!directorCut && (
+      <>
+      {/* Hours Race — daily/monthly/lifetime racing bar chart */}
+      <HoursRace games={games} />
 
       {/* Gaming Pulse + Genre Epochs side by side on larger screens */}
       <div className="grid gap-4 lg:grid-cols-2">
@@ -668,6 +704,8 @@ export function TimelineView({ games, gamesWithMetrics, updateGame, onLogTime, o
             </button>
           )}
         </div>
+      )}
+      </>
       )}
 
       {onQuickAddTime && (
