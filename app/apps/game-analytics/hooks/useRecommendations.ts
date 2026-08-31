@@ -84,7 +84,9 @@ export function useRecommendations(userId: string | null, games: Game[]) {
     }
   }, []);
 
-  useEffect(() => { refresh(); }, [refresh, userId]);
+  // Re-read when an empty library is populated by the global sample loader;
+  // recommendations are seeded outside this hook in that flow.
+  useEffect(() => { refresh(); }, [refresh, userId, games.length]);
 
   // Derived lists — released recommendations.
   // Subscription drops (PS Plus) are owned by the PS Plus panel, not the
@@ -94,11 +96,11 @@ export function useRecommendations(userId: string | null, games: Game[]) {
     [recommendations]
   );
   const interested = useMemo(() =>
-    recommendations.filter(r => r.status === 'interested' && !r.subscriptionService),
+    recommendations.filter(r => r.status === 'interested' && !r.isUpcoming && !r.subscriptionService),
     [recommendations]
   );
   const dismissed = useMemo(() =>
-    recommendations.filter(r => r.status === 'dismissed' && !r.subscriptionService),
+    recommendations.filter(r => r.status === 'dismissed' && !r.isUpcoming && !r.subscriptionService),
     [recommendations]
   );
   const watching = useMemo(() =>
@@ -111,6 +113,22 @@ export function useRecommendations(userId: string | null, games: Game[]) {
     recommendations.filter(r => r.isUpcoming && !r.subscriptionService && (r.status === 'suggested' || r.status === 'watching')),
     [recommendations]
   );
+  const upcomingPicks = useMemo(() => {
+    const seen = new Set<string>();
+    const decided = new Set(
+      recommendations
+        .filter(r => r.isUpcoming && !r.subscriptionService && r.status !== 'suggested')
+        .map(r => r.rawgId ? `rawg:${r.rawgId}` : `name:${r.gameName.toLowerCase()}`)
+    );
+    return recommendations
+      .filter(r => r.isUpcoming && !r.subscriptionService && r.status === 'suggested')
+      .filter(r => {
+        const key = r.rawgId ? `rawg:${r.rawgId}` : `name:${r.gameName.toLowerCase()}`;
+        if (decided.has(key) || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+  }, [recommendations]);
   const upcomingThisMonth = useMemo(() =>
     upcomingSuggested.filter(r => r.releaseWindow === 'this-month'),
     [upcomingSuggested]
@@ -195,17 +213,24 @@ export function useRecommendations(userId: string | null, games: Game[]) {
     try {
       const filters = buildUpcomingFilters(tasteProfile);
       const ownedNames = games.map(g => g.name);
-      const alreadyUpcomingNames = upcomingSuggested.map(r => r.gameName.toLowerCase());
+      // Include every prior decision, especially dismissed games, so AI picks do
+      // not reappear on the next refresh.
+      const alreadyUpcomingNames = recommendations
+        .filter(r => r.isUpcoming && !r.subscriptionService)
+        .map(r => r.gameName.toLowerCase());
 
       // Fetch upcoming games from RAWG
       const { thisMonth, nextFewMonths, later } = await getUpcomingGames(filters, ownedNames);
 
       // Combine all and filter out already-suggested
-      const allUpcoming = [
+      const upcomingCandidates = [
         ...thisMonth.map(g => ({ ...g, window: 'this-month' as const })),
         ...nextFewMonths.map(g => ({ ...g, window: 'next-few-months' as const })),
         ...later.map(g => ({ ...g, window: 'later' as const })),
-      ].filter(g => !alreadyUpcomingNames.includes(g.name.toLowerCase()));
+      ];
+      const allUpcoming = Array.from(
+        new Map(upcomingCandidates.map(game => [game.id, game])).values()
+      ).filter(g => !alreadyUpcomingNames.includes(g.name.toLowerCase()));
 
       if (allUpcoming.length === 0) {
         setGeneratingUpcoming(false);
@@ -246,10 +271,13 @@ export function useRecommendations(userId: string | null, games: Game[]) {
 
         const rec = await recommendationRepository.create({
           gameName: game.name,
+          rawgId: game.id,
           thumbnail: game.backgroundImage || undefined,
           metacritic: game.metacritic || undefined,
           rawgRating: game.rating || undefined,
           releaseDate: game.released || undefined,
+          releaseDateCheckedAt: new Date().toISOString(),
+          releaseDateSource: 'rawg',
           aiReason: reason,
           status: 'suggested',
           isUpcoming: true,
@@ -267,7 +295,7 @@ export function useRecommendations(userId: string | null, games: Game[]) {
     } finally {
       setGeneratingUpcoming(false);
     }
-  }, [games, tasteProfile, upcomingSuggested]);
+  }, [games, tasteProfile, recommendations]);
 
   // "Would I like this game?" analysis
   const analyzeGame = useCallback(async (gameName: string): Promise<GameAnalysis> => {
@@ -304,6 +332,33 @@ export function useRecommendations(userId: string | null, games: Game[]) {
   const markDismissed = useCallback((id: string) => updateStatus(id, 'dismissed'), [updateStatus]);
   const markWishlisted = useCallback((id: string) => updateStatus(id, 'wishlisted'), [updateStatus]);
   const markPlayed = useCallback((id: string) => updateStatus(id, 'played'), [updateStatus]);
+
+  const updateRecommendation = useCallback(async (id: string, updates: Partial<GameRecommendation>) => {
+    try {
+      const updated = await recommendationRepository.update(id, updates);
+      setRecommendations(prev => prev.map(r => r.id === id ? { ...r, ...updated } : r));
+      return updated;
+    } catch (e) {
+      setError(e as Error);
+      throw e;
+    }
+  }, []);
+
+  const checkReleaseDate = useCallback(async (id: string) => {
+    const recommendation = recommendations.find(r => r.id === id);
+    if (!recommendation) return null;
+    const rawg = await searchRAWGGame(recommendation.gameName, true);
+    const checkedAt = new Date().toISOString();
+    return updateRecommendation(id, {
+      rawgId: rawg?.id ?? recommendation.rawgId,
+      releaseDate: rawg?.released || recommendation.releaseDate,
+      thumbnail: rawg?.backgroundImage || recommendation.thumbnail,
+      metacritic: rawg?.metacritic || recommendation.metacritic,
+      rawgRating: rawg?.rating || recommendation.rawgRating,
+      releaseDateCheckedAt: checkedAt,
+      releaseDateSource: 'rawg',
+    });
+  }, [recommendations, updateRecommendation]);
 
   const deleteRecommendation = useCallback(async (id: string) => {
     try {
@@ -382,6 +437,7 @@ export function useRecommendations(userId: string | null, games: Game[]) {
 
     // Upcoming
     upcomingSuggested,
+    upcomingPicks,
     upcomingThisMonth,
     upcomingNextFewMonths,
     upcomingLater,
@@ -412,6 +468,8 @@ export function useRecommendations(userId: string | null, games: Game[]) {
     markDismissed,
     markWishlisted,
     markPlayed,
+    updateRecommendation,
+    checkReleaseDate,
     deleteRecommendation,
     undoDismiss,
     refresh,

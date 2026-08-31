@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Bookmark, Heart, Check, X, Star, Eye, Clock, Flame, TrendingUp, Sparkles } from 'lucide-react';
 import { GameRecommendation, RecommendationCategory } from '../lib/types';
-import { getDaysUntilRelease } from '../lib/calculations';
+import { getReleaseCountdown } from '../lib/release-date';
 import clsx from 'clsx';
 
 const CATEGORY_LABELS: Record<RecommendationCategory, { label: string; color: string }> = {
@@ -42,7 +42,7 @@ export function RecommendationCard({
   const [datePurchased, setDatePurchased] = useState('');
 
   const isUpcoming = recommendation.isUpcoming || variant === 'upcoming';
-  const daysUntil = getDaysUntilRelease(recommendation.releaseDate);
+  const daysUntil = getReleaseCountdown(recommendation.releaseDate);
   const categoryInfo = recommendation.recommendationCategory
     ? CATEGORY_LABELS[recommendation.recommendationCategory]
     : null;

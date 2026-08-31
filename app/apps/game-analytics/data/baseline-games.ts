@@ -1,5 +1,13 @@
 import { Game, PurchaseSource } from '../lib/types';
 
+const sampleReleaseDate = (daysFromNow: number) => {
+  const date = new Date();
+  date.setDate(date.getDate() + daysFromNow);
+  return date.toISOString().split('T')[0];
+};
+
+const sampleReleaseCheckedAt = new Date().toISOString();
+
 export const BASELINE_GAMES_2025: Omit<Game, 'id' | 'userId' | 'createdAt' | 'updatedAt'>[] = [
   // Completed Games - Great Value
   {
@@ -256,6 +264,10 @@ export const BASELINE_GAMES_2025: Omit<Game, 'id' | 'userId' | 'createdAt' | 'up
     genre: 'Action-Adventure',
     purchaseSource: 'PlayStation',
     notes: 'Day one purchase when released - already hyped',
+    releaseDate: sampleReleaseDate(112),
+    releaseDateStatus: 'dated',
+    releaseDateCheckedAt: sampleReleaseCheckedAt,
+    releaseDateSource: 'sample',
   },
   {
     name: 'Death Stranding 2',
@@ -267,6 +279,10 @@ export const BASELINE_GAMES_2025: Omit<Game, 'id' | 'userId' | 'createdAt' | 'up
     genre: 'Action-Adventure',
     purchaseSource: 'PlayStation',
     notes: 'Kojima magic continues',
+    releaseDate: sampleReleaseDate(34),
+    releaseDateStatus: 'dated',
+    releaseDateCheckedAt: sampleReleaseCheckedAt,
+    releaseDateSource: 'sample',
   },
   {
     name: 'Hollow Knight: Silksong',
@@ -278,6 +294,10 @@ export const BASELINE_GAMES_2025: Omit<Game, 'id' | 'userId' | 'createdAt' | 'up
     genre: 'Metroidvania',
     purchaseSource: 'Steam',
     notes: 'Been waiting years for this...',
+    releaseDate: sampleReleaseDate(57),
+    releaseDateStatus: 'dated',
+    releaseDateCheckedAt: sampleReleaseCheckedAt,
+    releaseDateSource: 'sample',
   },
   {
     name: 'Fable',
@@ -289,6 +309,10 @@ export const BASELINE_GAMES_2025: Omit<Game, 'id' | 'userId' | 'createdAt' | 'up
     genre: 'RPG',
     purchaseSource: 'Xbox',
     notes: 'Excited for the reboot',
+    releaseDate: sampleReleaseDate(180),
+    releaseDateStatus: 'dated',
+    releaseDateCheckedAt: sampleReleaseCheckedAt,
+    releaseDateSource: 'sample',
   },
   {
     name: 'Avowed',
@@ -300,6 +324,9 @@ export const BASELINE_GAMES_2025: Omit<Game, 'id' | 'userId' | 'createdAt' | 'up
     genre: 'RPG',
     purchaseSource: 'Xbox',
     notes: 'Obsidian first-person RPG',
+    releaseDateStatus: 'tba',
+    releaseDateCheckedAt: sampleReleaseCheckedAt,
+    releaseDateSource: 'sample',
   },
 
   // Discount buys

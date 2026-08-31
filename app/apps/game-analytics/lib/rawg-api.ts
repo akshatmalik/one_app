@@ -89,11 +89,13 @@ function clearOldCaches(): void {
 /**
  * Search for a game on RAWG and return the best match
  */
-export async function searchRAWGGame(gameName: string): Promise<RAWGGameData | null> {
+export async function searchRAWGGame(gameName: string, forceRefresh = false): Promise<RAWGGameData | null> {
   // Check cache first
-  const cached = getFromCache(gameName);
-  if (cached !== null) {
-    return cached;
+  if (!forceRefresh) {
+    const cached = getFromCache(gameName);
+    if (cached !== null) {
+      return cached;
+    }
   }
 
   try {

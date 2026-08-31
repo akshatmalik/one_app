@@ -10,6 +10,7 @@ import { PurchaseQueueEntry, PurchaseIntent } from '../lib/types';
 import { Game } from '../lib/types';
 import { getStoreUrl, getPriceFreshness } from '../lib/calculations';
 import { fetchCheapestPrice } from '../lib/price-fetch';
+import { formatReleaseDate, getReleaseCountdown } from '../lib/release-date';
 import { PriceSparkline } from './PriceSparkline';
 import clsx from 'clsx';
 
@@ -31,22 +32,6 @@ const INTENT_OPTIONS: { value: PurchaseIntent; label: string; icon: typeof Shopp
   { value: 'maybe', label: 'Maybe', icon: HelpCircle, active: 'bg-amber-500/15 text-amber-400' },
   { value: 'deferred', label: 'Deferred', icon: Tag, active: 'bg-blue-500/15 text-blue-400' },
 ];
-
-function daysUntil(dateStr: string): number {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const target = new Date(dateStr);
-  target.setHours(0, 0, 0, 0);
-  return Math.round((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-}
-
-function formatRelease(dateStr: string): string {
-  try {
-    return new Date(dateStr).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
-  } catch {
-    return dateStr;
-  }
-}
 
 function getPriceStatus(entry: PurchaseQueueEntry): { label: string; color: string; dot: string; glow: boolean } | null {
   if (!entry.targetPrice || !entry.currentPrice) return null;
@@ -80,7 +65,7 @@ export function BuyQueueCard({ entry, onUpdate, onMarkPurchased, onDelete, onSet
   const [fetchMsg, setFetchMsg] = useState<string | null>(null);
 
   const upcoming = entry.releaseDate ? new Date(entry.releaseDate) > new Date() : false;
-  const days = entry.releaseDate ? daysUntil(entry.releaseDate) : null;
+  const days = getReleaseCountdown(entry.releaseDate);
   const priceStatus = getPriceStatus(entry);
   const savings = getSavings(entry);
   const isAtTarget = priceStatus?.glow ?? false;
@@ -267,7 +252,7 @@ export function BuyQueueCard({ entry, onUpdate, onMarkPurchased, onDelete, onSet
               className="text-white/35 hover:text-white/60 transition-colors underline decoration-dotted"
             >
               {entry.releaseDate
-                ? (upcoming ? `Coming ${formatRelease(entry.releaseDate)}` : `Released ${formatRelease(entry.releaseDate)}`)
+                ? (upcoming ? `Coming ${formatReleaseDate(entry.releaseDate)}` : `Released ${formatReleaseDate(entry.releaseDate)}`)
                 : 'Set date'}
             </button>
           )}

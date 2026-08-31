@@ -21,11 +21,11 @@ const firebaseConfig = {
   appId: "1:1052736128978:web:9d42b47c6a343eac35aa0b",
 };
 
-export const DEFAULT_AI_MODEL = 'gemini-2.5-flash';
+export const DEFAULT_AI_MODEL = 'gemini-3.7-flash';
 
 type ModelOptions = Parameters<typeof getGenerativeModel>[1];
 
-/** Returns a generative model. Defaults to gemini-2.5-flash; options merge on top. */
+/** Returns a generative model. Defaults to gemini-3.7-flash; options merge on top. */
 export function getAIModel(options?: Partial<ModelOptions>) {
   const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
   const ai = getAI(app, { backend: new GoogleAIBackend() });
