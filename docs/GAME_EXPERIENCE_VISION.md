@@ -35,6 +35,23 @@ The long-term navigation model has four primary spaces:
 Discovery, PS Plus, releases, trophies, rankings, detailed statistics, and AI
 remain available as contextual tools inside these spaces.
 
+## Experience hierarchy
+
+- Home opens on one current game, one honest logging action, and the player’s
+  latest chapter. It never opens on an accounting dashboard.
+- Library cards on phones show artwork, relationship, one story line, hours,
+  rating, and one action. Ranking, value, streak, momentum, awards, and lifecycle
+  detail move behind the card instead of competing on its face.
+- Plan uses named destinations—Play Queue, Releases, PS Plus, Buy List, and Time
+  Plan—instead of an unlabeled icon matrix.
+- Chronicle owns memory. Its mobile companion views are Story, Player Profile,
+  and Coach.
+- Statistics first explain the player: depth, finishing, attachment, variety,
+  yearly shape, and personal records. The complete chart-and-budget laboratory
+  remains available as a deliberately opened deep view.
+- Collection totals, spending, completion, and gaming score are never repeated
+  above every screen. Each number appears where it can answer a player question.
+
 ## Feature program
 
 ### 1. Player preferences
@@ -172,6 +189,11 @@ branches or follow-up PRs:
 - New game defaults prefer PS5 and PlayStation.
 - The current Week/Month/Quarter/Year story modes remain available.
 - The production build and focused mobile browser verification pass.
+- Home, Library, Plan, Chronicle, and Player Profile each begin with their own
+  content rather than a shared stats wall.
+- Completion percentage is represented once, on a 0–100 scale.
+- Mobile cards preserve a strict front-face content budget while full details and
+  the existing desktop card passport remain available.
 
 ## Safety boundaries
 

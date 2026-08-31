@@ -17,6 +17,8 @@ import { GameForm } from './components/GameForm';
 import { PlayLogModal } from './components/PlayLogModal';
 import { TimelineView } from './components/TimelineView';
 import { StatsView } from './components/StatsView';
+import { PlayerProfileView } from './components/PlayerProfileView';
+import { MobileGameCard } from './components/MobileGameCard';
 import { AIChatTab } from './components/AIChatTab';
 import { AgentExecutors } from './lib/ai-actions';
 import { UpNextTab } from './components/UpNextTab';
@@ -322,6 +324,7 @@ export default function GameAnalyticsPage() {
   const [detailGame, setDetailGame] = useState<GameWithMetrics | null>(null);
   const [reviewChatGame, setReviewChatGame] = useState<GameWithMetrics | null>(null);
   const [compareGame, setCompareGame] = useState<GameWithMetrics | null>(null);
+  const showGlobalDashboard = false;
   const [statsCollapsed, setStatsCollapsed] = useState(() => {
     if (typeof window === 'undefined') return false;
     return localStorage.getItem('ga-stats-collapsed') === 'true';
@@ -925,7 +928,10 @@ export default function GameAnalyticsPage() {
     });
 
   const automaticShelves = getAutomaticGameShelves(games);
-  const allShelves = [...shelves, ...automaticShelves];
+  const allShelves = [...automaticShelves, ...shelves].filter((shelf, index, collection) => {
+    const normalizedName = shelf.name.trim().toLowerCase();
+    return collection.findIndex(candidate => candidate.name.trim().toLowerCase() === normalizedName) === index;
+  });
   const activeShelf = allShelves.find(shelf => shelf.id === activeShelfId) ?? null;
   const activeShelfGameIds = activeShelf
     ? new Set(getShelfGames(activeShelf, games).map(game => game.id))
@@ -997,19 +1003,27 @@ export default function GameAnalyticsPage() {
   return (
     <div className="min-h-[calc(100vh-60px)] flex flex-col pb-20 sm:pb-0">
       {/* Header */}
-      <div className="px-4 pt-5 pb-5 border-b border-white/5 sm:px-6 sm:pt-8 sm:pb-6">
+      <div className="border-b border-white/5 px-4 py-3 sm:px-6 sm:py-5">
         <div className="max-w-6xl mx-auto">
           {/* Title Row — Dynamic */}
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between gap-3">
             <div className="min-w-0 flex-1">
-              <h1 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">
-                {games.length > 0 ? (
-                  <>Your <span className="text-purple-400">{summary.totalGames}</span>-Game Collection</>
-                ) : (
-                  'Games'
-                )}
+              <h1 className="truncate text-lg font-bold tracking-tight text-white sm:text-2xl">
+                {{
+                  today: 'Home',
+                  games: 'Your Library',
+                  timeline: 'Your Chronicle',
+                  stats: 'Player Profile',
+                  'ai-coach': 'Game Coach',
+                  'up-next': 'Your Play Plan',
+                  discover: 'PlayStation Plus',
+                  'release-radar': 'Release Radar',
+                  leaderboard: 'Your Rankings',
+                  'buy-queue': 'Buy List',
+                  estimator: 'Time Planner',
+                }[tabMode]}
               </h1>
-              <div className="flex items-center gap-3 mt-1 min-w-0">
+              <div className="mt-1 hidden min-w-0 items-center gap-3 sm:flex">
                 {smartNudges.length > 0 ? (
                   <p className="text-white/40 text-sm italic truncate transition-opacity duration-500">
                     {smartNudges[nudgeIndex % smartNudges.length]?.text}
@@ -1031,13 +1045,15 @@ export default function GameAnalyticsPage() {
               </button>
               {/* Trophy Showcase */}
               {games.length > 0 && (
-                <TrophyShowcase
-                  pinnedTrophies={pinnedTrophies}
-                  totalScore={trophySummary.totalScore}
-                  earnedCount={trophySummary.earnedCount}
-                  totalCount={trophySummary.totalCount}
-                  onOpenTrophyRoom={() => setTabMode('stats')}
-                />
+                <div className="hidden sm:block">
+                  <TrophyShowcase
+                    pinnedTrophies={pinnedTrophies}
+                    totalScore={trophySummary.totalScore}
+                    earnedCount={trophySummary.earnedCount}
+                    totalCount={trophySummary.totalCount}
+                    onOpenTrophyRoom={() => setTabMode('stats')}
+                  />
+                </div>
               )}
               {games.length === 0 && (
                 <button
@@ -1112,7 +1128,7 @@ export default function GameAnalyticsPage() {
                   </>
                 )}
               </div>
-              <ErrorLogButton onClick={() => setShowErrorLog(true)} />
+              <div className="hidden sm:block"><ErrorLogButton onClick={() => setShowErrorLog(true)} /></div>
               {games.length > 0 && (
                 <AlertsCenter
                   alerts={alerts}
@@ -1129,7 +1145,7 @@ export default function GameAnalyticsPage() {
               )}
               <button
                 onClick={() => setShowWhatsNew(true)}
-                className="flex items-center gap-1.5 px-2.5 py-2 bg-white/5 text-white/60 hover:text-white/80 rounded-lg transition-all text-sm"
+                className="hidden items-center gap-1.5 rounded-lg bg-white/5 px-2.5 py-2 text-sm text-white/60 transition-all hover:text-white/80 sm:flex"
                 title="What's New"
                 aria-label="What's New"
               >
@@ -1147,8 +1163,8 @@ export default function GameAnalyticsPage() {
           </div>
 
           {/* Tier 1: This Week Recap Strip — Collapsible */}
-          {games.length > 0 && weekRecap && (
-            <div className="mb-4">
+          {showGlobalDashboard && games.length > 0 && weekRecap && (
+            <div className="hidden">
               <button
                 onClick={() => {
                   const next = !recapCollapsed;
@@ -1288,6 +1304,7 @@ export default function GameAnalyticsPage() {
           )}
 
           {/* Tier 2: Redesigned Stats Grid — Collapsible */}
+          {showGlobalDashboard && (
           <div>
             <button
               onClick={() => {
@@ -1367,7 +1384,7 @@ export default function GameAnalyticsPage() {
                       <span className="text-white/40"><Check size={16} /></span>
                       <span className="text-xs text-white/40">Completion</span>
                     </div>
-                    <div className="text-lg font-semibold text-white/90">{(summary.completionRate * 100).toFixed(0)}%</div>
+                    <div className="text-lg font-semibold text-white/90">{summary.completionRate.toFixed(0)}%</div>
                     <div className="text-[10px] text-white/30 mt-0.5">
                       {summary.completedCount} of {summary.ownedCount} owned
                       {summary.abandonedCount > 0 && <> · {summary.abandonedCount} abandoned</>}
@@ -1450,6 +1467,7 @@ export default function GameAnalyticsPage() {
               </>
             )}
           </div>
+          )}
         </div>
       </div>
 
@@ -1478,23 +1496,36 @@ export default function GameAnalyticsPage() {
                 alerts={alerts}
                 onAlertAction={handleAlertAction}
                 onPlayTonight={() => setShowPlayTonight(true)}
+                onOpenGame={(game) => {
+                  const gameWithMetrics = gamesWithMetrics.find(item => item.id === game.id);
+                  if (gameWithMetrics) setDetailGame(gameWithMetrics);
+                }}
+                onLogTime={(game) => {
+                  const gameWithMetrics = gamesWithMetrics.find(item => item.id === game.id);
+                  if (gameWithMetrics) handleOpenPlayLog(gameWithMetrics);
+                }}
+                onOpenStory={() => setTabMode('timeline')}
+                onOpenInsights={() => setTabMode('stats')}
                 dueCapsules={timeCapsules.due}
                 onOpenTimeCapsule={() => setShowTimeCapsule(true)}
                 onOpenReplayRadar={() => setShowReplayRadar(true)}
                 onOpenQueue={() => setTabMode('up-next')}
+                onOpenReleases={() => setTabMode('release-radar')}
               />
             </div>
           )}
 
           {/* New month's PS Plus games nudge */}
-          <SubscriptionSyncBanner
-            userId={user?.uid ?? null}
-            recheckKey={tabMode}
-            onOpen={() => { setTabMode('discover'); setDiscoverFocusSignal(s => s + 1); }}
-          />
+          {(tabMode === 'today' || tabMode === 'discover') && (
+            <SubscriptionSyncBanner
+              userId={user?.uid ?? null}
+              recheckKey={tabMode}
+              onOpen={() => { setTabMode('discover'); setDiscoverFocusSignal(s => s + 1); }}
+            />
+          )}
 
           {/* Gentle nudge to review finished games — leads into the review chat */}
-          {games.length > 0 && (
+          {games.length > 0 && tabMode === 'games' && (
             <ReviewNudgeBanner
               games={games}
               onReview={(game) => {
@@ -1510,7 +1541,7 @@ export default function GameAnalyticsPage() {
           {/* Tab Navigation */}
           <div className="space-y-4 mb-6">
             {/* Tabs - Two icon-only rows */}
-            <div className="space-y-1.5">
+            <div className="hidden space-y-1.5 sm:block">
               {/* Row 1: Games, Chronicle, Stats, AI Coach */}
               <div className="flex items-center gap-1.5">
                 {([
@@ -1605,6 +1636,55 @@ export default function GameAnalyticsPage() {
                 </div>
               </div>
             </div>
+
+            {/* Mobile secondary navigation: named destinations inside the four primary spaces. */}
+            {(['up-next', 'discover', 'release-radar', 'buy-queue', 'estimator'] as TabMode[]).includes(tabMode) && (
+              <div className="-mx-4 flex snap-x gap-2 overflow-x-auto px-4 pb-1 sm:hidden">
+                {([
+                  { id: 'up-next' as TabMode, label: 'Play queue' },
+                  { id: 'release-radar' as TabMode, label: 'Releases' },
+                  { id: 'discover' as TabMode, label: 'PS Plus' },
+                  { id: 'buy-queue' as TabMode, label: 'Buy list' },
+                  { id: 'estimator' as TabMode, label: 'Time plan' },
+                ]).map(item => (
+                  <button
+                    key={item.id}
+                    onClick={() => setTabMode(item.id)}
+                    className={clsx(
+                      'min-h-10 shrink-0 snap-start rounded-full border px-4 text-xs font-semibold transition-colors',
+                      tabMode === item.id
+                        ? 'border-purple-300/30 bg-purple-500/20 text-purple-100'
+                        : 'border-white/[0.07] bg-white/[0.025] text-white/45',
+                    )}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {(['timeline', 'stats', 'ai-coach'] as TabMode[]).includes(tabMode) && (
+              <div className="grid grid-cols-3 gap-2 sm:hidden">
+                {([
+                  { id: 'timeline' as TabMode, label: 'Story' },
+                  { id: 'stats' as TabMode, label: 'Player profile' },
+                  { id: 'ai-coach' as TabMode, label: 'Coach' },
+                ]).map(item => (
+                  <button
+                    key={item.id}
+                    onClick={() => setTabMode(item.id)}
+                    className={clsx(
+                      'min-h-10 rounded-xl border px-2 text-[11px] font-semibold transition-colors',
+                      tabMode === item.id
+                        ? 'border-purple-300/25 bg-purple-500/15 text-purple-100'
+                        : 'border-white/[0.06] bg-white/[0.02] text-white/40',
+                    )}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            )}
 
             {/* View Mode Filter & Sort (only for games tab) */}
             {tabMode === 'games' && (
@@ -1867,23 +1947,31 @@ export default function GameAnalyticsPage() {
           )}
 
           {tabMode === 'stats' && games.length > 0 && (
-            <StatsView
+            <PlayerProfileView
               games={gamesWithMetrics}
               summary={summary}
-              budgets={budgets}
-              userId={user?.uid ?? ''}
-              onSetBudget={async (year, amount) => {
-                try {
-                  await setBudget(year, amount);
-                  showToast('Budget updated', 'success');
-                } catch (e) {
-                  showToast(`Failed to save budget: ${(e as Error).message}`, 'error');
-                }
-              }}
-              trophies={allTrophies}
-              trophySummary={trophySummary}
-              pinnedTrophyIds={pinnedTrophyIds}
-              onToggleTrophyPin={toggleTrophyPin}
+              preferredEcosystem={preferences.ecosystem}
+              onOpenStory={() => setTabMode('timeline')}
+              deepStats={(
+                <StatsView
+                  games={gamesWithMetrics}
+                  summary={summary}
+                  budgets={budgets}
+                  userId={user?.uid ?? ''}
+                  onSetBudget={async (year, amount) => {
+                    try {
+                      await setBudget(year, amount);
+                      showToast('Budget updated', 'success');
+                    } catch (e) {
+                      showToast(`Failed to save budget: ${(e as Error).message}`, 'error');
+                    }
+                  }}
+                  trophies={allTrophies}
+                  trophySummary={trophySummary}
+                  pinnedTrophyIds={pinnedTrophyIds}
+                  onToggleTrophyPin={toggleTrophyPin}
+                />
+              )}
             />
           )}
 
@@ -2657,6 +2745,15 @@ function GameCardList({
   showSessionDetails,
 }: GameCardListProps) {
   const sections = useMemo(() => groupBySection ? getGameSections(allGames) : [], [allGames, groupBySection]);
+  const [isPhone, setIsPhone] = useState(false);
+
+  useEffect(() => {
+    const query = window.matchMedia('(max-width: 639px)');
+    const syncViewport = () => setIsPhone(query.matches);
+    syncViewport();
+    query.addEventListener('change', syncViewport);
+    return () => query.removeEventListener('change', syncViewport);
+  }, []);
 
   // Track entering cards for animation (E17: Animated Card Transitions)
   const prevGameIdsRef = useRef<Set<string>>(new Set());
@@ -2740,6 +2837,13 @@ function GameCardList({
     const eloRanking = eloByGameId.get(game.id);
     const gameTier = tierAssignments[game.id] as GameTier | undefined;
     const eloTierRank = eloTierRanks.get(game.id);
+    if (isPhone) {
+      return wrapSelectable(game,
+        <div className={animClass}>
+          <MobileGameCard game={game} allGames={allGames} onOpen={() => onCardClick(game)} onLogTime={() => onLogTime(game)} onStart={() => onStartGame(game)} />
+        </div>,
+      );
+    }
     if (cardViewMode === 'poster') {
       return wrapSelectable(game,
         <div className={animClass}>
@@ -2753,6 +2857,16 @@ function GameCardList({
       </div>,
     );
   };
+
+  const renderNowPlayingCard = (game: GameWithMetrics) => wrapSelectable(game,
+    <div className={`game-card-animate${enteringCards.has(game.id) ? ' game-card-enter' : ''}`}>
+      {isPhone ? (
+        <MobileGameCard game={game} allGames={allGames} onOpen={() => onCardClick(game)} onLogTime={() => onLogTime(game)} active />
+      ) : (
+        <NowPlayingCard game={game} allGames={allGames} onClick={() => onCardClick(game)} onQuickLog={(hours, date) => onQuickLog(game, hours, date)} sortBy={sortBy} tintColor={gameColors.get(game.id)} eloRanking={eloByGameId.get(game.id)} gameTier={tierAssignments[game.id] as GameTier | undefined} eloTierRank={eloTierRanks.get(game.id)} showSessionDetails={showSessionDetails} />
+      )}
+    </div>,
+  );
 
   if (groupBySection && sections.length > 0) {
     // Map game IDs to games for lookup
@@ -2769,11 +2883,7 @@ function GameCardList({
               <span className="text-[10px] text-white/20">{nowPlayingGames.length}</span>
             </div>
             <div className="space-y-3">
-              {nowPlayingGames.map(g => wrapSelectable(g,
-                <div className={`game-card-animate${enteringCards.has(g.id) ? ' game-card-enter' : ''}`}>
-                  <NowPlayingCard game={g} allGames={allGames} onClick={() => onCardClick(g)} onQuickLog={(h, d) => onQuickLog(g, h, d)} sortBy={sortBy} tintColor={gameColors.get(g.id)} eloRanking={eloByGameId.get(g.id)} gameTier={tierAssignments[g.id] as GameTier | undefined} eloTierRank={eloTierRanks.get(g.id)} showSessionDetails={showSessionDetails} />
-                </div>,
-              ))}
+              {nowPlayingGames.map(renderNowPlayingCard)}
             </div>
           </div>
         )}
@@ -2812,11 +2922,7 @@ function GameCardList({
             <span className="text-[10px] text-white/20">{nowPlayingGames.length}</span>
           </div>
           <div className="space-y-3">
-            {nowPlayingGames.map(g => wrapSelectable(g,
-              <div className={`game-card-animate${enteringCards.has(g.id) ? ' game-card-enter' : ''}`}>
-                <NowPlayingCard game={g} allGames={allGames} onClick={() => onCardClick(g)} onQuickLog={(h, d) => onQuickLog(g, h, d)} eloRanking={eloByGameId.get(g.id)} gameTier={tierAssignments[g.id] as GameTier | undefined} showSessionDetails={showSessionDetails} />
-              </div>,
-            ))}
+            {nowPlayingGames.map(renderNowPlayingCard)}
           </div>
         </div>
       )}

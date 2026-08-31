@@ -12,11 +12,11 @@ connected in this PR; **Retained** = already implemented and protected by the PR
 
 1. **Added** — Four-space mobile navigation: Today, Library, Plan, Chronicle.
 2. **Refined** — Timeline is presented as the player-facing Chronicle.
-3. **Retained** — Today dashboard for the next useful action.
+3. **Refined** — Cinematic Home centers the current game and one honest “Log what you played” action.
 4. **Retained** — Searchable global command palette.
-5. **Retained** — Library, discovery, planning, stats, and AI remain reachable.
+5. **Refined** — Library, planning, Player Profile, Chronicle, releases, PS Plus, and AI remain reachable through named destinations.
 6. **Refined** — Recaps and sharing are grouped as one memory system.
-7. **Refined** — Dense power tools remain progressively disclosed.
+7. **Refined** — Dense power tools remain progressively disclosed; the repeated global stats wall is removed.
 8. **Added** — Experience preferences explain the app’s behavioral defaults.
 9. **Refined** — Mobile content gutters and bottom-safe spacing.
 10. **Refined** — Consistent Chronicle, shelf, and share vocabulary.
@@ -36,7 +36,7 @@ connected in this PR; **Retained** = already implemented and protected by the PR
 
 ## 3. Living cards
 
-21. **Refined** — Poster and compact card density choices remain available.
+21. **Refined** — Phone cards use a strict story-first content budget; poster and compact desktop densities remain available.
 22. **Refined** — Now Playing cards participate in bulk selection.
 23. **Refined** — Card selection uses a one-handed full-card tap target.
 24. **Refined** — PS Plus is named explicitly instead of appearing only as Free.
@@ -140,7 +140,7 @@ connected in this PR; **Retained** = already implemented and protected by the PR
 
 ## 11. Insight and reflection
 
-101. **Retained** — Gaming pulse and activity cadence.
+101. **Refined** — Player Profile turns gaming pulse into depth, finish, attachment, and variety stories.
 102. **Retained** — Calendar and heatmap views.
 103. **Retained** — Genre epochs and mastery levels.
 104. **Retained** — Cumulative hours and hours race.

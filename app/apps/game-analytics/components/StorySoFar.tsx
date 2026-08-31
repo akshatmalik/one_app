@@ -54,7 +54,12 @@ const CADENCE_STYLES: Record<PlayStretch['cadence'], string> = {
 };
 
 export function StorySoFar({ games }: StorySoFarProps) {
-  const [range, setRange] = useState<StoryRangeOption>('year-so-far');
+  const [range, setRange] = useState<StoryRangeOption>(() => {
+    const currentStory = getGameChronicle(games, resolveStoryRange('year-so-far'));
+    if (currentStory.stretches.length > 0 || currentStory.purchases.length > 0) return 'year-so-far';
+    const lastYearStory = getGameChronicle(games, resolveStoryRange('last-year'));
+    return lastYearStory.stretches.length > 0 || lastYearStory.purchases.length > 0 ? 'last-year' : 'year-so-far';
+  });
   const [blurbs, setBlurbs] = useState<Record<string, string>>({});
   const [loadingBlurbs, setLoadingBlurbs] = useState(false);
 
