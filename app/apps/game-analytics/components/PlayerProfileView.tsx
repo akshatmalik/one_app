@@ -50,8 +50,6 @@ export function PlayerProfileView({ games, summary, preferredEcosystem, onOpenSt
     const topGenre = Object.entries(summary.hoursByGenre).sort((a, b) => b[1] - a[1])[0];
     const averageDepth = played.length > 0 ? summary.totalHours / played.length : 0;
     const loveRate = played.length > 0 ? Math.round((loved.length / played.length) * 100) : 0;
-    const variety = Math.min(100, genres.size * 12);
-    const depth = Math.min(100, Math.round((averageDepth / 60) * 100));
 
     let archetype = 'The Selective Player';
     if (summary.completionRate >= 60) archetype = 'The Story Finisher';
@@ -70,6 +68,30 @@ export function PlayerProfileView({ games, summary, preferredEcosystem, onOpenSt
     const yearGames = new Set(yearLogs.map(item => item.game.id)).size;
     const yearDays = new Set(yearLogs.map(item => item.log.date)).size;
 
+    const latestLogTime = allLogs.reduce((latest, item) => Math.max(latest, parseLocalDate(item.log.date).getTime()), 0);
+    const rhythmAnchor = latestLogTime ? new Date(latestLogTime) : new Date();
+    const rhythmStart = new Date(rhythmAnchor.getFullYear(), rhythmAnchor.getMonth(), 1);
+    const rhythmEnd = new Date(rhythmAnchor.getFullYear(), rhythmAnchor.getMonth() + 1, 1);
+    const previousStart = new Date(rhythmAnchor.getFullYear(), rhythmAnchor.getMonth() - 1, 1);
+    const rhythmLogs = allLogs.filter(item => {
+      const date = parseLocalDate(item.log.date);
+      return date >= rhythmStart && date < rhythmEnd;
+    });
+    const previousLogs = allLogs.filter(item => {
+      const date = parseLocalDate(item.log.date);
+      return date >= previousStart && date < rhythmStart;
+    });
+    const rhythmHours = rhythmLogs.reduce((total, item) => total + item.log.hours, 0);
+    const previousHours = previousLogs.reduce((total, item) => total + item.log.hours, 0);
+    const rhythmByGame = new Map<string, { game: GameWithMetrics; hours: number }>();
+    for (const item of rhythmLogs) {
+      const existing = rhythmByGame.get(item.game.id);
+      rhythmByGame.set(item.game.id, { game: item.game, hours: (existing?.hours ?? 0) + item.log.hours });
+    }
+    const rhythmTop = [...rhythmByGame.values()].sort((a, b) => b.hours - a.hours)[0];
+    const rhythmFocus = rhythmHours > 0 && rhythmTop ? Math.round((rhythmTop.hours / rhythmHours) * 100) : 0;
+    const rhythmIsCurrent = rhythmStart.getFullYear() === currentYear && rhythmStart.getMonth() === new Date().getMonth();
+
     return {
       owned,
       played,
@@ -79,13 +101,21 @@ export function PlayerProfileView({ games, summary, preferredEcosystem, onOpenSt
       topGenre,
       averageDepth,
       loveRate,
-      variety,
-      depth,
       archetype,
       year,
       yearHours,
       yearGames,
       yearDays,
+      rhythm: {
+        label: rhythmStart.toLocaleDateString(undefined, { month: 'long', year: 'numeric' }),
+        isCurrent: rhythmIsCurrent,
+        hours: rhythmHours,
+        previousHours,
+        days: new Set(rhythmLogs.map(item => item.log.date)).size,
+        sessions: rhythmLogs.length,
+        top: rhythmTop,
+        focus: rhythmFocus,
+      },
     };
   }, [games, preferredEcosystem, summary]);
 
@@ -133,6 +163,29 @@ export function PlayerProfileView({ games, summary, preferredEcosystem, onOpenSt
         </div>
       </section>
 
+      {profile.rhythm.hours > 0 && (
+        <section className="rounded-3xl border border-white/[0.08] bg-white/[0.025] p-5">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-cyan-300/60">{profile.rhythm.isCurrent ? 'This month' : 'Latest active month'} · {profile.rhythm.label}</p>
+            <h3 className="mt-1 text-lg font-semibold text-white">Your recent rhythm</h3>
+          </div>
+          <p className="mt-3 text-sm leading-relaxed text-white/50">
+            {profile.rhythm.top
+              ? `${profile.rhythm.top.game.name} held ${profile.rhythm.focus}% of your attention with ${profile.rhythm.top.hours.toFixed(1)} hours.`
+              : 'Your next play log will begin this chapter.'}
+            {profile.rhythm.previousHours > 0
+              ? ` That is ${Math.abs(Math.round(((profile.rhythm.hours - profile.rhythm.previousHours) / profile.rhythm.previousHours) * 100))}% ${profile.rhythm.hours >= profile.rhythm.previousHours ? 'more' : 'less'} playtime than the month before.`
+              : ''}
+          </p>
+          <div className="mt-5 grid grid-cols-4 gap-2">
+            <ProfileStat value={`${profile.rhythm.hours.toFixed(profile.rhythm.hours % 1 ? 1 : 0)}h`} label="logged" muted />
+            <ProfileStat value={String(profile.rhythm.days)} label="play days" muted />
+            <ProfileStat value={String(profile.rhythm.sessions)} label="sessions" muted />
+            <ProfileStat value={`${profile.rhythm.focus}%`} label="top-game focus" muted />
+          </div>
+        </section>
+      )}
+
       <button onClick={onOpenRankings} className="flex min-h-16 w-full items-center gap-4 rounded-3xl border border-amber-300/15 bg-gradient-to-r from-amber-500/[0.09] to-purple-500/[0.06] px-5 text-left">
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-amber-400/10 text-amber-300"><Trophy size={18} /></span>
         <span className="min-w-0 flex-1">
@@ -148,10 +201,10 @@ export function PlayerProfileView({ games, summary, preferredEcosystem, onOpenSt
           <h3 className="mt-1 text-lg font-semibold text-white">How you play</h3>
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
-          <ProfileDimension icon={<Clock3 size={16} />} label="Depth" value={profile.depth} headline={`${profile.averageDepth.toFixed(0)}h per played game`} detail={profile.averageDepth >= 35 ? 'You commit deeply once a game earns its place.' : 'You sample broadly and keep only what holds you.'} color="from-blue-400 to-cyan-300" />
-          <ProfileDimension icon={<Target size={16} />} label="Finish" value={Math.round(summary.completionRate)} headline={`${summary.completedCount} stories completed`} detail={`${summary.notStartedCount} are still waiting for their opening scene.`} color="from-emerald-400 to-teal-300" />
-          <ProfileDimension icon={<Heart size={16} />} label="Attachment" value={profile.loveRate} headline={`${profile.loved.length} ${profile.loved.length === 1 ? 'game' : 'games'} you love`} detail="Love stays separate from quality—this is what became yours." color="from-pink-400 to-rose-300" />
-          <ProfileDimension icon={<Compass size={16} />} label="Variety" value={profile.variety} headline={`${new Set(profile.played.map(game => game.genre).filter(Boolean)).size} genres explored`} detail={profile.topGenre ? `${profile.topGenre[0]} owns ${topGenreShare}% of all your hours.` : 'Your taste map will form as you log games.'} color="from-violet-400 to-fuchsia-300" />
+          <ProfileDimension icon={<Clock3 size={16} />} label="Depth" evidence={`${profile.averageDepth.toFixed(0)}h / game`} headline={`${profile.averageDepth.toFixed(0)} hours per played game`} detail={profile.averageDepth >= 35 ? 'You commit deeply once a game earns its place.' : 'You sample broadly and keep only what holds you.'} />
+          <ProfileDimension icon={<Target size={16} />} label="Finish" evidence={`${summary.completionRate.toFixed(0)}%`} headline={`${summary.completedCount} stories completed`} detail={`${summary.notStartedCount} are still waiting for their opening scene.`} />
+          <ProfileDimension icon={<Heart size={16} />} label="Attachment" evidence={`${profile.loved.length} / ${profile.played.length}`} headline={`${profile.loved.length} ${profile.loved.length === 1 ? 'game' : 'games'} you love`} detail="Love stays separate from quality—this is what became yours." />
+          <ProfileDimension icon={<Compass size={16} />} label="Variety" evidence={`${new Set(profile.played.map(game => game.genre).filter(Boolean)).size} genres`} headline={`${new Set(profile.played.map(game => game.genre).filter(Boolean)).size} genres explored`} detail={profile.topGenre ? `${profile.topGenre[0]} owns ${topGenreShare}% of all your hours.` : 'Your taste map will form as you log games.'} />
         </div>
       </section>
 
@@ -183,11 +236,10 @@ function ProfileStat({ value, label, muted = false }: { value: string; label: st
   return <div className={muted ? 'rounded-2xl bg-white/[0.035] px-3 py-3 text-center' : 'rounded-2xl border border-white/[0.08] bg-black/20 px-3 py-3 text-center backdrop-blur-sm'}><p className="text-xl font-black text-white">{value}</p><p className="mt-0.5 text-[10px] text-white/35">{label}</p></div>;
 }
 
-function ProfileDimension({ icon, label, value, headline, detail, color }: { icon: ReactNode; label: string; value: number; headline: string; detail: string; color: string }) {
+function ProfileDimension({ icon, label, evidence, headline, detail }: { icon: ReactNode; label: string; evidence: string; headline: string; detail: string }) {
   return (
     <article className="rounded-3xl border border-white/[0.07] bg-white/[0.025] p-5">
-      <div className="flex items-center justify-between"><span className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.12em] text-white/40">{icon}{label}</span><span className="text-xs font-bold text-white/50">{value}%</span></div>
-      <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-white/[0.06]"><div className={`h-full rounded-full bg-gradient-to-r ${color}`} style={{ width: `${Math.max(3, value)}%` }} /></div>
+      <div className="flex items-center justify-between gap-3"><span className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.12em] text-white/40">{icon}{label}</span><span className="rounded-full bg-white/[0.05] px-2.5 py-1 text-[10px] font-bold text-white/55">{evidence}</span></div>
       <p className="mt-4 text-base font-semibold text-white/85">{headline}</p>
       <p className="mt-1.5 text-xs leading-relaxed text-white/40">{detail}</p>
     </article>
