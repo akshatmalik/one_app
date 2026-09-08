@@ -5,7 +5,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronDown, Flame, Sparkles } from 'lucide-react';
 import { Game } from '../lib/types';
 import { useDailyQuests } from '../hooks/useDailyQuests';
-import { TrophyToast } from './TrophyToast';
 
 interface DailyQuestPanelProps {
   games: Game[];
@@ -15,7 +14,7 @@ interface DailyQuestPanelProps {
 const WEEKDAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
 export function DailyQuestPanel({ games, userId }: DailyQuestPanelProps) {
-  const { questSet, streak, last7Days, showPerfectDayToast, dismissPerfectDayToast } = useDailyQuests(games, userId);
+  const { questSet, streak, last7Days } = useDailyQuests(games, userId);
   const [expanded, setExpanded] = useState(false);
 
   if (questSet.quests.length === 0) return null;
@@ -24,15 +23,6 @@ export function DailyQuestPanel({ games, userId }: DailyQuestPanelProps) {
 
   return (
     <div className="mb-4 rounded-xl border border-white/10 bg-gradient-to-r from-indigo-500/10 to-purple-500/10 overflow-hidden">
-      {showPerfectDayToast && (
-        <TrophyToast
-          name={`Perfect Day! ${streak > 1 ? `${streak}-Day Streak` : 'Quests Complete'}`}
-          icon="🎯"
-          tier="milestone"
-          isUpgrade={false}
-          onDismiss={dismissPerfectDayToast}
-        />
-      )}
       <button
         onClick={() => setExpanded(v => !v)}
         className="w-full flex items-center gap-3 px-4 py-3 text-left"

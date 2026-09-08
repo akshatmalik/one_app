@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Game, BudgetSettings, GamingGoal, PurchaseQueueEntry } from '../lib/types';
 import { getActiveAlerts, getPriceWatchAlerts, getAnniversaryAlerts, ALERT_SEVERITY_ORDER, GameAlert, AlertCategory } from '../lib/calculations';
-import { getMilestoneProximityAlerts, TrophyProgress } from '../lib/trophy-calculations';
 
 const DISMISSED_KEY_PREFIX = 'game-analytics-alerts-dismissed';
 const NOTIFIED_KEY_PREFIX = 'game-analytics-alerts-notified';
@@ -68,8 +67,7 @@ export function useAlerts(
   goals: GamingGoal[],
   userId: string | null,
   liveSession?: LiveSessionAlertInput | null,
-  purchaseQueue: PurchaseQueueEntry[] = [],
-  trophies: TrophyProgress[] = []
+  purchaseQueue: PurchaseQueueEntry[] = []
 ) {
   const dismissedKey = `${DISMISSED_KEY_PREFIX}-${userId || 'local-user'}`;
   const notifiedKey = `${NOTIFIED_KEY_PREFIX}-${userId || 'local-user'}`;
@@ -86,9 +84,8 @@ export function useAlerts(
       ...getActiveAlerts(games, budgets, goals, liveSession ?? null),
       ...getPriceWatchAlerts(purchaseQueue),
       ...getAnniversaryAlerts(games),
-      ...getMilestoneProximityAlerts(trophies),
     ].sort((a, b) => ALERT_SEVERITY_ORDER[a.severity] - ALERT_SEVERITY_ORDER[b.severity]),
-    [games, budgets, goals, liveSession, purchaseQueue, trophies]
+    [games, budgets, goals, liveSession, purchaseQueue]
   );
 
   const now = Date.now();

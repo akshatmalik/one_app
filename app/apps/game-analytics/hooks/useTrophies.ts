@@ -8,14 +8,6 @@ import { TrophyTierLevel } from '../lib/trophy-definitions';
 const STORAGE_KEY_PREFIX = 'game-analytics-trophies-earned';
 const PINNED_KEY_PREFIX = 'game-analytics-trophies-pinned';
 
-interface NewTrophyEvent {
-  trophyId: string;
-  name: string;
-  icon: string;
-  tier: TrophyTierLevel | 'milestone';
-  isUpgrade: boolean; // true if tier upgraded, not newly earned
-}
-
 interface EarnedState {
   [trophyId: string]: {
     tier: TrophyTierLevel | 'milestone';
@@ -45,8 +37,6 @@ export function useTrophies(games: Game[], userId: string | null) {
     } catch { return []; }
   });
 
-  // Queue of newly earned trophies for toast notifications
-  const [toastQueue, setToastQueue] = useState<NewTrophyEvent[]>([]);
   const initialLoadRef = useRef(true);
   // Ref mirrors earnedState so the detection effect always sees the latest
   // value even when it runs multiple times before React commits state updates.
@@ -108,8 +98,7 @@ export function useTrophies(games: Game[], userId: string | null) {
       return;
     }
 
-    // After initial load — detect new trophies and show toasts
-    const newEvents: NewTrophyEvent[] = [];
+    // After initial load, keep earned progress in sync silently.
     const newState: EarnedState = { ...currentEarned };
     let changed = false;
 
@@ -122,24 +111,10 @@ export function useTrophies(games: Game[], userId: string | null) {
         // Newly earned
         newState[key] = { tier: t.definition.isMilestone ? 'milestone' : t.currentTier, earnedAt: new Date().toISOString() };
         changed = true;
-        newEvents.push({
-          trophyId: key,
-          name: t.definition.name,
-          icon: t.definition.icon,
-          tier: t.definition.isMilestone ? 'milestone' : t.currentTier,
-          isUpgrade: false,
-        });
       } else if (!t.definition.isMilestone && t.currentTier !== prev.tier) {
         // Tier upgrade
         newState[key] = { tier: t.currentTier, earnedAt: new Date().toISOString() };
         changed = true;
-        newEvents.push({
-          trophyId: key,
-          name: t.definition.name,
-          icon: t.definition.icon,
-          tier: t.currentTier,
-          isUpgrade: true,
-        });
       }
     }
 
@@ -148,14 +123,7 @@ export function useTrophies(games: Game[], userId: string | null) {
       setEarnedState(newState);
       localStorage.setItem(storageKey, JSON.stringify(newState));
     }
-    if (newEvents.length > 0) {
-      setToastQueue(prev => [...prev, ...newEvents]);
-    }
   }, [trophiesWithHunter]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const dismissToast = useCallback(() => {
-    setToastQueue(prev => prev.slice(1));
-  }, []);
 
   const togglePin = useCallback((trophyId: string) => {
     setPinnedIds(prev => {
@@ -180,8 +148,6 @@ export function useTrophies(games: Game[], userId: string | null) {
     pinnedTrophies,
     pinnedIds,
     togglePin,
-    toastQueue,
-    dismissToast,
     earnedState,
   };
 }
