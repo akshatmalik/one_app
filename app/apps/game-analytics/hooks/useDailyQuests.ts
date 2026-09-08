@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Game } from '../lib/types';
 import { getDailyQuestSet, DailyQuestSet } from '../lib/calculations';
 import { recordQuestDay, getQuestStreak, getQuestHistory, QuestDayRecord } from '../lib/quest-storage';
@@ -16,12 +16,6 @@ export function useDailyQuests(games: Game[], userId: string) {
   const questSet: DailyQuestSet = useMemo(() => getDailyQuestSet(games), [games]);
   const [streak, setStreak] = useState(0);
   const [history, setHistory] = useState<QuestDayRecord[]>([]);
-  const [showPerfectDayToast, setShowPerfectDayToast] = useState(false);
-
-  // Tracks the previous render's completion state for *today* only, so we can
-  // detect the exact moment the last quest flips to complete (not on initial
-  // mount, when today may already be complete from an earlier session).
-  const prevRef = useRef<{ date: string; allComplete: boolean } | null>(null);
 
   useEffect(() => {
     if (questSet.quests.length === 0) return;
@@ -32,15 +26,7 @@ export function useDailyQuests(games: Game[], userId: string) {
     });
     setStreak(getQuestStreak(userId, questSet.date));
     setHistory(getQuestHistory(userId));
-
-    const prev = prevRef.current;
-    if (prev && prev.date === questSet.date && !prev.allComplete && questSet.allComplete) {
-      setShowPerfectDayToast(true);
-    }
-    prevRef.current = { date: questSet.date, allComplete: questSet.allComplete };
   }, [userId, questSet.date, questSet.completedCount, questSet.quests.length, questSet.allComplete]);
-
-  const dismissPerfectDayToast = useCallback(() => setShowPerfectDayToast(false), []);
 
   // Last 7 calendar days (oldest first, today last) for a visible streak strip.
   const last7Days: QuestHistoryDay[] = useMemo(() => {
@@ -66,5 +52,5 @@ export function useDailyQuests(games: Game[], userId: string) {
     return days;
   }, [history, questSet.date, questSet.completedCount, questSet.quests.length]);
 
-  return { questSet, streak, last7Days, showPerfectDayToast, dismissPerfectDayToast };
+  return { questSet, streak, last7Days };
 }

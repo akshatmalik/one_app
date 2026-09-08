@@ -1,6 +1,7 @@
 // 'Abandoned' = DNF (Did Not Finish) — you gave up on it, whether you drifted away or made a deliberate call.
 // 'Pick Up Later' = an intentional pause, distinct from actively 'In Progress'. You plan to resume.
 export type GameStatus = 'Not Started' | 'In Progress' | 'Completed' | 'Wishlist' | 'Abandoned' | 'Pick Up Later';
+export type ReleaseExcitement = 'interested' | 'excited' | 'must-play';
 
 // ── Gaming Awards ──────────────────────────────────────────────
 
@@ -81,6 +82,10 @@ export interface Game {
   releaseDateStatus?: 'dated' | 'tba' | 'released' | 'delayed';
   releaseDateCheckedAt?: string;
   releaseDateSource?: 'rawg' | 'manual' | 'sample';
+  releaseExcitement?: ReleaseExcitement;
+  anticipationNote?: string;
+  metacriticScore?: number;
+  rawgRating?: number;
   awards?: GameAward[]; // User-given awards across all tiers
   isSpecial?: boolean; // Exceptional games the user loved despite any flaws
   queuePosition?: number; // Position in "Up Next" queue (1 = next to play, 2 = after that, etc.)
@@ -224,6 +229,8 @@ export interface GameRecommendation {
   isUpcoming?: boolean;       // true for unreleased/upcoming games
   releaseWindow?: ReleaseWindow; // Time bucket for upcoming games
   hypeScore?: number;         // 1-10 AI-generated match score for upcoming games
+  releaseExcitement?: ReleaseExcitement;
+  anticipationNote?: string;
   recommendationCategory?: RecommendationCategory; // Category for released game recommendations
   categoryContext?: string;   // e.g. "Because You Loved Elden Ring" — the specific game/context
 
